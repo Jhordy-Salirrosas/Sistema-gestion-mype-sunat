@@ -154,3 +154,6 @@ vite.config.ts.timestamp-*
 .claude/
 .windsurf/
 skills-lock.json
+
+# Carpeta personal de documentación
+docs/
