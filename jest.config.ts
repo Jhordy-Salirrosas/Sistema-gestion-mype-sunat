@@ -4,6 +4,11 @@ const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
+
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+
   transform: {
     '^.+\\.ts$': [
       'ts-jest',
@@ -19,6 +24,7 @@ const config: Config = {
       },
     ],
   },
+
   // With --experimental-vm-modules, Jest 30 handles ESM packages natively
   // via vm.SourceTextModule (supportsSyncEvaluate). No need to transform
   // node_modules — only our .ts source files get compiled to CJS by ts-jest.
