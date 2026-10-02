@@ -147,3 +147,10 @@ vite.config.ts.timestamp-*
 .env.development
 .env.production
 .env.local
+/generated/prisma
+
+# Archivos generados automáticamente por Prisma 7
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
