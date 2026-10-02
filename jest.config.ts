@@ -1,27 +1,29 @@
 import type { Config } from 'jest';
-import { pathsToModuleNameMapper } from 'ts-jest';
-import ts from 'typescript';
-
-// Path aliases (e.g. the ones added by `nest g library`) live in tsconfig.json,
-// so they are read from there instead of being duplicated here.
-const { config: tsconfig } = ts.readConfigFile(
-  './tsconfig.json',
-  ts.sys.readFile,
-);
-const paths = tsconfig?.compilerOptions?.paths ?? {};
 
 const config: Config = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
   transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'node16',
+          resolvePackageJsonExports: false,
+          target: 'ES2021',
+          isolatedModules: true,
+          esModuleInterop: true,
+        },
+      },
+    ],
   },
-  moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
+  // With --experimental-vm-modules, Jest 30 handles ESM packages natively
+  // via vm.SourceTextModule (supportsSyncEvaluate). No need to transform
+  // node_modules — only our .ts source files get compiled to CJS by ts-jest.
   collectCoverageFrom: [
-    'src/**/*.(t|j)s',
-    'libs/**/*.(t|j)s',
-    'apps/**/*.(t|j)s',
+    'src/**/*.ts',
   ],
   coverageDirectory: './coverage',
   testEnvironment: 'node',
