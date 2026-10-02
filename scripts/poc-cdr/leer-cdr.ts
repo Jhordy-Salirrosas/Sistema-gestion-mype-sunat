@@ -1,5 +1,5 @@
 import AdmZip from 'adm-zip';
-
+import { XMLParser } from 'fast-xml-parser';
 // 1. El Base64 "que llegó de SUNAT" (pega aquí el que generaste, entre comillas)
 const base64 = 'UEsDBBQAAAgIALUeQl2OWkSLAgEAAF4CAAAbAAAAUi0yMDA1MDQyMjAwMC0wMS1GMDAxLTEueG1snZJBasNADEX3PsXgdV3bXZXBdkgTAoWuSnsARVacAY80jOyS4xfjpMRpNu326euJD6pWJ9+bL4rqhOu0fCxSQ4zSOu7q9PNjlz2nqyapINp1CL1DGJzwO2kQVkqMOfme1UKs0zGyFVCnlsGTWg2E7nDesOO+t4pH8mBP2t6TZU/pjw8B/yjciPfC666L1MFAG/FBmHjQhXb/P+0LqMOFskmMqRDQbgVHTzxcWkyD82iJJrif4IEiMdLrttkVRZmVVX7Ll/lZspGWmuKSvWLX4S0pRhemIs0bmB3gMEYwPHqKYuZzD+YIRl0rBpDCAC3M0uvduUN+W2ImvxtX+f33aL4BUEsBAhQKFAAACAgAtR5CXY5aRIsCAQAAXgIAABsAAAAAAAAAAAAAAKSBAAAAAFItMjAwNTA0MjIwMDAtMDEtRjAwMS0xLnhtbFBLBQYAAAAAAQABAEkAAAA7AQAAAAA=';
 
@@ -27,3 +27,17 @@ if (!archivoXml) {
 const xml = archivoXml.getData().toString('utf8');
 console.log('\nContenido del XML:');
 console.log(xml);
+
+// 7. Convertir el texto XML en un objeto de JavaScript
+const parser = new XMLParser({
+  removeNSPrefix: true,
+  parseTagValue: false,
+});
+const cdr = parser.parse(xml);
+
+// 8. Navegar hasta el nodo de respuesta
+const respuesta = cdr.ApplicationResponse.DocumentResponse.Response;
+
+console.log('\nNodo de respuesta del CDR:');
+console.log(respuesta);
+console.log('\nCódigo de respuesta:', respuesta.ResponseCode);
