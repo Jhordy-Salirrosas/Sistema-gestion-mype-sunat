@@ -33,12 +33,12 @@ npm install
 ```
 
 ### 2. Configuración de Variables de Entorno
-Debes crear tus archivos de variables de entorno locales basándote en el archivo de ejemplo.
+Debes crear tu archivo de variables de entorno local basándote en el archivo de ejemplo.
 
 ```bash
-cp .env.example .env.development
+cp .env.example .env
 ```
-Edita `.env.development` y configura las siguientes variables (principalmente tu conexión a Supabase):
+Edita el archivo `.env` y configura las siguientes variables (principalmente tu conexión a Supabase):
 ```env
 DATABASE_URL="postgres://postgres.[tus-credenciales]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgres://postgres.[tus-credenciales]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
@@ -46,17 +46,51 @@ PORT=3000
 NODE_ENV=development
 ```
 
-### 3. Migraciones de la Base de Datos (Prisma)
+### 3. Verificar la conexión a la Base de Datos
+Para comprobar que Prisma se conecta correctamente a Supabase usando tus credenciales, ejecuta:
+```bash
+npx prisma db pull
+```
+*(Nota: Si la base de datos recién ha sido creada y está vacía, este comando arrojará el código `P4001`. Esto es completamente normal y confirma que la conexión fue exitosa).*
+
+### 4. Migraciones de la Base de Datos (Prisma)
 Una vez configurada la URL de la base de datos, debes crear las tablas en Supabase y generar los tipos locales ejecutando:
 ```bash
 npx prisma migrate dev --name init
 ```
 
-### 4. Iniciar el Servidor de Desarrollo
+### 5. Iniciar el Servidor de Desarrollo
 ```bash
 npm run start:dev
 ```
 El servidor se levantará en `http://localhost:3000`.
+
+---
+
+## 🌿 Flujo de Trabajo y Ramas (Git Flow)
+
+Este proyecto utiliza un flujo de trabajo simplificado basado en **Git Flow** y **Pull Requests (PR)** para mantener la estabilidad del código y asegurar la calidad.
+
+### Estructura de Ramas Principales:
+- `main`: Rama de **Producción**. Siempre contiene código estable, testeado y listo para despliegue. Bajo ninguna circunstancia se hacen commits directos aquí.
+- `dev`: Rama de **Integración/Desarrollo**. Todo el nuevo código del equipo se integra aquí para pruebas conjuntas antes del pase a producción.
+
+### Creación de Ramas de Trabajo:
+Para cualquier nueva tarea del Sprint, el desarrollador debe crear una rama temporal partiendo desde `dev`. Utilizamos la convención descriptiva de prefijos:
+
+```bash
+# Convención: tipo/ID-ticket-descripcion-corta
+# Tipos comunes: feature/, bugfix/, chore/
+git checkout -b feature/TT-01-modelado-sql-comprobantes
+```
+
+### Ciclo de Vida del Desarrollo:
+1. Crear la rama `feature/*` localmente a partir de `dev`.
+2. Desarrollar la funcionalidad y subir los commits.
+3. Abrir un **Pull Request (PR)** dirigido hacia la rama `dev`.
+4. El pipeline de CI (GitHub Actions) ejecutará automáticamente el linter y los tests. No se permite el merge si estas validaciones fallan.
+5. Tras la revisión (Code Review) y aprobación del equipo, se realiza el merge a `dev`.
+6. Al finalizar y certificar un Sprint, se realiza un PR definitivo de `dev` hacia `main` para el pase a Producción.
 
 ---
 *Este proyecto es desarrollado bajo un esquema de Sprints iterativos con integración continua automatizada (CI/CD).*
