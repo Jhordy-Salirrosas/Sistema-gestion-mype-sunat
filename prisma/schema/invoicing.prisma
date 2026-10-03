@@ -1,0 +1,40 @@
+// prisma/schema/invoicing.prisma
+
+enum InvoiceStatus {
+  PENDIENTE
+  PROCESANDO
+  ENVIADO
+  ACEPTADO
+  RECHAZADO
+  ERROR_RED
+}
+
+model Invoice {
+  id               String        @id @default(uuid())
+  ruc_emisor       String
+  serie            String
+  correlativo      Int
+  tipo_comprobante String
+  monto_total      Decimal       @db.Decimal(10, 2)
+  fecha_emision    DateTime
+  estado           InvoiceStatus @default(PENDIENTE)
+  payload_ubl      Json
+  cdr_sunat        Json?
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  
+  history          TransactionHistory[]
+}
+
+model TransactionHistory {
+  id                  String         @id @default(uuid())
+  invoice_id          String
+  invoice             Invoice        @relation(fields: [invoice_id], references: [id])
+  intento             Int            @default(1)
+  estado_anterior     InvoiceStatus?
+  estado_nuevo        InvoiceStatus
+  codigo_error        String?
+  mensaje_error       String?
+  tiempo_respuesta_ms Int?
+  created_at          DateTime       @default(now())
+}
