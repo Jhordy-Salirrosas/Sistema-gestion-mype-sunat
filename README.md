@@ -1,114 +1,96 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# SYNC-SUNAT: Sistema de Gestión Contable-Tributaria e Importaciones
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**SYNC-SUNAT** es un sistema resiliente diseñado para MYPES, enfocado en mantener la continuidad operativa ante las caídas, latencias o saturaciones de los servicios web de la SUNAT. 
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Arquitectura y Tecnologías
+El sistema se basa en una arquitectura **Cliente-Servidor asíncrona** y altamente resiliente utilizando el patrón **Transactional Outbox**.
 
-## Description
+- **Backend:** NestJS (Node.js + TypeScript)
+- **Base de Datos:** PostgreSQL alojado en Supabase
+- **ORM:** Prisma
+- **Motor de Colas Asíncronas:** `pg-boss` (garantiza atomicidad entre la BD relacional y la cola de tareas).
+- **Patrones de Resiliencia:** 
+  - **Buffer Asíncrono:** Las ventas no se detienen si la SUNAT está caída.
+  - **Backoff Exponencial:** Reintentos progresivos ante fallos de red.
+  - **Circuit Breaker:** Apertura de circuito ante múltiples errores 503 consecutivos para no saturar los endpoints.
+  - **Dead Letter Queue (DLQ):** Almacenamiento seguro de transacciones permanentemente fallidas para revisión manual.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📦 Módulos Principales
+1. **Dashboard de Resiliencia:** Monitoreo en tiempo real de métricas críticas como MTTD y MTTR, estado de colas y conexión a SUNAT.
+2. **Facturación Electrónica:** Emisión de comprobantes XML UBL 2.1.
+3. **Módulo de Importaciones (DUA/DAM):** Ingesta de despachos aduaneros y cálculo automático de prorrateo (FOB, Flete, Seguro, Ad-Valorem) al Kardex.
+4. **Módulo Contable (SIRE / PLE):** Carga de Excel/CSV del SIRE para el cruce multidimensional automático y detección de discrepancias, además de la exportación de libros TXT oficiales.
 
-## Project setup
+---
 
+## 🛠️ Guía de Instalación y Configuración Inicial
+
+### 1. Clonar el repositorio y dependencias
 ```bash
-$ npm install
+git clone <url-del-repositorio>
+cd Sistema-gestion-mype-sunat
+npm install
 ```
 
-## Compile and run the project
+### 2. Configuración de Variables de Entorno
+Debes crear tu archivo de variables de entorno local basándote en el archivo de ejemplo.
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env
+```
+Edita el archivo `.env` y configura las siguientes variables (principalmente tu conexión a Supabase):
+```env
+DATABASE_URL="postgres://postgres.[tus-credenciales]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DIRECT_URL="postgres://postgres.[tus-credenciales]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
+PORT=3000
+NODE_ENV=development
 ```
 
-## Run tests
+### 3. Verificar la conexión a la Base de Datos
+Para comprobar que Prisma se conecta correctamente a Supabase usando tus credenciales, ejecuta:
+```bash
+npx prisma db pull
+```
+*(Nota: Si la base de datos recién ha sido creada y está vacía, este comando arrojará el código `P4001`. Esto es completamente normal y confirma que la conexión fue exitosa).*
+
+### 4. Migraciones de la Base de Datos (Prisma)
+Una vez configurada la URL de la base de datos, debes crear las tablas en Supabase y generar los tipos locales ejecutando:
+```bash
+npx prisma migrate dev --name init
+```
+
+### 5. Iniciar el Servidor de Desarrollo
+```bash
+npm run start:dev
+```
+El servidor se levantará en `http://localhost:3000`.
+
+---
+
+## 🌿 Flujo de Trabajo y Ramas (Git Flow)
+
+Este proyecto utiliza un flujo de trabajo simplificado basado en **Git Flow** y **Pull Requests (PR)** para mantener la estabilidad del código y asegurar la calidad.
+
+### Estructura de Ramas Principales:
+- `main`: Rama de **Producción**. Siempre contiene código estable, testeado y listo para despliegue. Bajo ninguna circunstancia se hacen commits directos aquí.
+- `dev`: Rama de **Integración/Desarrollo**. Todo el nuevo código del equipo se integra aquí para pruebas conjuntas antes del pase a producción.
+
+### Creación de Ramas de Trabajo:
+Para cualquier nueva tarea del Sprint, el desarrollador debe crear una rama temporal partiendo desde `dev`. Utilizamos la convención descriptiva de prefijos:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Convención: tipo/ID-ticket-descripcion-corta
+# Tipos comunes: feature/, bugfix/, chore/
+git checkout -b feature/TT-01-modelado-sql-comprobantes
 ```
 
-## Deployment
+### Ciclo de Vida del Desarrollo:
+1. Crear la rama `feature/*` localmente a partir de `dev`.
+2. Desarrollar la funcionalidad y subir los commits.
+3. Abrir un **Pull Request (PR)** dirigido hacia la rama `dev`.
+4. El pipeline de CI (GitHub Actions) ejecutará automáticamente el linter y los tests. No se permite el merge si estas validaciones fallan.
+5. Tras la revisión (Code Review) y aprobación del equipo, se realiza el merge a `dev`.
+6. Al finalizar y certificar un Sprint, se realiza un PR definitivo de `dev` hacia `main` para el pase a Producción.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+---
+*Este proyecto es desarrollado bajo un esquema de Sprints iterativos con integración continua automatizada (CI/CD).*
