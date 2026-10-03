@@ -8,4 +8,6 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/Invoice.js'
+export type * from './models/TransactionHistory.js'
 export type * from './commonInputTypes.js'
