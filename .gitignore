@@ -157,3 +157,13 @@ skills-lock.json
 
 # Carpeta personal de documentación
 docs/
+
+# Certificados digitales y llaves criptográficas (Seguridad TT-04)
+*.pfx
+*.p12
+*.jks
+*.pem
+*.key
+*.cer
+*.crt
+
