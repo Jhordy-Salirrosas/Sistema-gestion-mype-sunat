@@ -9,6 +9,10 @@
  * OJO CON EL TIMEOUT: el headersTimeout por defecto de undici es de 300 s. Sin
  * un AbortSignal explicito, un cuelgue de SUNAT bloquea el worker hasta 5
  * minutos. Por eso TODA peticion lleva timeout.
+ *
+ * El AbortSignal.timeout hace que fetch() rechace con un error cuyo name es
+ * 'TimeoutError' (verificado con Node v24.21.0). Por eso la deteccion del
+ * timeout comprueba el name antes de cualquier otra cosa.
  */
 import {
   buildSendBillEnvelope,
@@ -104,6 +108,7 @@ export class SunatSoapClient {
 
     const startedAt = Date.now();
     let response: Response;
+    let rawResponse: string;
 
     try {
       response = await fetch(this.endpoint, {
@@ -117,13 +122,16 @@ export class SunatSoapClient {
         body: envelope,
         signal: AbortSignal.timeout(this.timeoutMs),
       });
+
+      // La lectura del cuerpo se hace DENTRO del try: el AbortSignal tambien
+      // puede dispararse durante esta fase, y ese error debe tratarse igual.
+      rawResponse = await response.text();
     } catch (error) {
       const tiempoRespuestaMs = Date.now() - startedAt;
+      const nombre = getErrorName(error);
+      const mensaje = getErrorMessage(error);
 
-      if (
-        error instanceof Error &&
-        (error.name === 'TimeoutError' || error.name === 'AbortError')
-      ) {
+      if (nombre === 'TimeoutError' || nombre === 'AbortError') {
         throw new SunatTransportError(
           `Timeout de ${this.timeoutMs} ms esperando al billService. El comprobante quedo en estado incierto: NO reenviar a ciegas, conciliar con billConsultService`,
           { cause: error },
@@ -131,14 +139,11 @@ export class SunatSoapClient {
       }
 
       throw new SunatTransportError(
-        `Error de red contra el billService (${tiempoRespuestaMs} ms): ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
+        `Error de red contra el billService (${tiempoRespuestaMs} ms): ${mensaje}`,
         { cause: error },
       );
     }
 
-    const rawResponse = await response.text();
     const tiempoRespuestaMs = Date.now() - startedAt;
 
     // SOAP Fault: es un error de negocio. Se detecta ANTES de mirar el status
@@ -163,4 +168,29 @@ export class SunatSoapClient {
       rawResponse,
     };
   }
+}
+
+/**
+ * Nombre del error, sin asumir que sea una instancia de Error.
+ *
+ * Los errores de abort de undici son DOMException, y un fallo de red puede
+ * llegar como un objeto sin prototipo de Error. Leer `name` de forma defensiva
+ * evita clasificar un timeout como "error desconocido".
+ */
+function getErrorName(error: unknown): string {
+  if (error && typeof error === 'object' && 'name' in error) {
+    return String((error as { name: unknown }).name);
+  }
+  return '';
+}
+
+/** Mensaje legible del error, con respaldo si no trae ninguno. */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = String((error as { message: unknown }).message);
+    if (message) return message;
+  }
+  const nombre = getErrorName(error);
+  return nombre ? `error de red (${nombre})` : 'error desconocido';
 }

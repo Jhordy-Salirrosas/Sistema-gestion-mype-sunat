@@ -11,6 +11,10 @@
  * enrutamiento por RUC del inyector de fallos (TA-10): asi no hay que tocar
  * codigo entre pruebas.
  *
+ * LECTURA DEL CUERPO: el cliente envia Content-Type text/xml, que el parser
+ * JSON de Nest ignora, asi que @Body() llega vacio. Por eso se lee el stream
+ * crudo con raw-body, verificando que sea legible antes de intentarlo.
+ *
  * NOTA: este Mock es el minimo que TA-03 necesita para su prueba de integracion
  * autocontenida. El Mock definitivo, con los 4 tipos de comprobante, es TA-06.
  */
@@ -20,9 +24,11 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import getRawBody from 'raw-body';
 import {
   CdrMockScenario,
   MOCK_CDR_BY_SCENARIO,
@@ -60,14 +66,31 @@ function extractTag(xml: string, tag: string): string {
 export class SunatBillMockController {
   @Post('billService')
   @HttpCode(HttpStatus.OK)
-  billService(@Body() body: unknown, @Res() res: Response): void {
-    const envelope = typeof body === 'string' ? body : '';
+  async billService(
+    @Req() req: Request,
+    @Body() body: unknown,
+    @Res() res: Response,
+  ): Promise<void> {
+    let envelope = '';
+
+    if (typeof body === 'string') {
+      envelope = body;
+    } else if (req.readable) {
+      // El stream aun no fue consumido: se lee crudo.
+      try {
+        envelope =
+          (await getRawBody(req, { encoding: 'utf8', limit: '10mb' })) ?? '';
+      } catch {
+        envelope = '';
+      }
+    }
+
     const fileName = extractTag(envelope, 'fileName');
     const contentFile = extractTag(envelope, 'contentFile');
 
     res.type('text/xml');
 
-    // El contrato exige contentFile (ZIP en Base64) y fileName.
+    // El contrato exige fileName y contentFile (ZIP en Base64).
     if (!fileName) {
       res.status(HttpStatus.INTERNAL_SERVER_ERROR);
       res.send(soapFault('0151', 'El nombre del archivo ZIP es incorrecto'));
