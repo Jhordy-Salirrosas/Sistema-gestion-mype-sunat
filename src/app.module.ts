@@ -11,6 +11,7 @@ import { SunatModule } from './modules/sunat/sunat.module';
     PrismaModule,
     HealthModule,
     InvoicesModule,
+    // Cliente SOAP del billService, parseo del CDR y persistencia (TA-03).
     SunatModule,
   ],
   controllers: [],

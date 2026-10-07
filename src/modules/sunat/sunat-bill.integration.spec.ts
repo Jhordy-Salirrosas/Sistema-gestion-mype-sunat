@@ -3,10 +3,10 @@
  *
  * A diferencia de cdr.parser.spec.ts (funcion pura, sin red), aqui se levanta
  * un servidor NestJS real con el Mock del billService y se ejercita el camino
- * completo del criterio 1:
+ * completo:
  *
  *   SunatBillService -> SunatSoapClient -> POST SOAP real por HTTP ->
- *   Mock (sobre SOAP 1.1 + ZIP en Base64) -> decodificacion -> CDR -> estado
+ *   Mock -> decodificacion -> clasificacion -> persistencia
  *
  * Se verifica de paso lo que una prueba con fetch mockeado NO probaria: que el
  * sobre viaje bien formado y que el ZIP llegue integro en Base64.
@@ -17,6 +17,7 @@ import AdmZip from 'adm-zip';
 import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { InvoiceStatus } from '../../generated/prisma/enums';
+import { CdrPersistenceService } from './cdr-persistence.service';
 import { SunatBillMockController } from './mock/sunat-bill-mock.controller';
 import { SunatBillService } from './sunat-bill.service';
 import { SunatSoapFaultError } from './soap/soap-envelope';
@@ -34,6 +35,31 @@ const ZIP_DE_PRUEBA = (() => {
   return zip.toBuffer();
 })();
 
+/**
+ * Stub de persistencia: registra lo que se le pide escribir.
+ * La escritura real a PostgreSQL se prueba en cdr-persistence.service.spec.ts.
+ */
+class PersistenceStub {
+  public readonly persisted: Array<Record<string, unknown>> = [];
+  public readonly failures: Array<Record<string, unknown>> = [];
+
+  async persist(params: Record<string, unknown>) {
+    this.persisted.push(params);
+    return {
+      invoice: { id: params.invoiceId, estado: null, updated_at: new Date() },
+      history: { id: 'hist-1' },
+    };
+  }
+
+  async persistFailure(params: Record<string, unknown>) {
+    this.failures.push(params);
+    return {
+      invoice: { id: params.invoiceId, estado: null, updated_at: new Date() },
+      history: { id: 'hist-2' },
+    };
+  }
+}
+
 const paramsBase = {
   invoiceId: 'factura-de-prueba',
   rucEmisor: '20123456789',
@@ -47,6 +73,7 @@ const paramsBase = {
 describe('TA-03 - integracion contra el Mock del billService', () => {
   let app: INestApplication;
   let baseUrl: string;
+  let persistence: PersistenceStub;
   let service: SunatBillService;
 
   beforeAll(async () => {
@@ -67,7 +94,9 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
   });
 
   beforeEach(() => {
-    service = new SunatBillService(
+    persistence = new PersistenceStub();
+    service = SunatBillService.create(
+      persistence as unknown as CdrPersistenceService,
       new SunatSoapClient({
         endpoint: `${baseUrl}/api/v1/mocks/sunat/billService`,
       }),
@@ -179,16 +208,16 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
   });
 
   it('maneja el timeout sin perder el job: deja el comprobante en ENVIADO', async () => {
+    // Servidor que consume el cuerpo pero NUNCA responde: asi la peticion queda
+    // colgada y el AbortSignal.timeout del cliente es el que corta.
     const servidorLento = createServer((req, _res) => {
-      // Se consume el cuerpo pero NUNCA se responde: asi la peticion queda
-      // colgada y el AbortSignal.timeout del cliente es el que corta.
       req.resume();
     });
-
     await new Promise<void>((resolve) => servidorLento.listen(0, resolve));
     const puertoLento = (servidorLento.address() as AddressInfo).port;
 
-    const servicioLento = new SunatBillService(
+    const servicioLento = SunatBillService.create(
+      persistence as unknown as CdrPersistenceService,
       new SunatSoapClient({
         endpoint: `http://127.0.0.1:${puertoLento}/billService`,
         timeoutMs: 150,
@@ -198,8 +227,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
     const resultado = await servicioLento.sendAndProcess(paramsBase);
 
     expect(resultado.error).toContain('Timeout');
-    // sendBill no es idempotente: ENVIADO (incierto), no ERROR_RED, para no
-    // reenviar y duplicar el comprobante. Ver ADR-06.
+    // sendBill no es idempotente: ENVIADO (incierto), no ERROR_RED. Ver ADR-06.
     expect(resultado.estado).toBe(InvoiceStatus.ENVIADO);
     expect(resultado.reintentable).toBe(true);
     expect(resultado.cdr).toBeNull();
@@ -225,5 +253,65 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
     ).rejects.toBeInstanceOf(SunatTransportError);
 
     await new Promise<void>((resolve) => servidorCaido.close(() => resolve()));
+  });
+
+  it('persiste el CDR aceptado con su tiempo de respuesta (criterios 3 y 6)', async () => {
+    await service.sendAndProcess(paramsBase);
+
+    expect(persistence.persisted).toHaveLength(1);
+    const guardado = persistence.persisted[0];
+
+    expect(guardado.invoiceId).toBe('factura-de-prueba');
+    expect((guardado.cdr as { responseCode: string }).responseCode).toBe('0');
+    expect(guardado.tiempoRespuestaMs).toBeGreaterThanOrEqual(0);
+    expect(guardado.estadoAnterior).toBe(InvoiceStatus.PROCESANDO);
+    expect(guardado.intento).toBe(1);
+  });
+
+  it('persiste la observacion 4031 cuando el CDR viene observado', async () => {
+    await service.sendAndProcess({ ...paramsBase, serie: 'OBSERVACION' });
+
+    expect(persistence.persisted).toHaveLength(1);
+    const guardado = persistence.persisted[0];
+    const cdr = guardado.cdr as { observaciones: Array<{ codigo: string }> };
+    const clasificacion = guardado.classification as { kind: string };
+
+    expect(clasificacion.kind).toBe('ACEPTADO_CON_OBSERVACIONES');
+    expect(cdr.observaciones[0].codigo).toBe('4031');
+  });
+
+  it('audita el SOAP Fault en el historial sin perder el job (criterio 5)', async () => {
+    await service.sendAndProcess({ ...paramsBase, serie: 'FAULT' });
+
+    expect(persistence.persisted).toHaveLength(0);
+    expect(persistence.failures).toHaveLength(1);
+    expect(persistence.failures[0].codigoError).toBe('0101');
+    expect(String(persistence.failures[0].mensajeError)).toContain(
+      'SOAP Fault',
+    );
+  });
+
+  it('audita el timeout y deja el comprobante en ENVIADO (ADR-06)', async () => {
+    const servidorMudo = createServer((req, _res) => {
+      req.resume();
+    });
+    await new Promise<void>((resolve) => servidorMudo.listen(0, resolve));
+    const puerto = (servidorMudo.address() as AddressInfo).port;
+
+    const servicioLento = SunatBillService.create(
+      persistence as unknown as CdrPersistenceService,
+      new SunatSoapClient({
+        endpoint: `http://127.0.0.1:${puerto}/billService`,
+        timeoutMs: 150,
+      }),
+    );
+
+    await servicioLento.sendAndProcess(paramsBase);
+
+    expect(persistence.failures).toHaveLength(1);
+    expect(persistence.failures[0].estadoNuevo).toBe(InvoiceStatus.ENVIADO);
+    expect(String(persistence.failures[0].mensajeError)).toContain('Timeout');
+
+    await new Promise<void>((resolve) => servidorMudo.close(() => resolve()));
   });
 });

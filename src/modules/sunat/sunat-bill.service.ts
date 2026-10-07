@@ -6,13 +6,18 @@
  *     y los namespaces verificados.
  *  2. Decodificar Base64 -> ZIP -> XML (parseCdr).
  *  3. Extraer ID, codigo y descripcion, y clasificar el estado.
- *  4. Manejar SOAP Fault y timeout SIN perder el job.
+ *  4. Manejar SOAP Fault y timeout SIN perder el job (persiste la traza).
  *  5. Registrar tiempo_respuesta_ms por intento.
  *
- * NO incluye: persistencia (la hace el llamador con el resultado), firma XMLDSig
- * (TA-07), worker de la cola (HU-04) ni backoff/circuit breaker (Sprint 2).
+ * NO incluye: firma XMLDSig (TA-07), worker de la cola (HU-04) ni
+ * backoff/circuit breaker (Sprint 2).
  */
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import { CdrPersistenceService } from './cdr-persistence.service';
 import { InvoiceStatus } from '../../generated/prisma/enums';
 import { classifyCdr } from './soap/cdr.classifier';
 import { CdrClassification, classifyResponseCode } from './soap/cdr-classifier';
@@ -93,7 +98,25 @@ function buildSolUsername(rucEmisor: string): string | null {
 export class SunatBillService {
   private readonly logger = new Logger(SunatBillService.name);
 
-  constructor(private readonly soapClient: SunatSoapClient) {}
+  constructor(
+    private readonly persistence: CdrPersistenceService,
+    private readonly soapClient: SunatSoapClient,
+  ) {}
+
+  /** Crea el servicio resolviendo endpoint y timeout del entorno. */
+  static create(
+    persistence: CdrPersistenceService,
+    client?: SunatSoapClient,
+  ): SunatBillService {
+    return new SunatBillService(
+      persistence,
+      client ??
+        new SunatSoapClient({
+          endpoint: resolveEndpoint(),
+          timeoutMs: resolveTimeout(),
+        }),
+    );
+  }
 
   /** Nombre del ZIP que espera SUNAT: una sola convencion (ADR-07). */
   private buildFileName(params: SendInvoiceParams): string {
@@ -113,7 +136,7 @@ export class SunatBillService {
   }
 
   /**
-   * Envia un comprobante y devuelve el resultado clasificado.
+   * Envia un comprobante, clasifica el CDR y persiste el resultado.
    * NUNCA lanza por un fallo de SUNAT: devuelve el resultado con reintentable
    * para que la capa de cola decida el backoff.
    */
@@ -127,13 +150,14 @@ export class SunatBillService {
         });
 
       if (!applicationResponse) {
-        return this.failure(
+        return await this.failure(
           params,
           'El billService respondio sin applicationResponse: CDR no encontrado',
           InvoiceStatus.ERROR_RED,
           null,
           null,
           true,
+          tiempoRespuestaMs,
         );
       }
 
@@ -145,6 +169,31 @@ export class SunatBillService {
           cdr.referenceId ?? params.invoiceId
         } en ${tiempoRespuestaMs} ms`,
       );
+
+      // Criterios 3 y 6: se persiste el CDR en cdr_sunat y la traza con
+      // tiempo_respuesta_ms en TransactionHistory, en una sola transaccion.
+      try {
+        await this.persistence.persist({
+          invoiceId: params.invoiceId,
+          cdr,
+          classification: clasificacion,
+          tiempoRespuestaMs,
+          estadoAnterior: params.estadoActual ?? null,
+          intento: params.intento ?? 1,
+        });
+      } catch (error) {
+        // El CDR llego pero no se pudo guardar: es un fallo de persistencia, NO
+        // un fallo de comunicacion. Se distingue para que la capa de cola sepa
+        // que reenviar el comprobante es seguro pero guardarlo no funciono.
+        this.logger.error(
+          `No se pudo persistir el CDR de ${params.invoiceId}: ${
+            error instanceof Error ? error.message : 'error desconocido'
+          }`,
+        );
+        throw new InternalServerErrorException(
+          'CDR recibido pero no se pudo persistir: PERSISTENCE_FAILED',
+        );
+      }
 
       return {
         invoiceId: params.invoiceId,
@@ -158,19 +207,24 @@ export class SunatBillService {
         error: null,
       };
     } catch (error) {
-      return this.handleError(params, error);
+      // Si es el fallo de persistencia recien lanzado, no se debe enmascarar
+      // como fallo de red: se propaga tal cual.
+      if (error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      return await this.handleError(params, error);
     }
   }
 
   /**
    * Maneja SOAP Fault y errores de transporte SIN perder el job.
-   * En ningun camino se descarta el comprobante: se devuelve su estado y el
-   * motivo, para que el llamador lo audite.
+   * En ningun camino se descarta el comprobante: se persiste su estado y el
+   * motivo, para que el backoff reintente o un humano lo revise.
    */
-  private handleError(
+  private async handleError(
     params: SendInvoiceParams,
     error: unknown,
-  ): ProcessCdrResult {
+  ): Promise<ProcessCdrResult> {
     // SOAP Fault: error de NEGOCIO. El codigo del fault se clasifica con la
     // misma tabla que el ResponseCode, porque SUNAT usa la misma numeracion.
     if (isSunatSoapFaultError(error)) {
@@ -181,7 +235,7 @@ export class SunatBillService {
         `SOAP Fault al enviar ${params.invoiceId}: ${error.message}`,
       );
 
-      return this.failure(
+      return await this.failure(
         params,
         error.message,
         clasificacion.status,
@@ -193,7 +247,7 @@ export class SunatBillService {
 
     // ZIP o CDR ilegible: error de integracion.
     if (error instanceof CdrDecodeError) {
-      return this.failure(
+      return await this.failure(
         params,
         `No se pudo decodificar el CDR: ${error.message}`,
         InvoiceStatus.ERROR_RED,
@@ -213,7 +267,7 @@ export class SunatBillService {
      * error de red invitaria a reenviar y a duplicar el comprobante. Ver ADR-06.
      */
     if (isSunatTransportError(error)) {
-      return this.failure(
+      return await this.failure(
         params,
         `${error.message}. Conciliar con billConsultService antes de reenviar`,
         InvoiceStatus.ENVIADO,
@@ -229,7 +283,7 @@ export class SunatBillService {
       `Fallo al enviar ${params.invoiceId} al billService: ${mensaje}`,
     );
 
-    return this.failure(
+    return await this.failure(
       params,
       mensaje,
       InvoiceStatus.ERROR_RED,
@@ -239,14 +293,38 @@ export class SunatBillService {
     );
   }
 
-  private failure(
+  /**
+   * Construye el resultado de un fallo Y lo audita.
+   * Criterio 5: sin perder el job. El fallo se deja registrado con su codigo y
+   * su motivo, para que el backoff reintente o un humano lo revise.
+   */
+  private async failure(
     params: SendInvoiceParams,
     mensaje: string,
     estado: InvoiceStatus,
     responseCode: string | null,
     clasificacion: CdrClassification | null,
     reintentable: boolean,
-  ): ProcessCdrResult {
+    tiempoRespuestaMs: number | null = null,
+  ): Promise<ProcessCdrResult> {
+    try {
+      await this.persistence.persistFailure({
+        invoiceId: params.invoiceId,
+        estadoNuevo: estado,
+        estadoAnterior: params.estadoActual ?? null,
+        intento: params.intento ?? 1,
+        codigoError: responseCode,
+        mensajeError: mensaje,
+        tiempoRespuestaMs,
+      });
+    } catch (error) {
+      this.logger.error(
+        `No se pudo auditar el fallo de ${params.invoiceId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+    }
+
     return {
       invoiceId: params.invoiceId,
       responseCode: responseCode ?? '',
@@ -255,7 +333,7 @@ export class SunatBillService {
       reintentable,
       clasificacion: clasificacion ?? classifyCdr(EMPTY_PARSED_CDR),
       cdr: null,
-      tiempoRespuestaMs: null,
+      tiempoRespuestaMs,
       error: mensaje,
     };
   }
