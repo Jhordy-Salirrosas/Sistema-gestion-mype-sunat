@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<ar:ApplicationResponse xmlns:ar="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>2.0</cbc:UBLVersionID>
+  <cbc:ID>201656892705188</cbc:ID>
+  <cbc:ResponseDate>2026-10-06</cbc:ResponseDate>
+  <cbc:ResponseTime>10:15:30</cbc:ResponseTime>
+  <cac:DocumentResponse>
+    <cac:Response>
+      <cbc:ReferenceID>F001-00000001</cbc:ReferenceID>
+      <cbc:ResponseCode>0</cbc:ResponseCode>
+      <cbc:Description>La Factura numero F001-00000001, ha sido aceptada. Razon social: Nunez</cbc:Description>
+    </cac:Response>
+  </cac:DocumentResponse>
+</ar:ApplicationResponse>
