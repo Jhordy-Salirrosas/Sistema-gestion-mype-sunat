@@ -98,6 +98,9 @@ function buildSolUsername(rucEmisor: string): string | null {
 export class SunatBillService {
   private readonly logger = new Logger(SunatBillService.name);
 
+  /** Evita repetir el aviso de credenciales faltantes en cada envio. */
+  private credencialesFaltantesAvisadas = false;
+
   constructor(
     private readonly persistence: CdrPersistenceService,
     private readonly soapClient: SunatSoapClient,
@@ -128,10 +131,34 @@ export class SunatBillService {
     });
   }
 
+  /**
+   * Resuelve las credenciales SOL desde variables de entorno (TT-05).
+   * Si falta alguna devuelve null (el sobre va sin WS-Security, valido solo
+   * contra el Mock) y deja UNA advertencia con los NOMBRES de las variables
+   * faltantes. Nunca se registran valores de credenciales.
+   */
   private resolveCredentials(rucEmisor: string) {
     const password = process.env.SUNAT_SOL_PASSWORD;
     const username = buildSolUsername(rucEmisor);
-    if (!username || !password) return null;
+
+    if (!username || !password) {
+      if (!this.credencialesFaltantesAvisadas) {
+        const faltantes = [
+          !process.env.SUNAT_SOL_USER ? 'SUNAT_SOL_USER' : null,
+          !password ? 'SUNAT_SOL_PASSWORD' : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        this.logger.warn(
+          `Credenciales SOL incompletas (falta: ${faltantes}). ` +
+            'El sobre SOAP se enviara SIN WS-Security; SUNAT lo rechazara ' +
+            'con 0101/0102. Valido solo contra el Mock.',
+        );
+        this.credencialesFaltantesAvisadas = true;
+      }
+      return null;
+    }
+
     return { username, password };
   }
 

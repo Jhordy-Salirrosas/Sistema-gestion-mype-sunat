@@ -11,7 +11,7 @@
  * Se verifica de paso lo que una prueba con fetch mockeado NO probaria: que el
  * sobre viaje bien formado y que el ZIP llegue integro en Base64.
  */
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import AdmZip from 'adm-zip';
 import { createServer, Server } from 'node:http';
@@ -175,6 +175,56 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
     // 0101 = encabezado de seguridad incorrecto: determinista, no reintentar.
     expect(resultado.reintentable).toBe(false);
     expect(resultado.estado).toBe(InvoiceStatus.ERROR_RED);
+  });
+
+  it('TT-05: una credencial SOL invalida (0102) es error de autenticacion, no de red', async () => {
+    const resultado = await service.sendAndProcess({
+      ...paramsBase,
+      serie: 'AUTH',
+    });
+
+    expect(resultado.error).toContain('SOAP Fault');
+    expect(resultado.responseCode).toBe('0102');
+    // 0102 = usuario o clave incorrectos: determinista, reintentar no sirve.
+    expect(resultado.reintentable).toBe(false);
+    // No es un fallo de transporte: nunca queda como ENVIADO (incierto).
+    expect(resultado.estado).not.toBe(InvoiceStatus.ENVIADO);
+    expect(resultado.estado).toBe(InvoiceStatus.ERROR_RED);
+
+    // Queda auditado con su codigo, sin perder el comprobante.
+    expect(persistence.failures).toHaveLength(1);
+    expect(persistence.failures[0].codigoError).toBe('0102');
+  });
+
+  it('TT-05: avisa una sola vez, sin exponer valores, cuando faltan las credenciales SOL', async () => {
+    const userPrevio = process.env.SUNAT_SOL_USER;
+    const passPrevio = process.env.SUNAT_SOL_PASSWORD;
+    delete process.env.SUNAT_SOL_USER;
+    delete process.env.SUNAT_SOL_PASSWORD;
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    try {
+      await service.sendAndProcess(paramsBase);
+      await service.sendAndProcess(paramsBase);
+
+      const avisos = warn.mock.calls
+        .map(([mensaje]) => String(mensaje))
+        .filter((mensaje) => mensaje.includes('Credenciales SOL incompletas'));
+
+      // Dos envios, un solo aviso: no se llena el log en cada peticion.
+      expect(avisos).toHaveLength(1);
+      // Se nombran las variables faltantes, nunca sus valores.
+      expect(avisos[0]).toContain('SUNAT_SOL_USER');
+      expect(avisos[0]).toContain('SUNAT_SOL_PASSWORD');
+    } finally {
+      warn.mockRestore();
+      if (userPrevio === undefined) delete process.env.SUNAT_SOL_USER;
+      else process.env.SUNAT_SOL_USER = userPrevio;
+      if (passPrevio === undefined) delete process.env.SUNAT_SOL_PASSWORD;
+      else process.env.SUNAT_SOL_PASSWORD = passPrevio;
+    }
   });
 
   it('el cliente propaga el SOAP Fault como excepcion tipada', async () => {

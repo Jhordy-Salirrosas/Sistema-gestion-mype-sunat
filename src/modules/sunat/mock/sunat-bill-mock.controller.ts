@@ -96,13 +96,25 @@ export class SunatBillMockController {
       res.send(soapFault('0151', 'El nombre del archivo ZIP es incorrecto'));
       return;
     }
+
     if (!contentFile) {
       res.status(HttpStatus.INTERNAL_SERVER_ERROR);
       res.send(soapFault('0159', 'El nombre del archivo XML es incorrecto'));
       return;
     }
-    // Caso de prueba explicito de SOAP Fault.
-    if (fileName.toUpperCase().includes('FAULT')) {
+
+    // Casos de prueba explícitos de SOAP Fault.
+    const upperFileName = fileName.toUpperCase();
+
+    // Credenciales SOL inválidas.
+    if (upperFileName.includes('AUTH')) {
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR);
+      res.send(soapFault('0102', 'El usuario o la clave SOL son incorrectos'));
+      return;
+    }
+
+    // Encabezado WS-Security incorrecto.
+    if (upperFileName.includes('FAULT')) {
       res.status(HttpStatus.INTERNAL_SERVER_ERROR);
       res.send(soapFault('0101', 'El encabezado de seguridad es incorrecto'));
       return;
