@@ -94,3 +94,31 @@ git checkout -b feature/TT-01-modelado-sql-comprobantes
 
 ---
 *Este proyecto es desarrollado bajo un esquema de Sprints iterativos con integración continua automatizada (CI/CD).*
+
+
+## 🛠️ Mock SUNAT (Entorno de Pruebas)
+Para evitar depender del servicio real de la SUNAT durante el desarrollo y los pipelines de CI/CD, este proyecto incluye un Mock del servicio SOAP `billService`.
+
+Este mock es **determinista**: siempre acepta los comprobantes (Factura, Boleta, Notas de Crédito/Débito) y devuelve un **CDR de Aceptado (Código 0)**.
+
+**Endpoint del Mock:**
+\`\`\`text
+POST http://localhost:3000/sunat-mock/billService
+Content-Type: text/xml
+\`\`\`
+
+**Ejemplo de invocación (cURL):**
+\`\`\`bash
+curl -X POST http://localhost:3000/sunat-mock/billService \\
+-H "Content-Type: text/xml" \\
+-d '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+         <urn:sendBill xmlns:urn="urn:sunat:names:specification:ubl:peru:schema:xsd:Invoice-1">
+            <fileName>20123456789-01-F001-1.zip</fileName>
+            <contentFile>UEsDBBQAAAAIA...</contentFile>
+         </urn:sendBill>
+      </soapenv:Body>
+    </soapenv:Envelope>'
+\`\`\`
+
+La respuesta siempre será un sobre SOAP válido conteniendo el archivo ZIP del CDR (Constancia de Recepción) en formato Base64.

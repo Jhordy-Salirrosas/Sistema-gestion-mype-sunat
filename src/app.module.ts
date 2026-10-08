@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { SunatModule } from './modules/sunat/sunat.module';
+import { SunatMockModule } from './modules/sunat-mock/sunat-mock.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { SunatModule } from './modules/sunat/sunat.module';
     InvoicesModule,
     // Cliente SOAP del billService, parseo del CDR y persistencia (TA-03).
     SunatModule,
+    SunatMockModule,
   ],
   controllers: [],
   providers: [],
