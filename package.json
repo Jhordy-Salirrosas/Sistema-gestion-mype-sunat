@@ -18,7 +18,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json"
+    "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "check:secrets": "node scripts/check-secrets.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -53,6 +54,7 @@
     "@types/node-forge": "^1.3.14",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.0.0",
+    "@types/xml-crypto": "^1.4.6",
     "dotenv": "^18.0.5",
     "jest": "^30.0.0",
     "oxlint": "^1.58.0",

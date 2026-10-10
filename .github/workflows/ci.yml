@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 jobs:
   build-and-test:
@@ -23,6 +23,9 @@ jobs:
 
       - name: Instalar dependencias
         run: npm install
+
+      - name: Escanear secretos en el repositorio
+        run: npm run check:secrets
 
       - name: Ejecutar Linter
         run: npm run lint
