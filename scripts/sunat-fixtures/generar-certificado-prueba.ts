@@ -10,23 +10,32 @@
  *  1. Sale en Base64 listo para CERT_BASE64.
  *  2. El PKCS#12 contiene el par certificado + clave privada.
  *  3. Vigencia de 2 anos: no esta vencido ni proximo a vencer.
- *  4. El RUC va en el CN y el serialNumber del subject, asi que
- *     subjectString.includes(rucEmisor) es verdadero.
+ *  4. El RUC va en el CN del subject, asi que subjectString.includes(rucEmisor)
+ *     es verdadero.
+ *
+ * ORDEN DEL PIPELINE
+ * Este script va PRIMERO: genera el certificado que despues consume
+ * generar-factura-firmada.ts. Ese orden es lo que hace determinista al
+ * pipeline, porque RSA produce una firma distinta con cada par de claves.
  *
  * Uso:
  *   npx ts-node scripts/sunat-fixtures/generar-certificado-prueba.ts
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as forge from 'node-forge';
 
 /** Datos ficticios: coinciden con el RUC del fixture de factura y de los CDR. */
-const RUC_EMISOR = '20123456789';
-const NOMBRE_EMPRESA = 'EMPRESA DE PRUEBA S.A.C.';
-const CERT_PASSWORD = 'prueba-ta08';
-const DIAS_VIGENCIA = 730; // 2 anos
+export const RUC_EMISOR = '20123456789';
+export const NOMBRE_EMPRESA = 'EMPRESA DE PRUEBA S.A.C.';
+export const CERT_PASSWORD = 'prueba-ta08';
+export const DIAS_VIGENCIA = 730; // 2 anos
 
-const OUTPUT_DIR = join(process.cwd(), 'fixtures', 'certs');
+/**
+ * Carpeta de salida. Esta ignorada por git (fixtures/certs/.gitignore), asi que
+ * el certificado nunca se versiona.
+ */
+export const OUTPUT_DIR = join(process.cwd(), 'fixtures', 'certs');
 
 export interface CertificadoPrueba {
   /** PKCS#12 en Base64: es el valor de CERT_BASE64. */
@@ -42,6 +51,10 @@ export interface CertificadoPrueba {
 /**
  * Genera el par de claves, el certificado autofirmado y lo empaqueta en
  * PKCS#12. Todo en memoria.
+ *
+ * Es una funcion pura respecto al disco: no escribe nada. Por eso la puede usar
+ * tanto el script (que luego escribe los archivos) como la prueba automatizada
+ * (que solo la necesita en memoria).
  */
 export function generarCertificadoPrueba(): CertificadoPrueba {
   // 1. Par de claves RSA de 2048 bits.
@@ -61,15 +74,15 @@ export function generarCertificadoPrueba(): CertificadoPrueba {
   cert.validity.notBefore = desde;
   cert.validity.notAfter = hasta;
 
-  // Subject: el RUC va en el CN y en el serialNumber.
+  // Subject: el RUC va dentro del CN.
   // CertificateService valida con subjectString.includes(rucEmisor), asi que
   // basta con que el RUC aparezca en cualquier atributo del subject.
+  //
+  // OJO: se usa 'name' con el nombre completo, no 'shortName'. node-forge no
+  // registra shortName para serialNumber, organizationName ni countryName, y
+  // lanza "Attribute type not specified" si se intenta.
   const attrs = [
-    // El RUC va dentro del CN: CertificateService valida con
-    // subjectString.includes(rucEmisor), asi que basta con que aparezca aqui.
     { name: 'commonName', value: `${NOMBRE_EMPRESA} - ${RUC_EMISOR}` },
-    // Se usa 'name' (no 'shortName') porque node-forge no registra shortName
-    // para organizationName ni countryName.
     { name: 'organizationName', value: NOMBRE_EMPRESA },
     { name: 'countryName', value: 'PE' },
   ];
@@ -92,9 +105,7 @@ export function generarCertificadoPrueba(): CertificadoPrueba {
     keys.privateKey,
     cert,
     CERT_PASSWORD,
-    {
-      algorithm: '3des',
-    },
+    { algorithm: '3des' },
   );
   const p12Der = forge.asn1.toDer(p12Asn1).getBytes();
 
@@ -107,17 +118,37 @@ export function generarCertificadoPrueba(): CertificadoPrueba {
 }
 
 function main() {
+  const p12Path = join(OUTPUT_DIR, 'certificado-prueba.p12');
+  const base64Path = join(OUTPUT_DIR, 'certificado-prueba.base64');
+
+  // IDEMPOTENCIA: si el certificado ya existe, se reutiliza.
+  // Es lo que hace determinista al pipeline: RSA produce una firma distinta
+  // con cada par de claves, asi que regenerar el certificado en cada corrida
+  // cambiaria el XML firmado sin que haya ningun cambio real.
+  if (existsSync(base64Path)) {
+    const certBase64 = readFileSync(base64Path, 'utf8').trim();
+    console.log('El certificado de prueba ya existe: se reutiliza.');
+    console.log(`  RUC_EMISOR      = ${RUC_EMISOR}`);
+    console.log(`  CERT_PASSWORD   = ${CERT_PASSWORD}`);
+    console.log(
+      `  CERT_BASE64     = (${certBase64.length} caracteres, sin cambios)`,
+    );
+    console.log(`\nArchivo: ${base64Path}`);
+    console.log(
+      'Para forzar la regeneracion, borra fixtures/certs/ y vuelve a ejecutar.',
+    );
+    return;
+  }
+
   mkdirSync(OUTPUT_DIR, { recursive: true });
 
   const { certBase64, p12Der } = generarCertificadoPrueba();
 
   // El .p12 binario: esta en una carpeta ignorada, nunca se commitea.
-  writeFileSync(
-    join(OUTPUT_DIR, 'certificado-prueba.p12'),
-    Buffer.from(p12Der, 'binary'),
-  );
-  // El Base64, para copiar a las variables de entorno.
-  writeFileSync(join(OUTPUT_DIR, 'certificado-prueba.base64'), certBase64);
+  writeFileSync(p12Path, Buffer.from(p12Der, 'binary'));
+  // El Base64, que es lo que consume generar-factura-firmada.ts y lo que se
+  // copia a la variable de entorno CERT_BASE64.
+  writeFileSync(base64Path, certBase64);
 
   console.log('Certificado de prueba generado.');
   console.log(`  RUC_EMISOR      = ${RUC_EMISOR}`);
@@ -128,6 +159,9 @@ function main() {
   console.log(`\nArchivos escritos en ${OUTPUT_DIR} (ignorados por git)`);
 }
 
+// Solo se ejecuta cuando se invoca el script directamente, no al importarlo
+// desde una prueba o desde otro script. Sin esta guarda, importar el modulo
+// regeneraria el certificado como efecto secundario.
 if (require.main === module) {
   main();
 }

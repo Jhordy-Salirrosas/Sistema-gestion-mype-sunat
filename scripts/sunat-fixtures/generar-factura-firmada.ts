@@ -2,6 +2,14 @@
  * Firma la factura UBL 2.1 con el certificado de prueba y produce el fixture
  * factura-ubl21-firmada.xml.
  *
+ * DETERMINISTA: reutiliza el certificado persistido en fixtures/certs/ en lugar
+ * de generar uno nuevo. RSA produce una firma distinta con cada par de claves,
+ * asi que generar un certificado nuevo en cada corrida haria que el XML firmado
+ * cambiara siempre, produciendo un diff de una linea sin cambios reales.
+ *
+ * Requiere haber ejecutado antes generar-certificado-prueba.ts. El orden del
+ * pipeline es: certificado -> factura firmada.
+ *
  * Usa los MISMOS parametros que SignatureService (TA-07):
  *  - Canonicalizacion: c14n
  *  - Firma: rsa-sha256
@@ -16,18 +24,31 @@
  *  - El nodo se emite sin prefijo ds:, con el namespace xmldsig por defecto.
  *
  * Uso:
+ *   npx ts-node scripts/sunat-fixtures/generar-certificado-prueba.ts
  *   npx ts-node scripts/sunat-fixtures/generar-factura-firmada.ts
  */
 import { X509Certificate } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SignedXml } from 'xml-crypto';
 import { CertificateService } from '../../src/modules/sunat/certificate.service';
-import { generarCertificadoPrueba } from './generar-certificado-prueba';
+import {
+  CERT_PASSWORD,
+  OUTPUT_DIR as CERT_OUTPUT_DIR,
+  RUC_EMISOR,
+} from './generar-certificado-prueba';
 
 export const INVOICE_DIR = join(process.cwd(), 'fixtures', 'sunat-invoice');
 export const INVOICE_PATH = join(INVOICE_DIR, 'factura-ubl21.xml');
 export const OUTPUT_PATH = join(INVOICE_DIR, 'factura-ubl21-firmada.xml');
+
+/**
+ * Ruta del certificado persistido. Lo escribe generar-certificado-prueba.ts.
+ */
+export const CERT_BASE64_PATH = join(
+  CERT_OUTPUT_DIR,
+  'certificado-prueba.base64',
+);
 
 /** Parametros de firma de SUNAT, identicos a los de SignatureService. */
 const CANONICALIZATION = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
@@ -89,20 +110,29 @@ export function firmar(
 
 /**
  * Genera la factura firmada y la escribe en el fixture.
- * Es la funcion que usan tanto el script como la prueba automatizada.
+ *
+ * Reutiliza el certificado persistido: es lo que hace determinista al pipeline.
+ * Si el certificado no existe, hay que generarlo primero.
  */
 export function generarFacturaFirmada(): {
   ruta: string;
   xml: string;
 } {
-  // El certificado se genera en memoria y se valida con el servicio de TA-04,
-  // para garantizar que el fixture se firma con un certificado aceptado.
-  const certGenerado = generarCertificadoPrueba();
+  if (!existsSync(CERT_BASE64_PATH)) {
+    throw new Error(
+      `No se encontro el certificado en ${CERT_BASE64_PATH}. ` +
+        'Ejecuta primero: npx ts-node scripts/sunat-fixtures/generar-certificado-prueba.ts',
+    );
+  }
+
+  // Se REUTILIZA el certificado persistido en lugar de generar uno nuevo.
+  // Es lo que evita que el XML firmado cambie en cada corrida.
+  const certBase64 = readFileSync(CERT_BASE64_PATH, 'utf8').trim();
   const service = new CertificateService();
   const cert = service.validarYCargarCertificado(
-    certGenerado.certBase64,
-    certGenerado.password,
-    certGenerado.rucEmisor,
+    certBase64,
+    CERT_PASSWORD,
+    RUC_EMISOR,
   );
 
   const xmlSinFirmar = readFileSync(INVOICE_PATH, 'utf8');
@@ -122,6 +152,7 @@ function main() {
   const { ruta, xml } = generarFacturaFirmada();
 
   console.log('Factura firmada generada.');
+  console.log('  Certificado      :', CERT_BASE64_PATH);
   console.log('  Entrada          :', INVOICE_PATH);
   console.log('  Salida           :', ruta);
   console.log('  Tamano           :', xml.length, 'caracteres');
