@@ -29,7 +29,13 @@ El sistema se basa en una arquitectura **Cliente-Servidor asíncrona** y altamen
 ```bash
 git clone <url-del-repositorio>
 cd Sistema-gestion-mype-sunat
+
+# Instalación base
 npm install
+
+# Instalar dependencias criptográficas requeridas para la firma XML (SUNAT)
+npm install node-forge xml-crypto @xmldom/xmldom
+npm install -D @types/node-forge @types/xml-crypto
 ```
 
 ### 2. Configuración de Variables de Entorno
