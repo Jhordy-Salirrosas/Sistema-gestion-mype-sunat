@@ -22,7 +22,7 @@ describe('IsRucValidConstraint', () => {
     // RUC de SUNAT (Ejemplo real)
     expect(validator.validate('20100070970', {} as any)).toBe(true);
     // Otro RUC válido común
-    expect(validator.validate('20556272551', {} as any)).toBe(true);
+    expect(validator.validate('20100053455', {} as any)).toBe(true);
   });
 
   it('debería retornar false para un RUC con dígito verificador adulterado (Módulo 11 inválido)', () => {
