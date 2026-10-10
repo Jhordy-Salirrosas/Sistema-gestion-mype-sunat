@@ -128,4 +128,6 @@ function main() {
   console.log(`\nArchivos escritos en ${OUTPUT_DIR} (ignorados por git)`);
 }
 
-main();
+if (require.main === module) {
+  main();
+}

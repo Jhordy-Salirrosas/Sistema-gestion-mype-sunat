@@ -7,12 +7,13 @@
  *  - Firma: rsa-sha256
  *  - Digest: sha256
  *  - Transformacion: enveloped-signature
- *  - El ds:Signature se inserta dentro de ext:ExtensionContent
+ *  - El Signature se inserta dentro de ext:ExtensionContent
  *
  * API de xml-crypto v6 (verificada en sus tipos, NO en la v2/v3):
  *  - privateKey y publicCert van en el CONSTRUCTOR, no como propiedades.
  *  - La ubicacion se pasa como XPath en location.reference, no como nodo.
  *  - getSignedXml() devuelve el documento CON la firma ya insertada.
+ *  - El nodo se emite sin prefijo ds:, con el namespace xmldsig por defecto.
  *
  * Uso:
  *   npx ts-node scripts/sunat-fixtures/generar-factura-firmada.ts
@@ -24,9 +25,9 @@ import { SignedXml } from 'xml-crypto';
 import { CertificateService } from '../../src/modules/sunat/certificate.service';
 import { generarCertificadoPrueba } from './generar-certificado-prueba';
 
-const INVOICE_DIR = join(process.cwd(), 'fixtures', 'sunat-invoice');
-const INVOICE_PATH = join(INVOICE_DIR, 'factura-ubl21.xml');
-const OUTPUT_PATH = join(INVOICE_DIR, 'factura-ubl21-firmada.xml');
+export const INVOICE_DIR = join(process.cwd(), 'fixtures', 'sunat-invoice');
+export const INVOICE_PATH = join(INVOICE_DIR, 'factura-ubl21.xml');
+export const OUTPUT_PATH = join(INVOICE_DIR, 'factura-ubl21-firmada.xml');
 
 /** Parametros de firma de SUNAT, identicos a los de SignatureService. */
 const CANONICALIZATION = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
@@ -36,9 +37,9 @@ const TRANSFORM = 'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
 
 /**
  * Quita las cabeceras y los saltos de linea del PEM para dejar solo el Base64
- * del certificado. Es lo que espera el nodo ds:X509Certificate.
+ * del certificado. Es lo que espera el nodo X509Certificate.
  */
-function certificadoABase64(certificatePem: string): string {
+export function certificadoABase64(certificatePem: string): string {
   return certificatePem
     .replace(/-----BEGIN CERTIFICATE-----/, '')
     .replace(/-----END CERTIFICATE-----/, '')
@@ -47,18 +48,19 @@ function certificadoABase64(certificatePem: string): string {
 }
 
 /**
- * Firma el XML y devuelve el documento completo con el ds:Signature dentro de
+ * Firma el XML y devuelve el documento completo con la firma dentro de
  * ext:ExtensionContent.
  */
-function firmar(
+export function firmar(
   xmlSinFirmar: string,
   privateKeyPem: string,
   certificatePem: string,
 ): string {
   const sig = new SignedXml({
     privateKey: privateKeyPem,
-    // publicCert hace que el KeyInfo incluya <ds:X509Certificate>, que SUNAT
-    // necesita para verificar la firma.
+    // publicCert hace que el KeyInfo incluya el X509Certificate, que SUNAT
+    // necesita para verificar la firma. Sin esto, getKeyInfoContent devuelve
+    // null y la firma queda sin certificado embebido.
     publicCert: new X509Certificate(certificatePem).toString(),
     signatureAlgorithm: SIGNATURE_ALGORITHM,
     canonicalizationAlgorithm: CANONICALIZATION,
@@ -85,7 +87,14 @@ function firmar(
   return sig.getSignedXml();
 }
 
-function main() {
+/**
+ * Genera la factura firmada y la escribe en el fixture.
+ * Es la funcion que usan tanto el script como la prueba automatizada.
+ */
+export function generarFacturaFirmada(): {
+  ruta: string;
+  xml: string;
+} {
   // El certificado se genera en memoria y se valida con el servicio de TA-04,
   // para garantizar que el fixture se firma con un certificado aceptado.
   const certGenerado = generarCertificadoPrueba();
@@ -106,19 +115,28 @@ function main() {
   mkdirSync(INVOICE_DIR, { recursive: true });
   writeFileSync(OUTPUT_PATH, xmlFirmado);
 
+  return { ruta: OUTPUT_PATH, xml: xmlFirmado };
+}
+
+function main() {
+  const { ruta, xml } = generarFacturaFirmada();
+
   console.log('Factura firmada generada.');
   console.log('  Entrada          :', INVOICE_PATH);
-  console.log('  Salida           :', OUTPUT_PATH);
-  console.log('  Tamano           :', xmlFirmado.length, 'caracteres');
+  console.log('  Salida           :', ruta);
+  console.log('  Tamano           :', xml.length, 'caracteres');
   console.log(
-    '  ds:Signature     :',
-    xmlFirmado.includes('Signature') ? 'presente' : 'FALTA',
+    '  Signature        :',
+    xml.includes('Signature') ? 'presente' : 'FALTA',
   );
   console.log(
     '  X509Certificate  :',
-    xmlFirmado.includes('X509Certificate') ? 'incluido en el KeyInfo' : 'FALTA',
+    xml.includes('X509Certificate') ? 'incluido en el KeyInfo' : 'FALTA',
   );
-  console.log('  RUC del emisor   :', certGenerado.rucEmisor);
 }
 
-main();
+// Solo se ejecuta cuando se invoca el script directamente, no al importarlo
+// desde una prueba. Sin esta guarda, importar el modulo escribiria archivos.
+if (require.main === module) {
+  main();
+}
