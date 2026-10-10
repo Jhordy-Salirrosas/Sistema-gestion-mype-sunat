@@ -1,39 +1,70 @@
+
+import {
+  BadRequestException,
+  INestApplication,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, BadRequestException } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../../../src/app.module';
+import { InvoicesService } from '../../../src/modules/invoices/invoices.service';
 
 describe('InvoicesController (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeAll(async () => {
-    // 1. Inyectamos una API Key ficticia para engañar al guard y poder pasar
-    process.env.API_KEY = 'super-secret-test-key';
+  const apiKey = 'super-secret-test-key';
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+  const mockInvoicesService = {
+    create: jest.fn(),
+  };
+
+  beforeAll(async () => {
+    process.env.API_KEY = apiKey;
+
+    const moduleFixture: TestingModule =
+      await Test.createTestingModule({
+        imports: [AppModule],
+      })
+        .overrideProvider(InvoicesService)
+        .useValue(mockInvoicesService)
+        .overrideProvider(
+          require('../../../src/prisma/prisma.service').PrismaService,
+        )
+        .useValue({
+          $connect: jest.fn(),
+          $disconnect: jest.fn(),
+          $transaction: jest.fn(),
+        })
+        .overrideProvider(
+          require('../../../src/modules/queue/queue.service').QueueService,
+        )
+        .useValue({
+          enqueueInvoiceInTx: jest.fn(),
+        })
+        .compile();
 
     app = moduleFixture.createNestApplication();
-    
-    // 2. Replicamos la configuración exacta de nuestro main.ts para que los pipes funcionen igual
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
         transform: true,
         exceptionFactory: (errors) => {
-          // Solución TS7006: Asignamos tipado any explícito al error
-          const formattedErrors = errors.map((error: any) => {
+          const formattedErrors = errors.map((error) => {
             const rule = Object.keys(error.constraints || {})[0];
-            const message = error.constraints ? error.constraints[rule] : 'Dato inválido';
+            const message = error.constraints
+              ? error.constraints[rule]
+              : 'Dato inválido';
+
             return {
               field: error.property,
-              rule: rule,
-              message: message,
+              rule,
+              message,
             };
           });
+
           return new BadRequestException(formattedErrors);
         },
       }),
@@ -44,44 +75,101 @@ describe('InvoicesController (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+    delete process.env.API_KEY;
   });
 
-  it('/api/v1/invoices (POST) - Debe rechazar peticiones inválidas con formato estructurado (Criterio 5)', async () => {
-    // 3. Preparamos nuestro payload malicioso/inválido
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const validPayload = {
+    ruc_emisor: '20100070970',
+    serie: 'F001',
+    correlativo: 1,
+    tipo_comprobante: '01',
+    monto_total: 118.5,
+    fecha_emision: '2026-10-09T10:00:00.000Z',
+    payload_ubl: {
+      version: '2.1',
+      documento: 'prueba',
+    },
+  };
+
+  it('rechaza peticiones sin API Key (401)', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/invoices')
+      .send(validPayload)
+      .expect(401);
+  });
+
+  it('rechaza comprobantes inválidos con errores estructurados (400)', async () => {
     const invalidPayload = {
-      ruc_emisor: '12345678901', // Falla: Matemáticamente incorrecto (Módulo 11)
-      serie: 'B001',             // Falla: Es Boleta pero declararemos que es Factura
-      tipo_comprobante: '01',    // Factura
-      correlativo: 999999999,    // Falla: Excede el máximo
-      monto_total: -100,         // Falla: Monto negativo
-      fecha_emision: 'ayer',     // Falla: No es un formato ISO Date
-      // Omitimos 'payload_ubl' intencionalmente para provocar falla IsNotEmpty
+      ...validPayload,
+      ruc_emisor: '12345678901',
+      serie: 'B001',
+      correlativo: 999999999,
+      monto_total: -100,
+      fecha_emision: 'ayer',
     };
 
-    // 4. Disparamos el misil contra nuestro servidor local usando SuperTest
-    const response = await request(app.getHttpServer() as any)
+    const response = await request(app.getHttpServer())
       .post('/api/v1/invoices')
-      .set('x-api-key', 'super-secret-test-key') // Saltamos el ApiKeyGuard
+      .set('x-api-key', apiKey)
       .send(invalidPayload)
-      .expect(400); // 5. AFIRMAMOS QUE DEBE DEVOLVER HTTP 400 Bad Request
+      .expect(400);
 
-    // 6. Verificamos la estructura estricta del Criterio 5: [{field, rule, message}]
+    expect(Array.isArray(response.body.message)).toBe(true);
+
     const errors = response.body.message;
-    expect(Array.isArray(errors)).toBe(true);
-    
-    // Solución TS7006: Tipado explícito a 'any'
-    errors.forEach((err: any) => {
-      expect(err).toHaveProperty('field');
-      expect(err).toHaveProperty('rule');
-      expect(err).toHaveProperty('message');
+
+    for (const error of errors) {
+      expect(error).toHaveProperty('field');
+      expect(error).toHaveProperty('rule');
+      expect(error).toHaveProperty('message');
+    }
+
+    const fields = errors.map((error: { field: string }) => error.field);
+
+    expect(fields).toContain('ruc_emisor');
+    expect(fields).toContain('serie');
+    expect(fields).toContain('correlativo');
+    expect(fields).toContain('monto_total');
+    expect(fields).toContain('fecha_emision');
+  });
+
+  it('rechaza campos adicionales no declarados en el DTO (400)', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/invoices')
+      .set('x-api-key', apiKey)
+      .send({
+        ...validPayload,
+        campo_no_permitido: true,
+      })
+      .expect(400);
+  });
+
+  it('acepta un comprobante válido y devuelve HTTP 202', async () => {
+    const createdAt = new Date('2026-10-09T10:00:00.000Z');
+
+    mockInvoicesService.create.mockResolvedValue({
+      id: 'invoice-test-001',
+      estado: 'PENDIENTE',
+      created_at: createdAt,
     });
 
-    // Verificamos que se hayan detectado los campos infractores
-    const failedFields = errors.map((err: any) => err.field);
-    expect(failedFields).toContain('ruc_emisor');
-    expect(failedFields).toContain('serie');
-    expect(failedFields).toContain('monto_total');
-    expect(failedFields).toContain('fecha_emision');
-    expect(failedFields).toContain('payload_ubl'); // El campo faltante fue detectado
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/invoices')
+      .set('x-api-key', apiKey)
+      .send(validPayload)
+      .expect(202);
+
+    expect(response.body).toEqual({
+      id: 'invoice-test-001',
+      estado: 'PENDIENTE',
+      message: 'Comprobante recibido y en cola para procesamiento',
+      created_at: createdAt.toISOString(),
+    });
+
+    expect(mockInvoicesService.create).toHaveBeenCalledTimes(1);
   });
 });

@@ -59,7 +59,7 @@ export class IsSerieValidConstraint implements ValidatorConstraintInterface {
  * Lo colocaremos encima del campo "serie" en el DTO.
  */
 export function IsSerieValid(validationOptions?: ValidationOptions) {
-    return function (object: Object, propertyName: string) {
+    return function (object: object, propertyName: string) {
         registerDecorator({
             target: object.constructor,
             propertyName: propertyName,
