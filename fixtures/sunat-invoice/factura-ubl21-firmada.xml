@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><DigestValue>rYmZO48GYwnn8LtOeOeKFlV3+p3IazS3eWn3uwPb1SU=</DigestValue></Reference></SignedInfo><SignatureValue>WQjteZSpe7rE7uZHQao19kX2CBx/GOIn01nPE6PbLVgnnlQckaBrV8yJfH1NAzTqtdlHw9hPRaDppo7FTULBeESZm0V4BbsVnZ19isFBOnD0sVaI3/Knq9aZDFdII39647MW2NVivyjM6eW6MiBm90A6gheelcnyTKc46jHLSAsUnI0tkuu1Xtf8v3FE7lOrGrvcXuWH6aJMKCsztp9f+pf/fSqcSNeSaoAoSsadK6lPUDkHdI1V1JRh3fBfhaw6D8ERG2WYvjVDiHsv5BNCq3QyR7Yok+pTPbatXTJyJQbq+xH/1EdNj34e2OjXiQvEoyxcbvhWu5xtyjgmDqS07w==</SignatureValue><KeyInfo><X509Data><X509Certificate>MIIDbDCCAlSgAwIBAgIBATANBgkqhkiG9w0BAQsFADBhMS8wLQYDVQQDEyZFTVBSRVNBIERFIFBSVUVCQSBTLkEuQy4gLSAyMDEyMzQ1Njc4OTEhMB8GA1UEChMYRU1QUkVTQSBERSBQUlVFQkEgUy5BLkMuMQswCQYDVQQGEwJQRTAeFw0yNjEwMDkwNjAyMDhaFw0yODEwMDkwNjAyMDhaMGExLzAtBgNVBAMTJkVNUFJFU0EgREUgUFJVRUJBIFMuQS5DLiAtIDIwMTIzNDU2Nzg5MSEwHwYDVQQKExhFTVBSRVNBIERFIFBSVUVCQSBTLkEuQy4xCzAJBgNVBAYTAlBFMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAohu1Rn/yzq8fKfbY9J0oq3ULnFaclo3z01v+OxmkuMaPhnCJAMbjH5v50YSTexQm0RhdpVwhgxeY1v94KX3A3rNJd0Fx4l9lpopb68x0iYw4Xjzv/rkyGMTeQtYjc0k3nYzwTORsqGD0GKdRNTeasxiY4fgHL4U/YuSgmSzzH9WFM9ifVYx/kNadz1qaI6DDVIehFsXimeTlbWZxi+E+6Oqy0DKwfX7rwu4RtAPBVlYUmUZzOjTd0AoUZmbN/NAffwul5eExZ52KLU2cjON7dqXADsGong2bixGypgD0Ft4zKwqK6HQKBzXQbQ0Jj7reYVFSjm7Fgm9rWleWOijRGwIDAQABoy8wLTAJBgNVHRMEAjAAMAsGA1UdDwQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDAjANBgkqhkiG9w0BAQsFAAOCAQEAI3o6HFp3w0JvHFga1aNe0alk2rg9fd0/zVe9EHWzmSjOpL/46kzsDvEB8N802WW7BF5sE82tFNX2zvcS26AFd9+bbf6VtJFvRyj0aDd05rd96mAF7gNejxlAW4Uq80rxZLIRMjas99XObzNALrJMmwzMu4z2ooezAdQDm2TqY38cTfaVI2pzhtKOzNhdvdbk+NVpNJtpqxkAd5Wxc+ZmEjKUajpA0bf7KOlgunwjAVn75RETL4u/Kf3I+ZfwvIHymOlr+e1dxKMHvNa+UxIVTd3iNL2ufakPrjMUTTdmXvi3rwDBGpQ+/kBQc8ippqqDWrdySU7MJ55zg4ShLgSVqQ==</X509Certificate></X509Data></KeyInfo></Signature></ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>2.0</cbc:CustomizationID>
+  <cbc:ID>F001-00000001</cbc:ID>
+  <cbc:IssueDate>2026-10-06</cbc:IssueDate>
+  <cbc:IssueTime>10:15:30</cbc:IssueTime>
+  <cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+  <cbc:LineCountNumeric>1</cbc:LineCountNumeric>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="6">20123456789</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>EMPRESA DE PRUEBA S.A.C.</cbc:Name>
+      </cac:PartyName>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>EMPRESA DE PRUEBA S.A.C.</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="6">20987654321</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>CLIENTE DE PRUEBA S.A.C.</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="PEN">180.00</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="PEN">1000.00</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="PEN">180.00</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cac:TaxScheme>
+          <cbc:ID>1000</cbc:ID>
+          <cbc:Name>IGV</cbc:Name>
+          <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="PEN">1000.00</cbc:LineExtensionAmount>
+    <cbc:TaxInclusiveAmount currencyID="PEN">1180.00</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="PEN">1180.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="NIU">100</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="PEN">1000.00</cbc:LineExtensionAmount>
+    <cac:PricingReference>
+      <cac:AlternativeConditionPrice>
+        <cbc:PriceAmount currencyID="PEN">11.80</cbc:PriceAmount>
+        <cbc:PriceTypeCode>01</cbc:PriceTypeCode>
+      </cac:AlternativeConditionPrice>
+    </cac:PricingReference>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="PEN">180.00</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="PEN">1000.00</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="PEN">180.00</cbc:TaxAmount>
+        <cac:TaxCategory>
+          <cbc:ID>S</cbc:ID>
+          <cbc:Percent>18.00</cbc:Percent>
+          <cbc:TaxExemptionReasonCode>10</cbc:TaxExemptionReasonCode>
+          <cac:TaxScheme>
+            <cbc:ID>1000</cbc:ID>
+            <cbc:Name>IGV</cbc:Name>
+            <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item>
+      <cbc:Description>Servicio de prueba</cbc:Description>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="PEN">10.00</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>
+</Invoice>

@@ -1,0 +1,124 @@
+/**
+ * Firma la factura UBL 2.1 con el certificado de prueba y produce el fixture
+ * factura-ubl21-firmada.xml.
+ *
+ * Usa los MISMOS parametros que SignatureService (TA-07):
+ *  - Canonicalizacion: c14n
+ *  - Firma: rsa-sha256
+ *  - Digest: sha256
+ *  - Transformacion: enveloped-signature
+ *  - El ds:Signature se inserta dentro de ext:ExtensionContent
+ *
+ * API de xml-crypto v6 (verificada en sus tipos, NO en la v2/v3):
+ *  - privateKey y publicCert van en el CONSTRUCTOR, no como propiedades.
+ *  - La ubicacion se pasa como XPath en location.reference, no como nodo.
+ *  - getSignedXml() devuelve el documento CON la firma ya insertada.
+ *
+ * Uso:
+ *   npx ts-node scripts/sunat-fixtures/generar-factura-firmada.ts
+ */
+import { X509Certificate } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { SignedXml } from 'xml-crypto';
+import { CertificateService } from '../../src/modules/sunat/certificate.service';
+import { generarCertificadoPrueba } from './generar-certificado-prueba';
+
+const INVOICE_DIR = join(process.cwd(), 'fixtures', 'sunat-invoice');
+const INVOICE_PATH = join(INVOICE_DIR, 'factura-ubl21.xml');
+const OUTPUT_PATH = join(INVOICE_DIR, 'factura-ubl21-firmada.xml');
+
+/** Parametros de firma de SUNAT, identicos a los de SignatureService. */
+const CANONICALIZATION = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
+const SIGNATURE_ALGORITHM = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+const DIGEST_ALGORITHM = 'http://www.w3.org/2001/04/xmlenc#sha256';
+const TRANSFORM = 'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
+
+/**
+ * Quita las cabeceras y los saltos de linea del PEM para dejar solo el Base64
+ * del certificado. Es lo que espera el nodo ds:X509Certificate.
+ */
+function certificadoABase64(certificatePem: string): string {
+  return certificatePem
+    .replace(/-----BEGIN CERTIFICATE-----/, '')
+    .replace(/-----END CERTIFICATE-----/, '')
+    .replace(/[\r\n]/g, '')
+    .trim();
+}
+
+/**
+ * Firma el XML y devuelve el documento completo con el ds:Signature dentro de
+ * ext:ExtensionContent.
+ */
+function firmar(
+  xmlSinFirmar: string,
+  privateKeyPem: string,
+  certificatePem: string,
+): string {
+  const sig = new SignedXml({
+    privateKey: privateKeyPem,
+    // publicCert hace que el KeyInfo incluya <ds:X509Certificate>, que SUNAT
+    // necesita para verificar la firma.
+    publicCert: new X509Certificate(certificatePem).toString(),
+    signatureAlgorithm: SIGNATURE_ALGORITHM,
+    canonicalizationAlgorithm: CANONICALIZATION,
+  });
+
+  // Referencia al documento completo con transformacion enveloped.
+  // isEmptyUri: true equivale a URI="" (firmar todo el documento).
+  sig.addReference({
+    xpath: '/*',
+    digestAlgorithm: DIGEST_ALGORITHM,
+    transforms: [TRANSFORM],
+    isEmptyUri: true,
+  });
+
+  // La ubicacion es un XPATH, no un nodo: xml-crypto v6 cambio la API.
+  sig.computeSignature(xmlSinFirmar, {
+    location: {
+      reference: "//*[local-name(.)='ExtensionContent']",
+      action: 'append',
+    },
+  });
+
+  // getSignedXml() devuelve el documento original CON la firma insertada.
+  return sig.getSignedXml();
+}
+
+function main() {
+  // El certificado se genera en memoria y se valida con el servicio de TA-04,
+  // para garantizar que el fixture se firma con un certificado aceptado.
+  const certGenerado = generarCertificadoPrueba();
+  const service = new CertificateService();
+  const cert = service.validarYCargarCertificado(
+    certGenerado.certBase64,
+    certGenerado.password,
+    certGenerado.rucEmisor,
+  );
+
+  const xmlSinFirmar = readFileSync(INVOICE_PATH, 'utf8');
+  const xmlFirmado = firmar(
+    xmlSinFirmar,
+    cert.privateKeyPem,
+    cert.certificatePem,
+  );
+
+  mkdirSync(INVOICE_DIR, { recursive: true });
+  writeFileSync(OUTPUT_PATH, xmlFirmado);
+
+  console.log('Factura firmada generada.');
+  console.log('  Entrada          :', INVOICE_PATH);
+  console.log('  Salida           :', OUTPUT_PATH);
+  console.log('  Tamano           :', xmlFirmado.length, 'caracteres');
+  console.log(
+    '  ds:Signature     :',
+    xmlFirmado.includes('Signature') ? 'presente' : 'FALTA',
+  );
+  console.log(
+    '  X509Certificate  :',
+    xmlFirmado.includes('X509Certificate') ? 'incluido en el KeyInfo' : 'FALTA',
+  );
+  console.log('  RUC del emisor   :', certGenerado.rucEmisor);
+}
+
+main();
