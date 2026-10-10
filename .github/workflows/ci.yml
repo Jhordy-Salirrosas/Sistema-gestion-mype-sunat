@@ -24,6 +24,9 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
+      - name: Escanear secretos en el repositorio
+        run: npm run check:secrets
+
       - name: Ejecutar Linter
         run: npm run lint
 

@@ -71,6 +71,22 @@ npm run start:dev
 ```
 El servidor se levantará en `http://localhost:3000`.
 
+### 6. Comandos Especiales de Desarrollo y Seguridad
+El proyecto incluye scripts creados para facilitar el desarrollo y asegurar el repositorio:
+
+*   **Generar Certificado Mock (Para entorno local):**
+    El módulo de SUNAT exige variables criptográficas válidas para arrancar. Si aún no tienes un certificado real, genera uno falso (matemáticamente válido) ejecutando:
+    ```bash
+    node scripts/generate-dev-cert.js
+    ```
+    *(Copia el resultado y pégalo en tu archivo `.env` local).*
+
+*   **Cazador de Secretos (CI/CD):**
+    Para verificar manualmente que no estás a punto de subir archivos `.env` o certificados `.pfx` a tu repositorio, ejecuta:
+    ```bash
+    npm run check:secrets
+    ```
+
 ---
 
 ## 🌿 Flujo de Trabajo y Ramas (Git Flow)
