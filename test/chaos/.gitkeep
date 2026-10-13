@@ -1,0 +1,2 @@
+# test/chaos
+Directorio para pruebas de Resiliencia, Inyección de Fallos HTTP 503 / Timeouts y medición de MTTD y MTTR.

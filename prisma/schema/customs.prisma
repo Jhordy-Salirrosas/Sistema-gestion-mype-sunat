@@ -1,0 +1,91 @@
+// prisma/schema/customs.prisma
+
+enum CustomsStatus {
+  REGISTRADO
+  LIQUIDADO
+  APLICADO_KARDEX
+  ANULADO
+}
+
+enum KardexMovementType {
+  INGRESO_IMPORTACION
+  SALIDA_VENTA
+  AJUSTE_INVENTARIO
+}
+
+model CustomsDeclaration {
+  id                      String        @id @default(uuid())
+  company_id              String
+  company                 Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  dua_number              String
+  customs_agency_code     String
+  regime_code             String        @default("10")
+  numeration_date         DateTime
+  fob_value_usd           Decimal       @db.Decimal(14, 2)
+  freight_value_usd       Decimal       @default(0.00) @db.Decimal(14, 2)
+  insurance_value_usd     Decimal       @default(0.00) @db.Decimal(14, 2)
+  cif_value_usd           Decimal       @db.Decimal(14, 2)
+  exchange_rate           Decimal       @db.Decimal(6, 4)
+  cif_value_pen           Decimal       @db.Decimal(14, 2)
+  ad_valorem_rate         Decimal       @db.Decimal(5, 2)
+  ad_valorem_amount_pen   Decimal       @db.Decimal(14, 2)
+  igv_rate                Decimal       @default(16.00) @db.Decimal(5, 2)
+  ipm_rate                Decimal       @default(2.00) @db.Decimal(5, 2)
+  igv_ipm_amount_pen      Decimal       @db.Decimal(14, 2)
+  perception_rate         Decimal       @db.Decimal(5, 2)
+  perception_amount_pen   Decimal       @db.Decimal(14, 2)
+  total_customs_taxes_pen Decimal       @db.Decimal(14, 2)
+  status                  CustomsStatus @default(REGISTRADO)
+  dua_pdf_storage_url     String?
+  created_at              DateTime      @default(now())
+  updated_at              DateTime      @updatedAt
+
+  items                   CustomsItem[]
+
+  @@unique([company_id, dua_number])
+  @@index([company_id, numeration_date, status])
+  @@map("customs_declarations")
+}
+
+model CustomsItem {
+  id                      String              @id @default(uuid())
+  declaration_id          String
+  declaration             CustomsDeclaration  @relation(fields: [declaration_id], references: [id], onDelete: Cascade)
+  item_order              Int
+  hs_code                 String
+  commercial_description  String
+  quantity                Decimal             @db.Decimal(12, 4)
+  unit_code               String
+  fob_unit_usd            Decimal             @db.Decimal(14, 4)
+  fob_total_usd           Decimal             @db.Decimal(14, 2)
+  allocated_cif_pen       Decimal             @db.Decimal(14, 2)
+  allocated_duties_pen    Decimal             @db.Decimal(14, 2)
+  landed_cost_unit_pen    Decimal             @db.Decimal(14, 4)
+
+  @@index([declaration_id, item_order])
+  @@map("customs_items")
+}
+
+model KardexMovement {
+  id                          String             @id @default(uuid())
+  company_id                  String
+  company                     Company            @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  movement_date               DateTime
+  movement_type               KardexMovementType
+  item_code                   String
+  description                 String
+  source_reference_id         String?
+  quantity_in                 Decimal            @default(0.0000) @db.Decimal(12, 4)
+  unit_cost_in                Decimal            @default(0.0000) @db.Decimal(14, 4)
+  total_cost_in               Decimal            @default(0.00) @db.Decimal(14, 2)
+  quantity_out                Decimal            @default(0.0000) @db.Decimal(12, 4)
+  unit_cost_out               Decimal            @default(0.0000) @db.Decimal(14, 4)
+  total_cost_out              Decimal            @default(0.00) @db.Decimal(14, 2)
+  final_stock_quantity        Decimal            @db.Decimal(12, 4)
+  final_average_unit_cost     Decimal            @db.Decimal(14, 4)
+  final_total_inventory_value Decimal            @db.Decimal(14, 2)
+  created_at                  DateTime           @default(now())
+
+  @@index([company_id, item_code, movement_date, created_at])
+  @@map("kardex_movements")
+}

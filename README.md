@@ -89,6 +89,31 @@ El proyecto incluye scripts creados para facilitar el desarrollo y asegurar el r
 
 ---
 
+## 🧪 Suite de Pruebas Automatizadas
+
+El proyecto cuenta con una suite completa multi-capa ubicada estrictamente en `test/` (siguiendo el *Mirror Directory Pattern*). Para la guía completa y todos los comandos, consulta [test/README.md](./test/README.md).
+
+| Tipo de Prueba | Comando |
+| :--- | :--- |
+| **Todas las pruebas** | `npm test` |
+| **Facturación (`invoices`)** | `npm test -- test/unit/invoices` |
+| **Resiliencia (`resilience`)** | `npm test -- test/unit/resilience` |
+| **Aduanas (`customs`)** | `npm test -- test/unit/customs` |
+| **SIRE (`sire`)** | `npm test -- test/unit/sire` |
+| **Contabilidad (`accounting`)** | `npm test -- test/unit/accounting` |
+| **Pruebas de Integración** | `npm test -- test/integration` |
+| **Pruebas End-to-End (E2E)** | `npm run test:e2e` |
+
+---
+
+## 📚 Arquitectura y Normativa del Proyecto
+
+- **Plan Maestro de Ingeniería:** [specs/PLAN.md](./specs/PLAN.md) — Normas de arquitectura hexagonal, estándares de código, límites de líneas y protocolos para el equipo.
+- **Estructura de Directorios:** [docs/cambios/estructuraDirectorios.md](./docs/cambios/estructuraDirectorios.md) — Árbol modular detallado carpeta por carpeta.
+- **Metodología Spec-Driven Development:** [specs/README.md](./specs/README.md) — Especificaciones técnicas por módulo.
+
+---
+
 ## 🌿 Flujo de Trabajo y Ramas (Git Flow)
 
 Este proyecto utiliza un flujo de trabajo simplificado basado en **Git Flow** y **Pull Requests (PR)** para mantener la estabilidad del código y asegurar la calidad.

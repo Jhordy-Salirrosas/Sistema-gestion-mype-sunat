@@ -13,8 +13,8 @@
  * traza de auditoria divergen, se pierde la trazabilidad.
  */
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { InvoiceStatus } from '../../generated/prisma/enums';
+import { PrismaService } from '../../database/prismaService';
+import { InvoiceStatus } from '../../generated/client/enums';
 import { CdrClassification } from './soap/cdr-classifier';
 import { ParsedCdr } from './soap/cdr.parser';
 

@@ -18,7 +18,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { CdrPersistenceService } from './cdr-persistence.service';
-import { InvoiceStatus } from '../../generated/prisma/enums';
+import { InvoiceStatus } from '../../generated/client/enums';
 import { classifyCdr } from './soap/cdr.classifier';
 import { CdrClassification, classifyResponseCode } from './soap/cdr-classifier';
 import {

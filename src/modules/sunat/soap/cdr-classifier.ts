@@ -14,7 +14,7 @@
  * texto de la descripcion. SUNAT cambia las redacciones entre versiones de sus
  * catalogos.
  */
-import { InvoiceStatus } from '../../../generated/prisma/enums';
+import { InvoiceStatus } from '../../../generated/client/enums';
 
 /**
  * Clasificacion detallada. InvoiceStatus solo tiene 6 valores, asi que se

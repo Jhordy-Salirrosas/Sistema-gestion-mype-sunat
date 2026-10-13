@@ -147,9 +147,9 @@ vite.config.ts.timestamp-*
 .env.development
 .env.production
 .env.local
-/generated/prisma
-
 # Archivos generados automáticamente por Prisma 7
+src/generated/
+
 .agents/
 .claude/
 .windsurf/

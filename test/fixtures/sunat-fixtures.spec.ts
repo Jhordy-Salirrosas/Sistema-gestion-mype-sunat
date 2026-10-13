@@ -20,7 +20,7 @@ import { SignedXml } from 'xml-crypto';
 import { CertificateService } from '../../src/modules/sunat/certificate.service';
 import { parseCdr } from '../../src/modules/sunat/soap/cdr.parser';
 import { classifyCdr } from '../../src/modules/sunat/soap/cdr.classifier';
-import { InvoiceStatus } from '../../src/generated/prisma/enums';
+import { InvoiceStatus } from '../../src/generated/client/enums';
 import { generarCertificadoPrueba } from '../../scripts/sunat-fixtures/generar-certificado-prueba';
 
 const XMLDSIG_NS = 'http://www.w3.org/2000/09/xmldsig#';

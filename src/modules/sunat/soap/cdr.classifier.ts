@@ -7,7 +7,7 @@
  * Note a nivel de raiz. Si solo se mira el codigo, un comprobante observado se
  * guarda como "aceptado limpio" y la observacion se pierde. Ver ADR-05.
  */
-import { InvoiceStatus } from '../../../generated/prisma/enums';
+import { InvoiceStatus } from '../../../generated/client/enums';
 import { classifyResponseCode, CdrClassification } from './cdr-classifier';
 import { ParsedCdr } from './cdr.parser';
 
