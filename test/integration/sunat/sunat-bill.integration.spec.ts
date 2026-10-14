@@ -21,7 +21,10 @@ import { CdrPersistenceService } from '../../../src/modules/sunat/cdr-persistenc
 import { SunatBillMockController } from '../../mocks/sunat/sunat-bill-mock.controller';
 import { SunatBillService } from '../../../src/modules/sunat/sunat-bill.service';
 import { SunatSoapFaultError } from '../../../src/modules/sunat/soap/soap-envelope';
-import { SunatSoapClient, SunatTransportError } from '../../../src/modules/sunat/soap/sunat-soap.client';
+import {
+  SunatSoapClient,
+  SunatTransportError,
+} from '../../../src/modules/sunat/soap/sunat-soap.client';
 
 jest.setTimeout(30_000);
 
@@ -29,7 +32,7 @@ jest.setTimeout(30_000);
 const ZIP_DE_PRUEBA = (() => {
   const zip = new AdmZip();
   zip.addFile(
-    '20123456789-01-F001-1.xml',
+    '20123456786-01-F001-1.xml',
     Buffer.from('<Invoice><ID>F001-00000001</ID></Invoice>', 'utf8'),
   );
   return zip.toBuffer();
@@ -62,7 +65,7 @@ class PersistenceStub {
 
 const paramsBase = {
   invoiceId: 'factura-de-prueba',
-  rucEmisor: '20123456789',
+  rucEmisor: '20123456786',
   tipoComprobante: '01',
   serie: 'F001',
   correlativo: 1,
@@ -234,7 +237,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
 
     await expect(
       cliente.sendBill({
-        fileName: '20123456789-01-FAULT-1.zip',
+        fileName: '20123456786-01-FAULT-1.zip',
         zip: ZIP_DE_PRUEBA,
       }),
     ).rejects.toBeInstanceOf(SunatSoapFaultError);
@@ -246,7 +249,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
     });
 
     const resultado = await cliente.sendBill({
-      fileName: '20123456789-01-F001-1.zip',
+      fileName: '20123456786-01-F001-1.zip',
       zip: ZIP_DE_PRUEBA,
     });
 

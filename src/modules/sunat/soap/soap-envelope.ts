@@ -18,7 +18,7 @@ import {
 export interface SendBillCredentials {
   /**
    * Usuario SOL secundario tal como lo espera SUNAT: RUC + usuario.
-   * Ejemplo: 20123456789MODDATOS
+   * Ejemplo: 20123456786MODDATOS
    */
   username: string;
   /** Clave SOL. */

@@ -19,7 +19,7 @@ import AdmZip from 'adm-zip';
 const OUTPUT_DIR = join(process.cwd(), 'fixtures', 'sunat-cdr');
 
 /** Nombre del XML dentro del ZIP, tal como lo entrega SUNAT. */
-const CDR_XML_ENTRY_NAME = 'R-20123456789-01-F001-1.xml';
+const CDR_XML_ENTRY_NAME = 'R-20123456786-01-F001-1.xml';
 
 interface FixtureDefinition {
   name: string;

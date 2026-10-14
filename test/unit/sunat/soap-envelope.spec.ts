@@ -20,7 +20,7 @@ const ZIP_MINIMO = Buffer.from('PK-contenido-simulado').toString('base64');
 describe('buildSendBillEnvelope', () => {
   it('usa el namespace del Body correcto y la operacion sendBill', () => {
     const envelope = buildSendBillEnvelope({
-      fileName: '20123456789-01-F001-1.zip',
+      fileName: '20123456786-01-F001-1.zip',
       contentFileBase64: ZIP_MINIMO,
     });
 
@@ -35,7 +35,7 @@ describe('buildSendBillEnvelope', () => {
 
   it('respeta el orden fileName, contentFile del XSD', () => {
     const envelope = buildSendBillEnvelope({
-      fileName: '20123456789-01-F001-1.zip',
+      fileName: '20123456786-01-F001-1.zip',
       contentFileBase64: ZIP_MINIMO,
     });
 
@@ -46,7 +46,7 @@ describe('buildSendBillEnvelope', () => {
 
   it('va sin WS-Security cuando no hay credenciales', () => {
     const envelope = buildSendBillEnvelope({
-      fileName: '20123456789-01-F001-1.zip',
+      fileName: '20123456786-01-F001-1.zip',
       contentFileBase64: ZIP_MINIMO,
       credentials: null,
     });
@@ -57,15 +57,15 @@ describe('buildSendBillEnvelope', () => {
 
   it('incluye UsernameToken con PasswordText cuando hay credenciales', () => {
     const envelope = buildSendBillEnvelope({
-      fileName: '20123456789-01-F001-1.zip',
+      fileName: '20123456786-01-F001-1.zip',
       contentFileBase64: ZIP_MINIMO,
-      credentials: { username: '20123456789MODDATOS', password: 'clave-sol' },
+      credentials: { username: '20123456786MODDATOS', password: 'clave-sol' },
     });
 
     expect(envelope).toContain('wsse:Security');
     expect(envelope).toContain(WSSE_NAMESPACE);
     expect(envelope).toContain(
-      '<wsse:Username>20123456789MODDATOS</wsse:Username>',
+      '<wsse:Username>20123456786MODDATOS</wsse:Username>',
     );
     expect(envelope).toContain(`Type="${WSSE_PASSWORD_TYPE}"`);
     expect(envelope).toContain('<wsse:Password');
@@ -168,11 +168,11 @@ describe('buildZipFileName', () => {
   it('arma el nombre que espera SUNAT sin ceros de relleno', () => {
     expect(
       buildZipFileName({
-        ruc: '20123456789',
+        ruc: '20123456786',
         tipoComprobante: '1',
         serie: 'f001',
         correlativo: 1,
       }),
-    ).toBe('20123456789-01-F001-1.zip');
+    ).toBe('20123456786-01-F001-1.zip');
   });
 });
