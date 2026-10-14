@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<ns3:ApplicationResponse xmlns:ns3="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2" xmlns:ns4="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:ns5="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <ns5:UBLVersionID>2.1</ns5:UBLVersionID>
+  <ns5:ID>201656892705188</ns5:ID>
+  <ns4:DocumentResponse>
+    <ns4:Response>
+      <ns5:ReferenceID>F001-00000001</ns5:ReferenceID>
+      <ns5:ResponseCode>0</ns5:ResponseCode>
+      <ns5:Description>La Factura numero F001-00000001, ha sido aceptada</ns5:Description>
+    </ns4:Response>
+  </ns4:DocumentResponse>
+</ns3:ApplicationResponse>

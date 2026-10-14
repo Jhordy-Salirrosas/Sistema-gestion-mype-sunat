@@ -7,34 +7,89 @@ enum InvoiceStatus {
   ACEPTADO
   RECHAZADO
   ERROR_RED
+  ANULADO
+}
+
+model InvoiceSeries {
+  id                  String        @id @default(uuid())
+  company_id          String
+  company             Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  document_type       String
+  series              String
+  current_correlative Int           @default(0)
+  is_active           Boolean       @default(true)
+  updated_at          DateTime      @updatedAt
+
+  invoices            Invoice[]
+
+  @@unique([company_id, document_type, series])
+  @@map("invoice_series")
 }
 
 model Invoice {
-  id               String        @id @default(uuid())
-  ruc_emisor       String
-  serie            String
-  correlativo      Int
-  tipo_comprobante String
-  monto_total      Decimal       @db.Decimal(10, 2)
-  fecha_emision    DateTime
-  estado           InvoiceStatus @default(PENDIENTE)
-  payload_ubl      Json
-  cdr_sunat        Json?
-  created_at       DateTime      @default(now())
-  updated_at       DateTime      @updatedAt
+  id                          String        @id @default(uuid())
+  company_id                  String?
+  company                     Company?      @relation(fields: [company_id], references: [id], onDelete: Restrict)
   
-  history          TransactionHistory[]
+  // Datos principales de compatibilidad y emisión
+  ruc_emisor                  String
+  serie                       String
+  correlativo                 Int
+  tipo_comprobante            String
+  monto_total                 Decimal       @db.Decimal(14, 2)
+  fecha_emision               DateTime
+  estado                      InvoiceStatus @default(PENDIENTE)
+  payload_ubl                 Json
+  cdr_sunat                   Json?
+  
+  // Campos normativos UBL 2.1 adicionales
+  customer_identity_type      String?
+  customer_identity_number    String?
+  customer_legal_name         String?
+  currency_code               String        @default("PEN")
+  taxable_operations          Decimal       @default(0.00) @db.Decimal(14, 2)
+  exempt_operations           Decimal       @default(0.00) @db.Decimal(14, 2)
+  unaffected_operations       Decimal       @default(0.00) @db.Decimal(14, 2)
+  total_igv                   Decimal       @default(0.00) @db.Decimal(14, 2)
+  sunat_response_code         String?
+  xml_storage_url             String?
+  xml_hash_sha256             String?
+  cdr_storage_url             String?
+  
+  // Referencias para Notas de Crédito / Débito
+  referenced_invoice_id       String?
+  referenced_document_type    String?
+  referenced_series_correlative String?
+  credit_debit_reason_code    String?
+
+  series_rel_id               String?
+  series_rel                  InvoiceSeries? @relation(fields: [series_rel_id], references: [id])
+
+  items                       InvoiceItem[]
+  history                     TransactionHistory[]
+
+  created_at                  DateTime      @default(now())
+  updated_at                  DateTime      @updatedAt
+
+  @@index([company_id, fecha_emision, estado])
+  @@map("invoices")
 }
 
-model TransactionHistory {
-  id                  String         @id @default(uuid())
-  invoice_id          String
-  invoice             Invoice        @relation(fields: [invoice_id], references: [id])
-  intento             Int            @default(1)
-  estado_anterior     InvoiceStatus?
-  estado_nuevo        InvoiceStatus
-  codigo_error        String?
-  mensaje_error       String?
-  tiempo_respuesta_ms Int?
-  created_at          DateTime       @default(now())
+model InvoiceItem {
+  id                    String        @id @default(uuid())
+  invoice_id            String
+  invoice               Invoice       @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  item_order            Int
+  item_code             String?
+  description           String
+  unit_code             String        @default("NIU")
+  quantity              Decimal       @db.Decimal(12, 4)
+  unit_value            Decimal       @db.Decimal(14, 4)
+  unit_price            Decimal       @db.Decimal(14, 4)
+  igv_affectation_type  String
+  igv_amount            Decimal       @default(0.00) @db.Decimal(14, 2)
+  total_amount          Decimal       @db.Decimal(14, 2)
+
+  @@index([invoice_id, item_order])
+  @@map("invoice_items")
 }

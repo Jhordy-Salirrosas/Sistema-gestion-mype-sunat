@@ -5,9 +5,8 @@
 
 // prisma/schema/base.prisma
 generator client {
-  provider        = "prisma-client"
-  output          = "../../src/generated/prisma"
-  previewFeatures = ["prismaSchemaFolder"] // Lo activamos por si acaso
+  provider = "prisma-client"
+  output   = "../../src/generated/client"
 }
 datasource db {
   provider = "postgresql"

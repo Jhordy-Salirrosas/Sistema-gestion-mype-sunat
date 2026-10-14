@@ -33,6 +33,7 @@ const config: Config = {
   ],
   coverageDirectory: './coverage',
   testEnvironment: 'node',
+  setupFiles: ['<rootDir>/test/setup.ts'],
 };
 
 export default config;

@@ -1,0 +1,42 @@
+// prisma/schema/resilience.prisma
+
+model TransactionHistory {
+  id                  String         @id @default(uuid())
+  company_id          String?
+  invoice_id          String
+  invoice             Invoice        @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  intento             Int            @default(1)
+  estado_anterior     InvoiceStatus?
+  estado_nuevo        InvoiceStatus
+  codigo_error        String?
+  mensaje_error       String?
+  tiempo_respuesta_ms Int?
+  circuit_breaker_state String       @default("CLOSED")
+  created_at          DateTime       @default(now())
+
+  @@index([invoice_id, intento])
+  @@index([company_id, created_at])
+  @@map("transaction_history")
+}
+
+model AuditLog {
+  id              String        @id @default(uuid())
+  company_id      String
+  company         Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  user_id         String?
+  user            User?         @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  module          String
+  action          String
+  entity_name     String
+  entity_id       String
+  ip_address      String
+  user_agent      String?
+  previous_values Json?
+  new_values      Json?
+  digest_hash     String
+  created_at      DateTime      @default(now())
+
+  @@index([company_id, created_at])
+  @@index([entity_name, entity_id])
+  @@map("audit_logs")
+}

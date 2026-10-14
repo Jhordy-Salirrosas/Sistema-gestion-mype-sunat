@@ -1,0 +1,94 @@
+// prisma/schema/sire.prisma
+
+enum SireBookType {
+  RVIE_VENTAS
+  RCE_COMPRAS
+}
+
+enum ReconciliationStatus {
+  EN_REVISION
+  CONCILIADO
+  CERRADO
+}
+
+enum DiscrepancyType {
+  COINCIDENCIA_EXACTA
+  DIFERENCIA_MONTOS
+  OMISION_LOCAL
+  OMISION_SUNAT
+}
+
+enum ResolutionAction {
+  ACEPTAR_PROPUESTA_SUNAT
+  MANTENER_REGISTRO_LOCAL
+  PENDIENTE
+}
+
+model SireProposal {
+  id                  String        @id @default(uuid())
+  company_id          String
+  company             Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period              String
+  book_type           SireBookType
+  car_sunat           String
+  emitter_ruc         String
+  emitter_legal_name  String?
+  document_type       String
+  series              String
+  correlative         String
+  issue_date          DateTime
+  taxable_base        Decimal       @db.Decimal(14, 2)
+  igv_amount          Decimal       @db.Decimal(14, 2)
+  total_amount        Decimal       @db.Decimal(14, 2)
+  raw_line_data       Json?
+  imported_at         DateTime      @default(now())
+
+  discrepancies       SireDiscrepancy[]
+
+  @@unique([company_id, book_type, car_sunat])
+  @@index([company_id, period, document_type, series, correlative])
+  @@map("sire_proposals")
+}
+
+model SireReconciliation {
+  id                    String                @id @default(uuid())
+  company_id            String
+  company               Company               @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period                String
+  book_type             SireBookType
+  total_sunat_records   Int
+  total_local_records   Int
+  exact_matches_count   Int
+  discrepancies_count   Int
+  status                ReconciliationStatus  @default(EN_REVISION)
+  reconciled_by         String?
+  reconciler            User?                 @relation(fields: [reconciled_by], references: [id], onDelete: SetNull)
+  reconciled_at         DateTime?
+  created_at            DateTime              @default(now())
+
+  discrepancies         SireDiscrepancy[]
+
+  @@map("sire_reconciliations")
+}
+
+model SireDiscrepancy {
+  id                  String             @id @default(uuid())
+  reconciliation_id   String
+  reconciliation      SireReconciliation @relation(fields: [reconciliation_id], references: [id], onDelete: Cascade)
+  discrepancy_type    DiscrepancyType
+  document_type       String
+  series              String
+  correlative         String
+  sire_proposal_id    String?
+  sire_proposal       SireProposal?      @relation(fields: [sire_proposal_id], references: [id], onDelete: SetNull)
+  local_invoice_id    String?
+  sire_total_amount   Decimal?           @db.Decimal(14, 2)
+  local_total_amount  Decimal?           @db.Decimal(14, 2)
+  amount_difference   Decimal?           @default(0.00) @db.Decimal(14, 2)
+  resolution_action   ResolutionAction   @default(PENDIENTE)
+  resolution_notes    String?
+  resolved_at         DateTime?
+
+  @@index([reconciliation_id, discrepancy_type])
+  @@map("sire_discrepancies")
+}

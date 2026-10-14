@@ -1,0 +1,2 @@
+# test/integration
+Directorio reservado para pruebas de integración con PostgreSQL efímero y persistencia transaccional.

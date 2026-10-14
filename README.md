@@ -29,7 +29,13 @@ El sistema se basa en una arquitectura **Cliente-Servidor asíncrona** y altamen
 ```bash
 git clone <url-del-repositorio>
 cd Sistema-gestion-mype-sunat
+
+# Instalación base
 npm install
+
+# Instalar dependencias criptográficas requeridas para la firma XML (SUNAT)
+npm install node-forge xml-crypto @xmldom/xmldom
+npm install -D @types/node-forge @types/xml-crypto
 ```
 
 ### 2. Configuración de Variables de Entorno
@@ -64,6 +70,47 @@ npx prisma migrate dev --name init
 npm run start:dev
 ```
 El servidor se levantará en `http://localhost:3000`.
+
+### 6. Comandos Especiales de Desarrollo y Seguridad
+El proyecto incluye scripts creados para facilitar el desarrollo y asegurar el repositorio:
+
+*   **Generar Certificado Mock (Para entorno local):**
+    El módulo de SUNAT exige variables criptográficas válidas para arrancar. Si aún no tienes un certificado real, genera uno falso (matemáticamente válido) ejecutando:
+    ```bash
+    node scripts/generate-dev-cert.js
+    ```
+    *(Copia el resultado y pégalo en tu archivo `.env` local).*
+
+*   **Cazador de Secretos (CI/CD):**
+    Para verificar manualmente que no estás a punto de subir archivos `.env` o certificados `.pfx` a tu repositorio, ejecuta:
+    ```bash
+    npm run check:secrets
+    ```
+
+---
+
+## 🧪 Suite de Pruebas Automatizadas
+
+El proyecto cuenta con una suite completa multi-capa ubicada estrictamente en `test/` (siguiendo el *Mirror Directory Pattern*). Para la guía completa y todos los comandos, consulta [test/README.md](./test/README.md).
+
+| Tipo de Prueba | Comando |
+| :--- | :--- |
+| **Todas las pruebas** | `npm test` |
+| **Facturación (`invoices`)** | `npm test -- test/unit/invoices` |
+| **Resiliencia (`resilience`)** | `npm test -- test/unit/resilience` |
+| **Aduanas (`customs`)** | `npm test -- test/unit/customs` |
+| **SIRE (`sire`)** | `npm test -- test/unit/sire` |
+| **Contabilidad (`accounting`)** | `npm test -- test/unit/accounting` |
+| **Pruebas de Integración** | `npm test -- test/integration` |
+| **Pruebas End-to-End (E2E)** | `npm run test:e2e` |
+
+---
+
+## 📚 Arquitectura y Normativa del Proyecto
+
+- **Plan Maestro de Ingeniería:** [specs/PLAN.md](./specs/PLAN.md) — Normas de arquitectura hexagonal, estándares de código, límites de líneas y protocolos para el equipo.
+- **Estructura de Directorios:** [docs/cambios/estructuraDirectorios.md](./docs/cambios/estructuraDirectorios.md) — Árbol modular detallado carpeta por carpeta.
+- **Metodología Spec-Driven Development:** [specs/README.md](./specs/README.md) — Especificaciones técnicas por módulo.
 
 ---
 

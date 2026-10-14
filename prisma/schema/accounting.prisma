@@ -1,0 +1,66 @@
+// prisma/schema/accounting.prisma
+
+enum EntryStatus {
+  BORRADOR
+  ASENTADO
+  ANULADO
+}
+
+model AccountingEntry {
+  id                    String            @id @default(uuid())
+  company_id            String
+  company               Company           @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period                String
+  entry_number          Int
+  entry_date            DateTime
+  glosa                 String
+  source_module         String
+  source_reference_id   String?
+  total_debit           Decimal           @db.Decimal(14, 2)
+  total_credit          Decimal           @db.Decimal(14, 2)
+  is_balanced           Boolean
+  status                EntryStatus       @default(ASENTADO)
+  created_at            DateTime          @default(now())
+
+  lines                 AccountingLine[]
+
+  @@unique([company_id, period, entry_number])
+  @@index([company_id, period, entry_date])
+  @@map("accounting_entries")
+}
+
+model AccountingLine {
+  id              String          @id @default(uuid())
+  entry_id        String
+  entry           AccountingEntry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  line_order      Int
+  account_code    String
+  account_name    String
+  debit_amount    Decimal         @default(0.00) @db.Decimal(14, 2)
+  credit_amount   Decimal         @default(0.00) @db.Decimal(14, 2)
+
+  @@index([entry_id, line_order])
+  @@index([account_code])
+  @@map("accounting_lines")
+}
+
+model PleBook {
+  id                  String        @id @default(uuid())
+  company_id          String
+  company             Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period              String
+  book_code           String
+  official_file_name  String
+  records_count       Int
+  total_taxable_base  Decimal       @db.Decimal(14, 2)
+  total_igv           Decimal       @db.Decimal(14, 2)
+  total_amount        Decimal       @db.Decimal(14, 2)
+  file_storage_url    String
+  file_sha256_hash    String
+  generated_by        String?
+  generator           User?         @relation(fields: [generated_by], references: [id], onDelete: SetNull)
+  generated_at        DateTime      @default(now())
+
+  @@index([company_id, period, book_code])
+  @@map("ple_books")
+}

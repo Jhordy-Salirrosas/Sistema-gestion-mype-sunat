@@ -1,0 +1,72 @@
+// prisma/schema/auth.prisma
+
+enum Role {
+  ADMIN
+  CONTADOR
+  OPERADOR_FACTURACION
+  OPERADOR_ADUANAS
+  AUDITOR
+}
+
+model Company {
+  id                    String        @id @default(uuid())
+  ruc                   String        @unique
+  legal_name            String
+  trade_name            String?
+  sol_user              String
+  sol_pass_encrypted    String
+  cert_storage_url      String?
+  cert_pass_encrypted   String?
+  sire_client_id_enc    String?
+  sire_client_secret_enc String?
+  is_active             Boolean       @default(true)
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+
+  users                 User[]
+  series                InvoiceSeries[]
+  invoices              Invoice[]
+  declarations          CustomsDeclaration[]
+  kardex_movements      KardexMovement[]
+  sire_proposals        SireProposal[]
+  sire_reconciliations  SireReconciliation[]
+  accounting_entries    AccountingEntry[]
+  ple_books             PleBook[]
+  audit_logs            AuditLog[]
+
+  @@map("companies")
+}
+
+model User {
+  id                    String        @id @default(uuid())
+  company_id            String
+  company               Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  email                 String
+  password_hash         String
+  full_name             String
+  role                  Role          @default(OPERADOR_FACTURACION)
+  is_active             Boolean       @default(true)
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+
+  refresh_tokens        RefreshToken[]
+  reconciliations       SireReconciliation[]
+  ple_books             PleBook[]
+  audit_logs            AuditLog[]
+
+  @@unique([company_id, email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id                    String        @id @default(uuid())
+  user_id               String
+  user                  User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash            String
+  expires_at            DateTime
+  is_revoked            Boolean       @default(false)
+  created_at            DateTime      @default(now())
+
+  @@index([user_id, expires_at])
+  @@map("refresh_tokens")
+}
