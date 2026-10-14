@@ -1,7 +1,7 @@
 /**
  * Generador de CDR de prueba para el Mock del billService.
  *
- * Son datos FICTICIOS: el RUC 20123456789 y la serie F001 no corresponden a
+ * Son datos FICTICIOS: el RUC 20123456786 y la serie F001 no corresponden a
  * nadie. Reutiliza la misma logica de empaquetado que el generador de fixtures
  * (adm-zip para el ZIP, Base64 para el transporte).
  */
@@ -11,7 +11,7 @@ export type CdrMockScenario =
   'ACEPTADO' | 'RECHAZADO' | 'OBSERVACION' | 'EXCEPCION';
 
 /** Nombre del XML dentro del ZIP, tal como lo entrega SUNAT. */
-export const CDR_XML_ENTRY_NAME = 'R-20123456789-01-F001-1.xml';
+export const CDR_XML_ENTRY_NAME = 'R-20123456786-01-F001-1.xml';
 
 export interface BuildCdrXmlOptions {
   responseCode: string;
