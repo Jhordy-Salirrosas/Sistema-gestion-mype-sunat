@@ -1,7 +1,7 @@
 # Fixtures del pipeline de emisión
 
 Insumos de prueba del pipeline de facturación electrónica. **No contienen datos
-reales ni credenciales**: el RUC `20123456789`, la serie `F001` y el correlativo
+reales ni credenciales**: el RUC `20123456786`, la serie `F001` y el correlativo
 `1` son ficticios.
 
 ## Como se regeneran
@@ -77,7 +77,7 @@ produce un PKCS#12 autofirmado que cumple las cuatro validaciones de TA-04:
 Los archivos se escriben en `fixtures/certs/`, que esta ignorado por git. Para
 usarlos:
 
-    RUC_EMISOR=20123456789
+    RUC_EMISOR=20123456786
     CERT_PASSWORD=prueba-ta08
     CERT_BASE64=<contenido de fixtures/certs/certificado-prueba.base64>
 
