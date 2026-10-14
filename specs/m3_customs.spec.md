@@ -38,7 +38,7 @@ $$\text{Percepción (PEN)} = \text{Base Percepción (PEN)} \times \left(\frac{\t
 ### 2.6. Regla 6: Prorrateo de Costos y Costo Unitario Nacionalizado (Landed Cost)
 Para cada ítem o serie de la DUA ($i$):
 $$\text{Landed Cost Unitario (PEN)}_i = \frac{\text{CIF Prorrateado (PEN)}_i + \text{Ad-Valorem Prorrateado (PEN)}_i}{\text{Cantidad}_i}$$
-*Nota Contable:* El IGV/IPM y la Percepción no forman parte del costo del inventario porque constituyen **Crédito Fiscal** deducible para la MYPE.
+*Nota Contable Obligatoria:* El IGV/IPM y la Percepción **NO forman parte del costo de inventario** porque constituyen **Crédito Fiscal** deducible para la MYPE.
 
 ### 2.7. Regla 7: Actualización de Kardex Valorizado (Promedio Ponderado)
 $$\text{Nuevo Stock} = \text{Stock Anterior} + \text{Cantidad Ingresada}$$
@@ -47,49 +47,119 @@ $$\text{Nuevo Costo Promedio Unitario} = \frac{\text{Nuevo Valor Total}}{\text{N
 
 ---
 
-## 3. Contratos de Entrada y Salida (DTOs)
+## 3. Estructura de Directorios del Módulo (`src/modules/customs/`)
 
-### `RegisterDuaDto`
+```text
+src/modules/customs/
+├── customsModule.ts                  # Módulo NestJS con controladores y proveedores de puertos
+│
+├── domain/                           # [CAPA 1: DOMINIO PURO]
+│   ├── entities/
+│   │   ├── customsDeclarationEntity.ts # Entidad de Declaración DUA
+│   │   └── kardexMovementEntity.ts    # Entidad de Movimiento de Inventario
+│   ├── rules/
+│   │   ├── calculateCifRule.ts        # Cálculo puro de Valor CIF en USD y PEN
+│   │   └── calculateCustomsTaxesRule.ts # Liquidación pura de Ad-Valorem, IGV y Percepción
+│   ├── value-objects/
+│   │   └── duaNumberVo.ts             # Validación del formato aduanero oficial (ej. 118-2026-10-012345)
+│   └── ports/
+│       ├── customsRepositoryPort.ts   # ICustomsRepositoryPort y Symbol CUSTOMS_REPOSITORY_PORT
+│       └── kardexRepositoryPort.ts    # IKardexRepositoryPort y Symbol KARDEX_REPOSITORY_PORT
+│
+├── application/                      # [CAPA 2: CASOS DE USO Y ORQUESTACIÓN]
+│   ├── dto/
+│   │   ├── calculateDuaDto.ts         # DTO para cálculo y simulación rápida de aranceles
+│   │   └── registerDuaDto.ts          # DTO completo con cabecera e ítems para despacho
+│   └── use-cases/
+│       ├── calculateDuaUseCase.ts     # Caso de uso: orquesta las reglas de cálculo sin persistir
+│       └── registerDuaUseCase.ts      # Caso de uso: valida DUA, liquida tributos y persiste en Kardex
+│
+└── infrastructure/                   # [CAPA 3: ADAPTADORES TECNOLÓGICOS]
+    ├── controllers/
+    │   └── customsController.ts       # Endpoints REST (POST /api/v1/customs/calculate, POST /api/v1/customs/dua)
+    ├── parsers/
+    │   └── duaXmlParserAdapter.ts     # Adaptador de parseo de archivos Teledespacho SUNAT
+    └── persistence/
+        ├── prismaCustomsRepository.ts # Adaptador de persistencia DUA en Supabase PostgreSQL
+        └── prismaKardexRepository.ts  # Adaptador de persistencia de movimientos Kardex
+```
+
+---
+
+## 4. Responsabilidades y Prohibiciones Estrictas por Capa
+
+### 4.1. Capa de Dominio (`domain/`)
+* **Qué se hace:** Reglas matemáticas de liquidación arancelaria ([calculateCifRule.ts](file:///c:/Users/Carlos%20Ahumada%20Soles/OneDrive/Documentos/taller-integrador/Sistema-gestion-mype-sunat/src/modules/customs/domain/rules/calculateCifRule.ts), [calculateCustomsTaxesRule.ts](file:///c:/Users/Carlos%20Ahumada%20Soles/OneDrive/Documentos/taller-integrador/Sistema-gestion-mype-sunat/src/modules/customs/domain/rules/calculateCustomsTaxesRule.ts)), Value Objects ([duaNumberVo.ts](file:///c:/Users/Carlos%20Ahumada%20Soles/OneDrive/Documentos/taller-integrador/Sistema-gestion-mype-sunat/src/modules/customs/domain/value-objects/duaNumberVo.ts)) e interfaces de puertos.
+* 🚫 **TERMINANTEMENTE PROHIBIDO:**
+  * Importar decoradores o módulos de NestJS (`@Injectable`, etc.).
+  * Importar Prisma o realizar conexiones a base de datos.
+  * Mezclar el crédito fiscal del IGV/Percepción dentro del cálculo de costo de mercadería.
+
+### 4.2. Capa de Aplicación (`application/`)
+* **Qué se hace:** Orquestar el flujo aduanero: recibir el DTO, validar tipos de cambio, invocar las reglas de dominio y delegar a los puertos de repositorio.
+* 🚫 **TERMINANTEMENTE PROHIBIDO:**
+  * Inyectar directamente `PrismaService`.
+  * Realizar llamadas HTTP directas a SUNAT sin pasar por un puerto de pasarela o adaptador.
+
+### 4.3. Capa de Infraestructura (`infrastructure/`)
+* **Qué se hace:** Controladores HTTP REST, parseo de XMLs de teledespacho y repositorios Prisma que operan sobre `customs_declarations` y `kardex_movements`.
+* 🚫 **TERMINANTEMENTE PROHIBIDO:**
+  * Alterar los porcentajes de impuestos en las consultas de Prisma (las tasas deben venir validadas por el dominio).
+
+### 4.4. Fronteras Modulares (Anti-Acoplamiento)
+* **Prohibido:** Modificar directamente las tablas contables (`accounting_entries`) o de facturación (`invoices`) desde el módulo de aduanas.
+* **Integración autorizada:** Al liquidar una DUA, el módulo emite el evento `DuaLiquidatedEvent`. El módulo de contabilidad (`accounting`) escucha este evento para generar automáticamente el asiento contable de importación (Cuentas `60111`, `40111`, `4212`).
+
+---
+
+## 5. Contratos de Puertos de Dominio (Hexagonal)
+
 ```typescript
-export class RegisterDuaDto {
-  dua_number: string;          // Formato '118-2026-10-012345'
-  customs_agency_code: string; // '118' Marítima Callao
-  numeration_date: string;     // ISO Date 'YYYY-MM-DD'
-  fob_value_usd: number;
-  freight_value_usd: number;
-  insurance_value_usd: number;
-  exchange_rate: number;       // Tipo de cambio SUNAT
-  ad_valorem_rate: number;     // 0, 6 u 11
-  perception_rate: number;     // 3.5, 5.0 o 10.0
-  items: Array<{
-    item_order: number;
-    hs_code: string;           // '8471.30.00.00'
-    commercial_description: string;
-    quantity: number;
-    unit_code: string;
-    fob_unit_usd: number;
-  }>;
+export const CUSTOMS_REPOSITORY_PORT = Symbol('CUSTOMS_REPOSITORY_PORT');
+export const KARDEX_REPOSITORY_PORT = Symbol('KARDEX_REPOSITORY_PORT');
+
+export interface ICustomsRepositoryPort {
+  save(declaration: CustomsDeclarationEntity): Promise<CustomsDeclarationEntity>;
+  findByDuaNumber(duaNumber: string, companyId: string): Promise<CustomsDeclarationEntity | null>;
+}
+
+export interface IKardexRepositoryPort {
+  registerMovement(movement: KardexMovementEntity): Promise<void>;
+  getLatestBalance(itemCode: string, companyId: string): Promise<{ stock: number; totalCost: number }>;
 }
 ```
 
 ---
 
-## 4. Puertos e Interfaces de Dominio (Hexagonal)
+## 6. Flujo de Implementación Paso a Paso para el Desarrollador (Workflow)
 
-* `ICustomsRepositoryPort`:
-  - `save(declaration: CustomsDeclarationEntity): Promise<CustomsDeclarationEntity>`
-  - `findByDuaNumber(duaNumber: string, companyId: string): Promise<CustomsDeclarationEntity | null>`
-* `IKardexRepositoryPort`:
-  - `registerMovement(movement: KardexMovementEntity): Promise<void>`
-  - `getLatestBalance(itemCode: string, companyId: string): Promise<KardexBalanceVO>`
+Cuando Carlos deba implementar o extender una funcionalidad de aduanas:
+
+1. **Paso 1 (Reglas de Liquidación):** Escribir la fórmula matemática pura en `domain/rules/`. Crear de inmediato su test unitario en `test/unit/customs/<regla>.spec.ts` validando la exactitud con dos decimales.
+2. **Paso 2 (Definir el Puerto):** Declarar las operaciones en `domain/ports/customsRepositoryPort.ts` o `kardexRepositoryPort.ts`.
+3. **Paso 3 (Crear el Caso de Uso):** Desarrollar la clase en `application/use-cases/` (ej. `CalculateDuaUseCase`, `RegisterDuaUseCase`) e inyectar el puerto correspondiente.
+4. **Paso 4 (Implementar el Repositorio):** Desarrollar la persistencia en `infrastructure/persistence/prismaCustomsRepository.ts` con transacciones ACID locales.
+5. **Paso 5 (Controlador y Registro en Módulo):** Exponer el endpoint en `infrastructure/controllers/customsController.ts` y configurar providers en `customsModule.ts`.
+6. **Paso 6 (Verificación Integral):**
+   ```bash
+   npm test -- test/unit/customs
+   npm run lint
+   npm run build
+   ```
 
 ---
 
-## 5. Casos de Prueba Requeridos
+## 7. Casos de Prueba Requeridos en `test/unit/customs/`
 
-1. **Unit Tests:**
-   * Cálculo de CIF exacto con valores decimales.
-   * Separación contable exacta: tributos que van al costo (Ad-Valorem) vs tributos que van a crédito fiscal (IGV, Percepción).
-   * Exactitud del Promedio Ponderado en Kardex ante múltiples entradas y salidas.
-2. **Integration Tests:**
-   * Persistencia en PostgreSQL de cabecera DUA + ítems + movimientos Kardex bajo una sola transacción.
+1. **`calculateCifRule.spec.ts`:** Cálculo de CIF en USD y conversión exacta a PEN según tipo de cambio.
+2. **`calculateCustomsTaxesRule.spec.ts`:** Liquidación de Ad-Valorem (0, 6 u 11%), IGV/IPM 18% y Percepciones (3.5, 5 o 10%).
+3. **`duaNumberVo.spec.ts`:** Formato válido de aduana Callao (`118-2026-10-012345`) y rechazo de códigos inválidos.
+4. **`calculateDuaUseCase.spec.ts`:** Orquestación completa de liquidación a partir de un DTO con múltiples ítems.
+
+---
+
+## 8. Buenas Prácticas Innegociables y DoD
+
+* **Límite de líneas:** Archivos concisos (< 150 líneas).
+* **Precisión decimal:** Todo cálculo monetario debe redondearse estrictamente a 2 decimales para evitar diferencias de centavos.
+* **Aislamiento Multi-Tenant:** `company_id` obligatorio extraído del token JWT para consultas de Kardex y Declaraciones.
