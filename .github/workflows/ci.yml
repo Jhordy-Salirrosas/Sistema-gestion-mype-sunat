@@ -24,6 +24,9 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
+      - name: Generar cliente de Prisma
+        run: npx prisma generate
+
       - name: Escanear secretos en el repositorio
         run: npm run check:secrets
 
