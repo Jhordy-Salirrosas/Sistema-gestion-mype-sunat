@@ -13,6 +13,13 @@ import type { AuthResponseDto } from '../../application/dto/authResponseDto';
 import { LoginUseCase } from '../../application/use-cases/loginUseCase';
 import { AuthGuard } from '../guards/authGuard';
 
+import type { TokenPayload } from '../../domain/ports/tokenServicePort';
+
+export interface ProfileResponse {
+  authenticated: boolean;
+  user?: TokenPayload;
+}
+
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly loginUseCase: LoginUseCase) {}
@@ -25,7 +32,9 @@ export class AuthController {
 
   @Get('profile')
   @UseGuards(AuthGuard)
-  async getProfile(@Req() req: any): Promise<any> {
+  async getProfile(
+    @Req() req: { user?: TokenPayload },
+  ): Promise<ProfileResponse> {
     return {
       authenticated: true,
       user: req.user,

@@ -3,7 +3,7 @@ import { CalculateDuaDto } from '../../application/dto/calculateDuaDto';
 import { CalculateDuaUseCase } from '../../application/use-cases/calculateDuaUseCase';
 import type { CalculatedDuaResponse } from '../../application/use-cases/calculateDuaUseCase';
 
-@Controller('customs')
+@Controller('api/v1/customs')
 export class CustomsController {
   constructor(private readonly calculateDuaUseCase: CalculateDuaUseCase) {}
 

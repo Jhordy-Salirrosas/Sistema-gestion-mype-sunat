@@ -4,12 +4,12 @@ import type { AuthResponseDto } from '../dto/authResponseDto';
 import {
   USER_REPOSITORY_PORT,
   type UserRepositoryPort,
-} from '../ports/userRepositoryPort';
-import { HASHER_PORT, type HasherPort } from '../ports/hasherPort';
+} from '../../domain/ports/userRepositoryPort';
+import { HASHER_PORT, type HasherPort } from '../../domain/ports/hasherPort';
 import {
   TOKEN_SERVICE_PORT,
   type TokenServicePort,
-} from '../ports/tokenServicePort';
+} from '../../domain/ports/tokenServicePort';
 
 @Injectable()
 export class LoginUseCase {

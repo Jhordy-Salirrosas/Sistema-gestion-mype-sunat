@@ -6,7 +6,7 @@ export interface InvoiceEntityProps {
   tipo_comprobante: string;
   monto_total: number;
   fecha_emision: Date;
-  payload_ubl: Record<string, unknown> | any;
+  payload_ubl: Record<string, unknown>;
   estado?: string;
   created_at?: Date;
 }
@@ -19,7 +19,7 @@ export class InvoiceEntity {
   public readonly tipo_comprobante: string;
   public readonly monto_total: number;
   public readonly fecha_emision: Date;
-  public readonly payload_ubl: Record<string, unknown> | any;
+  public readonly payload_ubl: Record<string, unknown>;
   public readonly estado: string;
   public readonly created_at?: Date;
 

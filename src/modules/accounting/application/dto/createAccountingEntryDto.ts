@@ -30,8 +30,8 @@ export class AccountingLineDto {
 
 export class CreateAccountingEntryDto {
   @IsString()
-  @IsNotEmpty()
-  companyId: string;
+  @IsOptional()
+  companyId?: string;
 
   @IsString()
   @IsNotEmpty()

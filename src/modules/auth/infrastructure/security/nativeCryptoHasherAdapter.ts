@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import type { HasherPort } from '../../application/ports/hasherPort';
+import type { HasherPort } from '../../domain/ports/hasherPort';
 
 @Injectable()
 export class NativeCryptoHasherAdapter implements HasherPort {

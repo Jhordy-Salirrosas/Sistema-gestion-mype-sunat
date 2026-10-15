@@ -2,6 +2,7 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { Prisma } from '../../../../generated/client/client';
 import { PrismaService } from '../../../../database/prismaService';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
 import { InvoiceEntity } from '../../domain/entities/invoiceEntity';
@@ -21,7 +22,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
     invoice: InvoiceEntity,
   ): Promise<InvoicePersistenceResult> {
     try {
-      return await this.prisma.$transaction(async (tx: any) => {
+      return await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Registrar el comprobante dentro de la transacción.
         const created = await tx.invoice.create({
           data: {
@@ -31,7 +32,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
             tipo_comprobante: invoice.tipo_comprobante,
             monto_total: invoice.monto_total,
             fecha_emision: invoice.fecha_emision,
-            payload_ubl: invoice.payload_ubl,
+            payload_ubl: invoice.payload_ubl as Prisma.InputJsonValue,
           },
           select: {
             id: true,

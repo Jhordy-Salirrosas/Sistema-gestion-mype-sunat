@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type {
   TokenPayload,
   TokenServicePort,
-} from '../../application/ports/tokenServicePort';
+} from '../../domain/ports/tokenServicePort';
 
 @Injectable()
 export class NativeJwtAdapter implements TokenServicePort {

@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { CurrentCompany } from '../../../../common/decorators';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
 import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
@@ -16,15 +17,19 @@ export class AccountingController {
   @HttpCode(HttpStatus.CREATED)
   async createEntry(
     @Body() dto: CreateAccountingEntryDto,
+    @CurrentCompany() currentCompanyId?: string,
   ): Promise<AccountingEntryEntity> {
-    return this.generateEntryUseCase.execute(dto);
+    const companyId = currentCompanyId || dto.companyId || '';
+    return this.generateEntryUseCase.execute({ ...dto, companyId });
   }
 
   @Post('ple/export')
   @HttpCode(HttpStatus.OK)
   async exportPle(
     @Body() dto: ExportPleDto,
+    @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
-    return this.exportPleUseCase.execute(dto);
+    const companyId = currentCompanyId || dto.companyId || '';
+    return this.exportPleUseCase.execute({ ...dto, companyId });
   }
 }
