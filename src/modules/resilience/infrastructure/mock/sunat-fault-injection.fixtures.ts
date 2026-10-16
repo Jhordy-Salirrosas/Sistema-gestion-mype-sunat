@@ -21,6 +21,11 @@
  *   20333333334  106     7     4
  *   20444444445  138     6     5
  *
+ * Nota sobre el modo SOAP_FAULT: SUNAT devuelve los SOAP Fault con HTTP 500, no
+ * con HTTP 400. El error es de negocio, no de formato de la peticion, y el
+ * SunatSoapClient de TA-03 lo distingue por el cuerpo antes de mirar el codigo
+ * HTTP. Esa es la razon de que el mapa de codigos lo asigne a 500.
+ *
  * Cualquier otro RUC recibe la respuesta normal (CDR aceptado, codigo 0).
  */
 import { HttpStatus } from '@nestjs/common';
