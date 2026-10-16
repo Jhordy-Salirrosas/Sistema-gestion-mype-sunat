@@ -50,6 +50,6 @@ describe('AuthController', () => {
 
     const profile = await controller.getProfile(req);
     expect(profile.authenticated).toBe(true);
-    expect(profile.user.sub).toBe('usr-1');
+    expect(profile.user?.sub).toBe('usr-1');
   });
 });
