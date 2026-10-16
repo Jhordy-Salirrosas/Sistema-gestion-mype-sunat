@@ -7,35 +7,34 @@ contabilidad, SIRE y resiliencia) definidos en `prisma/schema/`.
 
 ## Diagrama entidad-relación
 
-```mermaid
 erDiagram
-    %% ---------- Contexto: Autenticación y Multi-Tenancy ----------
-    Company {
-        string id PK
-        string ruc UK
-        string legal_name
-        string trade_name
-        string sol_user
-        string sol_pass_encrypted
-        string cert_storage_url
-        boolean is_active
-    }
-    User {
-        string id PK
-        string company_id FK
-        string email
-        string password_hash
-        string full_name
-        Role role
-        boolean is_active
-    }
-    RefreshToken {
-        string id PK
-        string user_id FK
-        string token_hash
-        timestamp expires_at
-        boolean is_revoked
-    }
+%% ---------- Contexto: Autenticación y Multi-Tenancy ----------
+Company {
+string id PK
+string ruc UK
+string legal_name
+string trade_name
+string sol_user
+string sol_pass_encrypted
+string cert_storage_url
+boolean is_active
+}
+User {
+string id PK
+string company_id FK
+string email
+string password_hash
+string full_name
+Role role
+boolean is_active
+}
+RefreshToken {
+string id PK
+string user_id FK
+string token_hash
+timestamp expires_at
+boolean is_revoked
+}
 
     %% ---------- Contexto: Facturación (M1) ----------
     InvoiceSeries {
@@ -197,34 +196,11 @@ erDiagram
     }
 
     %% ---------- Relaciones ----------
-    Company ||--o{ User : "emplea"
-    Company ||--o{ RefreshToken : ""
-    User ||--o{ RefreshToken : "posee"
+    Company ||--o{ Invoice : "emite s8 s9 s10 s11"
+    InvoiceSeries ||--o{ SireDiscrepancy : "origina s12 s13 s14 s15 s16 s17 s18 s19 s20 s21"
 
-    Company ||--o{ InvoiceSeries : "configura"
-    Company |o--o{ Invoice : "emite"
-    InvoiceSeries |o--o{ Invoice : "numera"
-    Invoice ||--o{ InvoiceItem : "contiene"
-    Invoice ||--o{ TransactionHistory : "audita"
-
-    Company ||--o{ AuditLog : "registra"
-
-    Company ||--o{ CustomsDeclaration : "declara"
-    CustomsDeclaration ||--o{ CustomsItem : "detalla"
-    Company ||--o{ KardexMovement : "mueve"
-
-    Company ||--o{ SireProposal : "importa"
-    Company ||--o{ SireReconciliation : "concilia"
-    SireReconciliation ||--o{ SireDiscrepancy : "detecta"
-    SireProposal |o--o{ SireDiscrepancy : "origina"
-
-    Company ||--o{ AccountingEntry : "asienta"
-    AccountingEntry ||--o{ AccountingLine : "compone"
-    Company ||--o{ PleBook : "genera"
-    User |o--o{ PleBook : "genera"
-    User |o--o{ AuditLog : "ejecuta"
-    User |o--o{ SireReconciliation : "reconcilia"
-```
+    Company ||--o{ PleBook : "genera s22 s23 s24"
+    User ||--o{ SireReconciliation : "reconci
 
 ## Correspondencia modelo ↔ tabla
 
