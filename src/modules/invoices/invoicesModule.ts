@@ -6,6 +6,9 @@ import { InvoicesService } from './application/services/invoicesService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
+import { InvoiceWorkerService } from './invoice-worker.service';
+import { UblGeneratorService } from './ubl-generator.service';
+import { XsdValidatorService } from './xsd-validator.service';
 
 @Module({
   imports: [PrismaModule, QueueModule],
@@ -18,12 +21,17 @@ import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvo
       useClass: PrismaInvoiceRepository,
     },
     PrismaInvoiceRepository,
+    InvoiceWorkerService,
+    UblGeneratorService,
+    XsdValidatorService,
   ],
   exports: [
     CreateInvoiceUseCase,
     InvoicesService,
     INVOICE_REPOSITORY_PORT,
+    InvoiceWorkerService,
+    UblGeneratorService,
+    XsdValidatorService,
   ],
 })
-export class InvoicesModule {}
-
+export class InvoicesModule { }
