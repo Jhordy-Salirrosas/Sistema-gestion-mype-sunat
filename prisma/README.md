@@ -362,3 +362,19 @@ echo $env:DIRECT_URL
 | `migrate reset`  | **Solo local.** Nunca Supabase           |
 | `migrate dev`    | **Solo local.** Requiere shadow database |
 | `migrate deploy` | Supabase (es aditivo)                    |
+
+### Estado de los repositorios por contexto
+
+| Contexto     | Entidad de dominio      | Puerto de repositorio       | Adaptador                     |
+| ------------ | ----------------------- | --------------------------- | ----------------------------- |
+| `invoices`   | `InvoiceEntity`         | `IInvoiceRepositoryPort`    | `PrismaInvoiceRepository`     |
+| `auth`       | `UserEntity`            | `IUserRepositoryPort`       | `PrismaUserRepositoryAdapter` |
+| `accounting` | `AccountingEntryEntity` | `IAccountingRepositoryPort` | Pendiente (M5)                |
+| `sire`       | `SireProposalEntity`    | Pendiente (M4)              | Pendiente (M4)                |
+| `customs`    | Pendiente (M3)          | Pendiente (M3)              | Pendiente (M3)                |
+
+Un puerto de repositorio depende de la entidad que persiste. Por eso `customs`,
+`sire` y `resilience` aún no tienen puerto: sus entidades de dominio se definen en
+las tareas de cada módulo (M3, M4 y M2 respectivamente). Este documento define el
+**modelo de datos** —las tablas, sus relaciones y sus agregados—, no la capa de
+dominio de cada módulo.
