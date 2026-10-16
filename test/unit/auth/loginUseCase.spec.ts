@@ -1,9 +1,9 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { LoginUseCase } from '../../../src/modules/auth/application/use-cases/loginUseCase';
 import { UserEntity } from '../../../src/modules/auth/domain/entities/userEntity';
-import type { UserRepositoryPort } from '../../../src/modules/auth/application/ports/userRepositoryPort';
-import type { HasherPort } from '../../../src/modules/auth/application/ports/hasherPort';
-import type { TokenServicePort } from '../../../src/modules/auth/application/ports/tokenServicePort';
+import type { UserRepositoryPort } from '../../../src/modules/auth/domain/ports/userRepositoryPort';
+import type { HasherPort } from '../../../src/modules/auth/domain/ports/hasherPort';
+import type { TokenServicePort } from '../../../src/modules/auth/domain/ports/tokenServicePort';
 
 describe('LoginUseCase', () => {
   let useCase: LoginUseCase;

@@ -14,10 +14,13 @@ import { Logger } from '@nestjs/common';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { CdrPersistenceService } from '../../../src/modules/sunat/cdr-persistence.service';
 import { SunatSoapFaultError } from '../../../src/modules/sunat/soap/soap-envelope';
-import { SunatSoapClient, SunatTransportError } from '../../../src/modules/sunat/soap/sunat-soap.client';
+import {
+  SunatSoapClient,
+  SunatTransportError,
+} from '../../../src/modules/sunat/soap/sunat-soap.client';
 import { SunatBillService } from '../../../src/modules/sunat/sunat-bill.service';
 
-const RUC = '20123456789';
+const RUC = '20123456786';
 
 const paramsBase = {
   invoiceId: 'factura-unitaria',
@@ -78,19 +81,19 @@ describe('SunatBillService (unitaria) - credenciales SOL', () => {
 
     expect(sendBill).toHaveBeenCalledTimes(1);
     expect(sendBill.mock.calls[0][0].credentials).toEqual({
-      username: '20123456789MODDATOS',
+      username: '20123456786MODDATOS',
       password: 'clave-de-prueba',
     });
   });
 
   it('no duplica el RUC si SUNAT_SOL_USER ya lo incluye', async () => {
-    process.env.SUNAT_SOL_USER = '20123456789MODDATOS';
+    process.env.SUNAT_SOL_USER = '20123456786MODDATOS';
     process.env.SUNAT_SOL_PASSWORD = 'clave-de-prueba';
 
     await service.sendAndProcess(paramsBase);
 
     expect(sendBill.mock.calls[0][0].credentials.username).toBe(
-      '20123456789MODDATOS',
+      '20123456786MODDATOS',
     );
   });
 

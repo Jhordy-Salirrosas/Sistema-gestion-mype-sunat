@@ -1,0 +1,15 @@
+import { UserEntity } from '../entities/userEntity';
+
+export interface UserAuthRecord {
+  user: UserEntity;
+  passwordHash: string;
+}
+
+export const USER_REPOSITORY_PORT = Symbol('USER_REPOSITORY_PORT');
+
+export interface IUserRepositoryPort {
+  findByEmail(email: string): Promise<UserAuthRecord | null>;
+  findById(id: string): Promise<UserEntity | null>;
+}
+
+export type UserRepositoryPort = IUserRepositoryPort;

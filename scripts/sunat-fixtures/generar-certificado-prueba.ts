@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import * as forge from 'node-forge';
 
 /** Datos ficticios: coinciden con el RUC del fixture de factura y de los CDR. */
-export const RUC_EMISOR = '20123456789';
+export const RUC_EMISOR = '20123456786';
 export const NOMBRE_EMPRESA = 'EMPRESA DE PRUEBA S.A.C.';
 export const CERT_PASSWORD = 'prueba-ta08';
 export const DIAS_VIGENCIA = 730; // 2 anos

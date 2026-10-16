@@ -14,13 +14,13 @@ export class IsSerieValidConstraint implements ValidatorConstraintInterface {
    * @param args Argumentos que incluyen el objeto completo del DTO.
    * @returns `true` si la serie corresponde al tipo de comprobante, `false` en caso contrario.
    */
-  validate(serie: any, args: ValidationArguments) {
+  validate(serie: unknown, args: ValidationArguments) {
     // 1. Filtro rápido: La serie debe ser un texto
     if (typeof serie !== 'string') return false;
 
     // 2. Extraer el objeto completo (el DTO) para leer el otro campo
-    const data = args.object as any;
-    const tipoComprobante = data.tipo_comprobante;
+    const data = args.object as Record<string, unknown>;
+    const tipoComprobante = typeof data?.tipo_comprobante === 'string' ? data.tipo_comprobante : undefined;
 
     // 3. Si no enviaron el tipo de comprobante, rechazamos porque no podemos cruzar la información
     if (!tipoComprobante) return false;
@@ -41,11 +41,11 @@ export class IsSerieValidConstraint implements ValidatorConstraintInterface {
   }
 
   defaultMessage(args: ValidationArguments) {
-    const data = args.object as any;
-    if (data.tipo_comprobante === '01') {
+    const data = args.object as Record<string, unknown>;
+    if (data?.tipo_comprobante === '01') {
       return 'Para Facturas (01), la serie debe comenzar con F (sistemas propios) o E (Portal SUNAT) y tener 4 caracteres';
     }
-    if (data.tipo_comprobante === '03') {
+    if (data?.tipo_comprobante === '03') {
       return 'Para Boletas (03), la serie debe comenzar con B (sistemas propios) o EB (Portal SUNAT) y tener 4 caracteres';
     }
     return 'La serie ingresada no corresponde con el tipo de comprobante especificado (o el tipo es inválido)';

@@ -4,7 +4,7 @@ import { UserEntity, type UserRole } from '../../domain/entities/userEntity';
 import type {
   UserAuthRecord,
   UserRepositoryPort,
-} from '../../application/ports/userRepositoryPort';
+} from '../../domain/ports/userRepositoryPort';
 
 @Injectable()
 export class PrismaUserRepositoryAdapter implements UserRepositoryPort {

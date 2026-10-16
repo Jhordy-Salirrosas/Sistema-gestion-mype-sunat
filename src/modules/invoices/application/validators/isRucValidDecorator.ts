@@ -14,7 +14,7 @@ export class IsRucValidConstraint implements ValidatorConstraintInterface {
    * @param _args Argumentos adicionales proporcionados por class-validator.
    * @returns `true` si el RUC es matemáticamente válido, `false` si es inválido.
    */
-  validate(ruc: any, _args: ValidationArguments) {
+  validate(ruc: unknown, _args: ValidationArguments) {
     // 1. Validar el formato del RUC.
     if (typeof ruc !== 'string' || !/^\d{11}$/.test(ruc)) {
       return false;

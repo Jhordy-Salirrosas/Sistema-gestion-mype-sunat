@@ -10,7 +10,6 @@ import {
   IsNotEmpty,
   IsPositive,
 } from 'class-validator';
-import { Prisma } from '../../../../generated/client/client';
 import { IsRucValid } from '../validators/isRucValidDecorator';
 import { IsSerieValid } from '../validators/isSerieValidDecorator';
 
@@ -49,5 +48,5 @@ export class CreateInvoiceDto {
 
   @IsNotEmpty()
   @IsObject()
-  payload_ubl: Prisma.InputJsonValue;
+  payload_ubl: Record<string, unknown>;
 }
