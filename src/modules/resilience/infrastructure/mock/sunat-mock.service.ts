@@ -1,8 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import AdmZip = require('adm-zip');
 import {
-  DEFAULT_SLOW_MS,
-  DEFAULT_TIMEOUT_MS,
   delay,
   FAULT_HTTP_STATUS_BY_MODE,
   FAULT_SOAP_CODE,
