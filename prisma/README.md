@@ -7,34 +7,35 @@ contabilidad, SIRE y resiliencia) definidos en `prisma/schema/`.
 
 ## Diagrama entidad-relación
 
+```mermaid
 erDiagram
-%% ---------- Contexto: Autenticación y Multi-Tenancy ----------
-Company {
-string id PK
-string ruc UK
-string legal_name
-string trade_name
-string sol_user
-string sol_pass_encrypted
-string cert_storage_url
-boolean is_active
-}
-User {
-string id PK
-string company_id FK
-string email
-string password_hash
-string full_name
-Role role
-boolean is_active
-}
-RefreshToken {
-string id PK
-string user_id FK
-string token_hash
-timestamp expires_at
-boolean is_revoked
-}
+    %% ---------- Contexto: Autenticación y Multi-Tenancy ----------
+    Company {
+        string id PK
+        string ruc UK
+        string legal_name
+        string trade_name
+        string sol_user
+        string sol_pass_encrypted
+        string cert_storage_url
+        boolean is_active
+    }
+    User {
+        string id PK
+        string company_id FK
+        string email
+        string password_hash
+        string full_name
+        Role role
+        boolean is_active
+    }
+    RefreshToken {
+        string id PK
+        string user_id FK
+        string token_hash
+        timestamp expires_at
+        boolean is_revoked
+    }
 
     %% ---------- Contexto: Facturación (M1) ----------
     InvoiceSeries {
@@ -196,11 +197,33 @@ boolean is_revoked
     }
 
     %% ---------- Relaciones ----------
-    Company ||--o{ Invoice : "emite s8 s9 s10 s11"
-    InvoiceSeries ||--o{ SireDiscrepancy : "origina s12 s13 s14 s15 s16 s17 s18 s19 s20 s21"
+    Company ||--o{ User : "emplea"
+    User ||--o{ RefreshToken : "posee"
 
-    Company ||--o{ PleBook : "genera s22 s23 s24"
-    User ||--o{ SireReconciliation : "reconci
+    Company ||--o{ InvoiceSeries : "configura"
+    Company |o--o{ Invoice : "emite"
+    InvoiceSeries |o--o{ Invoice : "numera"
+    Invoice ||--o{ InvoiceItem : "contiene"
+    Invoice ||--o{ TransactionHistory : "audita"
+
+    Company ||--o{ AuditLog : "registra"
+
+    Company ||--o{ CustomsDeclaration : "declara"
+    CustomsDeclaration ||--o{ CustomsItem : "detalla"
+    Company ||--o{ KardexMovement : "mueve"
+
+    Company ||--o{ SireProposal : "importa"
+    Company ||--o{ SireReconciliation : "concilia"
+    SireReconciliation ||--o{ SireDiscrepancy : "detecta"
+    SireProposal |o--o{ SireDiscrepancy : "origina"
+
+    Company ||--o{ AccountingEntry : "asienta"
+    AccountingEntry ||--o{ AccountingLine : "compone"
+    Company ||--o{ PleBook : "genera"
+    User |o--o{ PleBook : "genera"
+    User |o--o{ AuditLog : "ejecuta"
+    User |o--o{ SireReconciliation : "reconcilia"
+```
 
 ## Correspondencia modelo ↔ tabla
 
@@ -225,6 +248,65 @@ Los modelos usan `PascalCase` y las tablas `snake_case` plural, mediante `@@map`
 | `AccountingEntry`    | `accounting_entries`   |
 | `AccountingLine`     | `accounting_lines`     |
 | `PleBook`            | `ple_books`            |
+
+## Alcance: qué tiene modelo propio y qué no
+
+Los cinco módulos con persistencia propia son **facturación, aduanas,
+contabilidad, SIRE y resiliencia**.
+
+**El dashboard no tiene tablas propias:** es una **función de lectura** que agrega
+y resume datos de los cinco módulos. No persiste configuración ni estado, así que
+no requiere modelo. Si en el futuro necesita preferencias por usuario, se
+evaluaría un modelo aparte.
+
+## Agregados (DDD táctico)
+
+Un **agregado** es un conjunto de entidades que se modifican juntas y cuya
+consistencia se garantiza dentro de **una sola transacción**. El acceso desde
+fuera del agregado se hace **siempre por su raíz** (_Aggregate Root_), nunca
+directamente sobre las entidades internas.
+
+El límite de cada agregado se deduce del schema: las relaciones con
+`onDelete: Cascade` indican que la entidad interna **no existe sin su raíz**;
+las relaciones con `onDelete: Restrict` indican **agregados separados** que solo
+se referencian entre sí.
+
+### Raíces de agregado con entidades internas
+
+| Raíz de agregado         | Entidades internas                  | Invariante que protege                                                            | Consistencia                                   |
+| ------------------------ | ----------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **`Invoice`**            | `InvoiceItem`, `TransactionHistory` | `Σ InvoiceItem.total_amount = monto_total`; IGV = 18% de las operaciones gravadas | Una transacción: `saveWithTransactionalOutbox` |
+| **`CustomsDeclaration`** | `CustomsItem`                       | `Σ allocated_cif_pen = cif_value_pen`; tributos = CIF × tasas                     | Pendiente (M3)                                 |
+| **`AccountingEntry`**    | `AccountingLine`                    | **`Σ debit_amount = Σ credit_amount`** (partida doble)                            | Pendiente (M5)                                 |
+| **`SireReconciliation`** | `SireDiscrepancy`                   | `discrepancies_count = Σ discrepancias`                                           | Pendiente (M4)                                 |
+| **`User`**               | `RefreshToken`                      | Un usuario pertenece a una sola empresa                                           | Pendiente (Auth)                               |
+
+### Raíces independientes
+
+Sin entidades internas: cada una es su propio agregado.
+
+| Raíz de agregado     | Invariante propia                                                        |
+| -------------------- | ------------------------------------------------------------------------ |
+| **`Company`**        | `ruc` único; todo dato tributario cuelga de una empresa (_multi-tenant_) |
+| **`PleBook`**        | `file_sha256_hash` corresponde al archivo generado                       |
+| **`KardexMovement`** | `final_stock_quantity` = existencia anterior ± el movimiento             |
+| **`SireProposal`**   | Propuesta importada de SUNAT: inmutable                                  |
+| **`AuditLog`**       | `digest_hash` encadenado con el registro anterior (SHA-256)              |
+
+`Company` y `User` son **agregados separados** aunque estén relacionados: la
+relación es `onDelete: Restrict`, no `Cascade`. `User` referencia a `Company` por
+`company_id`, pero la existencia de la empresa no depende de sus usuarios.
+
+### Regla de aislamiento entre agregados
+
+**Un agregado referencia a otro solo por su identificador, nunca por sus
+entidades internas.** Por eso `Invoice` guarda `series_rel_id` —una clave hacia
+`InvoiceSeries`— y no una copia de la serie: `InvoiceSeries` es un agregado
+aparte y su consistencia se garantiza por separado.
+
+**Y cada módulo escribe solo en sus agregados.** La comunicación entre módulos se
+realiza por eventos de dominio, no por acceso directo a las tablas de otro
+contexto (`specs/PLAN.md`, regla 4 de dependencia entre capas).
 
 ## Cómo se generan las migraciones
 
