@@ -1,24 +1,46 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import AdmZip = require('adm-zip');
+import {
+  DEFAULT_SLOW_MS,
+  DEFAULT_TIMEOUT_MS,
+  delay,
+  FAULT_HTTP_STATUS_BY_MODE,
+  FAULT_SOAP_CODE,
+  FAULT_SOAP_MESSAGE,
+  extractRucFromFileName,
+  resolveFaultMode,
+  resolveSlowMs,
+  resolveTimeoutMs,
+  SunatFaultMode,
+} from './sunat-fault-injection.fixtures';
 
+/** Opciones del CDR: permite generar aceptacion o rechazo (TA-14). */
 export interface SendBillOptions {
   filename?: string;
-  responseCode?: string; // '0' para éxito; '2000', '2324', etc. para rechazo
+  responseCode?: string; // '0' para exito; '2000', '2324', etc. para rechazo
   description?: string;
+}
+
+/** Respuesta que el Mock debe enviar al cliente (TA-12). */
+export interface MockBillResponse {
+  /** Codigo HTTP de la respuesta. */
+  status: number;
+  /** Cuerpo de la respuesta (XML). */
+  body: string;
 }
 
 @Injectable()
 export class SunatMockService {
   /**
    * Genera la respuesta XML SOAP simulando a la SUNAT.
-   * Si responseCode === '0' genera CDR aceptado.
-   * Si responseCode !== '0' genera CDR de rechazo con código y descripción oficial.
+   *
+   * Acepta un string (compatibilidad con TA-06) o un objeto de opciones (TA-14):
+   * si responseCode === '0' genera CDR aceptado; si no, CDR de rechazo con el
+   * codigo y la descripcion indicados.
    */
   generateSendBillResponse(options?: SendBillOptions | string): string {
     const opts: SendBillOptions =
-      typeof options === 'string'
-        ? { filename: options }
-        : options || {};
+      typeof options === 'string' ? { filename: options } : options || {};
 
     const filename = opts.filename || 'R-20000000000-01-F001-1.xml';
     const responseCode = opts.responseCode || '0';
@@ -57,7 +79,7 @@ export class SunatMockService {
   }
 
   /**
-   * Genera una respuesta SOAP Fault con código de error y detalle estructural.
+   * Genera una respuesta SOAP Fault con codigo de error y detalle estructural.
    */
   generateSoapFaultResponse(
     faultCode: string = 'S:Client.0100',
@@ -75,5 +97,70 @@ export class SunatMockService {
     </S:Fault>
   </S:Body>
 </S:Envelope>`;
+  }
+
+  /**
+   * Decide la respuesta segun el RUC emisor que viaja en el nombre del archivo
+   * (TA-12). Si el RUC activa un modo de fallo, lo aplica; si no, devuelve el
+   * CDR aceptado, que es el comportamiento por defecto del Mock.
+   */
+  async resolveResponse(fileName: string): Promise<MockBillResponse> {
+    const ruc = extractRucFromFileName(fileName);
+    const mode = resolveFaultMode(ruc);
+
+    switch (mode) {
+      case SunatFaultMode.SERVICE_UNAVAILABLE:
+        return this.buildFaultResponse(SunatFaultMode.SERVICE_UNAVAILABLE);
+
+      case SunatFaultMode.SOAP_FAULT:
+        return this.buildFaultResponse(SunatFaultMode.SOAP_FAULT, {
+          code: FAULT_SOAP_CODE,
+          message: FAULT_SOAP_MESSAGE,
+        });
+
+      case SunatFaultMode.TIMEOUT:
+        return this.buildDelayedResponse(resolveTimeoutMs(), fileName);
+
+      case SunatFaultMode.SLOW:
+        return this.buildDelayedResponse(resolveSlowMs(), fileName);
+
+      default:
+        // RUC normal: respuesta por defecto del Mock.
+        return {
+          status: HttpStatus.OK,
+          body: this.generateSendBillResponse({ filename: fileName }),
+        };
+    }
+  }
+
+  /**
+   * Respuesta de error: HTTP 503 o SOAP Fault. El codigo HTTP lo determina el
+   * mapa de modos, no el controlador.
+   */
+  private buildFaultResponse(
+    mode: SunatFaultMode,
+    fault?: { code: string; message: string },
+  ): MockBillResponse {
+    return {
+      status: FAULT_HTTP_STATUS_BY_MODE[mode],
+      // Se reutiliza el generador de Fault de TA-14 para que la estructura del
+      // sobre sea una sola en todo el Mock.
+      body: this.generateSoapFaultResponse(
+        fault?.code ?? String(HttpStatus.SERVICE_UNAVAILABLE),
+        fault?.message ?? 'El servicio de SUNAT no esta disponible',
+      ),
+    };
+  }
+
+  /** Respuesta correcta, pero retrasada: simula SUNAT lenta. */
+  private async buildDelayedResponse(
+    ms: number,
+    fileName: string,
+  ): Promise<MockBillResponse> {
+    await delay(ms);
+    return {
+      status: HttpStatus.OK,
+      body: this.generateSendBillResponse({ filename: fileName }),
+    };
   }
 }
