@@ -6,15 +6,14 @@ import { HttpExceptionFilter } from './common/filters';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Habilitar CORS para que el frontend pueda consumir los endpoints
+  // CORS: el frontend de Vite corre en otro origen durante el desarrollo y en
+  // Vercel en produccion. Sin esto el navegador bloquea toda peticion.
   app.enableCors({
-    origin: true,
+    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5173').split(','),
     credentials: true,
   });
 
-  // Filtro de excepciones agregado por Diego
   app.useGlobalFilters(new HttpExceptionFilter());
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // elimina propiedades no declaradas en el DTO
@@ -25,7 +24,9 @@ async function bootstrap() {
         const formattedErrors = errors.map((error) => {
           // Extraer la primera regla de validación que haya fallado
           const rule = Object.keys(error.constraints || {})[0];
-          const message = error.constraints ? error.constraints[rule] : 'Dato inválido';
+          const message = error.constraints
+            ? error.constraints[rule]
+            : 'Dato inválido';
 
           return {
             field: error.property,
@@ -40,8 +41,9 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port, '0.0.0.0');
-  console.log(`Servidor corriendo en el puerto: ${port}`);
+  await app.listen(process.env.PORT ?? 3000);
+  console.log(
+    `Servidor corriendo en: http://localhost:${process.env.PORT ?? 3000}`,
+  );
 }
 bootstrap();
