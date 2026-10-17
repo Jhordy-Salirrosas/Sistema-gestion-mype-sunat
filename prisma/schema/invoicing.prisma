@@ -28,8 +28,8 @@ model InvoiceSeries {
 
 model Invoice {
   id                          String        @id @default(uuid())
-  company_id                  String?
-  company                     Company?      @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  company_id                  String
+  company                     Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
   
   // Datos principales de compatibilidad y emisión
   ruc_emisor                  String
@@ -52,6 +52,7 @@ model Invoice {
   unaffected_operations       Decimal       @default(0.00) @db.Decimal(14, 2)
   total_igv                   Decimal       @default(0.00) @db.Decimal(14, 2)
   sunat_response_code         String?
+  sunat_response_notes        Json?
   xml_storage_url             String?
   xml_hash_sha256             String?
   cdr_storage_url             String?
@@ -71,6 +72,7 @@ model Invoice {
   created_at                  DateTime      @default(now())
   updated_at                  DateTime      @updatedAt
 
+  @@unique([company_id, tipo_comprobante, serie, correlativo], map: "uq_invoices_fiscal")
   @@index([company_id, fecha_emision, estado])
   @@map("invoices")
 }

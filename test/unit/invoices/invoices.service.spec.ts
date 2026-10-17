@@ -7,6 +7,9 @@ import { QueueService } from '../../../src/modules/resilience/infrastructure/que
 describe('InvoicesService', () => {
   let service: InvoicesService;
 
+  /** Tenant que el controlador extrae del JWT y pasa al servicio. */
+  const COMPANY_ID = 'company-test-001';
+
   const invoice = {
     id: 'invoice-test-001',
     estado: 'PENDIENTE',
@@ -70,12 +73,13 @@ describe('InvoicesService', () => {
   });
 
   it('registra el comprobante y encola el trabajo dentro de la misma transacción', async () => {
-    const result = await service.create(dto);
+    const result = await service.create(dto, COMPANY_ID);
 
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
 
     expect(tx.invoice.create).toHaveBeenCalledWith({
       data: {
+        company_id: COMPANY_ID,
         ruc_emisor: dto.ruc_emisor,
         serie: dto.serie,
         correlativo: dto.correlativo,
@@ -91,10 +95,7 @@ describe('InvoicesService', () => {
       },
     });
 
-    expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledWith(
-      tx,
-      invoice.id,
-    );
+    expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledWith(tx, invoice.id);
 
     expect(result).toEqual(invoice);
   });
@@ -104,20 +105,17 @@ describe('InvoicesService', () => {
       new Error('Fallo simulado al escribir el trabajo'),
     );
 
-    await expect(service.create(dto)).rejects.toThrow(
+    await expect(service.create(dto, COMPANY_ID)).rejects.toThrow(
       InternalServerErrorException,
     );
 
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.invoice.create).toHaveBeenCalledTimes(1);
-    expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledWith(
-      tx,
-      invoice.id,
-    );
+    expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledWith(tx, invoice.id);
   });
 
   it('no invoca directamente a SUNAT al registrar un comprobante', async () => {
-    await service.create(dto);
+    await service.create(dto, COMPANY_ID);
 
     expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledTimes(1);
 

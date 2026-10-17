@@ -30,7 +30,9 @@ describe('CreateInvoiceUseCase', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    (mockRepo.saveWithTransactionalOutbox as jest.Mock).mockResolvedValue(expectedResult);
+    (mockRepo.saveWithTransactionalOutbox as jest.Mock).mockResolvedValue(
+      expectedResult,
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -46,10 +48,11 @@ describe('CreateInvoiceUseCase', () => {
   });
 
   it('mapea el DTO a la entidad de dominio y delega la persistencia al puerto', async () => {
-    const result = await useCase.execute(dto);
+    const result = await useCase.execute(dto, 'company-test-001');
 
     expect(mockRepo.saveWithTransactionalOutbox).toHaveBeenCalledTimes(1);
-    const calledEntity = (mockRepo.saveWithTransactionalOutbox as jest.Mock).mock.calls[0][0];
+    const calledEntity = (mockRepo.saveWithTransactionalOutbox as jest.Mock)
+      .mock.calls[0][0];
 
     expect(calledEntity.ruc_emisor).toBe(dto.ruc_emisor);
     expect(calledEntity.serie).toBe(dto.serie);
