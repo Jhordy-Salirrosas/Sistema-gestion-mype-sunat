@@ -10,28 +10,36 @@ async function bootstrap() {
     ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
     : [];
 
-  // Habilitar CORS con soporte para Vercel (*.vercel.app), localhost y credenciales
+  // =========================================================================
+  // CONFIGURACIÓN CORS PARA VERCEL (FRONTEND MULTI-TENANT)
+  // =========================================================================
   app.enableCors({
     origin: [
       'http://localhost:5173',
       'http://localhost:3000',
-      /\.vercel\.app$/, // Permite cualquier URL y preview de Vercel
+      'https://fronted-sistema-mype-sunat.vercel.app',
+      /\.vercel\.app$/,
       ...extraOrigins,
     ],
-    credentials: true, // Requerido para cookies HttpOnly
+    credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Tenant-Id', // Requerido por el interceptor del frontend de Carlos
+      'Accept',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // elimina propiedades no declaradas en el DTO
-      forbidNonWhitelisted: true, // rechaza si mandan campos extra
-      transform: true, // convierte tipos automáticamente
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
       exceptionFactory: (errors) => {
-        // Mapear los errores al formato exigido por HU-02: [{ field, rule, message }]
         const formattedErrors = errors.map((error) => {
-          // Extraer la primera regla de validación que haya fallado
           const rule = Object.keys(error.constraints || {})[0];
           const message = error.constraints
             ? error.constraints[rule]
@@ -44,7 +52,6 @@ async function bootstrap() {
           };
         });
 
-        // Lanzar el HTTP 400 Bad Request con nuestro array personalizado
         return new BadRequestException(formattedErrors);
       },
     }),
