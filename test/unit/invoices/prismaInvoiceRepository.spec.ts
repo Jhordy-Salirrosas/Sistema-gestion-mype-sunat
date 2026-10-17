@@ -9,6 +9,7 @@ describe('PrismaInvoiceRepository', () => {
   let repository: PrismaInvoiceRepository;
 
   const invoiceEntity = new InvoiceEntity({
+    company_id: 'company-test-001',
     ruc_emisor: '20100070970',
     serie: 'F001',
     correlativo: 1,
@@ -71,6 +72,7 @@ describe('PrismaInvoiceRepository', () => {
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.invoice.create).toHaveBeenCalledWith({
       data: {
+        company_id: 'company-test-001',
         ruc_emisor: invoiceEntity.ruc_emisor,
         serie: invoiceEntity.serie,
         correlativo: invoiceEntity.correlativo,
@@ -79,11 +81,7 @@ describe('PrismaInvoiceRepository', () => {
         fecha_emision: invoiceEntity.fecha_emision,
         payload_ubl: invoiceEntity.payload_ubl,
       },
-      select: {
-        id: true,
-        estado: true,
-        created_at: true,
-      },
+      select: { id: true, estado: true, created_at: true },
     });
 
     expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledWith(
@@ -94,9 +92,7 @@ describe('PrismaInvoiceRepository', () => {
   });
 
   it('lanza InternalServerErrorException si la transacción o el encolado fallan', async () => {
-    queueMock.enqueueInvoiceInTx.mockRejectedValue(
-      new Error('Fallo en cola'),
-    );
+    queueMock.enqueueInvoiceInTx.mockRejectedValue(new Error('Fallo en cola'));
 
     await expect(
       repository.saveWithTransactionalOutbox(invoiceEntity),

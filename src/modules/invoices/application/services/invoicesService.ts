@@ -1,8 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Optional,
-} from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
@@ -36,13 +32,18 @@ export class InvoicesService {
     }
   }
 
-  async create(dto: CreateInvoiceDto) {
+  /**
+   * @param companyId Tenant emisor, extraido del JWT. Se propaga a la entidad
+   *   para que el comprobante quede asociado a su empresa.
+   */
+  async create(dto: CreateInvoiceDto, companyId: string) {
     if (this.createInvoiceUseCase) {
-      return this.createInvoiceUseCase.execute(dto);
+      return this.createInvoiceUseCase.execute(dto, companyId);
     }
 
     if (this.repository) {
       const invoice = new InvoiceEntity({
+        company_id: companyId,
         ruc_emisor: dto.ruc_emisor,
         serie: dto.serie,
         correlativo: dto.correlativo,
@@ -58,4 +59,3 @@ export class InvoicesService {
     throw new Error('No repository or use case available in InvoicesService');
   }
 }
-
