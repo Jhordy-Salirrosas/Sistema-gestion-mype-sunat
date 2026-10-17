@@ -14,32 +14,42 @@ export interface ReconciliationSummary {
 export class ReconciliationMatcherRule {
   private static readonly TOLERANCE = 0.05;
 
+  private static makeKey(record: SireRecord): string {
+    return [
+      record.emitterRuc,
+      record.documentType,
+      record.series,
+      record.correlative,
+    ]
+      .map((part) => part.trim().toUpperCase())
+      .join('-');
+  }
+
+  private static exceedsTolerance(difference: number): boolean {
+    return Math.round(Math.abs(difference) * 100) > this.TOLERANCE * 100;
+  }
+
   public static reconcile(
     localRecords: SireRecord[],
     sireRecords: SireRecord[],
   ): ReconciliationSummary {
-    const makeKey = (r: SireRecord) =>
-      `${r.emitterRuc}|${r.documentType}|${r.series}|${r.correlative}`.toUpperCase();
-
     const localMap = new Map<string, SireRecord>();
     for (const rec of localRecords) {
-      localMap.set(makeKey(rec), rec);
+      localMap.set(this.makeKey(rec), rec);
     }
 
     const sireMap = new Map<string, SireRecord>();
     for (const rec of sireRecords) {
-      sireMap.set(makeKey(rec), rec);
+      sireMap.set(this.makeKey(rec), rec);
     }
 
     const details: DiscrepancyResult[] = [];
     let exactMatchesCount = 0;
     let discrepanciesCount = 0;
 
-    // 1. Iterar registros locales
     for (const [key, local] of localMap.entries()) {
       const sire = sireMap.get(key);
       if (!sire) {
-        // Escenario 4: OMISION_SUNAT
         discrepanciesCount++;
         details.push({
           discrepancyType: 'OMISION_SUNAT',
@@ -52,44 +62,50 @@ export class ReconciliationMatcherRule {
           amountDifference: local.totalAmount,
         });
       } else {
-        const diffBase = Math.abs(local.taxableBase - sire.taxableBase);
-        const diffIgv = Math.abs(local.igvAmount - sire.igvAmount);
-        const diffTotal = Math.round(Math.abs(local.totalAmount - sire.totalAmount) * 100) / 100;
+        const baseDifference = local.taxableBase - sire.taxableBase;
+        const igvDifference = local.igvAmount - sire.igvAmount;
+        const totalDifference =
+          Math.round(Math.abs(local.totalAmount - sire.totalAmount) * 100) /
+          100;
+        const discrepancy = {
+          emitterRuc: local.emitterRuc,
+          documentType: local.documentType,
+          series: local.series,
+          correlative: local.correlative,
+          localTotalAmount: local.totalAmount,
+          sireTotalAmount: sire.totalAmount,
+          amountDifference: totalDifference,
+          taxableBaseDifference: Math.round(baseDifference * 100) / 100,
+          igvDifference: Math.round(igvDifference * 100) / 100,
+        };
 
-        if (diffBase <= this.TOLERANCE && diffIgv <= this.TOLERANCE) {
-          // Escenario 1: COINCIDENCIA_EXACTA
+        if (
+          !this.exceedsTolerance(baseDifference) &&
+          !this.exceedsTolerance(igvDifference)
+        ) {
           exactMatchesCount++;
           details.push({
             discrepancyType: 'COINCIDENCIA_EXACTA',
-            emitterRuc: local.emitterRuc,
-            documentType: local.documentType,
-            series: local.series,
-            correlative: local.correlative,
-            localTotalAmount: local.totalAmount,
-            sireTotalAmount: sire.totalAmount,
-            amountDifference: diffTotal,
+            ...discrepancy,
           });
         } else {
-          // Escenario 2: DIFERENCIA_MONTOS
           discrepanciesCount++;
           details.push({
             discrepancyType: 'DIFERENCIA_MONTOS',
-            emitterRuc: local.emitterRuc,
-            documentType: local.documentType,
-            series: local.series,
-            correlative: local.correlative,
-            localTotalAmount: local.totalAmount,
-            sireTotalAmount: sire.totalAmount,
-            amountDifference: diffTotal,
+            ...discrepancy,
+            deviationPercentage:
+              local.totalAmount === 0
+                ? 0
+                : Math.round(
+                    (totalDifference / Math.abs(local.totalAmount)) * 10000,
+                  ) / 100,
           });
         }
       }
     }
 
-    // 2. Iterar propuestas SIRE para encontrar omisiones locales
     for (const [key, sire] of sireMap.entries()) {
       if (!localMap.has(key)) {
-        // Escenario 3: OMISION_LOCAL
         discrepanciesCount++;
         details.push({
           discrepancyType: 'OMISION_LOCAL',
