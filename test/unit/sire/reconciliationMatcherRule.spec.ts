@@ -15,9 +15,9 @@ describe('ReconciliationMatcherRule', () => {
   it('debería clasificar como COINCIDENCIA_EXACTA con tolerancia de centavos (<= 0.05)', () => {
     const sireProposal: SireRecord = {
       ...localInvoice,
-      taxableBase: 100.02,
-      igvAmount: 18.01,
-      totalAmount: 118.03,
+      taxableBase: 100.05,
+      igvAmount: 18.05,
+      totalAmount: 118.1,
     };
 
     const summary = ReconciliationMatcherRule.reconcile(
@@ -33,9 +33,9 @@ describe('ReconciliationMatcherRule', () => {
   it('debería clasificar como DIFERENCIA_MONTOS cuando excede tolerancia de 0.05', () => {
     const sireProposal: SireRecord = {
       ...localInvoice,
-      taxableBase: 120.0,
-      igvAmount: 21.6,
-      totalAmount: 141.6,
+      taxableBase: 100.06,
+      igvAmount: 18,
+      totalAmount: 118.06,
     };
 
     const summary = ReconciliationMatcherRule.reconcile(
@@ -46,7 +46,19 @@ describe('ReconciliationMatcherRule', () => {
     expect(summary.exactMatchesCount).toBe(0);
     expect(summary.discrepanciesCount).toBe(1);
     expect(summary.details[0].discrepancyType).toBe('DIFERENCIA_MONTOS');
-    expect(summary.details[0].amountDifference).toBe(23.6);
+    expect(summary.details[0].amountDifference).toBe(0.06);
+    expect(summary.details[0].taxableBaseDifference).toBe(-0.06);
+    expect(summary.details[0].deviationPercentage).toBe(0.05);
+  });
+
+  it('debería detectar diferencias de IGV mayores a 0.05', () => {
+    const summary = ReconciliationMatcherRule.reconcile(
+      [localInvoice],
+      [{ ...localInvoice, igvAmount: 18.06 }],
+    );
+
+    expect(summary.details[0].discrepancyType).toBe('DIFERENCIA_MONTOS');
+    expect(summary.details[0].igvDifference).toBe(-0.06);
   });
 
   it('debería clasificar como OMISION_SUNAT cuando un comprobante local no figura en SUNAT', () => {
@@ -75,5 +87,15 @@ describe('ReconciliationMatcherRule', () => {
     expect(summary.discrepanciesCount).toBe(1);
     expect(summary.details[0].discrepancyType).toBe('OMISION_LOCAL');
     expect(summary.details[0].sireTotalAmount).toBe(590.0);
+  });
+
+  it('debería construir la llave compuesta normalizando espacios y mayúsculas', () => {
+    const summary = ReconciliationMatcherRule.reconcile(
+      [{ ...localInvoice, series: ' f001 ' }],
+      [{ ...localInvoice, series: 'F001' }],
+    );
+
+    expect(summary.exactMatchesCount).toBe(1);
+    expect(summary.details[0].discrepancyType).toBe('COINCIDENCIA_EXACTA');
   });
 });

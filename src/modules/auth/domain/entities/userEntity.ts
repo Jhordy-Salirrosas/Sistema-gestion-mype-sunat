@@ -12,6 +12,8 @@ export interface UserProps {
   fullName: string;
   role: UserRole;
   isActive: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export class UserEntity {
@@ -41,7 +43,27 @@ export class UserEntity {
     return this.props.isActive;
   }
 
+  get createdAt(): Date | undefined {
+    return this.props.createdAt;
+  }
+
+  get updatedAt(): Date | undefined {
+    return this.props.updatedAt;
+  }
+
   hasRole(role: UserRole): boolean {
     return this.props.role === role;
+  }
+
+  isActiveAccount(): boolean {
+    return this.props.isActive;
+  }
+
+  updateFullName(newFullName: string): UserEntity {
+    return new UserEntity({
+      ...this.props,
+      fullName: newFullName.trim(),
+      updatedAt: new Date(),
+    });
   }
 }

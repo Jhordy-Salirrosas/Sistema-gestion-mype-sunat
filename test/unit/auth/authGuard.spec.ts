@@ -24,6 +24,8 @@ describe('AuthGuard', () => {
     mockTokenService = {
       signToken: jest.fn(),
       verifyToken: jest.fn(),
+      generateRefreshToken: jest.fn(),
+      hashToken: jest.fn(),
     };
     guard = new AuthGuard(mockTokenService);
   });

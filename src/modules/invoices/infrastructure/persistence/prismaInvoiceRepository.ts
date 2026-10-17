@@ -13,7 +13,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
-  ) {}
+  ) { }
 
   async saveWithTransactionalOutbox(
     invoice: InvoiceEntity,

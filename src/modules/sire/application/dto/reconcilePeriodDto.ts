@@ -1,8 +1,11 @@
 import {
   IsArray,
   IsIn,
+  IsNumber,
   IsNotEmpty,
   IsString,
+  Matches,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -24,14 +27,25 @@ export class SireRecordDto {
   @IsNotEmpty()
   correlative!: string;
 
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   taxableBase!: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   igvAmount!: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
   totalAmount!: number;
 }
 
 export class ReconcilePeriodDto {
   @IsString()
   @IsNotEmpty()
+  @Matches(/^\d{4}(0[1-9]|1[0-2])$/, {
+    message: 'El periodo debe tener formato YYYYMM y ser un mes válido',
+  })
   period!: string;
 
   @IsString()
@@ -42,9 +56,4 @@ export class ReconcilePeriodDto {
   @ValidateNested({ each: true })
   @Type(() => SireRecordDto)
   localRecords!: SireRecordDto[];
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SireRecordDto)
-  sireRecords!: SireRecordDto[];
 }

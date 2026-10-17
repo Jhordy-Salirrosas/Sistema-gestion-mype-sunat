@@ -7,6 +7,7 @@ process.env.DIRECT_URL = 'postgres://mock-direct-url:5432/test';
 process.env.SUPABASE_URL = 'http://mock-supabase.com';
 process.env.SUPABASE_KEY = 'mock-supabase-key';
 process.env.API_KEY = 'mock-api-key';
+process.env.JWT_SECRET = 'test-jwt-secret-key-32-chars-long';
 process.env.RUC_EMISOR = '20601234567';
 process.env.CERT_PASSWORD = 'mock-password';
 process.env.CERT_BASE64 = 'mock-base64';

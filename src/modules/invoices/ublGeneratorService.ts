@@ -58,22 +58,17 @@ export class UblGeneratorService {
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
-         xmlns:ccts="urn:un:unece:uncefact:documentation:2"
-         xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
-         xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
-         xmlns:qdt="urn:oasis:names:specification:ubl:schema:xsd:QualifiedDatatypes-2"
-         xmlns:udt="urn:un:unece:uncefact:data:specification:UnqualifiedDataTypesSchemaModule:2"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+         xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
   <ext:UBLExtensions>
     <ext:UBLExtension>
-      <ext:ExtensionContent/>
+      <ext:ExtensionContent />
     </ext:UBLExtension>
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>2.0</cbc:CustomizationID>
   <cbc:ID>${invoiceId}</cbc:ID>
   <cbc:IssueDate>${fechaEmision}</cbc:IssueDate>
-  <cbc:InvoiceTypeCode listID="0101">${tipoComprobante}</cbc:InvoiceTypeCode>
+  <cbc:InvoiceTypeCode>${tipoComprobante}</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>${tipoMoneda}</cbc:DocumentCurrencyCode>
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -105,6 +100,6 @@ ${customerXml}
     <cbc:TaxInclusiveAmount currencyID="${tipoMoneda}">${montoTotal.toFixed(2)}</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="${tipoMoneda}">${montoTotal.toFixed(2)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
-</Invoice>`.trim();
+</Invoice>`;
   }
 }

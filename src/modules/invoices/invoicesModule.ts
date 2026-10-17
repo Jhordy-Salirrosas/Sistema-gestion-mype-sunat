@@ -8,9 +8,9 @@ import { InvoicesService } from './application/services/invoicesService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
-import { InvoiceWorkerService } from './invoice-worker.service';
-import { UblGeneratorService } from './ubl-generator.service';
-import { XsdValidatorService } from './xsd-validator.service';
+import { InvoiceWorkerService } from './invoiceWorkerService';
+import { UblGeneratorService } from './ublGeneratorService';
+import { XsdValidatorService } from './xsdValidatorService';
 
 @Module({
   imports: [PrismaModule, AuthModule, QueueModule, SunatModule],

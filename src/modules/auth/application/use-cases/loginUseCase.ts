@@ -38,7 +38,7 @@ export class LoginUseCase {
       throw new UnauthorizedException('Credenciales de acceso incorrectas.');
     }
 
-    const expiresInSeconds = 28800; // 8 horas
+    const expiresInSeconds = 900; // 15 minutos
     const accessToken = this.tokenService.signToken(
       {
         sub: user.id,
@@ -49,10 +49,21 @@ export class LoginUseCase {
       expiresInSeconds,
     );
 
+    let rawRefreshToken: string | undefined;
+    if (typeof this.tokenService.generateRefreshToken === 'function') {
+      rawRefreshToken = this.tokenService.generateRefreshToken();
+      const tokenHash = this.tokenService.hashToken(rawRefreshToken);
+      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      if (typeof this.userRepository.saveRefreshToken === 'function') {
+        await this.userRepository.saveRefreshToken(user.id, tokenHash, expiresAt);
+      }
+    }
+
     return {
       accessToken,
       tokenType: 'Bearer',
       expiresInSeconds,
+      refreshToken: rawRefreshToken,
       user: {
         id: user.id,
         email: user.email,

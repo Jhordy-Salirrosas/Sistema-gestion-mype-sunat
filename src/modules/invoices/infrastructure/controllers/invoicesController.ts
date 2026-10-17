@@ -7,11 +7,11 @@ import {
   HttpStatus,
   Optional,
 } from '@nestjs/common';
+import { CurrentCompany } from '../../../../common/decorators';
 import { InvoicesService } from '../../application/services/invoicesService';
 import { CreateInvoiceUseCase } from '../../application/use-cases/createInvoiceUseCase';
 import { CreateInvoiceDto } from '../../application/dto/createInvoiceDto';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import { CurrentCompany } from '../../../../common/decorators';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -19,7 +19,7 @@ export class InvoicesController {
   constructor(
     private readonly createInvoiceUseCase: CreateInvoiceUseCase,
     @Optional() private readonly invoicesService?: InvoicesService,
-  ) {}
+  ) { }
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)

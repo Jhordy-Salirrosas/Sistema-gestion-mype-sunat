@@ -12,7 +12,7 @@ export class CreateInvoiceUseCase {
   constructor(
     @Inject(INVOICE_REPOSITORY_PORT)
     private readonly invoiceRepository: IInvoiceRepositoryPort,
-  ) {}
+  ) { }
 
   /**
    * @param companyId Tenant emisor, extraido del JWT por @CurrentCompany().

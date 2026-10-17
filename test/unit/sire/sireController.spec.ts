@@ -1,5 +1,7 @@
 import { SireController } from '../../../src/modules/sire/infrastructure/controllers/sireController';
 import { ReconcileSireUseCase } from '../../../src/modules/sire/application/use-cases/reconcileSireUseCase';
+import { validate } from 'class-validator';
+import { ReconcilePeriodDto } from '../../../src/modules/sire/application/dto/reconcilePeriodDto';
 
 describe('SireController', () => {
   let controller: SireController;
@@ -15,8 +17,8 @@ describe('SireController', () => {
 
   it('debería delegar la petición de conciliación al caso de uso', async () => {
     const mockOutput = {
-      period: '2026-03',
-      bookType: 'RVIE_VENTAS',
+      period: '202603',
+      bookType: 'RVIE_VENTAS' as const,
       totalLocalRecords: 1,
       totalSireRecords: 1,
       exactMatchesCount: 1,
@@ -27,14 +29,31 @@ describe('SireController', () => {
 
     useCase.execute.mockResolvedValue(mockOutput);
 
-    const result = await controller.reconcile({
-      period: '2026-03',
-      bookType: 'RVIE_VENTAS',
-      localRecords: [],
-      sireRecords: [],
-    });
+    const result = await controller.reconcile(
+      {
+        period: '202603',
+        bookType: 'RVIE_VENTAS',
+        localRecords: [],
+      },
+      'company-1',
+    );
 
     expect(result).toBe(mockOutput);
-    expect(useCase.execute).toHaveBeenCalled();
+    expect(useCase.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ period: '202603' }),
+      'company-1',
+    );
+  });
+
+  it('debería aceptar solo periodos con formato YYYYMM y mes válido', async () => {
+    const dto = Object.assign(new ReconcilePeriodDto(), {
+      period: '202613',
+      bookType: 'RVIE_VENTAS',
+      localRecords: [],
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toContain('period');
   });
 });
