@@ -1,6 +1,6 @@
 export interface InvoiceEntityProps {
   id?: string;
-  company_id?: string;
+  company_id: string;
   ruc_emisor: string;
   serie: string;
   correlativo: number;
@@ -14,7 +14,7 @@ export interface InvoiceEntityProps {
 
 export class InvoiceEntity {
   public readonly id?: string;
-  public readonly company_id?: string;
+  public readonly company_id: string;
   public readonly ruc_emisor: string;
   public readonly serie: string;
   public readonly correlativo: number;

@@ -16,10 +16,12 @@
  */
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import request = require('supertest');
 
 import { AppModule } from '../../../src/appModule';
 import { PrismaService } from '../../../src/database/prismaService';
+import { NativeJwtAdapter } from '../../../src/modules/auth/infrastructure/security/nativeJwtAdapter';
 import { PrismaInvoiceRepository } from '../../../src/modules/invoices/infrastructure/persistence/prismaInvoiceRepository';
 import { InvoiceEntity } from '../../../src/modules/invoices/domain/entities/invoiceEntity';
 import {
@@ -43,21 +45,24 @@ const SERIE_ENDPOINT = 'T903';
 /** El patron tarda: pg-boss crea su esquema en la primera ejecucion. */
 jest.setTimeout(60_000);
 
-function crearEntidad(serie: string, correlativo: number): InvoiceEntity {
-  return new InvoiceEntity({
-    ruc_emisor: RUC,
-    serie,
-    correlativo,
-    tipo_comprobante: '01',
-    monto_total: 118,
-    fecha_emision: new Date(),
-    payload_ubl: { test: 'ta-13' },
-  });
-}
-
 describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
   let prisma: PrismaService;
   let queue: QueueService | null = null;
+  let companyId: string;
+  let accessToken: string;
+
+  function crearEntidad(serie: string, correlativo: number): InvoiceEntity {
+    return new InvoiceEntity({
+      company_id: companyId,
+      ruc_emisor: RUC,
+      serie,
+      correlativo,
+      tipo_comprobante: '01',
+      monto_total: 118,
+      fecha_emision: new Date(),
+      payload_ubl: { test: 'ta-13' },
+    });
+  }
 
   beforeAll(async () => {
     // Debe fijarse ANTES de construir PrismaService y QueueService: ambos leen
@@ -74,12 +79,46 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
           'Levantá el contenedor y aplicá las migraciones (ver prisma/README.md).',
       );
     }
+
+    // Empresa de pruebas: invoices.company_id es FK a companies.
+    const company = await prisma.company.create({
+      data: {
+        ruc: RUC,
+        legal_name: 'EMPRESA DE PRUEBA TA-13 S.A.C.',
+        sol_user: 'MODDATOS',
+        sol_pass_encrypted: 'cifrado-de-prueba',
+      },
+    });
+    companyId = company.id;
+
+    // Token real firmado con el mismo adaptador que usa la aplicacion.
+    // Sin JWT_SECRET en el entorno, el adaptador usa su secreto de desarrollo,
+    // el mismo que usara AppModule al verificar.
+    const tokenService = new NativeJwtAdapter({
+      get: () => undefined,
+    } as unknown as ConfigService);
+
+    accessToken = tokenService.signToken({
+      sub: 'user-ta-13',
+      email: 'ta13@mype.pe',
+      companyId,
+      role: 'ADMIN',
+    });
   });
 
   afterAll(async () => {
     if (queue) {
       await queue.onModuleDestroy();
     }
+
+    // Limpieza: primero los comprobantes (FK), despues la empresa.
+    if (prisma && companyId) {
+      await prisma.invoice.deleteMany({ where: { company_id: companyId } });
+      await prisma.company
+        .delete({ where: { id: companyId } })
+        .catch(() => undefined);
+    }
+
     await prisma?.$disconnect();
   });
 
@@ -184,14 +223,13 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
 
     try {
       const servidor = app.getHttpServer();
-      const apiKey = process.env.API_KEY as string;
 
       const mediciones = await Promise.all(
         Array.from({ length: 10 }, async (_, i) => {
           const inicio = Date.now();
           const respuesta = await request(servidor)
             .post('/api/v1/invoices')
-            .set('x-api-key', apiKey)
+            .set('Authorization', `Bearer ${accessToken}`)
             .send({
               ruc_emisor: RUC,
               serie: SERIE_ENDPOINT,
@@ -207,6 +245,12 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
 
       mediciones.forEach((m) => expect(m.status).toBe(202));
       mediciones.forEach((m) => expect(m.ms).toBeLessThan(500));
+
+      // Y todas quedaron asociadas a la empresa del token.
+      const asociadas = await prisma.invoice.count({
+        where: { serie: SERIE_ENDPOINT, company_id: companyId },
+      });
+      expect(asociadas).toBe(10);
     } finally {
       await app.close();
     }

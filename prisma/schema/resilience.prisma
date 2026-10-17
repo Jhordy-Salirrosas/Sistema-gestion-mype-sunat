@@ -11,6 +11,7 @@ model TransactionHistory {
   codigo_error        String?
   mensaje_error       String?
   tiempo_respuesta_ms Int?
+  http_status_code    Int?
   circuit_breaker_state String       @default("CLOSED")
   created_at          DateTime       @default(now())
 

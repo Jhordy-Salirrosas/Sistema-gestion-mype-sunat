@@ -1,48 +1,62 @@
-
 import {
   BadRequestException,
   INestApplication,
   ValidationPipe,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../../../src/appModule';
 import { InvoicesService } from '../../../src/modules/invoices/application/services/invoicesService';
+import { NativeJwtAdapter } from '../../../src/modules/auth/infrastructure/security/nativeJwtAdapter';
 
 describe('InvoicesController (e2e)', () => {
   let app: INestApplication<App>;
+  let accessToken: string;
 
-  const apiKey = 'super-secret-test-key';
+  /** Tenant que viaja en el JWT. El endpoint lo toma de ahi, no del cuerpo. */
+  const companyId = 'company-e2e-001';
 
   const mockInvoicesService = {
     create: jest.fn(),
   };
 
   beforeAll(async () => {
-    process.env.API_KEY = apiKey;
+    // Token firmado con el mismo adaptador que usa la aplicacion. Sin
+    // JWT_SECRET en el entorno, ambos usan el secreto de desarrollo.
+    const tokenService = new NativeJwtAdapter({
+      get: () => undefined,
+    } as unknown as ConfigService);
 
-    const moduleFixture: TestingModule =
-      await Test.createTestingModule({
-        imports: [AppModule],
+    accessToken = tokenService.signToken({
+      sub: 'user-e2e',
+      email: 'e2e@mype.pe',
+      companyId,
+      role: 'ADMIN',
+    });
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(InvoicesService)
+      .useValue(mockInvoicesService)
+      .overrideProvider(
+        require('../../../src/database/prismaService').PrismaService,
+      )
+      .useValue({
+        $connect: jest.fn(),
+        $disconnect: jest.fn(),
+        $transaction: jest.fn(),
       })
-        .overrideProvider(InvoicesService)
-        .useValue(mockInvoicesService)
-        .overrideProvider(
-          require('../../../src/database/prismaService').PrismaService,
-        )
-        .useValue({
-          $connect: jest.fn(),
-          $disconnect: jest.fn(),
-          $transaction: jest.fn(),
-        })
-        .overrideProvider(
-          require('../../../src/modules/resilience/infrastructure/queue/queue.service').QueueService,
-        )
-        .useValue({
-          enqueueInvoiceInTx: jest.fn(),
-        })
-        .compile();
+      .overrideProvider(
+        require('../../../src/modules/resilience/infrastructure/queue/queue.service')
+          .QueueService,
+      )
+      .useValue({
+        enqueueInvoiceInTx: jest.fn(),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
 
@@ -75,7 +89,6 @@ describe('InvoicesController (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
-    delete process.env.API_KEY;
   });
 
   beforeEach(() => {
@@ -95,7 +108,7 @@ describe('InvoicesController (e2e)', () => {
     },
   };
 
-  it('rechaza peticiones sin API Key (401)', async () => {
+  it('rechaza peticiones sin token de autorización (401)', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/invoices')
       .send(validPayload)
@@ -114,7 +127,7 @@ describe('InvoicesController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/invoices')
-      .set('x-api-key', apiKey)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send(invalidPayload)
       .expect(400);
 
@@ -140,7 +153,7 @@ describe('InvoicesController (e2e)', () => {
   it('rechaza campos adicionales no declarados en el DTO (400)', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/invoices')
-      .set('x-api-key', apiKey)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send({
         ...validPayload,
         campo_no_permitido: true,
@@ -159,7 +172,7 @@ describe('InvoicesController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/invoices')
-      .set('x-api-key', apiKey)
+      .set('Authorization', `Bearer ${accessToken}`)
       .send(validPayload)
       .expect(202);
 
@@ -171,5 +184,10 @@ describe('InvoicesController (e2e)', () => {
     });
 
     expect(mockInvoicesService.create).toHaveBeenCalledTimes(1);
+    // El tenant se extrae del JWT y se pasa al servicio.
+    expect(mockInvoicesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ serie: 'F001' }),
+      companyId,
+    );
   });
 });

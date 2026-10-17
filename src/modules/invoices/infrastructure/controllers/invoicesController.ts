@@ -11,27 +11,26 @@ import { CurrentCompany } from '../../../../common/decorators';
 import { InvoicesService } from '../../application/services/invoicesService';
 import { CreateInvoiceUseCase } from '../../application/use-cases/createInvoiceUseCase';
 import { CreateInvoiceDto } from '../../application/dto/createInvoiceDto';
-import { ApiKeyGuard } from '../guards/apiKeyGuard';
+import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { CurrentCompany } from '../../../../common/decorators';
 
 @Controller('api/v1/invoices')
-@UseGuards(ApiKeyGuard)
+@UseGuards(AuthGuard)
 export class InvoicesController {
   constructor(
     private readonly createInvoiceUseCase: CreateInvoiceUseCase,
     @Optional() private readonly invoicesService?: InvoicesService,
-  ) {}
+  ) { }
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   async create(
     @Body() dto: CreateInvoiceDto,
-    @CurrentCompany() companyId?: string,
+    @CurrentCompany() companyId: string,
   ) {
     const invoice = this.invoicesService
-      ? await this.invoicesService.create(dto)
-      : await (companyId
-          ? this.createInvoiceUseCase.execute(dto, companyId)
-          : this.createInvoiceUseCase.execute(dto));
+      ? await this.invoicesService.create(dto, companyId)
+      : await this.createInvoiceUseCase.execute(dto, companyId);
 
     return {
       id: invoice.id,
@@ -41,4 +40,3 @@ export class InvoicesController {
     };
   }
 }
-

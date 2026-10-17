@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
+import { AuthModule } from '../auth/authModule';
 import { QueueModule } from '../resilience/infrastructure/queue/queueModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
@@ -12,7 +13,7 @@ import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 
 @Module({
-  imports: [PrismaModule, QueueModule, SunatModule],
+  imports: [PrismaModule, AuthModule, QueueModule, SunatModule],
   controllers: [InvoicesController],
   providers: [
     CreateInvoiceUseCase,
@@ -35,4 +36,4 @@ import { XsdValidatorService } from './xsdValidatorService';
     XsdValidatorService,
   ],
 })
-export class InvoicesModule { }
+export class InvoicesModule {}
