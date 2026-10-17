@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Prisma } from '../../../../generated/client/client';
 import { PrismaService } from '../../../../database/prismaService';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
@@ -13,7 +17,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
-  ) { }
+  ) {}
 
   async saveWithTransactionalOutbox(
     invoice: InvoiceEntity,
@@ -47,6 +51,21 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
         },
       );
     } catch (error) {
+      // Un reintento del mismo comprobante choca con uq_invoices_fiscal.
+      // Se responde 409 para que el cliente lo trate como "ya registrado"
+      // y no como un fallo: asi el reintento es idempotente.
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        throw new ConflictException({
+          code: 'INVOICE_ALREADY_EXISTS',
+          message:
+            'Ya existe un comprobante con esa serie y correlativo para la empresa',
+        });
+      }
+
       console.error('Error al registrar el comprobante:', error);
 
       throw new InternalServerErrorException({

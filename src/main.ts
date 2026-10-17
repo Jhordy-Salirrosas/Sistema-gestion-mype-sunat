@@ -6,17 +6,21 @@ import { HttpExceptionFilter } from './common/filters';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Habilitar CORS para Vercel (*.vercel.app), localhost y soporte de cookies
+  const extraOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+    : [];
+
+  // Habilitar CORS con soporte para Vercel (*.vercel.app), localhost y credenciales
   app.enableCors({
     origin: [
       'http://localhost:5173',
       'http://localhost:3000',
-      /\.vercel\.app$/, // Permite cualquier URL y preview branch generada por Vercel
+      /\.vercel\.app$/, // Permite cualquier URL y preview de Vercel
+      ...extraOrigins,
     ],
-    credentials: true, // Requerido para que viajen las cookies HttpOnly
+    credentials: true, // Requerido para cookies HttpOnly
   });
 
-  // Filtro de excepciones agregado por Diego
   app.useGlobalFilters(new HttpExceptionFilter());
 
   app.useGlobalPipes(
@@ -29,7 +33,9 @@ async function bootstrap() {
         const formattedErrors = errors.map((error) => {
           // Extraer la primera regla de validación que haya fallado
           const rule = Object.keys(error.constraints || {})[0];
-          const message = error.constraints ? error.constraints[rule] : 'Dato inválido';
+          const message = error.constraints
+            ? error.constraints[rule]
+            : 'Dato inválido';
 
           return {
             field: error.property,
