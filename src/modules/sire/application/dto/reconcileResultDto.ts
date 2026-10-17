@@ -2,7 +2,7 @@ import type { DiscrepancyResult } from '../../domain/entities/sireProposalEntity
 
 export interface ReconcileResultDto {
   period: string;
-  bookType: string;
+  bookType: 'RVIE_VENTAS' | 'RCE_COMPRAS';
   totalLocalRecords: number;
   totalSireRecords: number;
   exactMatchesCount: number;
