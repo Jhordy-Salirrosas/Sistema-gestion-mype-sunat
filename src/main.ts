@@ -6,6 +6,13 @@ import { HttpExceptionFilter } from './common/filters';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // CORS: el frontend de Vite corre en otro origen durante el desarrollo y en
+  // Vercel en produccion. Sin esto el navegador bloquea toda peticion.
+  app.enableCors({
+    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5173').split(','),
+    credentials: true,
+  });
+
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
@@ -17,15 +24,17 @@ async function bootstrap() {
         const formattedErrors = errors.map((error) => {
           // Extraer la primera regla de validación que haya fallado
           const rule = Object.keys(error.constraints || {})[0];
-          const message = error.constraints ? error.constraints[rule] : 'Dato inválido';
-          
+          const message = error.constraints
+            ? error.constraints[rule]
+            : 'Dato inválido';
+
           return {
             field: error.property,
             rule: rule,
             message: message,
           };
         });
-        
+
         // Lanzar el HTTP 400 Bad Request con nuestro array personalizado
         return new BadRequestException(formattedErrors);
       },
