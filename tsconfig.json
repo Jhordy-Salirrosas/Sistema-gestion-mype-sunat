@@ -18,7 +18,6 @@
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
-    "strictPropertyInitialization": false,
-    "rootDir": "./"
+    "strictPropertyInitialization": false
   }
 }

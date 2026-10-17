@@ -38,6 +38,10 @@ class EnvironmentVariables {
   API_KEY: string;
 
   @IsString()
+  @IsNotEmpty({ message: 'JWT_SECRET es obligatoria para la autenticación de usuarios y aislamiento multi-tenant' })
+  JWT_SECRET: string;
+
+  @IsString()
   @IsNotEmpty({ message: 'RUC_EMISOR es obligatorio' })
   RUC_EMISOR: string;
 

@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Optional,
 } from '@nestjs/common';
+import { CurrentCompany } from '../../../../common/decorators';
 import { InvoicesService } from '../../application/services/invoicesService';
 import { CreateInvoiceUseCase } from '../../application/use-cases/createInvoiceUseCase';
 import { CreateInvoiceDto } from '../../application/dto/createInvoiceDto';
@@ -22,10 +23,15 @@ export class InvoicesController {
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
-  async create(@Body() dto: CreateInvoiceDto) {
+  async create(
+    @Body() dto: CreateInvoiceDto,
+    @CurrentCompany() companyId?: string,
+  ) {
     const invoice = this.invoicesService
       ? await this.invoicesService.create(dto)
-      : await this.createInvoiceUseCase.execute(dto);
+      : await (companyId
+          ? this.createInvoiceUseCase.execute(dto, companyId)
+          : this.createInvoiceUseCase.execute(dto));
 
     return {
       id: invoice.id,

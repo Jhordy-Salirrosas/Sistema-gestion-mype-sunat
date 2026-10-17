@@ -26,6 +26,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
         // Registrar el comprobante dentro de la transacción.
         const created = await tx.invoice.create({
           data: {
+            company_id: invoice.company_id,
             ruc_emisor: invoice.ruc_emisor,
             serie: invoice.serie,
             correlativo: invoice.correlativo,

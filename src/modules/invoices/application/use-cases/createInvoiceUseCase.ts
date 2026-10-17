@@ -14,8 +14,9 @@ export class CreateInvoiceUseCase {
     private readonly invoiceRepository: IInvoiceRepositoryPort,
   ) {}
 
-  async execute(dto: CreateInvoiceDto): Promise<InvoicePersistenceResult> {
+  async execute(dto: CreateInvoiceDto, companyId?: string): Promise<InvoicePersistenceResult> {
     const entity = new InvoiceEntity({
+      company_id: companyId,
       ruc_emisor: dto.ruc_emisor,
       serie: dto.serie,
       correlativo: dto.correlativo,
