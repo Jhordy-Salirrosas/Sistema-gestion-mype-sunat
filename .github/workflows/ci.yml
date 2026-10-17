@@ -10,6 +10,25 @@ jobs:
   build-and-test:
     name: Build, Lint & Coverage
     runs-on: ubuntu-latest
+
+    # Base de datos para las pruebas de integracion del Outbox (TA-13).
+    # Las pruebas de concurrencia y rollback requieren PostgreSQL real: el
+    # patron transactional outbox garantiza atomicidad en la base de datos, y
+    # con mocks esa garantia no se puede demostrar.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ta13_test
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,11 +47,20 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      # Sin este paso la base existe pero esta vacia: las pruebas de
+      # integracion fallan al consultar las tablas del modelo de datos.
+      - name: Apply migrations to the test database
+        run: npx prisma migrate deploy
+        env:
+          DIRECT_URL: postgresql://postgres:test@localhost:5435/ta13_test
+
       - name: Run Linter (oxlint)
         run: npm run lint
 
       - name: Run Tests with Coverage (Jest)
         run: npm test -- --coverage --coverageDirectory=coverage
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:test@localhost:5435/ta13_test
 
       - name: Run Build
         run: npm run build
