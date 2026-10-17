@@ -20,6 +20,7 @@
     "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "test:sunat:beta": "node --experimental-vm-modules -r dotenv/config node_modules/jest/bin/jest.js --runInBand test/integration/sunat/sunatBetaConnection.spec.ts",
     "seed": "npx tsx prisma/seed.ts",
     "check:secrets": "node scripts/check-secrets.js"
   },

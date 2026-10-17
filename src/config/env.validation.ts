@@ -29,8 +29,15 @@ class EnvironmentVariables {
   @IsOptional()
   PORT: number = 3000;
 
+  @IsNumber()
+  @IsOptional()
+  SUNAT_TIMEOUT_MS: number = 30000;
+
   @IsString()
-  @IsNotEmpty({ message: 'DATABASE_URL es obligatoria para la conexión a Supabase/PostgreSQL' })
+  @IsNotEmpty({
+    message:
+      'DATABASE_URL es obligatoria para la conexión a Supabase/PostgreSQL',
+  })
   DATABASE_URL: string;
 
   @IsString()
@@ -38,7 +45,10 @@ class EnvironmentVariables {
   API_KEY: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'JWT_SECRET es obligatoria para la autenticación de usuarios y aislamiento multi-tenant' })
+  @IsNotEmpty({
+    message:
+      'JWT_SECRET es obligatoria para la autenticación de usuarios y aislamiento multi-tenant',
+  })
   JWT_SECRET: string;
 
   @IsString()
@@ -46,7 +56,9 @@ class EnvironmentVariables {
   RUC_EMISOR: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'CERT_PASSWORD es obligatorio para abrir el certificado digital' })
+  @IsNotEmpty({
+    message: 'CERT_PASSWORD es obligatorio para abrir el certificado digital',
+  })
   CERT_PASSWORD: string;
 
   @IsString()
@@ -68,6 +80,16 @@ class EnvironmentVariables {
   @IsUrl({ require_tld: false })
   @IsOptional()
   SUNAT_BILL_SERVICE_URL?: string;
+
+  @IsUrl({ protocols: ['https'], require_tld: true })
+  @IsOptional()
+  SUNAT_BILL_SERVICE_URL_BETA: string =
+    'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService';
+
+  @IsUrl({ protocols: ['https'], require_tld: true })
+  @IsOptional()
+  SUNAT_BILL_SERVICE_URL_PRODUCCION: string =
+    'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService';
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -81,9 +103,12 @@ export function validate(config: Record<string, unknown>) {
 
   if (errors.length > 0) {
     const errorMessages = errors.map(
-      (error) => `\n - ${error.property}: ${Object.values(error.constraints || {}).join(', ')}`
+      (error) =>
+        `\n - ${error.property}: ${Object.values(error.constraints || {}).join(', ')}`,
     );
-    throw new Error(`\n❌ Error de configuración. Faltan variables de entorno obligatorias:${errorMessages.join('')}\n`);
+    throw new Error(
+      `\n❌ Error de configuración. Faltan variables de entorno obligatorias:${errorMessages.join('')}\n`,
+    );
   }
 
   return validatedConfig;

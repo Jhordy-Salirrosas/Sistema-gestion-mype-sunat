@@ -36,9 +36,15 @@ export function resolveEndpoint(): string {
   if (process.env.SUNAT_BILL_SERVICE_URL) {
     return process.env.SUNAT_BILL_SERVICE_URL;
   }
-  return process.env.SUNAT_ENV === 'produccion'
-    ? SUNAT_BILL_SERVICE_URLS.produccion
-    : SUNAT_BILL_SERVICE_URLS.beta;
+  if (process.env.SUNAT_ENV === 'produccion') {
+    return (
+      process.env.SUNAT_BILL_SERVICE_URL_PRODUCCION ??
+      SUNAT_BILL_SERVICE_URLS.produccion
+    );
+  }
+  return (
+    process.env.SUNAT_BILL_SERVICE_URL_BETA ?? SUNAT_BILL_SERVICE_URLS.beta
+  );
 }
 
 export function resolveTimeout(): number {
