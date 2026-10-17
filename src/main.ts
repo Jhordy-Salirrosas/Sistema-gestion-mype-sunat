@@ -6,10 +6,14 @@ import { HttpExceptionFilter } from './common/filters';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Habilitar CORS para que el frontend pueda consumir los endpoints
+  // Habilitar CORS para Vercel (*.vercel.app), localhost y soporte de cookies
   app.enableCors({
-    origin: true,
-    credentials: true,
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      /\.vercel\.app$/, // Permite cualquier URL y preview branch generada por Vercel
+    ],
+    credentials: true, // Requerido para que viajen las cookies HttpOnly
   });
 
   // Filtro de excepciones agregado por Diego

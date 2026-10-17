@@ -3,22 +3,24 @@ import type { Request, Response } from 'express';
 export const REFRESH_COOKIE_NAME = 'refreshToken';
 
 export function setRefreshTokenCookie(res: Response, token: string): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
+
   res.cookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax', // 'none' obligatorio para Vercel <-> Render
     path: '/api/v1/auth',
     maxAge: 7 * 24 * 3600 * 1000, // 7 días
   });
 }
 
 export function clearRefreshTokenCookie(res: Response): void {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
+
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax', // 'none' obligatorio para poder borrar la cookie entre dominios
     path: '/api/v1/auth',
   });
 }
