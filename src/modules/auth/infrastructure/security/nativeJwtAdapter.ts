@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type {
   TokenPayload,
   TokenServicePort,
@@ -16,7 +16,7 @@ export class NativeJwtAdapter implements TokenServicePort {
       'secret-clave-segura-desarrollo-sistema-mype-2026';
   }
 
-  signToken(payload: TokenPayload, expiresInSeconds = 28800): string {
+  signToken(payload: TokenPayload, expiresInSeconds = 900): string {
     const header = { alg: 'HS256', typ: 'JWT' };
     const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const fullPayload = { ...payload, exp };
@@ -54,6 +54,14 @@ export class NativeJwtAdapter implements TokenServicePort {
     } catch {
       return null;
     }
+  }
+
+  generateRefreshToken(): string {
+    return randomBytes(32).toString('hex');
+  }
+
+  hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private createSignature(content: string): string {

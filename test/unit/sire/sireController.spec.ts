@@ -18,7 +18,7 @@ describe('SireController', () => {
   it('debería delegar la petición de conciliación al caso de uso', async () => {
     const mockOutput = {
       period: '202603',
-      bookType: 'RVIE_VENTAS',
+      bookType: 'RVIE_VENTAS' as const,
       totalLocalRecords: 1,
       totalSireRecords: 1,
       exactMatchesCount: 1,

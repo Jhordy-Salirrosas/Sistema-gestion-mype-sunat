@@ -20,6 +20,7 @@
     "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "seed": "npx tsx prisma/seed.ts",
     "check:secrets": "node scripts/check-secrets.js"
   },
   "dependencies": {
@@ -68,6 +69,9 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.2"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   },
   "allowScripts": {
     "@parcel/watcher@2.6.0": true,
