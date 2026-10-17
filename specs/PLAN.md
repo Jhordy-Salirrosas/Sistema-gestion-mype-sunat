@@ -4,7 +4,7 @@
 **Autor y Arquitecto:** Carlos Ahumada Soles  
 **Destinatarios:** Equipo de Desarrollo (Carlos, Jhordy, Oliver, Michael, Diego) y Asistente Operativo / IA (OA)  
 **Versión:** 1.0.0 — Octubre 2026  
-**Estatus:** 🔒 NORMATIVA INNEGOCIABLE DEL REPOSITORIO  
+**Estatus:** 🔒 NORMATIVA INNEGOCIABLE DEL REPOSITORIO
 
 ---
 
@@ -13,6 +13,7 @@
 Este documento establece el **70% de las directrices operativas, arquitectónicas y de codificación** que rigen la construcción del proyecto. Es la **fuente de verdad suprema** tanto para los desarrolladores del equipo como para cualquier Operador Asistente de IA (OA).
 
 ### 1.1. Filosofía de Ingeniería
+
 1. **Las buenas prácticas son innegociables:** No se aceptan atajos técnicos, deuda técnica consciente ni "código temporal".
 2. **Spec-Driven Development (SDD):** Ninguna línea de código de producción o prueba automatizada se crea sin que exista una especificación previa en `specs/`.
 3. **Simetría y Orden Absoluto:** Todo componente del sistema tiene una ubicación unívoca y una nomenclatura estricta. Si un archivo no encaja en la estructura definida, el diseño debe ser revisado.
@@ -22,7 +23,7 @@ Este documento establece el **70% de las directrices operativas, arquitectónica
 
 ## 2. Arquitectura Global: Monolito Modular Hexagonal (DDD Ligero)
 
-El sistema se estructura como un **Monolito Modular** con **Arquitectura Hexagonal (Ports and Adapters)** y límites de contexto (*Bounded Contexts*) estrictos.
+El sistema se estructura como un **Monolito Modular** con **Arquitectura Hexagonal (Ports and Adapters)** y límites de contexto (_Bounded Contexts_) estrictos.
 
 ```text
                ┌────────────────────────────────────────────────────────┐
@@ -41,6 +42,7 @@ El sistema se estructura como un **Monolito Modular** con **Arquitectura Hexagon
 ```
 
 ### 2.1. Reglas de Dependencia entre Capas
+
 1. **El Dominio es Agnóstico y Sagrado:**
    - La carpeta `domain/` **NO PUEDE IMPORTAR NADA** de NestJS (`@Injectable`, `@Controller`, etc.), NADA de Prisma (`PrismaClient`, `@prisma/client`), ni de ninguna librería de base de datos o HTTP.
    - Solo contiene TypeScript puro, tipos primitivos, matemáticas y lógica de negocio.
@@ -74,6 +76,7 @@ Sistema-gestion-mype-sunat/
 │   │   └── accounting.prisma           # Entidades: AccountingEntry, AccountingLine, PleBook
 │   ├── migrations/                     # Migraciones versionadas en SQL puro
 │   └── seeds/                          # Scripts de precarga de catálogos SUNAT y PCGE
+|   └── README.md                       # Modelo de datos: diagrama ER y guía de migraciones
 │
 ├── src/                                # Código fuente de la aplicación (Producción)
 │   ├── main.ts                         # Bootstrap de NestJS, Helmet, CORS, Pipes globales
@@ -170,63 +173,71 @@ src/modules/<modulo>/
 ## 5. Estándares de Nomenclatura y Codificación
 
 ### 5.1. Nombres de Archivos
-* **Archivos y Componentes del Sistema (100% CamelCase):** Todos los archivos de código siguen la convención `camelCase.ts` sin excepción:
+
+- **Archivos y Componentes del Sistema (100% CamelCase):** Todos los archivos de código siguen la convención `camelCase.ts` sin excepción:
   - Módulos: `appModule.ts`, `invoicesModule.ts`, `sunatModule.ts`, `authModule.ts`, `customsModule.ts`, `sireModule.ts`, `resilienceModule.ts`, `accountingModule.ts`, `prismaModule.ts`, `healthModule.ts`.
   - Controladores: `invoicesController.ts`, `authController.ts`, `sireController.ts`, `accountingController.ts`.
   - Servicios y Casos de Uso: `invoicesService.ts`, `prismaService.ts`, `createInvoiceUseCase.ts`, `loginUseCase.ts`.
   - DTOs y Value Objects: `createInvoiceDto.ts`, `rucVo.ts`, `duaNumberVo.ts`.
   - Reglas de Negocio: `doubleEntryRule.ts`, `calculateCifRule.ts`, `pleFileNameRule.ts`.
-* **Pruebas unitarias:** `<nombre-del-archivo-origen>.spec.ts`  
-  *Ejemplo:* `invoices.service.spec.ts`, `doubleEntryRule.spec.ts`.
-* **Pruebas E2E:** `<flujo>.e2e-spec.ts`.
-* **Interfaces de Puertos:** `I<Entidad><Rol>Port.ts`  
-  *Ejemplo:* `IInvoiceRepositoryPort.ts`, `ISunatGatewayPort.ts`.
+- **Pruebas unitarias:** `<nombre-del-archivo-origen>.spec.ts`  
+  _Ejemplo:_ `invoices.service.spec.ts`, `doubleEntryRule.spec.ts`.
+- **Pruebas E2E:** `<flujo>.e2e-spec.ts`.
+- **Interfaces de Puertos:** `I<Entidad><Rol>Port.ts`  
+  _Ejemplo:_ `IInvoiceRepositoryPort.ts`, `ISunatGatewayPort.ts`.
 
 ### 5.2. Nombres de Código en TypeScript
-* **Clases, Módulos, Interfaces, Enums:** `PascalCase` (`CreateInvoiceDto`, `InvoiceEntity`, `InvoiceStatus`).
-* **Interfaces de Dominio (Puertos):** Prefijo `I` obligatorio (`IInvoiceRepositoryPort`).
-* **Value Objects:** Sufijo `VO` obligatorio (`RucVO`, `DuaNumberVO`, `MontoDecimalVO`).
-* **Reglas de Negocio:** Sufijo `Rule` obligatorio (`DoubleEntryRule`, `CalculateCifRule`).
-* **Casos de Uso:** Formato `<Verbo><Entidad>UseCase` (`CreateInvoiceUseCase`, `CalculateDuaUseCase`).
-* **Métodos y Funciones:** `camelCase` (`execute()`, `calculateTax()`, `validateFormat()`).
-* **Constantes Globales y Valores de Enum:** `UPPER_SNAKE_CASE` (`MAX_RETRY_ATTEMPTS`, `FACTURA_ELECTRONICA`).
-* **Modelos y Columnas en Base de Datos (Prisma):** `snake_case` mapeados con `@@map("nombre_tabla")` y `@map("nombre_columna")`.
+
+- **Clases, Módulos, Interfaces, Enums:** `PascalCase` (`CreateInvoiceDto`, `InvoiceEntity`, `InvoiceStatus`).
+- **Interfaces de Dominio (Puertos):** Prefijo `I` obligatorio (`IInvoiceRepositoryPort`).
+- **Value Objects:** Sufijo `VO` obligatorio (`RucVO`, `DuaNumberVO`, `MontoDecimalVO`).
+- **Reglas de Negocio:** Sufijo `Rule` obligatorio (`DoubleEntryRule`, `CalculateCifRule`).
+- **Casos de Uso:** Formato `<Verbo><Entidad>UseCase` (`CreateInvoiceUseCase`, `CalculateDuaUseCase`).
+- **Métodos y Funciones:** `camelCase` (`execute()`, `calculateTax()`, `validateFormat()`).
+- **Constantes Globales y Valores de Enum:** `UPPER_SNAKE_CASE` (`MAX_RETRY_ATTEMPTS`, `FACTURA_ELECTRONICA`).
+- **Modelos y Columnas en Base de Datos (Prisma):** `snake_case` mapeados con `@@map("nombre_tabla")` y `@map("nombre_columna")`.
 
 ---
 
 ## 6. Buenas Prácticas Innegociables
 
 ### 6.1. Prohibido Colocar Pruebas en `src/`
-* **Regla estricta:** Ningún archivo que termine en `.spec.ts` o `.test.ts` puede residir en `src/`.
-* Todas las pruebas pertenecen exclusivamente a la carpeta `test/` bajo su correspondiente subcarpeta (`test/unit/`, `test/integration/`, `test/e2e/`, `test/chaos/`).
-* Esta regla previene contaminación del paquete de producción compilado (`dist/`).
+
+- **Regla estricta:** Ningún archivo que termine en `.spec.ts` o `.test.ts` puede residir en `src/`.
+- Todas las pruebas pertenecen exclusivamente a la carpeta `test/` bajo su correspondiente subcarpeta (`test/unit/`, `test/integration/`, `test/e2e/`, `test/chaos/`).
+- Esta regla previene contaminación del paquete de producción compilado (`dist/`).
 
 ### 6.2. Única Carpeta `prisma/` en la Raíz
-* En la raíz del repositorio reside `prisma/` con sus esquemas, migraciones y semillas.
-* La salida del cliente generado por Prisma 7 se configura obligatoriamente como:
+
+- En la raíz del repositorio reside `prisma/` con sus esquemas, migraciones y semillas.
+- La salida del cliente generado por Prisma 7 se configura obligatoriamente como:
   ```prisma
   generator client {
     provider = "prisma-client"
     output   = "../../src/generated/client"
   }
   ```
-* La carpeta `src/generated/` está listada en `.gitignore`. **Nunca debe existir otra subcarpeta llamada `prisma` dentro de `src/`**.
+- La carpeta `src/generated/` está listada en `.gitignore`. **Nunca debe existir otra subcarpeta llamada `prisma` dentro de `src/`**.
 
 ### 6.3. Aislamiento Multi-Tenant Obligatorio (Anti-IDOR)
-* En un sistema MYPE, el aislamiento entre empresas es crítico.
-* **Prohibido:** Recibir `company_id` o `companyId` como parámetro de URL (`/invoices/:companyId`) o en el cuerpo de peticiones abiertas.
-* **Obligatorio:** El `company_id` debe obtenerse **exclusivamente del token JWT verificado** a través del decorador personalizado `@CurrentCompany()`. Toda consulta y escritura a la base de datos debe filtrar estrictamente por dicho `company_id`.
+
+- En un sistema MYPE, el aislamiento entre empresas es crítico.
+- **Prohibido:** Recibir `company_id` o `companyId` como parámetro de URL (`/invoices/:companyId`) o en el cuerpo de peticiones abiertas.
+- **Obligatorio:** El `company_id` debe obtenerse **exclusivamente del token JWT verificado** a través del decorador personalizado `@CurrentCompany()`. Toda consulta y escritura a la base de datos debe filtrar estrictamente por dicho `company_id`.
 
 ### 6.4. Validación Fail-Fast al Arranque
-* Si falta una variable de entorno crítica (`DATABASE_URL`, `JWT_SECRET`, `SUNAT_SOL_PASS`, etc.), la aplicación **no debe arrancar**.
-* Toda variable se valida en [src/config/env.validation.ts](file:///c:/Users/Carlos%20Ahumada%20Soles/OneDrive/Documentos/taller-integrador/Sistema-gestion-mype-sunat/src/config/env.validation.ts) mediante `class-validator` antes de levantar cualquier conexión.
+
+- Si falta una variable de entorno crítica (`DATABASE_URL`, `JWT_SECRET`, `SUNAT_SOL_PASS`, etc.), la aplicación **no debe arrancar**.
+- Toda variable se valida en [src/config/env.validation.ts](file:///c:/Users/Carlos%20Ahumada%20Soles/OneDrive/Documentos/taller-integrador/Sistema-gestion-mype-sunat/src/config/env.validation.ts) mediante `class-validator` antes de levantar cualquier conexión.
 
 ### 6.5. Cero Uso de `any`
-* Está estrictamente prohibido usar el tipo `any` en TypeScript.
-* Utiliza tipos genéricos, uniones discriminadas, interfaces formales o `unknown` con guardas de tipo (*type narrowing*).
+
+- Está estrictamente prohibido usar el tipo `any` en TypeScript.
+- Utiliza tipos genéricos, uniones discriminadas, interfaces formales o `unknown` con guardas de tipo (_type narrowing_).
 
 ### 6.6. Manejo de Errores con Formato RFC 7807 (Problem Details)
-* Todos los errores HTTP devueltos por la API deben seguir la estructura estándar RFC 7807:
+
+- Todos los errores HTTP devueltos por la API deben seguir la estructura estándar RFC 7807:
   ```json
   {
     "type": "https://sync-sunat.pe/errors/invalid-ruc",
@@ -297,15 +308,15 @@ Cuando el desarrollador trabaje asistido por un Operador de Inteligencia Artific
 
 ## 9. Matriz de Módulos y Responsables del Proyecto
 
-| Bounded Context | Responsable Asignado | Módulo en `src/` | Módulo en `test/` | Archivo de Especificación |
-| :--- | :--- | :--- | :--- | :--- |
-| **M1: Facturación UBL 2.1** | Jhordy Salirrosas | `src/modules/invoices/` | `test/unit/invoices/` | [`specs/m1_invoices.spec.md`](./m1_invoices.spec.md) |
-| **M2: Resiliencia y Outbox** | Oliver Saldaña | `src/modules/resilience/` | `test/unit/resilience/` | [`specs/m2_resilience.spec.md`](./m2_resilience.spec.md) |
-| **M3: Aduanas y Kardex** | Carlos Ahumada | `src/modules/customs/` | `test/unit/customs/` | [`specs/m3_customs.spec.md`](./m3_customs.spec.md) |
-| **M4: Conciliación SIRE** | Diego Toledo | `src/modules/sire/` | `test/unit/sire/` | [`specs/m4_sire.spec.md`](./m4_sire.spec.md) |
-| **M5: Contabilidad y PLE** | Michael Velásquez | `src/modules/accounting/` | `test/unit/accounting/` | [`specs/m5_accounting.spec.md`](./m5_accounting.spec.md) |
-| **Transversal: SUNAT Cripto/SOAP** | Carlos Ahumada | `src/modules/sunat/` | `test/unit/sunat/` | [`specs/pipeline_emision.md`](./pipeline_emision.md) |
-| **Transversal: Seguridad & Auth** | Carlos Ahumada | `src/modules/auth/` | `test/unit/auth/` | [`specs/global_architecture.spec.md`](./global_architecture.spec.md) |
+| Bounded Context                    | Responsable Asignado | Módulo en `src/`          | Módulo en `test/`       | Archivo de Especificación                                            |
+| :--------------------------------- | :------------------- | :------------------------ | :---------------------- | :------------------------------------------------------------------- |
+| **M1: Facturación UBL 2.1**        | Jhordy Salirrosas    | `src/modules/invoices/`   | `test/unit/invoices/`   | [`specs/m1_invoices.spec.md`](./m1_invoices.spec.md)                 |
+| **M2: Resiliencia y Outbox**       | Oliver Saldaña       | `src/modules/resilience/` | `test/unit/resilience/` | [`specs/m2_resilience.spec.md`](./m2_resilience.spec.md)             |
+| **M3: Aduanas y Kardex**           | Carlos Ahumada       | `src/modules/customs/`    | `test/unit/customs/`    | [`specs/m3_customs.spec.md`](./m3_customs.spec.md)                   |
+| **M4: Conciliación SIRE**          | Diego Toledo         | `src/modules/sire/`       | `test/unit/sire/`       | [`specs/m4_sire.spec.md`](./m4_sire.spec.md)                         |
+| **M5: Contabilidad y PLE**         | Michael Velásquez    | `src/modules/accounting/` | `test/unit/accounting/` | [`specs/m5_accounting.spec.md`](./m5_accounting.spec.md)             |
+| **Transversal: SUNAT Cripto/SOAP** | Carlos Ahumada       | `src/modules/sunat/`      | `test/unit/sunat/`      | [`specs/pipeline_emision.md`](./pipeline_emision.md)                 |
+| **Transversal: Seguridad & Auth**  | Carlos Ahumada       | `src/modules/auth/`       | `test/unit/auth/`       | [`specs/global_architecture.spec.md`](./global_architecture.spec.md) |
 
 ---
 
