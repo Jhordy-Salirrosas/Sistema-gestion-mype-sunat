@@ -110,7 +110,7 @@ describe('TaxLiquidationEngine (Domain Rule)', () => {
       const ipmPen = baseIgvIpm * 0.02; // S/ 451.14
       const totalDuties = adValoremPen + igvPen + ipmPen; // S/ 5,337.03
       const basePerception = cifPen + totalDuties; // S/ 26,617.03
-      const perception = basePerception * 0.1; // S/ 2,661.70
+      const _perception = basePerception * 0.1; // S/ 2,661.70
 
       expect(result.adValoremPen).toBe(1276.8);
       expect(result.igvPen).toBe(3609.09);

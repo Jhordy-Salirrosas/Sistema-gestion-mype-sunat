@@ -1,4 +1,3 @@
-import { SettlementStatus } from '../enums/settlementStatus.enum';
 import { SettlementType } from '../enums/settlementType.enum';
 
 export interface CreateSettlementData {
