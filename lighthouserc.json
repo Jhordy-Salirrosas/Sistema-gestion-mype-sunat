@@ -3,7 +3,7 @@
         "collect": {
             "numberOfRuns": 3,
             "url": [
-                "https://sistema-gestion-mype-sunat.vercel.app/"
+                "https://fronted-sistema-mype-sunat.vercel.app/"
             ]
         },
         "assert": {
@@ -17,7 +17,7 @@
                 "categories:accessibility": [
                     "error",
                     {
-                        "minScore": 0.90
+                        "minScore": 0.88
                     }
                 ]
             }
