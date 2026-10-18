@@ -1,0 +1,7 @@
+export enum SettlementStatus {
+  GENERADA = 'GENERADA',
+  PAGADA = 'PAGADA',
+  GARANTIZADA = 'GARANTIZADA',
+  VENCIDA = 'VENCIDA',
+  ANULADA = 'ANULADA',
+}

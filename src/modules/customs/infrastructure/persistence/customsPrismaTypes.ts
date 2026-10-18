@@ -1,9 +1,14 @@
 export interface PrismaCustomsDeclarationRow {
   id: string;
   company_id: string;
+  shipment_id?: string | null;
   dua_number: string;
   customs_agency_code: string;
   regime_code: string;
+  dispatch_mode?: string;
+  channel?: string;
+  transport_doc_number?: string | null;
+  manifest_number?: string | null;
   numeration_date: Date;
   fob_value_usd: unknown;
   freight_value_usd: unknown;
@@ -29,15 +34,22 @@ export interface PrismaCustomsItemRow {
   id: string;
   declaration_id: string;
   item_order: number;
+  series_order?: number | null;
+  product_code?: string | null;
   hs_code: string;
   commercial_description: string;
+  goods_state?: string;
   quantity: unknown;
   unit_code: string;
+  net_weight_kg?: unknown;
+  gross_weight_kg?: unknown;
   fob_unit_usd: unknown;
   fob_total_usd: unknown;
   allocated_cif_pen: unknown;
   allocated_duties_pen: unknown;
+  allocated_local_cost_pen?: unknown;
   landed_cost_unit_pen: unknown;
+  final_landed_cost_unit_pen?: unknown;
 }
 
 export interface PrismaKardexMovementRow {

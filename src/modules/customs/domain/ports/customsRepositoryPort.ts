@@ -60,4 +60,9 @@ export interface ICustomsRepositoryPort {
     companyId: string,
     itemCode: string,
   ): Promise<KardexMovementRecord | null>;
+
+  registerKardexMovements(
+    movements: KardexMovementRecord[],
+    declarationId?: string,
+  ): Promise<void>;
 }

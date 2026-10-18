@@ -2,16 +2,23 @@ export interface CustomsItemProps {
   id?: string;
   declarationId?: string;
   itemOrder: number;
+  seriesOrder?: number | null;
+  productCode?: string | null;
   itemCode?: string;
   hsCode: string;
   commercialDescription: string;
+  goodsState?: string;
   quantity: number;
   unitCode: string;
+  netWeightKg?: number | null;
+  grossWeightKg?: number | null;
   fobUnitUsd: number;
   fobTotalUsd: number;
   allocatedCifPen: number;
   allocatedDutiesPen: number;
+  allocatedLocalCostPen?: number;
   landedCostUnitPen: number;
+  finalLandedCostUnitPen?: number;
 }
 
 export class CustomsItemEntity {
@@ -67,6 +74,34 @@ export class CustomsItemEntity {
 
   get landedCostUnitPen(): number {
     return this.props.landedCostUnitPen;
+  }
+
+  get seriesOrder(): number | null | undefined {
+    return this.props.seriesOrder;
+  }
+
+  get productCode(): string | null | undefined {
+    return this.props.productCode;
+  }
+
+  get goodsState(): string | undefined {
+    return this.props.goodsState;
+  }
+
+  get netWeightKg(): number | null | undefined {
+    return this.props.netWeightKg;
+  }
+
+  get grossWeightKg(): number | null | undefined {
+    return this.props.grossWeightKg;
+  }
+
+  get allocatedLocalCostPen(): number {
+    return this.props.allocatedLocalCostPen ?? 0;
+  }
+
+  get finalLandedCostUnitPen(): number {
+    return this.props.finalLandedCostUnitPen ?? this.props.landedCostUnitPen;
   }
 
   toPrimitives(): CustomsItemProps {

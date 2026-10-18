@@ -1,0 +1,5 @@
+export enum LandedCostStatus {
+  PROVISIONAL = 'PROVISIONAL',
+  DEFINITIVO = 'DEFINITIVO',
+  A_RECALCULAR = 'A_RECALCULAR',
+}

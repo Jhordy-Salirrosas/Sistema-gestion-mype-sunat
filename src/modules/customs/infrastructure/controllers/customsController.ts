@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Optional,
   Param,
   Post,
   UseGuards,
@@ -12,6 +13,7 @@ import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CalculateDuaDto } from '../../application/dto/calculateDuaDto';
 import { RegisterDuaDto } from '../../application/dto/registerDuaDto';
+import { RegisterDuaWizardDto } from '../../application/dto/registerDuaWizardDto';
 import {
   CalculateDuaUseCase,
   type CalculatedDuaResponse,
@@ -20,6 +22,7 @@ import {
   RegisterDuaUseCase,
   type RegisteredDuaResponse,
 } from '../../application/use-cases/registerDuaUseCase';
+import { RegisterDuaWizardUseCase } from '../../application/use-cases/registerDuaWizardUseCase';
 import {
   GetCustomsDeclarationByIdUseCase,
   type CustomsDeclarationDetailResponse,
@@ -39,12 +42,27 @@ export class CustomsController {
     private readonly getCustomsDeclarationByIdUseCase: GetCustomsDeclarationByIdUseCase,
     private readonly listCustomsDeclarationsUseCase: ListCustomsDeclarationsUseCase,
     private readonly listKardexMovementsUseCase: ListKardexMovementsUseCase,
+    @Optional() private readonly registerDuaWizardUseCase?: RegisterDuaWizardUseCase,
   ) {}
 
   @Post('calculate')
   @HttpCode(HttpStatus.OK)
   calculateLiquidation(@Body() dto: CalculateDuaDto): CalculatedDuaResponse {
     return this.calculateDuaUseCase.execute(dto);
+  }
+
+  @Post('declarations/wizard')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async registerDeclarationWizard(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() dto: RegisterDuaWizardDto,
+  ) {
+    const resolvedCompanyId = companyId || 'default-company-id';
+    if (!this.registerDuaWizardUseCase) {
+      throw new Error('RegisterDuaWizardUseCase no está inyectado');
+    }
+    return this.registerDuaWizardUseCase.execute(dto, resolvedCompanyId);
   }
 
   @Post('declarations')

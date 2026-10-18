@@ -99,4 +99,24 @@ export class PrismaCustomsRepository implements ICustomsRepositoryPort {
 
     return row ? CustomsPrismaMapper.toDomainKardex(row) : null;
   }
+
+  async registerKardexMovements(
+    movements: KardexMovementRecord[],
+    declarationId?: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      for (const movement of movements) {
+        await tx.kardexMovement.create({
+          data: CustomsPrismaMapper.toPrismaKardexCreate(movement, declarationId ?? ''),
+        });
+      }
+
+      if (declarationId) {
+        await tx.customsDeclaration.update({
+          where: { id: declarationId },
+          data: { status: 'APLICADO_KARDEX' as any },
+        });
+      }
+    });
+  }
 }

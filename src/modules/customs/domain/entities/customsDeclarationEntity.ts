@@ -9,9 +9,14 @@ export type CustomsDeclarationStatus =
 export interface CustomsDeclarationProps {
   id?: string;
   companyId: string;
+  shipmentId?: string | null;
   duaNumber: string;
   customsAgencyCode: string;
   regimeCode: string;
+  dispatchMode?: string;
+  channel?: string;
+  transportDocNumber?: string | null;
+  manifestNumber?: string | null;
   numerationDate: Date;
   fobValueUsd: number;
   freightValueUsd: number;
@@ -49,6 +54,10 @@ export class CustomsDeclarationEntity {
     return this.props.companyId;
   }
 
+  get shipmentId(): string | null | undefined {
+    return this.props.shipmentId;
+  }
+
   get duaNumber(): string {
     return this.props.duaNumber;
   }
@@ -59,6 +68,22 @@ export class CustomsDeclarationEntity {
 
   get regimeCode(): string {
     return this.props.regimeCode;
+  }
+
+  get dispatchMode(): string | undefined {
+    return this.props.dispatchMode;
+  }
+
+  get channel(): string | undefined {
+    return this.props.channel;
+  }
+
+  get transportDocNumber(): string | null | undefined {
+    return this.props.transportDocNumber;
+  }
+
+  get manifestNumber(): string | null | undefined {
+    return this.props.manifestNumber;
   }
 
   get numerationDate(): Date {

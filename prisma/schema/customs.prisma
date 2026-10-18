@@ -7,40 +7,180 @@ enum CustomsStatus {
   ANULADO
 }
 
+enum ShipmentStatus {
+  BORRADOR
+  EN_TRANSITO
+  ARRIBADO
+  EN_DESPACHO
+  CON_LEVANTE
+  COSTEADO
+  CERRADO
+  CANCELADO
+}
+
+enum CustomsChannel {
+  PENDIENTE
+  VERDE
+  NARANJA
+  ROJO
+}
+
+enum LandedCostStatus {
+  PROVISIONAL
+  DEFINITIVO
+  A_RECALCULAR
+}
+
+enum SettlementType {
+  TIPO_0010_DECLARACION
+  TIPO_0026_MAYOR_VALOR
+  TIPO_0027_MULTA
+  RESOLUCION_MULTA_RM65
+}
+
+enum SettlementStatus {
+  GENERADA
+  PAGADA
+  GARANTIZADA
+  VENCIDA
+  ANULADA
+}
+
 enum KardexMovementType {
   INGRESO_IMPORTACION
   SALIDA_VENTA
   AJUSTE_INVENTARIO
 }
 
-model CustomsDeclaration {
-  id                      String        @id @default(uuid())
-  company_id              String
-  company                 Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
-  dua_number              String
-  customs_agency_code     String
-  regime_code             String        @default("10")
-  numeration_date         DateTime
-  fob_value_usd           Decimal       @db.Decimal(14, 2)
-  freight_value_usd       Decimal       @default(0.00) @db.Decimal(14, 2)
-  insurance_value_usd     Decimal       @default(0.00) @db.Decimal(14, 2)
-  cif_value_usd           Decimal       @db.Decimal(14, 2)
-  exchange_rate           Decimal       @db.Decimal(6, 4)
-  cif_value_pen           Decimal       @db.Decimal(14, 2)
-  ad_valorem_rate         Decimal       @db.Decimal(5, 2)
-  ad_valorem_amount_pen   Decimal       @db.Decimal(14, 2)
-  igv_rate                Decimal       @default(16.00) @db.Decimal(5, 2)
-  ipm_rate                Decimal       @default(2.00) @db.Decimal(5, 2)
-  igv_ipm_amount_pen      Decimal       @db.Decimal(14, 2)
-  perception_rate         Decimal       @db.Decimal(5, 2)
-  perception_amount_pen   Decimal       @db.Decimal(14, 2)
-  total_customs_taxes_pen Decimal       @db.Decimal(14, 2)
-  status                  CustomsStatus @default(REGISTRADO)
-  dua_pdf_storage_url     String?
-  created_at              DateTime      @default(now())
-  updated_at              DateTime      @updatedAt
+model CustomsBroker {
+  id              String          @id @default(uuid())
+  broker_code     String          @unique
+  business_name   String
+  jurisdiction    String
+  mandate_active  Boolean         @default(true)
+  created_at      DateTime        @default(now())
 
-  items                   CustomsItem[]
+  shipments       CustomsShipment[]
+
+  @@map("customs_brokers")
+}
+
+model ForeignSupplier {
+  id               String          @id @default(uuid())
+  tax_id           String?
+  business_name    String
+  country_code     String
+  default_currency String          @default("USD")
+  is_related       Boolean         @default(false)
+  created_at       DateTime        @default(now())
+
+  shipments        CustomsShipment[]
+
+  @@map("foreign_suppliers")
+}
+
+model CustomsShipment {
+  id                    String              @id @default(uuid())
+  company_id            String
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  shipment_number       String              // EXP-2026-0001
+  supplier_id           String?
+  supplier              ForeignSupplier?    @relation(fields: [supplier_id], references: [id])
+  customs_broker_id     String?
+  customs_broker        CustomsBroker?      @relation(fields: [customs_broker_id], references: [id])
+  incoterm              String              @default("FOB") // FOB, CIF, EXW
+  currency_code         String              @default("USD")
+  transport_mode        String              @default("MARITIMO") // MARITIMO, AEREO
+  origin_country_code   String              @default("CN") // CN, US
+  destination_customs   String              @default("118") // 118 Callao, 370 Chancay
+  etd_date              DateTime?           // Fecha estimada de zarpe
+  eta_date              DateTime?           // Fecha estimada de llegada
+  order_reference       String?             // Orden de compra MYPE
+  status                ShipmentStatus      @default(BORRADOR)
+  is_observed           Boolean             @default(false)
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+
+  declarations          CustomsDeclaration[]
+  documents             CustomsDocument[]
+  events                CustomsEvent[]
+  local_expenses        LocalExpenseInvoice[]
+  landed_cost_sheet     LandedCostSheet?
+
+  @@unique([company_id, shipment_number])
+  @@map("customs_shipments")
+}
+
+model CustomsDocument {
+  id              String          @id @default(uuid())
+  shipment_id     String
+  shipment        CustomsShipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  document_type   String          // FAC, TRA, SEG, CRO, AUT, DAV
+  document_number String
+  issue_date      DateTime
+  issuer_name     String?
+  storage_url     String          // URL en Supabase Storage
+  is_validated    Boolean         @default(false)
+  vuce_dr_number  String?         // Documento Resolutivo VUCE si aplica
+  created_at      DateTime        @default(now())
+
+  @@map("customs_documents")
+}
+
+model CustomsEvent {
+  id              String          @id @default(uuid())
+  shipment_id     String
+  shipment        CustomsShipment @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  event_type      String          // ZARPE, ARRIBO, NUMERACION, CANAL, LEVANTE, RETIRO
+  event_timestamp DateTime
+  event_value     String?         // VERDE, NARANJA, ROJO
+  reference_code  String?
+  registered_by   String
+  created_at      DateTime        @default(now())
+
+  @@map("customs_events")
+}
+
+model CustomsDeclaration {
+  id                        String              @id @default(uuid())
+  company_id                String
+  company                   Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  shipment_id               String?
+  shipment                  CustomsShipment?    @relation(fields: [shipment_id], references: [id], onDelete: Restrict)
+  dua_number                String              // 118-2026-10-123456
+  customs_agency_code       String              @default("118")
+  customs_code              String?             // 118
+  declaration_year          Int?                // 2026
+  regime_code               String              @default("10")
+  correlative_number        String?             // 123456
+  numeration_date           DateTime
+  dispatch_mode             String              @default("10") // 10 Anticipado, 00 Diferido
+  channel                   CustomsChannel      @default(PENDIENTE)
+  transport_doc_number      String?             // BL o Guia
+  manifest_number           String?
+  fob_value_usd             Decimal             @db.Decimal(14, 2)
+  freight_value_usd         Decimal             @default(0.00) @db.Decimal(14, 2)
+  insurance_value_usd       Decimal             @default(0.00) @db.Decimal(14, 2)
+  cif_value_usd             Decimal             @db.Decimal(14, 2)
+  exchange_rate             Decimal             @db.Decimal(6, 4)
+  cif_value_pen             Decimal             @db.Decimal(14, 2)
+  ad_valorem_rate           Decimal             @db.Decimal(5, 2)
+  ad_valorem_amount_pen     Decimal             @db.Decimal(14, 2)
+  igv_rate                  Decimal             @default(16.00) @db.Decimal(5, 2)
+  ipm_rate                  Decimal             @default(2.00) @db.Decimal(5, 2)
+  igv_ipm_amount_pen        Decimal             @db.Decimal(14, 2)
+  perception_rate           Decimal             @db.Decimal(5, 2)
+  perception_amount_pen     Decimal             @db.Decimal(14, 2)
+  total_customs_taxes_pen   Decimal             @db.Decimal(14, 2)
+  has_article_160_guarantee Boolean             @default(false)
+  status                    CustomsStatus       @default(REGISTRADO)
+  dua_pdf_storage_url       String?
+  version                   Int                 @default(1)
+  created_at                DateTime            @default(now())
+  updated_at                DateTime            @updatedAt
+
+  items                     CustomsItem[]
+  settlements               CustomsSettlement[]
 
   @@unique([company_id, dua_number])
   @@index([company_id, numeration_date, status])
@@ -48,22 +188,99 @@ model CustomsDeclaration {
 }
 
 model CustomsItem {
-  id                      String              @id @default(uuid())
-  declaration_id          String
-  declaration             CustomsDeclaration  @relation(fields: [declaration_id], references: [id], onDelete: Cascade)
-  item_order              Int
-  hs_code                 String
-  commercial_description  String
-  quantity                Decimal             @db.Decimal(12, 4)
-  unit_code               String
-  fob_unit_usd            Decimal             @db.Decimal(14, 4)
-  fob_total_usd           Decimal             @db.Decimal(14, 2)
-  allocated_cif_pen       Decimal             @db.Decimal(14, 2)
-  allocated_duties_pen    Decimal             @db.Decimal(14, 2)
-  landed_cost_unit_pen    Decimal             @db.Decimal(14, 4)
+  id                          String              @id @default(uuid())
+  declaration_id              String
+  declaration                 CustomsDeclaration  @relation(fields: [declaration_id], references: [id], onDelete: Cascade)
+  item_order                  Int                 @default(1)
+  series_order                Int?                // Serie 1, 2, 3
+  product_code                String?             // Código interno producto
+  hs_code                     String              // SPN 10 dígitos
+  commercial_description      String
+  goods_state                 String              @default("NUEVO") // NUEVO o USADO
+  tpi_code                    String?             // 800 China, 801 EEUU
+  quantity                    Decimal             @db.Decimal(12, 4)
+  physical_quantity           Decimal?            @db.Decimal(12, 4)
+  unit_code                   String              @default("NIU")
+  physical_unit               String?             @default("NIU")
+  net_weight_kg               Decimal?            @db.Decimal(12, 4)
+  gross_weight_kg             Decimal?            @db.Decimal(12, 4)
+  fob_unit_usd                Decimal             @db.Decimal(14, 4)
+  fob_total_usd               Decimal             @db.Decimal(14, 2)
+  freight_usd                 Decimal?            @default(0.00) @db.Decimal(14, 2)
+  insurance_usd               Decimal?            @default(0.00) @db.Decimal(14, 2)
+  cif_usd                     Decimal?            @default(0.00) @db.Decimal(14, 2)
+  cif_pen                     Decimal?            @default(0.00) @db.Decimal(14, 2)
+  allocated_cif_pen           Decimal             @db.Decimal(14, 2)
+  ad_valorem_rate             Decimal?            @default(0.00) @db.Decimal(5, 2)
+  allocated_duties_pen        Decimal             @db.Decimal(14, 2)
+  igv_pen                     Decimal?            @default(0.00) @db.Decimal(14, 2)
+  ipm_pen                     Decimal?            @default(0.00) @db.Decimal(14, 2)
+  perception_pen              Decimal?            @default(0.00) @db.Decimal(14, 2)
+  allocated_local_cost_pen    Decimal             @default(0.00) @db.Decimal(14, 2)
+  landed_cost_unit_pen        Decimal             @db.Decimal(14, 4)
+  final_landed_cost_unit_pen  Decimal             @default(0.0000) @db.Decimal(14, 4)
 
   @@index([declaration_id, item_order])
   @@map("customs_items")
+}
+
+model CustomsSettlement {
+  id                      String              @id @default(uuid())
+  declaration_id          String
+  declaration             CustomsDeclaration  @relation(fields: [declaration_id], references: [id], onDelete: Cascade)
+  settlement_type         SettlementType
+  settlement_number       String              // N° liquidación SUNAT
+  tax_code                String              // 0001, 0002, 0096, 0027
+  amount_usd              Decimal             @default(0.00) @db.Decimal(14, 2)
+  amount_pen              Decimal             @db.Decimal(14, 2)
+  cda_number              String?             // Código Documento Aduanero 14 dígitos
+  due_date                DateTime
+  status                  SettlementStatus    @default(GENERADA)
+  paid_at                 DateTime?
+  bank_code               String?             // 002 BCP, 011 BBVA
+  bank_operation_number   String?
+  voucher_storage_url     String?
+  created_at              DateTime            @default(now())
+
+  @@map("customs_settlements")
+}
+
+model LocalExpenseInvoice {
+  id                      String              @id @default(uuid())
+  shipment_id             String
+  shipment                CustomsShipment     @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  supplier_ruc            String              // 11 dígitos
+  supplier_name           String
+  expense_concept         String              // AGENCIA, ALMACENAJE, TRANSPORTE_LOCAL, CUADRILLA
+  invoice_serial_number   String              // F001-12345
+  issue_date              DateTime
+  net_amount_pen          Decimal             @db.Decimal(14, 2)
+  igv_amount_pen          Decimal             @db.Decimal(14, 2)
+  total_amount_pen        Decimal             @db.Decimal(14, 2)
+  spot_detraction_rate    Decimal             @default(0.00) @db.Decimal(5, 2)
+  is_capitalizable        Boolean             @default(true) // NIC 2
+  proration_method        String              @default("VALOR_FOB") // PESO_BRUTO, VALOR_FOB, VALOR_CIF
+  created_at              DateTime            @default(now())
+
+  @@map("local_expense_invoices")
+}
+
+model LandedCostSheet {
+  id                      String              @id @default(uuid())
+  shipment_id             String              @unique
+  shipment                CustomsShipment     @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  calculation_date        DateTime            @default(now())
+  total_cif_pen           Decimal             @db.Decimal(14, 2)
+  total_duties_pen        Decimal             @db.Decimal(14, 2)
+  total_local_expenses_pen Decimal            @db.Decimal(14, 2)
+  total_inventory_cost_pen Decimal            @db.Decimal(14, 2)
+  status                  LandedCostStatus    @default(PROVISIONAL)
+  approved_by_accountant  Boolean             @default(false)
+  approved_at             DateTime?
+  created_at              DateTime            @default(now())
+  updated_at              DateTime            @updatedAt
+
+  @@map("landed_cost_sheets")
 }
 
 model KardexMovement {
