@@ -2,6 +2,12 @@ import type {
   DiscrepancyResult,
   SireRecord,
 } from '../entities/sireProposalEntity';
+import {
+  createDetail,
+  fromCents,
+  indexRecords,
+  toCents,
+} from './reconciliationRecordUtils';
 
 export interface ReconciliationSummary {
   totalLocal: number;
@@ -12,111 +18,49 @@ export interface ReconciliationSummary {
 }
 
 export class ReconciliationMatcherRule {
-  private static readonly TOLERANCE = 0.05;
-
-  private static makeKey(record: SireRecord): string {
-    return [
-      record.emitterRuc,
-      record.documentType,
-      record.series,
-      record.correlative,
-    ]
-      .map((part) => part.trim().toUpperCase())
-      .join('-');
-  }
-
-  private static exceedsTolerance(difference: number): boolean {
-    return Math.round(Math.abs(difference) * 100) > this.TOLERANCE * 100;
-  }
+  private static readonly TOLERANCE_CENTS = 5;
 
   public static reconcile(
     localRecords: SireRecord[],
     sireRecords: SireRecord[],
   ): ReconciliationSummary {
-    const localMap = new Map<string, SireRecord>();
-    for (const rec of localRecords) {
-      localMap.set(this.makeKey(rec), rec);
-    }
-
-    const sireMap = new Map<string, SireRecord>();
-    for (const rec of sireRecords) {
-      sireMap.set(this.makeKey(rec), rec);
-    }
-
+    const localIndex = indexRecords(localRecords);
+    const sireIndex = indexRecords(sireRecords);
+    const keys = new Set([...localIndex.keys(), ...sireIndex.keys()]);
     const details: DiscrepancyResult[] = [];
     let exactMatchesCount = 0;
-    let discrepanciesCount = 0;
 
-    for (const [key, local] of localMap.entries()) {
-      const sire = sireMap.get(key);
-      if (!sire) {
-        discrepanciesCount++;
-        details.push({
-          discrepancyType: 'OMISION_SUNAT',
-          emitterRuc: local.emitterRuc,
-          documentType: local.documentType,
-          series: local.series,
-          correlative: local.correlative,
-          localTotalAmount: local.totalAmount,
-          sireTotalAmount: undefined,
-          amountDifference: local.totalAmount,
-        });
-      } else {
-        const baseDifference = local.taxableBase - sire.taxableBase;
-        const igvDifference = local.igvAmount - sire.igvAmount;
-        const totalDifference =
-          Math.round(Math.abs(local.totalAmount - sire.totalAmount) * 100) /
-          100;
-        const discrepancy = {
-          emitterRuc: local.emitterRuc,
-          documentType: local.documentType,
-          series: local.series,
-          correlative: local.correlative,
-          localTotalAmount: local.totalAmount,
-          sireTotalAmount: sire.totalAmount,
-          amountDifference: totalDifference,
-          taxableBaseDifference: Math.round(baseDifference * 100) / 100,
-          igvDifference: Math.round(igvDifference * 100) / 100,
-        };
-
-        if (
-          !this.exceedsTolerance(baseDifference) &&
-          !this.exceedsTolerance(igvDifference)
-        ) {
-          exactMatchesCount++;
-          details.push({
-            discrepancyType: 'COINCIDENCIA_EXACTA',
-            ...discrepancy,
-          });
-        } else {
-          discrepanciesCount++;
-          details.push({
-            discrepancyType: 'DIFERENCIA_MONTOS',
-            ...discrepancy,
-            deviationPercentage:
-              local.totalAmount === 0
-                ? 0
-                : Math.round(
-                    (totalDifference / Math.abs(local.totalAmount)) * 10000,
-                  ) / 100,
-          });
-        }
+    for (const key of keys) {
+      const localMatches = localIndex.get(key) ?? [];
+      const sireMatches = sireIndex.get(key) ?? [];
+      if (localMatches.length > 1 || sireMatches.length > 1) {
+        details.push(this.createDuplicateDetail(localMatches, sireMatches));
+        continue;
       }
-    }
-
-    for (const [key, sire] of sireMap.entries()) {
-      if (!localMap.has(key)) {
-        discrepanciesCount++;
-        details.push({
-          discrepancyType: 'OMISION_LOCAL',
-          emitterRuc: sire.emitterRuc,
-          documentType: sire.documentType,
-          series: sire.series,
-          correlative: sire.correlative,
-          localTotalAmount: undefined,
-          sireTotalAmount: sire.totalAmount,
-          amountDifference: sire.totalAmount,
-        });
+      const local = localMatches[0];
+      const sire = sireMatches[0];
+      if (!local && sire) {
+        details.push(
+          createDetail(sire, 'OMISION_LOCAL', {
+            localTotalAmount: undefined,
+            sireTotalAmount: sire.totalAmount,
+            amountDifference: sire.totalAmount,
+          }),
+        );
+      } else if (local && !sire) {
+        details.push(
+          createDetail(local, 'OMISION_SUNAT', {
+            localTotalAmount: local.totalAmount,
+            sireTotalAmount: undefined,
+            amountDifference: local.totalAmount,
+          }),
+        );
+      } else if (local && sire) {
+        const detail = this.compareAmounts(local, sire);
+        details.push(detail);
+        if (detail.discrepancyType === 'COINCIDENCIA_EXACTA') {
+          exactMatchesCount++;
+        }
       }
     }
 
@@ -124,8 +68,69 @@ export class ReconciliationMatcherRule {
       totalLocal: localRecords.length,
       totalSire: sireRecords.length,
       exactMatchesCount,
-      discrepanciesCount,
+      discrepanciesCount: details.filter(
+        (detail) => detail.discrepancyType !== 'COINCIDENCIA_EXACTA',
+      ).length,
       details,
     };
+  }
+
+  private static createDuplicateDetail(
+    localMatches: SireRecord[],
+    sireMatches: SireRecord[],
+  ): DiscrepancyResult {
+    const duplicateSource =
+      localMatches.length > 1 && sireMatches.length > 1
+        ? 'AMBOS'
+        : localMatches.length > 1
+          ? 'LOCAL'
+          : 'SIRE';
+    const record = localMatches[0] ?? sireMatches[0];
+    return createDetail(record, 'DUPLICADO_LLAVE', {
+      localTotalAmount:
+        localMatches.length === 1 ? localMatches[0].totalAmount : undefined,
+      sireTotalAmount:
+        sireMatches.length === 1 ? sireMatches[0].totalAmount : undefined,
+      amountDifference: 0,
+      duplicateSource,
+    });
+  }
+
+  private static compareAmounts(
+    local: SireRecord,
+    sire: SireRecord,
+  ): DiscrepancyResult {
+    const baseDifferenceCents =
+      toCents(local.taxableBase) - toCents(sire.taxableBase);
+    const igvDifferenceCents =
+      toCents(local.igvAmount) - toCents(sire.igvAmount);
+    const totalDifferenceCents = Math.abs(
+      toCents(local.totalAmount) - toCents(sire.totalAmount),
+    );
+    const isExact =
+      Math.abs(baseDifferenceCents) <= this.TOLERANCE_CENTS &&
+      Math.abs(igvDifferenceCents) <= this.TOLERANCE_CENTS;
+    const discrepancyType = isExact
+      ? 'COINCIDENCIA_EXACTA'
+      : 'DIFERENCIA_MONTOS';
+    return createDetail(local, discrepancyType, {
+      localTotalAmount: local.totalAmount,
+      sireTotalAmount: sire.totalAmount,
+      amountDifference: fromCents(totalDifferenceCents),
+      taxableBaseDifference: fromCents(baseDifferenceCents),
+      igvDifference: fromCents(igvDifferenceCents),
+      ...(isExact
+        ? {}
+        : {
+            deviationPercentage:
+              local.totalAmount === 0
+                ? 0
+                : Math.round(
+                    (totalDifferenceCents /
+                      Math.abs(toCents(local.totalAmount))) *
+                      10_000,
+                  ) / 100,
+          }),
+    });
   }
 }

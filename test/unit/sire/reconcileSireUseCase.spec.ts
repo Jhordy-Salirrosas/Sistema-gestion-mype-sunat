@@ -8,7 +8,11 @@ describe('ReconcileSireUseCase', () => {
   beforeEach(() => {
     repository = {
       saveBatchProposals: jest.fn(),
+      ensurePeriodOpen: jest.fn(),
       findProposalsByPeriod: jest.fn().mockResolvedValue([]),
+      findReconciliationForExport: jest.fn(),
+      getClosedReconciliationHistory: jest.fn(),
+      closeFiscalPeriod: jest.fn(),
       saveReconciliationResult: jest.fn(),
     };
     useCase = new ReconcileSireUseCase(repository);
@@ -46,6 +50,11 @@ describe('ReconcileSireUseCase', () => {
     expect(result.discrepanciesCount).toBe(0);
     expect(result.complianceRate).toBe(100);
     expect(repository.findProposalsByPeriod).toHaveBeenCalledWith(
+      'company-1',
+      '202603',
+      'RVIE',
+    );
+    expect(repository.ensurePeriodOpen).toHaveBeenCalledWith(
       'company-1',
       '202603',
       'RVIE',

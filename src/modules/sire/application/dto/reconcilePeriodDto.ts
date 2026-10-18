@@ -13,10 +13,11 @@ import { Type } from 'class-transformer';
 export class SireRecordDto {
   @IsString()
   @IsNotEmpty()
+  @Matches(/^\d{11}$/)
   emitterRuc!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsIn(['01', '03', '07', '08'])
   documentType!: string;
 
   @IsString()
@@ -25,6 +26,7 @@ export class SireRecordDto {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/^\d+$/)
   correlative!: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -43,7 +45,7 @@ export class SireRecordDto {
 export class ReconcilePeriodDto {
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\d{4}(0[1-9]|1[0-2])$/, {
+  @Matches(/^(?!0000)\d{4}(0[1-9]|1[0-2])$/, {
     message: 'El periodo debe tener formato YYYYMM y ser un mes válido',
   })
   period!: string;

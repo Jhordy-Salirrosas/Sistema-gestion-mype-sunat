@@ -16,12 +16,19 @@ enum DiscrepancyType {
   DIFERENCIA_MONTOS
   OMISION_LOCAL
   OMISION_SUNAT
+  DUPLICADO_LLAVE
 }
 
 enum ResolutionAction {
   ACEPTAR_PROPUESTA_SUNAT
   MANTENER_REGISTRO_LOCAL
   PENDIENTE
+}
+
+enum SireDuplicateSource {
+  LOCAL
+  SIRE
+  AMBOS
 }
 
 model SireProposal {
@@ -76,6 +83,7 @@ model SireDiscrepancy {
   reconciliation_id   String
   reconciliation      SireReconciliation @relation(fields: [reconciliation_id], references: [id], onDelete: Cascade)
   discrepancy_type    DiscrepancyType
+  emitter_ruc         String?
   document_type       String
   series              String
   correlative         String
@@ -85,6 +93,9 @@ model SireDiscrepancy {
   sire_total_amount   Decimal?           @db.Decimal(14, 2)
   local_total_amount  Decimal?           @db.Decimal(14, 2)
   amount_difference   Decimal?           @default(0.00) @db.Decimal(14, 2)
+  taxable_base_difference Decimal?             @db.Decimal(14, 2)
+  igv_difference          Decimal?             @db.Decimal(14, 2)
+  duplicate_source        SireDuplicateSource?
   resolution_action   ResolutionAction   @default(PENDIENTE)
   resolution_notes    String?
   resolved_at         DateTime?
