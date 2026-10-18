@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import AdmZip = require('adm-zip');
 import {
   delay,
@@ -11,6 +11,7 @@ import {
   resolveTimeoutMs,
   SunatFaultMode,
 } from './sunat-fault-injection.fixtures';
+import { ResilienceStateService } from '../../application/resilienceStateService';
 
 /** Opciones del CDR: permite generar aceptacion o rechazo (TA-14). */
 export interface SendBillOptions {
@@ -29,6 +30,14 @@ export interface MockBillResponse {
 
 @Injectable()
 export class SunatMockService {
+  /**
+   * El estado de resiliencia es opcional para no romper las pruebas que
+   * instancian el servicio sin argumentos.
+   */
+  constructor(
+    @Optional() private readonly state?: ResilienceStateService,
+  ) {}
+
   /**
    * Genera la respuesta XML SOAP simulando a la SUNAT.
    *
@@ -104,26 +113,33 @@ export class SunatMockService {
    */
   async resolveResponse(fileName: string): Promise<MockBillResponse> {
     const ruc = extractRucFromFileName(fileName);
-    const mode = resolveFaultMode(ruc);
+    // El escenario de caos activado desde el dashboard tiene prioridad sobre el
+    // RUC: permite forzar el fallo sin cambiar el comprobante que se envia.
+    const mode = this.state?.getForcedFaultMode() ?? resolveFaultMode(ruc);
 
     switch (mode) {
       case SunatFaultMode.SERVICE_UNAVAILABLE:
+        this.state?.recordFailure();
         return this.buildFaultResponse(SunatFaultMode.SERVICE_UNAVAILABLE);
 
       case SunatFaultMode.SOAP_FAULT:
+        this.state?.recordFailure();
         return this.buildFaultResponse(SunatFaultMode.SOAP_FAULT, {
           code: FAULT_SOAP_CODE,
           message: FAULT_SOAP_MESSAGE,
         });
 
       case SunatFaultMode.TIMEOUT:
+        this.state?.recordFailure();
         return this.buildDelayedResponse(resolveTimeoutMs(), fileName);
 
       case SunatFaultMode.SLOW:
+        this.state?.recordSlow();
         return this.buildDelayedResponse(resolveSlowMs(), fileName);
 
       default:
         // RUC normal: respuesta por defecto del Mock.
+        this.state?.recordSuccess();
         return {
           status: HttpStatus.OK,
           body: this.generateSendBillResponse({ filename: fileName }),
