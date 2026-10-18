@@ -18,7 +18,7 @@ test/
 │   ├── config/                 # [TRANSVERSAL] Validación de variables de entorno Fail-Fast
 │   ├── customs/                # [M3] Reglas CIF, liquidación de impuestos y cálculo DUA
 │   ├── database/               # [TRANSVERSAL] Instanciación y adaptadores Prisma
-│   ├── invoices/               # [M1] Validadores Módulo 11, series y servicio de facturación (Jhordy Salirrosas)
+│   ├── invoices/               # [M1] Casos de uso, repositorios Prisma, reglas IGV, VO series y validadores (Jhordy Salirrosas)
 │   ├── resilience/             # [M2] Mocks, breakers y controladores de resiliencia (Oliver Saldaña)
 │   ├── sire/                   # [M4] Motor de cruce y conciliación SIRE
 │   └── sunat/                  # Parseo de CDRs, firmas XML, certificados y cliente SOAP

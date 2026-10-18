@@ -7,7 +7,7 @@ import { DoubleEntryRule } from '../../domain/rules/doubleEntryRule';
 export class GenerateAccountingEntryUseCase {
   async execute(dto: CreateAccountingEntryDto): Promise<AccountingEntryEntity> {
     const entry = new AccountingEntryEntity({
-      companyId: dto.companyId,
+      companyId: dto.companyId ?? '',
       period: dto.period,
       entryNumber: dto.entryNumber ?? 1,
       entryDate: new Date(dto.entryDate),

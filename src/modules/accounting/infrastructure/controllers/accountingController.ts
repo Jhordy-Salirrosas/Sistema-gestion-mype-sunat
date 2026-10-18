@@ -1,4 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { CurrentCompany } from '../../../../common/decorators';
+import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
 import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
@@ -6,6 +15,7 @@ import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-case
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
+@UseGuards(AuthGuard)
 export class AccountingController {
   constructor(
     private readonly generateEntryUseCase: GenerateAccountingEntryUseCase,
@@ -16,15 +26,19 @@ export class AccountingController {
   @HttpCode(HttpStatus.CREATED)
   async createEntry(
     @Body() dto: CreateAccountingEntryDto,
+    @CurrentCompany() currentCompanyId?: string,
   ): Promise<AccountingEntryEntity> {
-    return this.generateEntryUseCase.execute(dto);
+    const companyId = currentCompanyId || dto.companyId || 'default-company-id';
+    return this.generateEntryUseCase.execute({ ...dto, companyId });
   }
 
   @Post('ple/export')
   @HttpCode(HttpStatus.OK)
   async exportPle(
     @Body() dto: ExportPleDto,
+    @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
-    return this.exportPleUseCase.execute(dto);
+    const companyId = currentCompanyId || dto.companyId || 'default-company-id';
+    return this.exportPleUseCase.execute({ ...dto, companyId });
   }
 }

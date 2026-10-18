@@ -30,6 +30,8 @@ const config: Config = {
   // node_modules — only our .ts source files get compiled to CJS by ts-jest.
   collectCoverageFrom: [
     'src/**/*.ts',
+    '!src/main.ts',
+    '!src/generated/**',
   ],
   coverageDirectory: './coverage',
   testEnvironment: 'node',

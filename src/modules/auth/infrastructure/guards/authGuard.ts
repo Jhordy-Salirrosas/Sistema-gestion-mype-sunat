@@ -8,7 +8,7 @@ import {
 import {
   TOKEN_SERVICE_PORT,
   type TokenServicePort,
-} from '../../application/ports/tokenServicePort';
+} from '../../domain/ports/tokenServicePort';
 
 @Injectable()
 export class AuthGuard implements CanActivate {

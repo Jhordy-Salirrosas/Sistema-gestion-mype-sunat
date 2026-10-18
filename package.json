@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -15,10 +16,13 @@
     "start:prod": "node dist/main",
     "lint": "oxlint src/ test/",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:cov": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "test:integration:db": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/integration",
+    "test:sunat:beta": "node --experimental-vm-modules -r dotenv/config node_modules/jest/bin/jest.js --runInBand test/integration/sunat/sunatBetaConnection.spec.ts",
+    "seed": "npx tsx prisma/seed.ts",
     "check:secrets": "node scripts/check-secrets.js"
   },
   "dependencies": {
@@ -68,8 +72,13 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.2"
   },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
   "allowScripts": {
     "@parcel/watcher@2.6.0": true,
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "prisma@7.10.0": true,
+    "@prisma/engines@7.10.0": true
   }
 }

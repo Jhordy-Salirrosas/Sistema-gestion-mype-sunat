@@ -8,6 +8,14 @@ export interface SireRecord {
   totalAmount: number;
 }
 
+export interface SireProposalEntity extends SireRecord {
+  companyId: string;
+  period: string;
+  bookType: 'RVIE' | 'RCE';
+  carSunat: string;
+  issueDate: Date;
+}
+
 export type DiscrepancyType =
   | 'COINCIDENCIA_EXACTA'
   | 'DIFERENCIA_MONTOS'
@@ -23,4 +31,7 @@ export interface DiscrepancyResult {
   localTotalAmount?: number;
   sireTotalAmount?: number;
   amountDifference: number;
+  taxableBaseDifference?: number;
+  igvDifference?: number;
+  deviationPercentage?: number;
 }

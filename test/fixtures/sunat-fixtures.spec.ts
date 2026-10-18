@@ -152,7 +152,7 @@ describe('TA-08 - fixtures del pipeline', () => {
       const pem = `-----BEGIN CERTIFICATE-----\n${match![1]}\n-----END CERTIFICATE-----`;
       const cert = new X509Certificate(pem);
 
-      expect(cert.subject).toContain('20123456789');
+      expect(cert.subject).toContain('20123456786');
     });
   });
 

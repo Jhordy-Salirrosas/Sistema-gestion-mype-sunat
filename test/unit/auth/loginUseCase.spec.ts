@@ -1,9 +1,9 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { LoginUseCase } from '../../../src/modules/auth/application/use-cases/loginUseCase';
 import { UserEntity } from '../../../src/modules/auth/domain/entities/userEntity';
-import type { UserRepositoryPort } from '../../../src/modules/auth/application/ports/userRepositoryPort';
-import type { HasherPort } from '../../../src/modules/auth/application/ports/hasherPort';
-import type { TokenServicePort } from '../../../src/modules/auth/application/ports/tokenServicePort';
+import type { UserRepositoryPort } from '../../../src/modules/auth/domain/ports/userRepositoryPort';
+import type { HasherPort } from '../../../src/modules/auth/domain/ports/hasherPort';
+import type { TokenServicePort } from '../../../src/modules/auth/domain/ports/tokenServicePort';
 
 describe('LoginUseCase', () => {
   let useCase: LoginUseCase;
@@ -24,6 +24,15 @@ describe('LoginUseCase', () => {
     mockUserRepo = {
       findByEmail: jest.fn(),
       findById: jest.fn(),
+      findByRuc: jest.fn(),
+      findCompanyById: jest.fn(),
+      createUserWithCompany: jest.fn(),
+      saveRefreshToken: jest.fn(),
+      findRefreshToken: jest.fn(),
+      revokeRefreshToken: jest.fn(),
+      revokeAllUserRefreshTokens: jest.fn(),
+      updatePassword: jest.fn(),
+      updateProfile: jest.fn(),
     };
     mockHasher = {
       hash: jest.fn(),
@@ -32,6 +41,8 @@ describe('LoginUseCase', () => {
     mockTokenService = {
       signToken: jest.fn().mockReturnValue('mocked.jwt.token'),
       verifyToken: jest.fn(),
+      generateRefreshToken: jest.fn().mockReturnValue('mocked_refresh_token'),
+      hashToken: jest.fn().mockReturnValue('mocked_refresh_token_hash'),
     };
 
     useCase = new LoginUseCase(mockUserRepo, mockHasher, mockTokenService);
@@ -51,11 +62,17 @@ describe('LoginUseCase', () => {
 
     expect(result.accessToken).toBe('mocked.jwt.token');
     expect(result.tokenType).toBe('Bearer');
+    expect(result.refreshToken).toBe('mocked_refresh_token');
     expect(result.user.email).toBe('contador@mype.pe');
     expect(result.user.role).toBe('CONTADOR');
     expect(mockTokenService.signToken).toHaveBeenCalledWith(
       expect.objectContaining({ sub: 'usr-123', role: 'CONTADOR' }),
-      28800,
+      900,
+    );
+    expect(mockUserRepo.saveRefreshToken).toHaveBeenCalledWith(
+      'usr-123',
+      'mocked_refresh_token_hash',
+      expect.any(Date),
     );
   });
 

@@ -10,7 +10,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import AdmZip from 'adm-zip';
-import { CdrDecodeError, parseCdr } from '../../../src/modules/sunat/soap/cdr.parser';
+import {
+  CdrDecodeError,
+  parseCdr,
+} from '../../../src/modules/sunat/soap/cdr.parser';
 
 const FIXTURES_DIR = join(process.cwd(), 'fixtures', 'sunat-cdr');
 
@@ -35,7 +38,7 @@ describe('parseCdr (funcion pura)', () => {
       expect(cdr.referenceId).toBe('F001-00000001');
       expect(cdr.observaciones).toEqual([]);
       expect(cdr.ublVersion).toBe('2.0');
-      expect(cdr.xmlFileName).toBe('R-20123456789-01-F001-1.xml');
+      expect(cdr.xmlFileName).toBe('R-20123456786-01-F001-1.xml');
       expect(cdr.rawXml).toContain('ApplicationResponse');
     });
   });
@@ -119,7 +122,7 @@ describe('parseCdr (funcion pura)', () => {
     it('lanza CdrDecodeError si el XML no trae ResponseCode', () => {
       const zip = new AdmZip();
       zip.addFile(
-        'R-20123456789-01-F001-1.xml',
+        'R-20123456786-01-F001-1.xml',
         Buffer.from(
           '<?xml version="1.0" encoding="UTF-8"?><ar:ApplicationResponse xmlns:ar="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2"></ar:ApplicationResponse>',
           'utf8',
@@ -134,7 +137,7 @@ describe('parseCdr (funcion pura)', () => {
     it('trata un ApplicationResponse vacio como CDR invalido', () => {
       const zip = new AdmZip();
       zip.addFile(
-        'R-20123456789-01-F001-1.xml',
+        'R-20123456786-01-F001-1.xml',
         Buffer.from(
           '<?xml version="1.0" encoding="UTF-8"?><ar:ApplicationResponse xmlns:ar="urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2"/>',
           'utf8',

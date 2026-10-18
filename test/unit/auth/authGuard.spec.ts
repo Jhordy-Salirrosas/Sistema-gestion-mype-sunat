@@ -1,6 +1,6 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '../../../src/modules/auth/infrastructure/guards/authGuard';
-import type { TokenServicePort } from '../../../src/modules/auth/application/ports/tokenServicePort';
+import type { TokenServicePort } from '../../../src/modules/auth/domain/ports/tokenServicePort';
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
@@ -24,6 +24,8 @@ describe('AuthGuard', () => {
     mockTokenService = {
       signToken: jest.fn(),
       verifyToken: jest.fn(),
+      generateRefreshToken: jest.fn(),
+      hashToken: jest.fn(),
     };
     guard = new AuthGuard(mockTokenService);
   });

@@ -1,17 +1,11 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PgBoss, fromPrisma } from 'pg-boss';
 
 export const INVOICE_QUEUE = 'sunat-invoice-queue';
+export const INVOICE_DLQ = 'sunat-invoice-dlq';
 
 export interface TxClient {
-  $queryRawUnsafe<T = unknown>(
-    query: string,
-    ...values: unknown[]
-  ): Promise<T>;
+  $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
 }
 
 @Injectable()
@@ -30,6 +24,14 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     await this.boss.start();
+
+    await this.boss.createQueue(INVOICE_DLQ);
+    await this.boss.createQueue(INVOICE_QUEUE, {
+      retryLimit: 3,
+      retryDelay: 5,
+      retryBackoff: true,
+      deadLetter: INVOICE_DLQ,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -46,10 +48,6 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   ): Promise<string | null> {
     const db = fromPrisma(tx);
 
-    return this.boss.send(
-      INVOICE_QUEUE,
-      { invoice_id: invoiceId },
-      { db },
-    );
+    return this.boss.send(INVOICE_QUEUE, { invoice_id: invoiceId }, { db });
   }
 }

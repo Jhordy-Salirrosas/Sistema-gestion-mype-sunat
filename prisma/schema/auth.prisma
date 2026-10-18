@@ -27,6 +27,7 @@ model Company {
   series                InvoiceSeries[]
   invoices              Invoice[]
   declarations          CustomsDeclaration[]
+  shipments             CustomsShipment[]
   kardex_movements      KardexMovement[]
   sire_proposals        SireProposal[]
   sire_reconciliations  SireReconciliation[]

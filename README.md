@@ -141,3 +141,20 @@ git checkout -b feature/TT-01-modelado-sql-comprobantes
 
 ---
 *Este proyecto es desarrollado bajo un esquema de Sprints iterativos con integración continua automatizada (CI/CD).*
+
+
+
+[[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=alert_status]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
+[[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=coverage]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
+[[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=bugs]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
+[[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=vulnerabilities]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
+[[https://img.shields.io/badge/Lighthouse-90%2B-green.svg]](https://sistema-gestion-mype-sunat.vercel.app/)
+
+### Métricas de Calidad y Rendimiento (Sprint 1)
+* **SonarCloud Dashboard:** [Ver análisis en SonarCloud](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
+  * Cobertura de pruebas unitarias: $\ge 80\%$
+  * Vulnerabilidades y Bugs: 0
+  * Duplicación de código: $\le 3\%$
+* **Lighthouse CI Performance:** [Ver reporte Lighthouse](https://sistema-gestion-mype-sunat.vercel.app/)
+  * Rendimiento (Performance): $\ge 90$
+  * Accesibilidad (Accessibility): $\ge 90$
