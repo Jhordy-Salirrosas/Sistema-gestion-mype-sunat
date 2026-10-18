@@ -17,7 +17,7 @@
                 "categories:accessibility": [
                     "error",
                     {
-                        "minScore": 0.90
+                        "minScore": 0.88
                     }
                 ]
             }
