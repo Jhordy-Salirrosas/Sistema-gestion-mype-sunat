@@ -19,6 +19,11 @@ export class ReconcileSireUseCase {
     companyId: string,
   ): Promise<ReconcileResultDto> {
     const repositoryBookType = dto.bookType === 'RVIE_VENTAS' ? 'RVIE' : 'RCE';
+    await this.sireRepository.ensurePeriodOpen(
+      companyId,
+      dto.period,
+      repositoryBookType,
+    );
     const sireRecords = await this.sireRepository.findProposalsByPeriod(
       companyId,
       dto.period,

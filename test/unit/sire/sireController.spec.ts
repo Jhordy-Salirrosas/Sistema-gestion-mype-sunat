@@ -1,18 +1,41 @@
 import { SireController } from '../../../src/modules/sire/infrastructure/controllers/sireController';
 import { ReconcileSireUseCase } from '../../../src/modules/sire/application/use-cases/reconcileSireUseCase';
+import { IngestSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/ingestSireProposalUseCase';
+import { ExportSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/exportSireProposalUseCase';
+import { GetReconciliationHistoryUseCase } from '../../../src/modules/sire/application/use-cases/getReconciliationHistoryUseCase';
+import { CloseFiscalPeriodUseCase } from '../../../src/modules/sire/application/use-cases/closeFiscalPeriodUseCase';
 import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
 import { ReconcilePeriodDto } from '../../../src/modules/sire/application/dto/reconcilePeriodDto';
 
 describe('SireController', () => {
   let controller: SireController;
   let useCase: jest.Mocked<ReconcileSireUseCase>;
+  const ingestUseCase = {
+    execute: jest.fn(),
+  } as unknown as jest.Mocked<IngestSireProposalUseCase>;
+  const exportUseCase = {
+    execute: jest.fn(),
+  } as unknown as jest.Mocked<ExportSireProposalUseCase>;
+  const historyUseCase = {
+    execute: jest.fn(),
+  } as unknown as jest.Mocked<GetReconciliationHistoryUseCase>;
+  const closeUseCase = {
+    execute: jest.fn(),
+  } as unknown as jest.Mocked<CloseFiscalPeriodUseCase>;
 
   beforeEach(() => {
     useCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<ReconcileSireUseCase>;
 
-    controller = new SireController(useCase);
+    controller = new SireController(
+      useCase,
+      ingestUseCase,
+      exportUseCase,
+      historyUseCase,
+      closeUseCase,
+    );
   });
 
   it('debería delegar la petición de conciliación al caso de uso', async () => {
@@ -35,7 +58,12 @@ describe('SireController', () => {
         bookType: 'RVIE_VENTAS',
         localRecords: [],
       },
-      'company-1',
+      {
+        sub: 'user-1',
+        email: 'user@example.test',
+        companyId: 'company-1',
+        role: 'ACCOUNTANT',
+      },
     );
 
     expect(result).toBe(mockOutput);
@@ -46,7 +74,7 @@ describe('SireController', () => {
   });
 
   it('debería aceptar solo periodos con formato YYYYMM y mes válido', async () => {
-    const dto = Object.assign(new ReconcilePeriodDto(), {
+    const dto = plainToInstance(ReconcilePeriodDto, {
       period: '202613',
       bookType: 'RVIE_VENTAS',
       localRecords: [],
@@ -55,5 +83,48 @@ describe('SireController', () => {
     const errors = await validate(dto);
 
     expect(errors.map((error) => error.property)).toContain('period');
+  });
+
+  it('debería rechazar tipos de comprobante fuera del catálogo soportado', async () => {
+    const dto = plainToInstance(ReconcilePeriodDto, {
+      period: '202603',
+      bookType: 'RVIE_VENTAS',
+      localRecords: [
+        {
+          emitterRuc: '20100070970',
+          documentType: '99',
+          series: 'F001',
+          correlative: '1',
+          taxableBase: 100,
+          igvAmount: 18,
+          totalAmount: 118,
+        },
+      ],
+    });
+
+    const errors = await validate(dto, { whitelist: true });
+    const recordErrors = errors[0].children?.[0].children ?? [];
+
+    expect(recordErrors.map((error) => error.property)).toContain(
+      'documentType',
+    );
+  });
+
+  it('debería rechazar un usuario sin empresa autenticada', async () => {
+    await expect(
+      controller.reconcile(
+        {
+          period: '202603',
+          bookType: 'RVIE_VENTAS',
+          localRecords: [],
+        },
+        {
+          sub: 'user-1',
+          email: 'user@example.test',
+          companyId: '',
+          role: 'ACCOUNTANT',
+        },
+      ),
+    ).rejects.toThrow('La empresa del usuario no está definida.');
   });
 });

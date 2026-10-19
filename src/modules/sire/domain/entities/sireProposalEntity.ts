@@ -20,7 +20,8 @@ export type DiscrepancyType =
   | 'COINCIDENCIA_EXACTA'
   | 'DIFERENCIA_MONTOS'
   | 'OMISION_LOCAL'
-  | 'OMISION_SUNAT';
+  | 'OMISION_SUNAT'
+  | 'DUPLICADO_LLAVE';
 
 export interface DiscrepancyResult {
   discrepancyType: DiscrepancyType;
@@ -34,4 +35,5 @@ export interface DiscrepancyResult {
   taxableBaseDifference?: number;
   igvDifference?: number;
   deviationPercentage?: number;
+  duplicateSource?: 'LOCAL' | 'SIRE' | 'AMBOS';
 }

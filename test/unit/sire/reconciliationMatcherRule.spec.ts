@@ -98,4 +98,48 @@ describe('ReconciliationMatcherRule', () => {
     expect(summary.exactMatchesCount).toBe(1);
     expect(summary.details[0].discrepancyType).toBe('COINCIDENCIA_EXACTA');
   });
+
+  it('debería señalar llaves duplicadas y excluirlas de la conciliación normal', () => {
+    const summary = ReconciliationMatcherRule.reconcile(
+      [localInvoice, localInvoice],
+      [localInvoice],
+    );
+
+    expect(summary.totalLocal).toBe(2);
+    expect(summary.totalSire).toBe(1);
+    expect(summary.exactMatchesCount).toBe(0);
+    expect(summary.discrepanciesCount).toBe(1);
+    expect(summary.details[0]).toEqual(
+      expect.objectContaining({
+        discrepancyType: 'DUPLICADO_LLAVE',
+        duplicateSource: 'LOCAL',
+      }),
+    );
+  });
+
+  it('debería calcular diferencias monetarias a centavos sin error de punto flotante', () => {
+    const summary = ReconciliationMatcherRule.reconcile(
+      [localInvoice],
+      [
+        {
+          ...localInvoice,
+          taxableBase: 100.06,
+          totalAmount: 118.06,
+        },
+      ],
+    );
+
+    expect(summary.details[0].discrepancyType).toBe('DIFERENCIA_MONTOS');
+    expect(summary.details[0].taxableBaseDifference).toBe(-0.06);
+    expect(summary.details[0].deviationPercentage).toBe(0.05);
+  });
+
+  it('debería rechazar importes no finitos', () => {
+    expect(() =>
+      ReconciliationMatcherRule.reconcile(
+        [{ ...localInvoice, taxableBase: Number.NaN }],
+        [localInvoice],
+      ),
+    ).toThrow('Los importes de conciliación deben ser finitos.');
+  });
 });
