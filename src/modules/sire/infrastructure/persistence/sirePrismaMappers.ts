@@ -1,8 +1,12 @@
 import type { DiscrepancyResult } from '../../domain/entities/sireProposalEntity';
 import type { ReconciliationHistoryRecord } from '../../domain/ports/sireRepositoryPort';
+import type {
+  DiscrepancyType,
+  SireDuplicateSource,
+} from '../../../../generated/client/enums';
 
 type PrismaDiscrepancy = {
-  discrepancy_type: DiscrepancyResult['discrepancyType'];
+  discrepancy_type: DiscrepancyType;
   emitter_ruc: string | null;
   document_type: string;
   series: string;
@@ -12,7 +16,7 @@ type PrismaDiscrepancy = {
   amount_difference: { toNumber(): number } | null;
   taxable_base_difference: { toNumber(): number } | null;
   igv_difference: { toNumber(): number } | null;
-  duplicate_source: DiscrepancyResult['duplicateSource'] | null;
+  duplicate_source: SireDuplicateSource | null;
 };
 
 export function mapDiscrepancy(item: PrismaDiscrepancy): DiscrepancyResult {
