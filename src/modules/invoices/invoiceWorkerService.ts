@@ -1,8 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prismaService';
-import { UblGeneratorService, type InvoicePayload } from './ublGeneratorService';
+import { UblGeneratorService } from './ublGeneratorService';
+import type { InvoicePayload } from './invoicePayload';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SignatureService } from '../sunat/signature.service';
+import {
+  actualizarEstadoInvoice,
+  registrarAuditoria,
+} from './invoiceWorkerAudit';
 
 export interface ProcessJobResult {
   success: boolean;
@@ -10,20 +15,6 @@ export interface ProcessJobResult {
   status: string;
   signedXml?: string;
   errorMessage?: string;
-}
-
-interface PrismaUpdatable {
-  invoice?: {
-    update: (args: {
-      where: { id: string };
-      data: Record<string, unknown>;
-    }) => Promise<unknown>;
-  };
-  transactionHistory?: {
-    create: (args: {
-      data: Record<string, unknown>;
-    }) => Promise<unknown>;
-  };
 }
 
 @Injectable()
@@ -39,15 +30,33 @@ export class InvoiceWorkerService {
     private readonly signatureService: SignatureService,
   ) {}
 
-  public async processInvoiceJob(jobData: { invoiceId: string; payload: InvoicePayload }): Promise<ProcessJobResult> {
+  private actualizarEstado(id: string, status: string, xml?: string) {
+    return actualizarEstadoInvoice(this.prisma, id, status, xml);
+  }
+
+  /** Registra una transición en el historial con el intento fijo del worker. */
+  private auditar(
+    invoiceId: string,
+    anterior: string,
+    nuevo: string,
+    codigo: string,
+    mensaje: string,
+    tiempoMs = 0,
+  ) {
+    return registrarAuditoria(this.prisma, invoiceId, 1, anterior, nuevo, codigo, mensaje, tiempoMs);
+  }
+
+  public async processInvoiceJob(jobData: {
+    invoiceId: string;
+    payload: InvoicePayload;
+  }): Promise<ProcessJobResult> {
     const { invoiceId, payload } = jobData;
     const startTime = Date.now();
-
     this.logger.log(`[Job Tomado] Procesando comprobante: ${invoiceId}`);
 
     // 1. Transición de estado: PENDIENTE -> PROCESANDO (Criterio 1)
-    await this.updateInvoiceStatus(invoiceId, 'PROCESANDO');
-    await this.recordAudit(invoiceId, 1, 'PENDIENTE', 'PROCESANDO', 'JOB_ACQUIRED', 'Job tomado por el worker');
+    await this.actualizarEstado(invoiceId, 'PROCESANDO');
+    await this.auditar(invoiceId, 'PENDIENTE', 'PROCESANDO', 'JOB_ACQUIRED', 'Job tomado por el worker');
 
     try {
       // 2. Generación de XML UBL 2.1 oficial (Criterio 2)
@@ -58,13 +67,14 @@ export class InvoiceWorkerService {
 
       if (!validation.isValid) {
         const errorDetail = validation.errors.join(' | ');
-        this.logger.error(`[Fallo XSD] Comprobante ${invoiceId} inválido: ${errorDetail}`);
+        this.logger.error(
+          `[Fallo XSD] Comprobante ${invoiceId} inválido: ${errorDetail}`,
+        );
 
-        // Desvío a DLQ y registro de auditoría sin perder el payload (Criterio 5)
-        await this.updateInvoiceStatus(invoiceId, 'ERROR_VALIDACION_XSD');
-        await this.recordAudit(
+        // Desvío a DLQ y auditoría sin perder el payload (Criterio 5)
+        await this.actualizarEstado(invoiceId, 'ERROR_VALIDACION_XSD');
+        await this.auditar(
           invoiceId,
-          1,
           'PROCESANDO',
           'FALLIDO_DLQ',
           'ERR_XSD_SCHEMA',
@@ -85,10 +95,13 @@ export class InvoiceWorkerService {
 
       // 5. Transición exitosa y auditoría completa (Criterio 4)
       const duration = Date.now() - startTime;
-      await this.updateInvoiceStatus(invoiceId, 'PROCESADO', signatureResult.signedXml);
-      await this.recordAudit(
+      await this.actualizarEstado(
         invoiceId,
-        1,
+        'PROCESADO',
+        signatureResult.signedXml,
+      );
+      await this.auditar(
+        invoiceId,
         'PROCESANDO',
         'PROCESADO',
         'SUCCESS_READY_FOR_SUNAT',
@@ -96,7 +109,9 @@ export class InvoiceWorkerService {
         duration,
       );
 
-      this.logger.log(`[Éxito Pipeline] Comprobante ${invoiceId} listo en ${duration}ms`);
+      this.logger.log(
+        `[Éxito Pipeline] Comprobante ${invoiceId} listo en ${duration}ms`,
+      );
 
       return {
         success: true,
@@ -106,13 +121,15 @@ export class InvoiceWorkerService {
       };
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[Falla Pipeline] Error al procesar ${invoiceId}: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `[Falla Pipeline] Error al procesar ${invoiceId}: ${errorMessage}`,
+      );
 
-      await this.updateInvoiceStatus(invoiceId, 'FALLIDO');
-      await this.recordAudit(
+      await this.actualizarEstado(invoiceId, 'FALLIDO');
+      await this.auditar(
         invoiceId,
-        1,
         'PROCESANDO',
         'FALLIDO',
         'ERR_WORKER_PIPELINE',
@@ -120,50 +137,7 @@ export class InvoiceWorkerService {
         duration,
       );
 
-      return {
-        success: false,
-        invoiceId,
-        status: 'FALLIDO',
-        errorMessage,
-      };
+      return { success: false, invoiceId, status: 'FALLIDO', errorMessage };
     }
-  }
-
-  private async updateInvoiceStatus(id: string, status: string, signedXml?: string): Promise<void> {
-    const client = this.prisma as unknown as PrismaUpdatable;
-    if (!client?.invoice?.update) return;
-
-    await client.invoice.update({
-      where: { id },
-      data: {
-        estado: status,
-        ...(signedXml ? { xml_storage_url: signedXml } : {}),
-      },
-    }).catch(() => null);
-  }
-
-  private async recordAudit(
-    invoiceId: string,
-    intento: number,
-    estadoAnterior: string,
-    estadoNuevo: string,
-    codigoError: string,
-    mensajeError: string,
-    tiempoMs = 0,
-  ): Promise<void> {
-    const client = this.prisma as unknown as PrismaUpdatable;
-    if (!client?.transactionHistory?.create) return;
-
-    await client.transactionHistory.create({
-      data: {
-        invoice_id: invoiceId,
-        intento,
-        estado_anterior: estadoAnterior,
-        estado_nuevo: estadoNuevo,
-        codigo_error: codigoError,
-        mensaje_error: mensajeError,
-        tiempo_respuesta_ms: tiempoMs,
-      },
-    }).catch(() => null);
   }
 }
