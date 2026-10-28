@@ -20,14 +20,26 @@ Garantizar la alta disponibilidad y tolerancia a fallos del sistema frente a ca�
 
 ## 2. Reglas Matemáticas y de Resiliencia (Capa de Dominio)
 
-### 2.1. Regla 1: Política de Exponential Backoff
-$$\text{Retardo} = 2^{\text{intento}} \text{ segundos} \quad \text{donde } \text{intento} \in [1, 5]$$
-* Intento 1: reintento a los 2 segundos.
-* Intento 2: reintento a los 4 segundos.
-* Intento 3: reintento a los 8 segundos.
-* Intento 4: reintento a los 16 segundos.
-* Intento 5: reintento a los 32 segundos.
-* Si el intento 5 falla, el trabajo se mueve a la DLQ (`pgboss.archive`) y el estado se actualiza a `FALLO_CRITICO`.
+### 2.1. Regla 1: Política de Exponential Backoff (HU-04)
+La política es pura y vive en `domain/rules/backoffPolicy.ts`. Se aplica a cada
+envío de comprobante:
+$$\text{Retardo}(n) \in \{5,\ 15,\ 45\}\ \text{segundos} \quad \text{para } n = 1, 2, 3$$
+* Envío inicial inmediato.
+* Tras el fallo 1: reintento a los 5 segundos.
+* Tras el fallo 2: reintento a los 15 segundos.
+* Tras el fallo 3: reintento a los 45 segundos.
+* Tras el fallo 4 (3 reintentos agotados): el job se mueve a la DLQ
+  (`sunat-invoice-dlq`) y la Invoice pasa a `ERROR_RED`.
+* Solo se reintenta si el resultado es `reintentable` (error de red, timeout,
+  5xx o CDR ilegible). Un rechazo de negocio del CDR (`reintentable = false`)
+  detiene el flujo sin DLQ y conserva el estado que persistió SUNAT.
+* Cada intento queda auditado en `TransactionHistory` con su número de intento
+  (`intento` 1..4).
+
+> Nota de lectura: la historia habla de "3 intentos" y de tres retardos. Un
+> retardo solo aplica si hay un envío posterior, por lo que se implementan
+> **3 reintentos (4 envíos)**. Es la misma lectura de TA-38 ("se agotan 3
+> reintentos") y TA-57 ("se reintentan 3 veces").
 
 ### 2.2. Regla 2: Máquina de Estados del Circuit Breaker
 * **CLOSED (Operación Normal):** Las peticiones fluyen al cliente SOAP/Mock. Si se acumulan 5 errores consecutivos (HTTP 503 o timeouts $\ge 5000\text{ ms}$), el circuito transiciona inmediatamente a **OPEN**.
@@ -52,6 +64,7 @@ src/modules/resilience/
 │
 ├── domain/                           # [CAPA 1: DOMINIO PURO]
 │   ├── entities/                     # TransactionHistoryEntity, CircuitBreakerStateEntity
+│   ├── rules/                        # backoffPolicy.ts: retardos 5/15/45 s y decisión de reintento
 │   ├── value-objects/                # BackoffDelayVo, BreakerThresholdVo
 │   └── ports/                        # IOutboxQueuePort, ICircuitBreakerPort, IChaosSimulatorPort
 │
@@ -61,7 +74,8 @@ src/modules/resilience/
 │
 └── infrastructure/                   # [CAPA 3: ADAPTADORES TECNOLÓGICOS]
     ├── queue/
-    │   ├── queue.service.ts          # Adaptador pg-boss (fromPrisma, send, start, stop)
+    │   ├── queue.service.ts          # Adaptador pg-boss (fromPrisma, send, DLQ, start, stop)
+    │   ├── invoiceRetryService.ts    # Orquestador HU-04: 3 reintentos, ERROR_RED y DLQ
     │   └── queueModule.ts            # Módulo NestJS exportable para enqueueInvoiceInTx
     ├── mock/
     │   ├── sunat-mock.controller.ts  # Endpoints REST de inyección de caos y simulación SOAP
@@ -96,7 +110,7 @@ src/modules/resilience/
   * Mezclar el almacenamiento de `pg-boss` en una base de datos distinta a la de negocio (deben compartir la misma BD para preservar transaccionalidad ACID sin Sagas distribuidas).
 
 ### 4.4. Fronteras Modulares (Anti-Acoplamiento)
-* **Servicio público exportado:** `QueueService.enqueueInvoiceInTx(tx, invoiceId)` es la **única** función que el módulo `invoices` tiene permitido invocar directamente.
+* **Servicios públicos exportados:** `QueueService.enqueueInvoiceInTx(tx, invoiceId)` para el Outbox y `InvoiceRetryService.processWithRetry(job)` para que el consumidor de TA-57 aplique el backoff de HU-04. `InvoiceRetryService` es el único punto que mueve jobs a la DLQ y marca la Invoice en `ERROR_RED`; el worker de facturación no debe reimplementar esa secuencia.
 * **Prohibido:** Modificar tablas de facturación desde workers de resiliencia mediante SQL directo. Se deben utilizar los puertos públicos o eventos emitidos.
 
 ---
@@ -146,7 +160,9 @@ Cuando Oliver deba implementar o extender una funcionalidad de resiliencia:
 1. **`sunat-mock.service.spec.ts`:** Verificación de inyección de error 503 y respuesta de fixture CDR válida cuando el caos está inactivo.
 2. **`sunat-mock.controller.spec.ts`:** Control de encendido/apagado del modo caos vía REST.
 3. **`queue.service.spec.ts`:** Encolado transaccional con cliente `fromPrisma(tx)` y manejo de excepciones.
-4. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
+4. **`backoffPolicy.spec.ts`:** Retardos 5/15/45 s, 3 reintentos, decisión DLQ y rechazo de negocio sin reintento.
+5. **`invoiceRetryService.spec.ts`:** Con fallos de red forzados, verifica la secuencia de esperas, la auditoría de los 4 intentos, el paso a la DLQ y la Invoice en `ERROR_RED`; además, que un rechazo de negocio no se reintenta.
+6. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
 
 ---
 
