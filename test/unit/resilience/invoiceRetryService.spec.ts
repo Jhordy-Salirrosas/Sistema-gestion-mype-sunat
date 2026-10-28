@@ -6,6 +6,7 @@
  * 5 s, 15 s y 45 s, auditar los 4 intentos y terminar en DLQ + ERROR_RED.
  */
 import { InvoiceStatus } from '../../../src/generated/client/enums';
+import { dormir } from '../../../src/modules/resilience/infrastructure/queue/invoiceRetryService';
 import { CdrPersistenceService } from '../../../src/modules/sunat/cdr-persistence.service';
 import { SunatBillService } from '../../../src/modules/sunat/sunat-bill.service';
 import { SunatTransportError } from '../../../src/modules/sunat/soap/sunat-soap.client';
@@ -93,6 +94,10 @@ describe('HU-04 · InvoiceRetryService', () => {
     );
     expect(resultado.enviadoADlq).toBe(true);
     expect(resultado.estado).toBe(InvoiceStatus.ERROR_RED);
+  });
+
+  it('la espera real de producción resuelve sin lanzar', async () => {
+    await expect(dormir(0)).resolves.toBeUndefined();
   });
 
   it('vuelve a ACEPTADO si un reintento tiene éxito y no toca la DLQ', async () => {

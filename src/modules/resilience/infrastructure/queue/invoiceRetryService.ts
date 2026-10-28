@@ -21,7 +21,6 @@ import {
 import {
   decidirReintento,
   delayDelReintento,
-  MAX_INTENTOS,
 } from '../../domain/rules/backoffPolicy';
 import { QueueService } from './queue.service';
 
@@ -71,7 +70,7 @@ export class InvoiceRetryService {
       job.estadoActual ?? InvoiceStatus.PENDIENTE;
     let ultimo: ProcessCdrResult | null = null;
 
-    for (let intento = 1; intento <= MAX_INTENTOS; intento += 1) {
+    for (let intento = 1; ; intento += 1) {
       try {
         ultimo = await this.sunatBill.sendAndProcess({
           ...job,
@@ -114,10 +113,6 @@ export class InvoiceRetryService {
       );
       await this.sleep(retardo);
     }
-
-    // Inalcanzable: el bucle retorna en el último intento. Se deja por si
-    // cambia MAX_INTENTOS y el compilador exige un retorno.
-    throw new Error('El bucle de reintentos terminó sin un resultado');
   }
 
   /**
