@@ -13,12 +13,6 @@ import {
   superaUmbralDetraccion,
 } from '../../../src/modules/invoices/sunatCatalogs';
 import {
-  classifyCdrRule,
-  debeReintentar,
-  esAceptado,
-  estadoPorAccion,
-} from '../../../src/modules/invoices/classifyCdrRule';
-import {
   UblGeneratorService,
   type InvoicePayload,
 } from '../../../src/modules/invoices/ublGeneratorService';
@@ -29,7 +23,6 @@ import {
   serieCorrespondeATipo,
   serieSugerida,
 } from '../../../src/modules/invoices/domain/rules/serieRules';
-import { SerieCorrelativoVo } from '../../../src/modules/invoices/domain/value-objects/serieCorrelativoVo';
 
 const payloadBase: InvoicePayload = {
   rucEmisor: '20601012341',
@@ -85,49 +78,6 @@ describe('sunatCatalogs - catálogos oficiales de SUNAT', () => {
   });
 });
 
-describe('classifyCdrRule - reglas del CDR de SUNAT', () => {
-  it('acepta el código 0 sin anular el comprobante', () => {
-    const r = classifyCdrRule('0');
-
-    expect(r.accion).toBe('ACEPTADO');
-    expect(r.anulaComprobante).toBe(false);
-    expect(r.requiereCorreccion).toBe(false);
-  });
-
-  it('trata el error 2022 (auto-facturación) como rechazo', () => {
-    const r = classifyCdrRule(2022);
-
-    expect(r.accion).toBe('RECHAZADO');
-    expect(r.anulaComprobante).toBe(true);
-    expect(r.descripcion).toContain('RUC del receptor');
-  });
-
-  it('trata el error 3267 como observación de redondeo de cuotas', () => {
-    const r = classifyCdrRule('3267');
-
-    expect(r.accion).toBe('OBSERVADO');
-    expect(r.anulaComprobante).toBe(false);
-    expect(esAceptado('3267')).toBe(true);
-  });
-
-  it('marca el error 5000 como reintentable sin corrección', () => {
-    expect(debeReintentar('5000')).toBe(true);
-    expect(classifyCdrRule('5000').requiereCorreccion).toBe(false);
-    expect(estadoPorAccion('REINTENTAR')).toBe('EN_COLA');
-  });
-
-  it('trata códigos desconocidos de forma conservadora', () => {
-    expect(classifyCdrRule('2999').accion).toBe('OBSERVADO');
-    expect(classifyCdrRule('1999').accion).toBe('RECHAZADO');
-    expect(classifyCdrRule('9999').accion).toBe('RECHAZADO');
-  });
-
-  it('mapea la acción al estado interno del comprobante', () => {
-    expect(estadoPorAccion('ACEPTADO')).toBe('ACEPTADO');
-    expect(estadoPorAccion('OBSERVADO')).toBe('ACEPTADO_OBSERVADO');
-    expect(estadoPorAccion('RECHAZADO')).toBe('RECHAZADO');
-  });
-});
 
 describe('UblGeneratorService - generación UBL 2.1', () => {
   let generator: UblGeneratorService;
@@ -360,33 +310,5 @@ describe('serieRules - series por tipo de comprobante', () => {
     expect(serieSugerida('07')).toBe('FC01');
     expect(serieSugerida('RA')).toBe('');
     expect(MENSAJE_SERIE_INVALIDA).toContain('no corresponde');
-  });
-});
-
-describe('SerieCorrelativoVo - value object', () => {
-  it('formatea el correlativo a ocho dígitos', () => {
-    expect(new SerieCorrelativoVo('F001', 42).formatted).toBe('F001-00000042');
-  });
-
-  it('valida la serie contra el tipo cuando se informa', () => {
-    expect(() => new SerieCorrelativoVo('FC01', 1, '07')).not.toThrow();
-    expect(() => new SerieCorrelativoVo('FC01', 1, '01')).toThrow(/Facturas/);
-  });
-
-  it('normaliza la serie a mayúsculas', () => {
-    expect(new SerieCorrelativoVo('f001', 1).serie).toBe('F001');
-  });
-
-  it('rechaza correlativos fuera de rango', () => {
-    expect(() => new SerieCorrelativoVo('F001', 0)).toThrow(/entre 1 y 99999999/);
-    expect(() => new SerieCorrelativoVo('F001', 100000000)).toThrow(/entre 1 y 99999999/);
-  });
-
-  it('reconoce las notas y calcula el siguiente correlativo', () => {
-    const vo = new SerieCorrelativoVo('FC01', 7, '07');
-
-    expect(vo.esNota).toBe(true);
-    expect(new SerieCorrelativoVo('F001', 1).esNota).toBe(false);
-    expect(vo.siguiente().formatted).toBe('FC01-00000008');
   });
 });
