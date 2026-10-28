@@ -26,10 +26,12 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     await this.boss.start();
 
     await this.boss.createQueue(INVOICE_DLQ);
+    // Los reintentos con backoff (5, 15 y 45 s) los decide `InvoiceRetryService`
+    // aplicando `backoffPolicy.ts`. pg-boss solo transporta y persiste: si se
+    // dejara su propio retryLimit, cada job se reintentaría dos veces (una por
+    // pg-boss y otra por el orquestador) y la secuencia dejaría de cumplirse.
     await this.boss.createQueue(INVOICE_QUEUE, {
-      retryLimit: 3,
-      retryDelay: 5,
-      retryBackoff: true,
+      retryLimit: 0,
       deadLetter: INVOICE_DLQ,
     });
   }
@@ -74,23 +76,49 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
    */
   async listDlq(): Promise<Array<Record<string, unknown>>> {
     try {
-      const jobs = await this.boss.findJobs<{ invoice_id?: string }>(
-        INVOICE_DLQ,
-      );
+      const jobs = await this.boss.findJobs<{
+        invoice_id?: string;
+        intento?: number;
+        codigo_error?: string;
+        mensaje_error?: string;
+        estado?: string;
+      }>(INVOICE_DLQ);
 
       return jobs.map((job) => ({
         id: job.id,
         comprobanteSerieNumero: job.data?.invoice_id ?? 'sin identificar',
         clienteRuc: '',
         monto: 0,
-        codigoErrorSunat: '',
-        mensajeError: 'El comprobante agoto los reintentos automaticos',
-        intentosFallidos: job.retryCount ?? 0,
+        codigoErrorSunat: job.data?.codigo_error ?? '',
+        mensajeError:
+          job.data?.mensaje_error ??
+          'El comprobante agoto los reintentos automaticos',
+        intentosFallidos: job.data?.intento ?? job.retryCount ?? 0,
+        estado: job.data?.estado ?? 'ERROR_RED',
         fechaUltimoIntento: new Date().toISOString(),
       }));
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Mueve explícitamente un comprobante a la DLQ.
+   *
+   * Lo usa `InvoiceRetryService` al agotar los 3 reintentos de HU-04. Se crea
+   * un job nuevo en la cola de muertos (con `retryLimit: 0` para que no vuelva
+   * a ejecutarse solo) y se conserva el motivo y el número de intento para que
+   * el panel de la DLQ pueda mostrarlos.
+   */
+  async sendToDlq(
+    invoiceId: string,
+    detalle: Record<string, unknown> = {},
+  ): Promise<string | null> {
+    return this.boss.send(
+      INVOICE_DLQ,
+      { invoice_id: invoiceId, ...detalle },
+      { retryLimit: 0 },
+    );
   }
 
   /** Devuelve un trabajo de la DLQ a la cola principal para reintentarlo. */
