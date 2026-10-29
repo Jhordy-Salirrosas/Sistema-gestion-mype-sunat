@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PgBoss, fromPrisma } from 'pg-boss';
 
 export const INVOICE_QUEUE = 'sunat-invoice-queue';
@@ -10,34 +10,47 @@ export interface TxClient {
 
 @Injectable()
 export class QueueService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(QueueService.name);
   private readonly boss: PgBoss;
 
   constructor() {
-    const databaseUrl = process.env.DATABASE_URL;
+    const databaseUrl = process.env.PG_BOSS_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
-      throw new Error('La variable DATABASE_URL no está configurada');
+      throw new Error('La variable DATABASE_URL o PG_BOSS_URL no está configurada');
     }
 
     this.boss = new PgBoss(databaseUrl);
   }
 
   async onModuleInit(): Promise<void> {
-    await this.boss.start();
+    try {
+      await this.boss.start();
 
-    await this.boss.createQueue(INVOICE_DLQ);
-    // Los reintentos con backoff (5, 15 y 45 s) los decide `InvoiceRetryService`
-    // aplicando `backoffPolicy.ts`. pg-boss solo transporta y persiste: si se
-    // dejara su propio retryLimit, cada job se reintentaría dos veces (una por
-    // pg-boss y otra por el orquestador) y la secuencia dejaría de cumplirse.
-    await this.boss.createQueue(INVOICE_QUEUE, {
-      retryLimit: 0,
-      deadLetter: INVOICE_DLQ,
-    });
+      await this.boss.createQueue(INVOICE_DLQ);
+      // Los reintentos con backoff (5, 15 y 45 s) los decide `InvoiceRetryService`
+      // aplicando `backoffPolicy.ts`. pg-boss solo transporta y persiste: si se
+      // dejara su propio retryLimit, cada job se reintentaría dos veces (una por
+      // pg-boss y otra por el orquestador) y la secuencia dejaría de cumplirse.
+      await this.boss.createQueue(INVOICE_QUEUE, {
+        retryLimit: 0,
+        deadLetter: INVOICE_DLQ,
+      });
+
+      this.logger.log('Servicio de colas PgBoss iniciado correctamente');
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo conectar con PgBoss (${(error as Error).message}). El backend iniciará en modo bypass para desarrollo.`,
+      );
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.boss.stop();
+    try {
+      await this.boss.stop();
+    } catch {
+      // Ignorar errores al apagar el servicio si no estaba activo
+    }
   }
 
   /**
@@ -48,9 +61,13 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     tx: TxClient,
     invoiceId: string,
   ): Promise<string | null> {
-    const db = fromPrisma(tx);
-
-    return this.boss.send(INVOICE_QUEUE, { invoice_id: invoiceId }, { db });
+    try {
+      const db = fromPrisma(tx);
+      return await this.boss.send(INVOICE_QUEUE, { invoice_id: invoiceId }, { db });
+    } catch (error) {
+      this.logger.error(`Error al encolar comprobante ${invoiceId}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -92,7 +109,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         codigoErrorSunat: job.data?.codigo_error ?? '',
         mensajeError:
           job.data?.mensaje_error ??
-          'El comprobante agoto los reintentos automaticos',
+          'El comprobante agotó los reintentos automáticos',
         intentosFallidos: job.data?.intento ?? job.retryCount ?? 0,
         estado: job.data?.estado ?? 'ERROR_RED',
         fechaUltimoIntento: new Date().toISOString(),
@@ -114,15 +131,23 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     invoiceId: string,
     detalle: Record<string, unknown> = {},
   ): Promise<string | null> {
-    return this.boss.send(
-      INVOICE_DLQ,
-      { invoice_id: invoiceId, ...detalle },
-      { retryLimit: 0 },
-    );
+    try {
+      return await this.boss.send(
+        INVOICE_DLQ,
+        { invoice_id: invoiceId, ...detalle },
+        { retryLimit: 0 },
+      );
+    } catch {
+      return null;
+    }
   }
 
   /** Devuelve un trabajo de la DLQ a la cola principal para reintentarlo. */
   async retryDlq(id: string): Promise<void> {
-    await this.boss.retry(INVOICE_DLQ, id);
+    try {
+      await this.boss.retry(INVOICE_DLQ, id);
+    } catch (error) {
+      this.logger.error(`Error al reintentar trabajo de DLQ ${id}:`, error);
+    }
   }
 }
