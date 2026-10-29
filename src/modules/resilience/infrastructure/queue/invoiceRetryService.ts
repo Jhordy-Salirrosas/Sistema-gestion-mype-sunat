@@ -1,17 +1,10 @@
 /**
- * Orquestador de reintentos del envío de comprobantes (HU-04, M2).
+ * Orquestador de reintentos (HU-04) + Circuit Breaker (TA-33).
  *
- * Aplica `backoffPolicy`: 3 reintentos (5, 15 y 45 s) solo para fallos
- * reintentables (red, timeout, 5xx o CDR ilegible). Un rechazo de negocio del
- * CDR no se reintenta. Al agotar los reintentos deja la Invoice en `ERROR_RED`,
- * registra la transición terminal y mueve el job a `sunat-invoice-dlq`.
- *
- * Cada intento lo audita `SunatBillService`/`CdrPersistenceService` en
- * `TransactionHistory`. El consumidor de pg-boss (TA-57) es quien debe invocar
- * `processWithRetry`; este servicio no genera el XML ni arma el ZIP.
+ * 3 reintentos de 5/15/45 s solo para fallos reintentables. Si el circuito
+ * está OPEN no toca SUNAT y deja el job en cola; al agotar, ERROR_RED + DLQ.
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { PrismaService } from '../../../../database/prismaService';
 import { InvoiceStatus } from '../../../../generated/client/enums';
 import { SunatBillService } from '../../../sunat/sunat-bill.service';
 import {
@@ -22,7 +15,8 @@ import {
   decidirReintento,
   delayDelReintento,
 } from '../../domain/rules/backoffPolicy';
-import { QueueService } from './queue.service';
+import { ResilienceStateService } from '../../application/resilienceStateService';
+import { InvoiceDlqService } from './invoiceDlqService';
 
 /** Token de inyección del reloj, para no esperar 65 s en las pruebas. */
 export const RETRY_SLEEP = Symbol('RETRY_SLEEP');
@@ -32,9 +26,7 @@ export type SleepFn = (ms: number) => Promise<void>;
 
 /** Espera real entre reintentos. */
 export const dormir: SleepFn = (ms) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Datos completos del comprobante que necesita el envío. */
 export type RetryInvoiceJob = SendInvoiceParams;
@@ -45,6 +37,8 @@ export interface RetryInvoiceResult {
   intentos: number;
   reintentable: boolean;
   enviadoADlq: boolean;
+  /** true: el circuito estaba OPEN y el job debe quedar en cola. */
+  circuitoAbierto: boolean;
   ultimoResultado: ProcessCdrResult | null;
   error: string | null;
 }
@@ -54,23 +48,29 @@ export class InvoiceRetryService {
   private readonly logger = new Logger(InvoiceRetryService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly queue: QueueService,
+    private readonly dlq: InvoiceDlqService,
     private readonly sunatBill: SunatBillService,
+    private readonly state: ResilienceStateService,
     @Optional() @Inject(RETRY_SLEEP) private readonly sleep: SleepFn = dormir,
   ) {}
 
-  /**
-   * Ejecuta el envío con reintentos. Nunca lanza por un fallo de SUNAT: el
-   * resultado describe el estado final. Solo un fallo al escribir la DLQ o al
-   * auditar la transición terminal puede propagarse (el job no debe perderse).
-   */
+  /** Ejecuta el envío con reintentos; nunca lanza por un fallo de SUNAT. */
   async processWithRetry(job: RetryInvoiceJob): Promise<RetryInvoiceResult> {
     let estadoAnterior: InvoiceStatus | null =
       job.estadoActual ?? InvoiceStatus.PENDIENTE;
     let ultimo: ProcessCdrResult | null = null;
-
     for (let intento = 1; ; intento += 1) {
+      // TA-33: con el circuito OPEN no se toca la red. El job no se marca
+      // terminado ni va a la DLQ: queda en cola para cuando SUNAT se recupere.
+      if (!this.state.reservarEnvio()) {
+        return this.detenerPorCircuito(
+          job,
+          intento - 1,
+          estadoAnterior,
+          ultimo,
+        );
+      }
+
       try {
         ultimo = await this.sunatBill.sendAndProcess({
           ...job,
@@ -80,14 +80,19 @@ export class InvoiceRetryService {
       } catch (error) {
         // Fallo inesperado (p. ej. no se pudo persistir el CDR): no se
         // reenvía a ciegas; el comprobante queda terminal y va a la DLQ.
+        this.state.liberarEnvio();
         const mensaje = this.mensajeDe(error);
         this.logger.error(
           `[HU-04] Envío ${job.invoiceId} intento ${intento} falló sin resultado: ${mensaje}`,
         );
-        return this.enviarADlq(job, intento, estadoAnterior, ultimo, mensaje);
+        return this.terminarEnDlq(job, intento, estadoAnterior, ultimo, mensaje);
       }
 
       estadoAnterior = ultimo.estado;
+      // TA-33: los reintentables (red, timeout, 5xx, CDR ilegible) alimentan
+      // el circuito; un CDR de negocio demuestra que SUNAT responde y lo cierra.
+      this.state.registrarResultadoEnvio(ultimo.reintentable);
+
       const decision = decidirReintento(ultimo, intento);
 
       if (decision === 'DETENER') {
@@ -98,13 +103,19 @@ export class InvoiceRetryService {
       }
 
       if (decision === 'DLQ') {
-        return this.enviarADlq(
+        return this.terminarEnDlq(
           job,
           intento,
           estadoAnterior,
           ultimo,
           ultimo.error ?? 'Se agotaron los reintentos',
         );
+      }
+
+      // Si este intento abrió el circuito, no se espera el backoff: el job
+      // queda en cola y el worker lo retomará cuando pase la ventana.
+      if (!this.state.puedeEnviar()) {
+        return this.detenerPorCircuito(job, intento, estadoAnterior, ultimo);
       }
 
       const retardo = delayDelReintento(intento);
@@ -115,47 +126,43 @@ export class InvoiceRetryService {
     }
   }
 
-  /**
-   * Transición terminal: Invoice -> ERROR_RED + fila de auditoría, y el job a
-   * la DLQ. La fila de cada intento ya la escribió `CdrPersistenceService`;
-   * esta registra el paso final a la cola de muertos.
-   */
-  private async enviarADlq(
+  /** Devuelve el job sin tocarlo: el Circuit Breaker está OPEN. */
+  private detenerPorCircuito(
+    job: RetryInvoiceJob,
+    intentos: number,
+    estadoAnterior: InvoiceStatus | null,
+    ultimo: ProcessCdrResult | null,
+  ): RetryInvoiceResult {
+    const mensaje =
+      'Circuit Breaker OPEN: el job queda en cola sin tocar SUNAT';
+    this.logger.warn(`[TA-33] ${job.invoiceId}: ${mensaje}`);
+
+    return {
+      invoiceId: job.invoiceId,
+      estado: estadoAnterior ?? InvoiceStatus.PENDIENTE,
+      intentos,
+      reintentable: true,
+      enviadoADlq: false,
+      circuitoAbierto: true,
+      ultimoResultado: ultimo,
+      error: mensaje,
+    };
+  }
+  /** Deja la Invoice en ERROR_RED y mueve el job a la DLQ. */
+  private async terminarEnDlq(
     job: RetryInvoiceJob,
     intento: number,
     estadoAnterior: InvoiceStatus | null,
     ultimo: ProcessCdrResult | null,
     motivo: string,
   ): Promise<RetryInvoiceResult> {
-    const mensaje = `Reintentos agotados tras ${intento} intentos: ${motivo}`;
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.invoice.update({
-        where: { id: job.invoiceId },
-        data: { estado: InvoiceStatus.ERROR_RED },
-      });
-
-      await tx.transactionHistory.create({
-        data: {
-          invoice_id: job.invoiceId,
-          intento,
-          estado_anterior: estadoAnterior,
-          estado_nuevo: InvoiceStatus.ERROR_RED,
-          codigo_error: 'MAX_REINTENTOS',
-          mensaje_error: mensaje,
-          tiempo_respuesta_ms: ultimo?.tiempoRespuestaMs ?? null,
-        },
-      });
-    });
-
-    await this.queue.sendToDlq(job.invoiceId, {
+    const mensaje = await this.dlq.enviar({
+      invoiceId: job.invoiceId,
       intento,
-      codigo_error: 'MAX_REINTENTOS',
-      mensaje_error: mensaje,
-      estado: InvoiceStatus.ERROR_RED,
+      estadoAnterior,
+      ultimo,
+      motivo,
     });
-
-    this.logger.error(`[HU-04] ${job.invoiceId} enviado a la DLQ: ${mensaje}`);
 
     return {
       invoiceId: job.invoiceId,
@@ -163,11 +170,11 @@ export class InvoiceRetryService {
       intentos: intento,
       reintentable: false,
       enviadoADlq: true,
+      circuitoAbierto: false,
       ultimoResultado: ultimo,
       error: mensaje,
     };
   }
-
   private resultado(
     invoiceId: string,
     ultimo: ProcessCdrResult,
@@ -181,6 +188,7 @@ export class InvoiceRetryService {
       intentos,
       reintentable,
       enviadoADlq,
+      circuitoAbierto: false,
       ultimoResultado: ultimo,
       error: ultimo.error,
     };

@@ -47,6 +47,7 @@ $$\text{Retardo}(n) \in \{5,\ 15,\ 45\}\ \text{segundos} \quad \text{para } n = 
 * **HALF-OPEN (Prueba de Recuperación):** Transcurridos los 30 segundos, el circuito permite pasar exactamente **1 petición de prueba**:
   * Si la petición es exitosa $\rightarrow$ El circuito se cierra (**CLOSED**) y los contadores se reinician.
   * Si la petición falla $\rightarrow$ El circuito vuelve a abrirse (**OPEN**) por otros 30 segundos.
+* **Integración con el envío (TA-33):** `InvoiceRetryService` consulta `ResilienceStateService.puedeEnviar()` antes de cada intento. Si es `false`, devuelve `circuitoAbierto = true` sin tocar SUNAT, sin cambiar la Invoice y sin enviar a la DLQ: el worker debe dejar el job en cola. Cada resultado reintentable alimenta `registrarResultadoEnvio(true)`; un CDR de negocio lo cierra (`false`).
 
 ### 2.3. Regla 3: Métricas de Resiliencia (MTTD y MTTR)
 * **MTTD (Mean Time to Detect):** Tiempo transcurrido desde el primer error 503 inyectado hasta la apertura del Circuit Breaker.
@@ -75,7 +76,8 @@ src/modules/resilience/
 └── infrastructure/                   # [CAPA 3: ADAPTADORES TECNOLÓGICOS]
     ├── queue/
     │   ├── queue.service.ts          # Adaptador pg-boss (fromPrisma, send, DLQ, start, stop)
-    │   ├── invoiceRetryService.ts    # Orquestador HU-04: 3 reintentos, ERROR_RED y DLQ
+    │   ├── invoiceRetryService.ts    # Orquestador HU-04/TA-33: backoff, circuito y DLQ
+    │   ├── invoiceDlqService.ts      # Transición terminal ERROR_RED + DLQ
     │   └── queueModule.ts            # Módulo NestJS exportable para enqueueInvoiceInTx
     ├── mock/
     │   ├── sunat-mock.controller.ts  # Endpoints REST de inyección de caos y simulación SOAP
@@ -162,7 +164,9 @@ Cuando Oliver deba implementar o extender una funcionalidad de resiliencia:
 3. **`queue.service.spec.ts`:** Encolado transaccional con cliente `fromPrisma(tx)` y manejo de excepciones.
 4. **`backoffPolicy.spec.ts`:** Retardos 5/15/45 s, 3 reintentos, decisión DLQ y rechazo de negocio sin reintento.
 5. **`invoiceRetryService.spec.ts`:** Con fallos de red forzados, verifica la secuencia de esperas, la auditoría de los 4 intentos, el paso a la DLQ y la Invoice en `ERROR_RED`; además, que un rechazo de negocio no se reintenta.
-6. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
+6. **`circuitBreaker.spec.ts`:** 5 fallos consecutivos abren el circuito, 30 s de enfriamiento permiten la prueba, y el resultado la cierra o la reabre.
+7. **`invoiceRetryServiceCircuit.spec.ts`:** Con el circuito OPEN no se llama a `SunatBillService`, no se actualiza la Invoice y no se manda a la DLQ (el job queda en cola). Tras 30 s se permite la prueba; si acierta cierra, si falla reabre.
+8. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
 
 ---
 
