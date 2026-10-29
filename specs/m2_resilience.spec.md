@@ -166,7 +166,8 @@ Cuando Oliver deba implementar o extender una funcionalidad de resiliencia:
 5. **`invoiceRetryService.spec.ts`:** Con fallos de red forzados, verifica la secuencia de esperas, la auditoría de los 4 intentos, el paso a la DLQ y la Invoice en `ERROR_RED`; además, que un rechazo de negocio no se reintenta.
 6. **`circuitBreaker.spec.ts`:** 5 fallos consecutivos abren el circuito, 30 s de enfriamiento permiten la prueba, y el resultado la cierra o la reabre.
 7. **`invoiceRetryServiceCircuit.spec.ts`:** Con el circuito OPEN no se llama a `SunatBillService`, no se actualiza la Invoice y no se manda a la DLQ (el job queda en cola). Tras 30 s se permite la prueba; si acierta cierra, si falla reabre.
-8. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
+8. **`test/integration/resilience/` (TA-34):** 503 sostenido → 3 reintentos + DLQ; timeout → reintento y `TransactionHistory`; caída/retorno → 0 comprobantes perdidos, MTTD ≤ 5 s y MTTR ≤ 60 s.
+9. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
 
 ---
 
