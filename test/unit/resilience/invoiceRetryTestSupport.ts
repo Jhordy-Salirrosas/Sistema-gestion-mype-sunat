@@ -7,6 +7,8 @@
 import { Logger } from '@nestjs/common';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { PrismaService } from '../../../src/database/prismaService';
+import { ResilienceStateService } from '../../../src/modules/resilience/application/resilienceStateService';
+import { InvoiceDlqService } from '../../../src/modules/resilience/infrastructure/queue/invoiceDlqService';
 import { InvoiceRetryService } from '../../../src/modules/resilience/infrastructure/queue/invoiceRetryService';
 import { QueueService } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 import { SunatBillService } from '../../../src/modules/sunat/sunat-bill.service';
@@ -95,8 +97,12 @@ export interface Dobles {
     transactionHistory: { create: jest.Mock };
   };
   queue: { sendToDlq: jest.Mock };
+  state: ResilienceStateService;
   sleep: jest.Mock;
-  crearServicio: (sunat: SunatBillService) => InvoiceRetryService;
+  crearServicio: (
+    sunat: SunatBillService,
+    state?: ResilienceStateService,
+  ) => InvoiceRetryService;
 }
 
 export function crearDobles(): Dobles {
@@ -113,18 +119,23 @@ export function crearDobles(): Dobles {
   };
 
   const queue = { sendToDlq: jest.fn().mockResolvedValue('dlq-job-1') };
+  const state = new ResilienceStateService();
   const sleep = jest.fn().mockResolvedValue(undefined);
 
   return {
     prisma,
     tx,
     queue,
+    state,
     sleep,
-    crearServicio: (sunat: SunatBillService) =>
+    crearServicio: (sunat: SunatBillService, stateOverride?: ResilienceStateService) =>
       new InvoiceRetryService(
-        prisma as unknown as PrismaService,
-        queue as unknown as QueueService,
+        new InvoiceDlqService(
+          prisma as unknown as PrismaService,
+          queue as unknown as QueueService,
+        ),
         sunat,
+        stateOverride ?? state,
         sleep,
       ),
   };
