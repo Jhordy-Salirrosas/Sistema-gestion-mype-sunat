@@ -25,6 +25,14 @@ import {
   SUNAT_DEFAULT_TIMEOUT_MS,
   SUNAT_SEND_BILL_SOAP_ACTION,
 } from './soap.constants';
+import {
+  buildGetStatusCdrEnvelope,
+  GET_STATUS_CDR_SOAP_ACTION,
+  GetStatusCdrParams,
+  parseGetStatusCdrResponse,
+  StatusCdrResult,
+  SUNAT_CODE_NO_ENCONTRADO,
+} from './sunatStatusCdr.operation';
 
 /** Fallo de transporte: la peticion no obtuvo una respuesta valida. */
 export class SunatTransportError extends Error {
@@ -163,6 +171,87 @@ export class SunatSoapClient {
 
     return {
       applicationResponse,
+      tiempoRespuestaMs,
+      httpStatus: response.status,
+      rawResponse,
+    };
+  }
+
+  /**
+   * Ejecuta getStatusCdr y recupera el CDR de un comprobante ya enviado.
+   *
+   * Se usa cuando sendBill quedo en estado incierto (timeout o corte de red
+   * tras transmitir el sobre). En ese caso reenviar el XML produce rechazos por
+   * duplicidad 1032/1033, asi que primero se pregunta por el estado.
+   *
+   * Si SUNAT responde 0127 el comprobante no llego: el llamador puede
+   * reintentar sendBill con seguridad.
+   */
+  async getStatusCdr(params: GetStatusCdrParams): Promise<StatusCdrResult> {
+    const envelope = buildGetStatusCdrEnvelope(params);
+    const startedAt = Date.now();
+
+    let response: Response;
+    let rawResponse: string;
+
+    try {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          SOAPAction: `"${GET_STATUS_CDR_SOAP_ACTION}"`,
+          'Content-Length': String(Buffer.byteLength(envelope, 'utf8')),
+        },
+        body: envelope,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      rawResponse = await response.text();
+    } catch (error) {
+      const nombre = getErrorName(error);
+      const mensaje = getErrorMessage(error);
+
+      if (nombre === 'TimeoutError' || nombre === 'AbortError') {
+        throw new SunatTransportError(
+          `Timeout de ${this.timeoutMs} ms esperando la consulta de estado del comprobante`,
+          { cause: error },
+        );
+      }
+
+      throw new SunatTransportError(
+        `Error de red contra el billConsultService: ${mensaje}`,
+        { cause: error },
+      );
+    }
+
+    const tiempoRespuestaMs = Date.now() - startedAt;
+    const parsed = parseGetStatusCdrResponse(rawResponse);
+
+    if (parsed.faultCode || parsed.faultString) {
+      throw new SunatSoapFaultError({
+        faultCode: parsed.faultCode,
+        faultString: parsed.faultString,
+      });
+    }
+
+    if (!response.ok) {
+      throw new SunatTransportError(
+        `El billConsultService respondio HTTP ${response.status} sin SOAP Fault parseable`,
+        { httpStatus: response.status },
+      );
+    }
+
+    const statusCode = parsed.statusCode;
+    const noEncontrado = statusCode === SUNAT_CODE_NO_ENCONTRADO;
+    const encontrado =
+      !!parsed.applicationResponse ||
+      (statusCode !== null && statusCode !== SUNAT_CODE_NO_ENCONTRADO);
+
+    return {
+      statusCode,
+      statusMessage: parsed.statusMessage,
+      applicationResponse: parsed.applicationResponse,
+      encontrado,
+      noEncontrado,
       tiempoRespuestaMs,
       httpStatus: response.status,
       rawResponse,
