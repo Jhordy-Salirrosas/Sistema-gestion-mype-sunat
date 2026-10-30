@@ -2,6 +2,7 @@ import { randomBytes, scryptSync } from 'node:crypto';
 import type { PrismaClient } from '../../src/generated/client/client';
 
 export const DEMO_COMPANY = {
+  id: '5eaccb4e-a6ec-4f23-9909-85fe7fc9a87e', // ID exacta vinculada con el frontend
   ruc: '20601234567',
   legalName: 'SYNC-SUNAT DEMO MYPE S.A.C.',
   tradeName: 'DEMO MYPE',
@@ -62,6 +63,7 @@ export async function seedAuth(prisma: PrismaClient) {
       is_active: DEMO_COMPANY.isActive,
     },
     create: {
+      id: DEMO_COMPANY.id, // Forzamos la ID predeterminada
       ruc: DEMO_COMPANY.ruc,
       legal_name: DEMO_COMPANY.legalName,
       trade_name: DEMO_COMPANY.tradeName,
@@ -71,7 +73,7 @@ export async function seedAuth(prisma: PrismaClient) {
     },
   });
 
-  console.log(`Empresa MYPE Demo configurada: ${company.legal_name} (RUC: ${company.ruc})`);
+  console.log(`Empresa MYPE Demo configurada: ${company.legal_name} (RUC: ${company.ruc}) [ID: ${company.id}]`);
 
   for (const userDef of DEMO_USERS) {
     const passwordHash = hashPassword(userDef.password);
