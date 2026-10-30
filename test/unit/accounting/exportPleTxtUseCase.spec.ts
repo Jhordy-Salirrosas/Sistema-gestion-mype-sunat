@@ -2,75 +2,65 @@ import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application
 
 describe('ExportPleTxtUseCase', () => {
   let useCase: ExportPleTxtUseCase;
-  let mockRepository: any;
 
-  const mockEntries = [
+  const mockEntries: any[] = [
     {
       id: 'entry-1',
-      companyId: 'company-1',
-      period: '202603',
-      entryNumber: 1,
-      entryDate: new Date('2026-03-10'),
+      entryNumber: '001-202603-001', // Caso 1: CUO formateado
       glosa: 'Venta de mercadería',
-      sourceModule: 'INVOICES',
       lines: [
-        { lineOrder: 1, accountCode: '1212', accountName: 'Facturas por cobrar', debitAmount: 118, creditAmount: 0 },
-        { lineOrder: 2, accountCode: '40111', accountName: 'IGV', debitAmount: 0, creditAmount: 18 },
-        { lineOrder: 3, accountCode: '7011', accountName: 'Ventas', debitAmount: 0, creditAmount: 100 },
+        { lineOrder: 1, accountCode: '1212', debitAmount: 118, creditAmount: 0 },
+        { lineOrder: 2, accountCode: '40111', debitAmount: 0, creditAmount: 18 },
+        { lineOrder: 3, accountCode: '7011', debitAmount: 0, creditAmount: 100 },
+      ],
+    },
+    {
+      id: 'entry-2',
+      entryNumber: 2, // Caso 2: CUO numérico sin formatear
+      glosa: 'Asiento sin formatear',
+      lines: [
+        { line_order: 1, account_code: '101', debit_amount: 50, credit_amount: 0 },
+        { line_order: 2, account_code: '701', debit_amount: 0, credit_amount: 50 },
       ],
     },
   ];
 
   beforeEach(() => {
-    mockRepository = {
-      getNextEntryNumber: jest.fn(),
-      saveEntry: jest.fn(),
-      findByCompany: jest.fn().mockResolvedValue(mockEntries),
-      findAllByCompany: jest.fn().mockResolvedValue(mockEntries),
-      deleteById: jest.fn(),
+    useCase = new ExportPleTxtUseCase();
+  });
+
+  it('debe generar el archivo PLE TXT con datos cuando se envían asientos contables', async () => {
+    const dto = {
+      companyRuc: '20601234567',
+      year: 2026,
+      month: 3,
+      bookCode: '050100',
     };
 
-    useCase = new (ExportPleTxtUseCase as any)(mockRepository);
-  });
-
-  it('debe generar contenido de archivo PLE 5.1 cuando existen asientos', async () => {
-    const result = await useCase.execute({
-      companyId: 'company-1',
-      ruc: '20601234567',
-      companyRuc: '20601234567',
-      period: '202603',
-      pleType: '5.1',
-    } as any);
+    const result = await useCase.execute(dto as any, mockEntries);
 
     expect(result).toBeDefined();
-    expect(typeof result).toBe('object');
+    expect(result.recordsCount).toBe(5); // 3 líneas de entry-1 + 2 líneas de entry-2
+    expect(result.totalDebit).toBe(168);
+    expect(result.totalCredit).toBe(168);
+    expect(result.content).toContain('1212|118.00|0.00|Venta de mercadería|1|');
+    expect(typeof result.fileName).toBe('string');
   });
 
-  it('debe generar estructura para PLE 6.1 (Libro Mayor) cuando existen asientos', async () => {
-    const result = await useCase.execute({
-      companyId: 'company-1',
-      ruc: '20601234567',
+  it('debe generar la estructura vacía cuando el arreglo de asientos es vacío', async () => {
+    const dto = {
       companyRuc: '20601234567',
-      period: '202603',
-      pleType: '6.1',
-    } as any);
+      year: 2026,
+      month: 3,
+      bookCode: '050100',
+    };
+
+    const result = await useCase.execute(dto as any, []);
 
     expect(result).toBeDefined();
-    expect(typeof result).toBe('object');
-  });
-
-  it('debe manejar el caso cuando no existen asientos contables', async () => {
-    mockRepository.findByCompany.mockResolvedValue([]);
-    mockRepository.findAllByCompany.mockResolvedValue([]);
-
-    const result = await useCase.execute({
-      companyId: 'company-1',
-      ruc: '20601234567',
-      companyRuc: '20601234567',
-      period: '202603',
-      pleType: '5.1',
-    } as any);
-
-    expect(result).toBeDefined();
+    expect(result.recordsCount).toBe(0);
+    expect(result.totalDebit).toBe(0);
+    expect(result.totalCredit).toBe(0);
+    expect(result.content).toBe('');
   });
 });
