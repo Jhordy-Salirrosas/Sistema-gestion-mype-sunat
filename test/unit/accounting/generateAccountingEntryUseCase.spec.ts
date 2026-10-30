@@ -1,11 +1,20 @@
 import { BadRequestException } from '@nestjs/common';
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
+import { IAccountingRepositoryPort } from '../../../src/modules/accounting/domain/ports/accountingRepositoryPort';
 
 describe('GenerateAccountingEntryUseCase', () => {
   let useCase: GenerateAccountingEntryUseCase;
+  let mockRepository: jest.Mocked<IAccountingRepositoryPort>;
 
   beforeEach(() => {
-    useCase = new GenerateAccountingEntryUseCase();
+    mockRepository = {
+      getNextEntryNumber: jest.fn().mockResolvedValue(1),
+      saveEntry: jest.fn().mockImplementation(async (entry) => entry),
+      findByCompany: jest.fn().mockResolvedValue([]),
+      deleteById: jest.fn().mockResolvedValue(true),
+    } as unknown as jest.Mocked<IAccountingRepositoryPort>;
+
+    useCase = new GenerateAccountingEntryUseCase(mockRepository);
   });
 
   it('debe generar exitosamente un asiento contable cuadrado', async () => {

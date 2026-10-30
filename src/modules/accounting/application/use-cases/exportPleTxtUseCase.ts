@@ -39,7 +39,6 @@ export class ExportPleTxtUseCase {
         : `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(entryIndex + 1).padStart(3, '0')}`;
 
       entry.lines.forEach((line, lineIdx) => {
-        // Garantizar la lectura de montos sin importar si la entidad es camelCase o snake_case
         const debitVal = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
         const creditVal = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
 
@@ -50,24 +49,22 @@ export class ExportPleTxtUseCase {
         const lineCorrelative = `M${String(lineOrderNum).padStart(3, '0')}`;
         const accountCode = line.accountCode || (line as any).account_code || '';
 
-        // Formato estructurado oficial PLE delimitado por tuberías |
         const record = [
-          `${dto.year}${String(dto.month).padStart(2, '0')}00`, // 1. Periodo SUNAT (AAAAMM00)
-          cuo,                                                 // 2. CUO (Código Único de Operación)
-          lineCorrelative,                                     // 3. Correlativo del Asiento (M001, M002...)
-          accountCode,                                         // 4. Código de cuenta PCGE
-          debitVal.toFixed(2),                                 // 5. Monto Debe con 2 decimales
-          creditVal.toFixed(2),                                // 6. Monto Haber con 2 decimales
-          entry.glosa || '',                                   // 7. Glosa de la operación
-          '1',                                                 // 8. Estado de la operación
-          '',                                                  // 9. Cierre con tubería final |
+          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
+          cuo,
+          lineCorrelative,
+          accountCode,
+          debitVal.toFixed(2),
+          creditVal.toFixed(2),
+          entry.glosa || '',
+          '1',
+          '',
         ].join('|');
 
         lines.push(record);
       });
     });
 
-    // Construcción con saltos de línea CRLF (\r\n) sin línea vacía sobrante al final
     const content = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
 
     return {
