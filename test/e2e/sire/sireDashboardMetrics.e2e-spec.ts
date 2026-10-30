@@ -17,6 +17,7 @@ import {
   SireResilienceMetricsCompatibilityController,
 } from '../../../src/modules/sire/infrastructure/controllers/sireDashboardMetricsController';
 import { SireController } from '../../../src/modules/sire/infrastructure/controllers/sireController';
+import { UploadSireReportUseCase } from '../../../src/modules/sire/application/use-cases/uploadSireReportUseCase';
 
 const authorization = (token: string) =>
   `${['Be', 'arer'].join('')} ${token}`;
@@ -104,6 +105,7 @@ describe('SIRE dashboard metrics HTTP contract', () => {
           useValue: reconciliationHistory,
         },
         { provide: CloseFiscalPeriodUseCase, useValue: { execute: jest.fn() } },
+        { provide: UploadSireReportUseCase, useValue: { execute: jest.fn() } },
         { provide: SireDashboardMetricsService, useValue: service },
         { provide: TOKEN_SERVICE_PORT, useValue: tokenService },
       ],
@@ -236,5 +238,29 @@ describe('SIRE dashboard metrics HTTP contract', () => {
       .get('/api/v1/sire/dashboard/metrics')
       .set('Authorization', authorization('invalid'))
       .expect(401);
+  });
+
+  it('enforces the report upload media type and 5 MB limit', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/sire/upload')
+      .set('Authorization', authorization('tenant-a'))
+      .field('period', '202610')
+      .field('bookType', 'RCE_COMPRAS')
+      .attach('file', Buffer.from('not supported'), {
+        filename: 'report.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(415);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/sire/upload')
+      .set('Authorization', authorization('tenant-a'))
+      .field('period', '202610')
+      .field('bookType', 'RCE_COMPRAS')
+      .attach('file', Buffer.alloc(5 * 1024 * 1024 + 1), {
+        filename: 'report.csv',
+        contentType: 'text/csv',
+      })
+      .expect(413);
   });
 });

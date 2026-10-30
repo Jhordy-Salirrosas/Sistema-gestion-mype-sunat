@@ -7,6 +7,7 @@ import { CloseFiscalPeriodUseCase } from '../../../src/modules/sire/application/
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ReconcilePeriodDto } from '../../../src/modules/sire/application/dto/reconcilePeriodDto';
+import { UploadSireReportUseCase } from '../../../src/modules/sire/application/use-cases/uploadSireReportUseCase';
 
 describe('SireController', () => {
   let controller: SireController;
@@ -23,6 +24,9 @@ describe('SireController', () => {
   const closeUseCase = {
     execute: jest.fn(),
   } as unknown as jest.Mocked<CloseFiscalPeriodUseCase>;
+  const uploadReportUseCase = {
+    execute: jest.fn(),
+  } as unknown as jest.Mocked<UploadSireReportUseCase>;
 
   beforeEach(() => {
     useCase = {
@@ -35,6 +39,7 @@ describe('SireController', () => {
       exportUseCase,
       historyUseCase,
       closeUseCase,
+      uploadReportUseCase,
     );
   });
 

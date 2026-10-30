@@ -9,6 +9,7 @@ import {
   Query,
   Res,
   UnauthorizedException,
+  UnsupportedMediaTypeException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -27,6 +28,7 @@ import { IngestSireProposalUseCase } from '../../application/use-cases/ingestSir
 import { ReconcileSireUseCase } from '../../application/use-cases/reconcileSireUseCase';
 import type { ReconcileResultDto } from '../../application/dto/reconcileResultDto';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { UploadSireReportUseCase } from '../../application/use-cases/uploadSireReportUseCase';
 
 interface UploadedSireFile {
   originalname: string;
@@ -54,6 +56,23 @@ const txtUploadOptions = {
   },
 };
 
+const reportUploadOptions = {
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (
+    _request: unknown,
+    file: UploadedSireFile,
+    callback: (error: Error | null, acceptFile: boolean) => void,
+  ) => {
+    const accepted = /\.(csv|xlsx)$/i.test(file.originalname);
+    callback(
+      accepted
+        ? null
+        : new UnsupportedMediaTypeException('Solo se permiten archivos .csv o .xlsx.'),
+      accepted,
+    );
+  },
+};
+
 @Controller('api/v1/sire')
 @UseGuards(AuthGuard)
 export class SireController {
@@ -63,6 +82,7 @@ export class SireController {
     private readonly exportUseCase: ExportSireProposalUseCase,
     private readonly historyUseCase: GetReconciliationHistoryUseCase,
     private readonly closeUseCase: CloseFiscalPeriodUseCase,
+    private readonly uploadReportUseCase: UploadSireReportUseCase,
   ) {}
 
   private requireCompany(user?: TokenPayload): string {
@@ -95,6 +115,21 @@ export class SireController {
       dto,
       this.requireCompany(user),
       file.buffer,
+    );
+  }
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', reportUploadOptions))
+  async uploadReport(
+    @Body() dto: SirePeriodBookDto,
+    @UploadedFile() file: UploadedSireFile | undefined,
+    @CurrentUser() user?: TokenPayload,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Falta el archivo CSV/XLSX.');
+    return this.uploadReportUseCase.execute(
+      dto,
+      this.requireCompany(user),
+      file,
     );
   }
 
