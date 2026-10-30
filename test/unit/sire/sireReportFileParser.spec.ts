@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { SireReportFileParser } from '../../../src/modules/sire/infrastructure/parsers/sireReportFileParser';
 
 describe('SireReportFileParser', () => {
@@ -31,5 +32,35 @@ describe('SireReportFileParser', () => {
         'Faltan columnas obligatorias: documentType, correlative, issueDate, taxableBase, igvAmount, totalAmount, carSunat (encabezado, fila 1).',
       ),
     );
+  });
+
+  it('parses an XLSX workbook using the same required layout', () => {
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      [
+        'RUC emisor',
+        'Tipo comprobante',
+        'Serie',
+        'Correlativo',
+        'Fecha emisión',
+        'Base imponible',
+        'IGV',
+        'Importe total',
+        'CAR',
+      ],
+      ['20100070970', '01', 'F001', '2', '2026-10-02', '200', '36', '236', 'CAR-2'],
+    ]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'RCE');
+
+    const result = parser.parse(
+      XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }),
+    );
+
+    expect(result.rejected).toEqual([]);
+    expect(result.records[0]).toMatchObject({
+      emitterRuc: '20100070970',
+      correlative: '2',
+      totalAmount: 236,
+    });
   });
 });

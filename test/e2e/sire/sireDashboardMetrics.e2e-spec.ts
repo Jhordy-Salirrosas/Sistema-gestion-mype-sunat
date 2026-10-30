@@ -85,6 +85,16 @@ describe('SIRE dashboard metrics HTTP contract', () => {
       items: [],
     }),
   };
+  const uploadReportUseCase = {
+    execute: jest.fn().mockResolvedValue({
+      imported: 1,
+      rejected: 0,
+      errors: [],
+      fileHash: 'a'.repeat(64),
+      fileName: 'rce.csv',
+      reportType: 'RCE',
+    }),
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -105,7 +115,7 @@ describe('SIRE dashboard metrics HTTP contract', () => {
           useValue: reconciliationHistory,
         },
         { provide: CloseFiscalPeriodUseCase, useValue: { execute: jest.fn() } },
-        { provide: UploadSireReportUseCase, useValue: { execute: jest.fn() } },
+        { provide: UploadSireReportUseCase, useValue: uploadReportUseCase },
         { provide: SireDashboardMetricsService, useValue: service },
         { provide: TOKEN_SERVICE_PORT, useValue: tokenService },
       ],
@@ -262,5 +272,31 @@ describe('SIRE dashboard metrics HTTP contract', () => {
         contentType: 'text/csv',
       })
       .expect(413);
+  });
+
+  it('uploads a valid report for the authenticated company', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/sire/upload')
+      .set('Authorization', authorization('tenant-a'))
+      .field('period', '202610')
+      .field('bookType', 'RCE_COMPRAS')
+      .attach('file', Buffer.from('csv content'), {
+        filename: 'rce.csv',
+        contentType: 'text/csv',
+      })
+      .expect(201);
+
+    expect(response.body).toMatchObject({
+      imported: 1,
+      reportType: 'RCE',
+    });
+    expect(uploadReportUseCase.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        period: '202610',
+        bookType: 'RCE_COMPRAS',
+      }),
+      'company-a',
+      expect.objectContaining({ originalname: 'rce.csv' }),
+    );
   });
 });
