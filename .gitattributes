@@ -1,0 +1,9 @@
+# Las reglas de validación de SUNAT son un artefacto NORMATIVO, no código fuente.
+#
+# Git suele convertir los finales de línea (LF <-> CRLF) al hacer checkout en
+# Windows. Sobre estos archivos eso es dañino: cambiaría sus bytes según la
+# plataforma y la huella SHA256 que verifica ta31-xsl-oficial.spec.ts dejaría de
+# coincidir, haciendo fallar la suite en Linux y en Windows indistintamente.
+# Se guardan y se entregan byte a byte, siempre.
+assets/sunat-xsl/** -text
+test/fixtures/xsl/** -text

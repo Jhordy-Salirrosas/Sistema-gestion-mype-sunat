@@ -8,9 +8,14 @@
  *
  * Decisiones de diseño:
  *
- *  - Las XSL no se versionan en el repositorio (son material de SUNAT, pesan
- *    cientos de KB y cambian con el estándar). Se leen del directorio que
- *    indique `SUNAT_XSL_DIR`.
+ *  - Las XSL se versionan en `assets/sunat-xsl/`. Al principio se dejaron
+ *    fuera del repositorio (son material de SUNAT y cambian con el estándar),
+ *    pero eso hacía que un clon nuevo no pudiera enviar nada: bloqueaba todos
+ *    los comprobantes por falta de un archivo. Una validación que no funciona
+ *    al instalar no es resiliencia, es un bug de empaquetado. Si SUNAT publica
+ *    versiones nuevas, se reemplazan y se actualizan las huellas de
+ *    `test/unit/invoices/ta31-xsl-oficial.spec.ts`.
+ *    `SUNAT_XSL_DIR` sigue existiendo para apuntar a otra copia.
  *
  *  - Si la hoja no se puede cargar, el envío se BLOQUEA. El criterio 4 del
  *    backlog es explícito, y dejar pasar un comprobante sin validar porque
@@ -141,11 +146,13 @@ export class SunatXslValidatorService {
   /**
    * Directorio de las hojas oficiales.
    *
-   * Se lee en cada llamada y no en el constructor para que las pruebas puedan
-   * apuntar a un directorio temporal sin volver a instanciar el servicio.
+   * Por defecto las versionadas en `assets/sunat-xsl/`, para que un clon
+   * recién hecho valide sin configurar nada. Se lee en cada llamada y no en el
+   * constructor para que las pruebas puedan apuntar a un directorio temporal
+   * sin volver a instanciar el servicio.
    */
   private directorio(): string {
-    return process.env.SUNAT_XSL_DIR ?? join(process.cwd(), 'sunat-xsl');
+    return process.env.SUNAT_XSL_DIR ?? join(process.cwd(), 'assets', 'sunat-xsl');
   }
 
   /** Lee, normaliza y cachea la hoja; `null` si el archivo no está. */
