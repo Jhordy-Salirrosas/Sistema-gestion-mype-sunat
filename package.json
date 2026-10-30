@@ -45,7 +45,8 @@
     "pg-boss": "^12.36.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "xml-crypto": "^6.3.3"
+    "xml-crypto": "^6.3.3",
+    "xslt-processor": "^5.1.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
