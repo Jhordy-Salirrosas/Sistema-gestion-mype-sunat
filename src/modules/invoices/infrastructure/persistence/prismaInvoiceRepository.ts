@@ -51,14 +51,16 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
         },
       );
     } catch (error) {
-      // Un reintento del mismo comprobante choca con uq_invoices_fiscal.
-      // Se responde 409 para que el cliente lo trate como "ya registrado"
-      // y no como un fallo: asi el reintento es idempotente.
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        (error as { code?: string }).code === 'P2002'
-      ) {
+      if (esViolacionDeUnicidad(error)) {
+        // TA-32 frente 1: si la llave que chocó es `uq_invoices_idempotencia`
+        // (la misma empresa y el mismo RUC emisor), la petición es un reenvío
+        // del MISMO comprobante y el criterio 2 exige responder 200 con el
+        // registro existente. Si choca `uq_invoices_fiscal`, la serie ya está
+        // tomada por otra empresa del mismo tenant y eso sí es un conflicto.
+        if (esChoqueDeIdempotencia(error)) {
+          return this.devolverExistente(invoice);
+        }
+
         throw new ConflictException({
           code: 'INVOICE_ALREADY_EXISTS',
           message:
@@ -75,4 +77,93 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
       });
     }
   }
+
+  /**
+   * Recupera el comprobante que ya estaba registrado (TA-32, criterio 2).
+   *
+   * Se busca por los cinco campos de la llave; si por alguna razón no
+   * apareciera (carrera entre el commit de la otra petición y esta lectura),
+   * se responde 409, que sigue siendo un resultado correcto para el cliente.
+   */
+  private async devolverExistente(
+    invoice: InvoiceEntity,
+  ): Promise<InvoicePersistenceResult> {
+    const existente = await this.prisma.invoice.findFirst({
+      where: {
+        company_id: invoice.company_id,
+        ruc_emisor: invoice.ruc_emisor,
+        tipo_comprobante: invoice.tipo_comprobante,
+        serie: invoice.serie,
+        correlativo: invoice.correlativo,
+      },
+      select: { id: true, estado: true, created_at: true },
+    });
+
+    if (!existente) {
+      throw new ConflictException({
+        code: 'INVOICE_ALREADY_EXISTS',
+        message:
+          'El comprobante ya fue registrado por otra petición simultánea',
+      });
+    }
+
+    return existente;
+  }
+}
+
+/**
+ * Campos de la llave de idempotencia (TA-32), ya ordenados.
+ *
+ * Ordenados para poder compararlos con `camposViolados`, que también ordena:
+ * Prisma no garantiza el orden en `meta.target`.
+ */
+const CAMPOS_LLAVE_IDEMPOTENCIA = [
+  'company_id',
+  'ruc_emisor',
+  'tipo_comprobante',
+  'serie',
+  'correlativo',
+].sort();
+
+/** ¿El error es una violación del índice único (P2002)? */
+function esViolacionDeUnicidad(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: string }).code === 'P2002'
+  );
+}
+
+/**
+ * Nombres de los campos que provocaron el P2002.
+ *
+ * Prisma los expone en `meta.target` como array de strings (algunos
+ * controladores lo devuelven como un solo string con comas); se normaliza a
+ * array ordenado para no depender de la forma exacta ni del orden.
+ */
+function camposViolados(error: unknown): string[] {
+  const meta = (error as { meta?: { target?: unknown } }).meta;
+  const target = meta?.target;
+
+  if (Array.isArray(target)) return target.map(String).sort();
+  if (typeof target === 'string') {
+    return target
+      .split(',')
+      .map((c) => c.trim())
+      .sort();
+  }
+  return [];
+}
+
+/**
+ * ¿El choque se produjo por la llave de idempotencia?
+ *
+ * Se compara el conjunto ordenado de campos: Prisma puede reportar el target
+ * como array o como string, y el orden no está garantizado.
+ */
+function esChoqueDeIdempotencia(error: unknown): boolean {
+  return (
+    camposViolados(error).join(',') ===
+    CAMPOS_LLAVE_IDEMPOTENCIA.join(',')
+  );
 }

@@ -16,6 +16,10 @@ import {
   delayDelReintento,
 } from '../../domain/rules/backoffPolicy';
 import { ResilienceStateService } from '../../application/resilienceStateService';
+import {
+  requiereConciliacion,
+  resultadoTrasConciliacion,
+} from '../../../invoices/application/services/invoiceReconciliation';
 import { InvoiceDlqService } from './invoiceDlqService';
 
 /** Token de inyección del reloj, para no esperar 65 s en las pruebas. */
@@ -30,6 +34,34 @@ export const dormir: SleepFn = (ms) =>
 
 /** Datos completos del comprobante que necesita el envío. */
 export type RetryInvoiceJob = SendInvoiceParams;
+
+/**
+ * Contrato mínimo de la consulta de estado (TA-30).
+ *
+ * Se declara aquí y no se importa de la implementación para que esta rama
+ * (TA-32) no dependa de la rama de TA-30: mientras no se inyecte nada, el
+ * servicio funciona como antes. El token de inyección es
+ * `CONSULTA_ESTADO_PORT`.
+ */
+export const CONSULTA_ESTADO_PORT = Symbol('CONSULTA_ESTADO_PORT');
+
+/** Parámetros para preguntar a SUNAT por un comprobante ya enviado. */
+export interface ConsultaEstadoParams {
+  invoiceId: string;
+  rucEmisor: string;
+  tipoComprobante: string;
+  serie: string;
+  correlativo: number;
+  estadoActual: InvoiceStatus | null;
+  intento: number;
+}
+
+export interface ConsultaEstadoPort {
+  /** Devuelve el resultado recuperado, o `null` si SUNAT no lo tiene. */
+  consultarEstado(
+    params: ConsultaEstadoParams,
+  ): Promise<ProcessCdrResult | null>;
+}
 
 export interface RetryInvoiceResult {
   invoiceId: string;
@@ -52,6 +84,11 @@ export class InvoiceRetryService {
     private readonly sunatBill: SunatBillService,
     private readonly state: ResilienceStateService,
     @Optional() @Inject(RETRY_SLEEP) private readonly sleep: SleepFn = dormir,
+    // TA-32: opcional a propósito. Si no está (rama de TA-30 sin integrar),
+    // no se concilia y el reintento se comporta como antes.
+    @Optional()
+    @Inject(CONSULTA_ESTADO_PORT)
+    private readonly consultaEstado?: ConsultaEstadoPort,
   ) {}
 
   /** Ejecuta el envío con reintentos; nunca lanza por un fallo de SUNAT. */
@@ -93,6 +130,14 @@ export class InvoiceRetryService {
       // el circuito; un CDR de negocio demuestra que SUNAT responde y lo cierra.
       this.state.registrarResultadoEnvio(ultimo.reintentable);
 
+      // TA-32 criterio 3: si el intento anterior quedó en estado incierto
+      // (timeout), se reconcilia con SUNAT ANTES de volver a enviar. Si SUNAT
+      // ya tenía el comprobante, su CDR se recupera y no se reenvía nada.
+      const conciliado = await this.conciliar(job, ultimo);
+      if (conciliado) {
+        return this.resultado(job.invoiceId, conciliado, intento, false, false);
+      }
+
       const decision = decidirReintento(ultimo, intento);
 
       if (decision === 'DETENER') {
@@ -123,6 +168,53 @@ export class InvoiceRetryService {
         `[HU-04] ${job.invoiceId} intento ${intento} falló; reintento en ${retardo} ms`,
       );
       await this.sleep(retardo);
+    }
+  }
+
+  /**
+   * TA-32, frente 2: concilia un intento que quedó en estado incierto.
+   *
+   * Antes de reenviar un comprobante cuyo timeout pudo haber llegado a SUNAT,
+   * se pregunta por su estado. Si SUNAT lo tenía, se devuelve el CDR
+   * recuperado y el proceso termina sin reenviar; si no lo tenía (o la
+   * consulta tampoco respondió), devuelve null y el flujo sigue al reintento.
+   *
+   * La consulta es OPCIONAL a propósito: en la rama de TA-32 todavía no existe
+   * el servicio de consulta (llega con TA-30). Sin él, el comportamiento es el
+   * anterior, así que las dos ramas se pueden integrar en cualquier orden.
+   */
+  private async conciliar(
+    job: RetryInvoiceJob,
+    ultimo: ProcessCdrResult | null,
+  ): Promise<ProcessCdrResult | null> {
+    if (!this.consultaEstado) return null;
+    if (!requiereConciliacion(ultimo, null)) return null;
+
+    try {
+      const consultado = await this.consultaEstado.consultarEstado({
+        invoiceId: job.invoiceId,
+        rucEmisor: job.rucEmisor,
+        tipoComprobante: job.tipoComprobante,
+        serie: job.serie,
+        correlativo: job.correlativo,
+        estadoActual: ultimo?.estado ?? null,
+        intento: ultimo ? 1 : 1,
+      });
+
+      const recuperado = resultadoTrasConciliacion(consultado);
+      if (recuperado) {
+        this.logger.warn(
+          `[TA-32] ${job.invoiceId}: SUNAT ya había procesado el comprobante; se recupera el CDR (${recuperado.responseCode}) sin reenviar`,
+        );
+      }
+      return recuperado;
+    } catch (error) {
+      // Si la conciliación falla se sigue con el reintento: es el
+      // comportamiento previo y nunca peor que quedarse sin hacer nada.
+      this.logger.warn(
+        `[TA-32] ${job.invoiceId}: no se pudo conciliar el estado (${this.mensajeDe(error)}); se reintenta el envío`,
+      );
+      return null;
     }
   }
 
