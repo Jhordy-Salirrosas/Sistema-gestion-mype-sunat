@@ -1,0 +1,18 @@
+{
+  "modo": "smoke",
+  "avgMs": 0.5713007909090906,
+  "p95Ms": 0.7893123499999999,
+  "rate": 9.99989408907627,
+  "mttrMs": 25480,
+  "recoveryRate": 1,
+  "ok": true,
+  "breakerState": "CLOSED",
+  "outage": false,
+  "outageStartedAt": 1793295909750,
+  "restoredAt": 1793295914757,
+  "accepted": 116,
+  "failedAttempts": 5,
+  "queued": 0,
+  "processed": 304,
+  "pending": 0
+}

@@ -20,6 +20,7 @@ describe('GetCustomsDeclarationByIdUseCase', () => {
       findDeclarationsByCompany: jest.fn(),
       findKardexMovementsByCompany: jest.fn(),
       findLatestKardexMovementByItem: jest.fn(),
+      registerKardexMovements: jest.fn(),
     };
 
     useCase = new GetCustomsDeclarationByIdUseCase(mockRepository);

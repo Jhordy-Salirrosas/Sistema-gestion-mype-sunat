@@ -26,7 +26,7 @@ export class PaySettlementUseCase {
   ) {}
 
   async execute(settlementId: string, dto: PaySettlementDto, companyId?: string): Promise<any> {
-    const settlement = await this.settlementRepository.findSettlementById(settlementId);
+    const settlement = await this.settlementRepository.findSettlementById(settlementId, companyId);
 
     if (!settlement) {
       throw new NotFoundException(`Liquidación de cobranza con ID '${settlementId}' no encontrada`);
@@ -64,6 +64,7 @@ export class PaySettlementUseCase {
       // 3. Verificar si todas las liquidaciones de la DAM están pagadas para autorizar levante (Canal Verde)
       const allSettlements = await this.settlementRepository.findSettlementsByDeclarationId(
         settlement.declaration_id,
+        companyId,
       );
       const allPaid = allSettlements.every((s) => s.status === SettlementStatus.PAGADA);
 

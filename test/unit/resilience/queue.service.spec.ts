@@ -137,7 +137,7 @@ describe('HU-04 · QueueService (DLQ)', () => {
       id: 'dlq-2',
       comprobanteSerieNumero: 'sin identificar',
       codigoErrorSunat: '',
-      mensajeError: 'El comprobante agoto los reintentos automaticos',
+      mensajeError: 'El comprobante agotó los reintentos automáticos',
       intentosFallidos: 2,
       estado: 'ERROR_RED',
     });

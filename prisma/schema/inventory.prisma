@@ -1,0 +1,126 @@
+// prisma/schema/inventory.prisma
+
+enum InventoryMovementDirection {
+  ENTRADA
+  SALIDA
+}
+
+enum InventoryObligationStatus {
+  OBLIGATORIO
+  EXCEPTUADO
+  VOLUNTARIO
+}
+
+model InventoryWarehouse {
+  id                        String              @id @default(uuid())
+  company_id                String
+  company                   Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  warehouse_code            String
+  sunat_establishment_code  String              @default("0000")
+  description               String
+  address                   String?
+  is_active                 Boolean             @default(true)
+  created_at                DateTime            @default(now())
+  updated_at                DateTime            @updatedAt
+
+  balances                  InventoryBalance[]
+  movements                 InventoryMovement[]
+
+  @@unique([company_id, warehouse_code])
+  @@index([company_id])
+  @@map("inventory_warehouses")
+}
+
+model InventoryProduct {
+  id                    String              @id @default(uuid())
+  company_id            String
+  company               Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  sku                   String
+  description           String
+  sunat_type_code       String              @default("01") // Tabla 5 SUNAT (01 Mercaderías, 02 Prod. Terminado, etc.)
+  sunat_unit_code       String              @default("NIU") // Tabla 6 SUNAT (NIU, KGM, LTR, etc.)
+  min_stock_alert       Decimal             @default(0.0000) @db.Decimal(12, 4)
+  is_active             Boolean             @default(true)
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+
+  balances              InventoryBalance[]
+  movements             InventoryMovement[]
+
+  @@unique([company_id, sku])
+  @@index([company_id])
+  @@map("inventory_products")
+}
+
+model InventoryBalance {
+  id                          String             @id @default(uuid())
+  company_id                  String
+  company                     Company            @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  warehouse_id                String
+  warehouse                   InventoryWarehouse @relation(fields: [warehouse_id], references: [id], onDelete: Restrict)
+  product_id                  String
+  product                     InventoryProduct   @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  current_stock               Decimal            @default(0.0000) @db.Decimal(12, 4)
+  average_unit_cost           Decimal            @default(0.0000) @db.Decimal(14, 4)
+  total_inventory_value       Decimal            @default(0.00) @db.Decimal(14, 2)
+  last_movement_at            DateTime?
+  updated_at                  DateTime           @updatedAt
+
+  @@unique([company_id, warehouse_id, product_id])
+  @@index([company_id, warehouse_id])
+  @@index([company_id, product_id])
+  @@map("inventory_balances")
+}
+
+model InventoryMovement {
+  id                          String                     @id @default(uuid())
+  company_id                  String
+  company                     Company                    @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  warehouse_id                String
+  warehouse                   InventoryWarehouse         @relation(fields: [warehouse_id], references: [id], onDelete: Restrict)
+  product_id                  String
+  product                     InventoryProduct           @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  movement_number             String
+  movement_date               DateTime
+  accounting_date             DateTime                   @default(now())
+  operation_type_code         String                     // Tabla 12 SUNAT (01 Venta, 02 Compra nacional, 18 Importación, 28 Ajuste, 16 Saldo inicial)
+  document_type_code          String?                    // Tabla 10 SUNAT (50 DAM, 01 Factura, 09 Guía)
+  document_serial             String?
+  document_number             String?
+  direction                   InventoryMovementDirection
+  quantity                    Decimal                    @db.Decimal(12, 4)
+  unit_cost                   Decimal                    @db.Decimal(14, 4)
+  total_cost                  Decimal                    @db.Decimal(14, 2)
+  previous_stock              Decimal                    @db.Decimal(12, 4)
+  previous_unit_cost          Decimal                    @db.Decimal(14, 4)
+  previous_total_value        Decimal                    @db.Decimal(14, 2)
+  resulting_stock             Decimal                    @db.Decimal(12, 4)
+  resulting_unit_cost         Decimal                    @db.Decimal(14, 4)
+  resulting_total_value       Decimal                    @db.Decimal(14, 2)
+  source_reference_id         String?
+  notes                       String?
+  created_at                  DateTime                   @default(now())
+
+  @@index([company_id, warehouse_id, movement_date])
+  @@index([company_id, product_id, movement_date])
+  @@unique([company_id, source_reference_id, operation_type_code, product_id])
+  @@map("inventory_movements")
+}
+
+model InventoryBookObligationDecision {
+  id                    String                    @id @default(uuid())
+  company_id            String
+  company               Company                   @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  fiscal_year           Int
+  annual_revenue_uit    Decimal                   @db.Decimal(10, 2)
+  tax_regime            String
+  ple_12_1_status       InventoryObligationStatus
+  ple_13_1_status       InventoryObligationStatus
+  legal_basis_notes     String?
+  evaluated_at          DateTime                  @default(now())
+
+  @@unique([company_id, fiscal_year])
+  @@index([company_id])
+  @@map("inventory_obligation_decisions")
+}
+

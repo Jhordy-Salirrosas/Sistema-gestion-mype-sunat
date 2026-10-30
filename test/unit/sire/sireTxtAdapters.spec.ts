@@ -36,7 +36,7 @@ describe('SIRE TXT adapters (provisional formats)', () => {
     });
 
     expect(file.fileName).toContain('BORRADOR');
-    expect(file.content.toString('utf8')).toContain('RUC_EMISOR|');
+    expect(Buffer.from(file.content).toString('utf8')).toContain('RUC_EMISOR|');
     expect(() =>
       writer.export({
         period: '202603',

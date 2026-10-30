@@ -1,10 +1,11 @@
 /**
  * Value Object para el Código de Documento Aduanero (CDA) de SUNAT.
  * Utilizado para el pago electrónico (Teledespacho) de liquidaciones aduaneras en banca comercial.
- * Formato SUNAT: 14 dígitos numéricos (ej. '11826100104589').
+ * Soporta formato teledespacho estándar (14 dígitos) y formato extendido oficial (18 dígitos).
+ * Ejemplos: '11826100104589' (14D) o '118202610001004589' (18D).
  */
 export class CdaNumberVO {
-  private static readonly CDA_REGEX = /^\d{14}$/;
+  private static readonly CDA_REGEX = /^(\d{14}|\d{18})$/;
   private readonly value: string;
 
   constructor(cda: string) {
@@ -15,7 +16,7 @@ export class CdaNumberVO {
     const trimmed = cda.trim();
     if (!CdaNumberVO.CDA_REGEX.test(trimmed)) {
       throw new Error(
-        `Código de Documento Aduanero (CDA) inválido: '${cda}'. Debe contener exactamente 14 dígitos numéricos.`,
+        `Código de Documento Aduanero (CDA) inválido: '${cda}'. Debe contener exactamente 14 o 18 dígitos numéricos.`,
       );
     }
 
@@ -34,23 +35,36 @@ export class CdaNumberVO {
   }
 
   /**
-   * Año de emisión (dígitos 4 y 5, ej. '26' para 2026)
+   * Año de emisión
    */
-  getYearTwoDigits(): string {
-    return this.value.substring(3, 5);
+  getYear(): string {
+    return this.value.length === 18
+      ? this.value.substring(3, 7)
+      : this.value.substring(3, 5);
   }
 
   /**
-   * Tipo de liquidación / cuota (dígitos 6 al 9, ej. '0010', '0026', '0027')
+   * Año de emisión en 2 dígitos (ej. '26' para 2026)
+   */
+  getYearTwoDigits(): string {
+    return this.value.length === 18
+      ? this.value.substring(5, 7)
+      : this.value.substring(3, 5);
+  }
+
+  /**
+   * Tipo de liquidación / cuota (ej. '0010', '0026', '0027', '1001')
    */
   getSettlementTypeCode(): string {
-    return this.value.substring(5, 9);
+    return this.value.length === 18
+      ? this.value.substring(9, 13)
+      : this.value.substring(5, 9);
   }
 
   /**
    * Correlativo de liquidación (últimos 5 dígitos)
    */
   getCorrelative(): string {
-    return this.value.substring(9, 14);
+    return this.value.substring(this.value.length - 5);
   }
 }

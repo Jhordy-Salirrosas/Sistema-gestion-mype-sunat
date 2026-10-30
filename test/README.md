@@ -23,6 +23,8 @@ test/
 │   ├── sire/                   # [M4] Motor de cruce y conciliación SIRE
 │   └── sunat/                  # Parseo de CDRs, firmas XML, certificados y cliente SOAP
 ├── integration/                # Pruebas de Integración (módulos cruzados y mock SOAP)
+│   ├── invoices/               # Transactional Outbox contra PostgreSQL real
+│   ├── resilience/             # TA-34: 503, timeout, caída/retorno, MTTD y MTTR
 │   └── sunat/                  # Integración con el mock SOAP de SUNAT
 ├── e2e/                        # Pruebas End-to-End de flujos verticales completos (UI/API -> BD)
 │   └── invoices/               # Emisión de facturas completa

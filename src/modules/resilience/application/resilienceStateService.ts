@@ -48,6 +48,45 @@ export class ResilienceStateService {
     this.sincronizarEstado();
   }
 
+  /**
+   * Indica si el Circuit Breaker permite llamar a SUNAT ahora.
+   *
+   * `false` en OPEN (ventana de enfriamiento) o en HALF-OPEN cuando ya hay una
+   * peticion de prueba en curso. El worker debe dejar el job en cola cuando
+   * recibe `false`: no se toca la red y no se consume un intento del backoff.
+   */
+  puedeEnviar(): boolean {
+    return !this.breaker.estaBloqueando();
+  }
+
+  /**
+   * Reserva el envío. En HALF-OPEN garantiza que solo una petición de prueba
+   * pase a la vez; en CLOSED no limita y en OPEN rechaza.
+   */
+  reservarEnvio(): boolean {
+    return this.breaker.reservarPeticion();
+  }
+
+  /** Libera la reserva cuando el envío termina sin un resultado clasificable. */
+  liberarEnvio(): void {
+    this.breaker.liberarPeticion();
+  }
+
+  /**
+   * Alimenta el circuito con el resultado de un envio real a SUNAT.
+   *
+   * `falloRed = true` para red, timeout, 5xx o CDR ilegible (resultados
+   * reintentables); `false` para un CDR de negocio, que demuestra que SUNAT
+   * esta respondiendo y reinicia los fallos consecutivos.
+   */
+  registrarResultadoEnvio(falloRed: boolean): void {
+    if (falloRed) {
+      this.recordFailure();
+    } else {
+      this.recordSuccess();
+    }
+  }
+
   /** Detecta el cambio de estado del circuito para sellar `lastStateChange`. */
   private sincronizarEstado(): void {
     const actual = this.breaker.getState();

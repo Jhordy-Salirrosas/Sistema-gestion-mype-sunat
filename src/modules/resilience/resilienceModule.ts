@@ -10,6 +10,7 @@ import {
   InvoiceRetryService,
   RETRY_SLEEP,
 } from './infrastructure/queue/invoiceRetryService';
+import { InvoiceDlqService } from './infrastructure/queue/invoiceDlqService';
 import { SunatMockModule } from './infrastructure/mock/sunatMockModule';
 
 @Module({
@@ -17,8 +18,8 @@ import { SunatMockModule } from './infrastructure/mock/sunatMockModule';
   // inyecta TOKEN_SERVICE_PORT. Igual que lo hace InvoicesModule.
   //
   // SunatModule aporta `SunatBillService`, que InvoiceRetryService envuelve
-  // para aplicar el backoff de HU-04. No hay ciclo: SunatModule no importa
-  // ResilienceModule.
+  // para aplicar el backoff de HU-04 y el Circuit Breaker de TA-33. No hay
+  // ciclo: SunatModule no importa ResilienceModule.
   imports: [
     QueueModule,
     PrismaModule,
@@ -30,6 +31,7 @@ import { SunatMockModule } from './infrastructure/mock/sunatMockModule';
   controllers: [ResilienceController],
   providers: [
     InvoiceRetryService,
+    InvoiceDlqService,
     { provide: RETRY_SLEEP, useValue: dormir },
   ],
   exports: [QueueModule, SunatMockModule, InvoiceRetryService],

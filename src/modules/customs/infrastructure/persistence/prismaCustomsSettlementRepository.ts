@@ -32,8 +32,8 @@ export class PrismaCustomsSettlementRepository implements ICustomsSettlementRepo
     return created;
   }
 
-  async findSettlementById(id: string): Promise<any | null> {
-    return this.prisma.customsSettlement.findUnique({
+  async findSettlementById(id: string, companyId?: string): Promise<any | null> {
+    const settlement = await this.prisma.customsSettlement.findUnique({
       where: { id },
       include: {
         declaration: {
@@ -43,11 +43,20 @@ export class PrismaCustomsSettlementRepository implements ICustomsSettlementRepo
         },
       },
     });
+
+    if (settlement && companyId && settlement.declaration?.company_id !== companyId) {
+      return null;
+    }
+
+    return settlement;
   }
 
-  async findSettlementsByDeclarationId(declarationId: string): Promise<any[]> {
+  async findSettlementsByDeclarationId(declarationId: string, companyId?: string): Promise<any[]> {
     return this.prisma.customsSettlement.findMany({
-      where: { declaration_id: declarationId },
+      where: {
+        declaration_id: declarationId,
+        ...(companyId ? { declaration: { company_id: companyId } } : {}),
+      },
       orderBy: { due_date: 'asc' },
     });
   }
