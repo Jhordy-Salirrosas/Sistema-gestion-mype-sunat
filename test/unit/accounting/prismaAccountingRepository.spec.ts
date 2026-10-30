@@ -8,11 +8,11 @@ describe('PrismaAccountingRepository', () => {
   beforeEach(() => {
     prismaMock = {
       accountingEntry: {
+        count: jest.fn(),
         findFirst: jest.fn(),
         create: jest.fn(),
         findMany: jest.fn(),
         deleteMany: jest.fn(),
-        delete: jest.fn(),
       },
     };
 
@@ -21,19 +21,21 @@ describe('PrismaAccountingRepository', () => {
 
   describe('getNextEntryNumber', () => {
     it('debe retornar 1 si no existen asientos previos para el periodo', async () => {
-      prismaMock.accountingEntry.findFirst.mockResolvedValue(null);
+      prismaMock.accountingEntry.count.mockResolvedValue(0);
 
       const result = await repository.getNextEntryNumber('company-1', '2026-03');
 
       expect(result).toBe(1);
-      expect(prismaMock.accountingEntry.findFirst).toHaveBeenCalledWith({
-        where: { companyId: 'company-1', period: '2026-03' },
-        orderBy: { entryNumber: 'desc' },
+      expect(prismaMock.accountingEntry.count).toHaveBeenCalledWith({
+        where: {
+          company_id: 'company-1',
+          period: '2026-03',
+        },
       });
     });
 
     it('debe retornar el correlativo siguiente si ya existen asientos', async () => {
-      prismaMock.accountingEntry.findFirst.mockResolvedValue({ entryNumber: 15 });
+      prismaMock.accountingEntry.count.mockResolvedValue(15);
 
       const result = await repository.getNextEntryNumber('company-1', '2026-03');
 
@@ -42,25 +44,23 @@ describe('PrismaAccountingRepository', () => {
   });
 
   describe('saveEntry', () => {
-    it('debe crear el asiento contable en la base de datos', async () => {
-      const mockEntryData: any = {
+    it('debe registrar el asiento contable', async () => {
+      const mockData: any = {
         companyId: 'company-1',
         period: '2026-03',
         entryNumber: 1,
         entryDate: new Date('2026-03-10'),
         glosa: 'Asiento test',
         sourceModule: 'INVOICES',
-        lines: [
-          { lineOrder: 1, accountCode: '1212', accountName: 'Clientes', debitAmount: 100, creditAmount: 0 },
-        ],
+        lines: [],
       };
 
       prismaMock.accountingEntry.create.mockResolvedValue({
         id: 'entry-uuid-1',
-        ...mockEntryData,
+        ...mockData,
       });
 
-      const result = await repository.saveEntry(mockEntryData);
+      const result = await repository.saveEntry(mockData);
 
       expect(result).toBeDefined();
       expect(prismaMock.accountingEntry.create).toHaveBeenCalled();
