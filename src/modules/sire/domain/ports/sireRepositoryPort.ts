@@ -16,6 +16,15 @@ export interface ReconciliationHistoryRecord {
 }
 
 export interface ISireRepositoryPort {
+  hasReportUploadHash(companyId: string, fileHash: string): Promise<boolean>;
+  saveReportUpload(input: {
+    companyId: string;
+    period: string;
+    bookType: 'RVIE' | 'RCE';
+    fileName: string;
+    fileHash: string;
+    proposals: SireProposalEntity[];
+  }): Promise<void>;
   saveBatchProposals(proposals: SireProposalEntity[]): Promise<void>;
   ensurePeriodOpen(
     companyId: string,

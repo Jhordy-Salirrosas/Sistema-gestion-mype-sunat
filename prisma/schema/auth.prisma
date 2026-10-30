@@ -36,6 +36,7 @@ model Company {
   inventory_movements   InventoryMovement[]
   inventory_obligations InventoryBookObligationDecision[]
   sire_proposals        SireProposal[]
+  sire_report_uploads   SireReportUpload[]
   sire_reconciliations  SireReconciliation[]
   accounting_entries    AccountingEntry[]
   ple_books             PleBook[]

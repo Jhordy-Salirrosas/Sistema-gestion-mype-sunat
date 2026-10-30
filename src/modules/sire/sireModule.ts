@@ -21,6 +21,8 @@ import {
   SireMetricsCompatibilityController,
   SireResilienceMetricsCompatibilityController,
 } from './infrastructure/controllers/sireDashboardMetricsController';
+import { UploadSireReportUseCase } from './application/use-cases/uploadSireReportUseCase';
+import { SireReportFileParser } from './infrastructure/parsers/sireReportFileParser';
 
 @Module({
   imports: [AuthModule, ResilienceStateModule],
@@ -39,6 +41,8 @@ import {
     CloseFiscalPeriodUseCase,
     SireDashboardMetricsService,
     SireDashboardMetricsRepository,
+    UploadSireReportUseCase,
+    SireReportFileParser,
     PrismaSireRepository,
     SireTxtParserAdapter,
     SireTxtWriterAdapter,
