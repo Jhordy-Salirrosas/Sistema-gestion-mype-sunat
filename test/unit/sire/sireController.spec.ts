@@ -132,4 +132,47 @@ describe('SireController', () => {
       ),
     ).rejects.toThrow('La empresa del usuario no está definida.');
   });
+
+  it('debería delegar la carga CSV/XLSX con la empresa autenticada', async () => {
+    const file = {
+      originalname: 'rce.csv',
+      mimetype: 'text/csv',
+      buffer: Buffer.from('content'),
+    };
+    const output = { imported: 1, rejected: 0, errors: [] };
+    uploadReportUseCase.execute.mockResolvedValue(output);
+
+    await expect(
+      controller.uploadReport(
+        { period: '202610', bookType: 'RCE_COMPRAS' },
+        file,
+        {
+          sub: 'user-1',
+          email: 'user@example.test',
+          companyId: 'company-1',
+          role: 'ACCOUNTANT',
+        },
+      ),
+    ).resolves.toBe(output);
+    expect(uploadReportUseCase.execute).toHaveBeenCalledWith(
+      { period: '202610', bookType: 'RCE_COMPRAS' },
+      'company-1',
+      file,
+    );
+  });
+
+  it('debería rechazar la carga cuando falta el archivo', async () => {
+    await expect(
+      controller.uploadReport(
+        { period: '202610', bookType: 'RVIE_VENTAS' },
+        undefined,
+        {
+          sub: 'user-1',
+          email: 'user@example.test',
+          companyId: 'company-1',
+          role: 'ACCOUNTANT',
+        },
+      ),
+    ).rejects.toThrow('Falta el archivo CSV/XLSX.');
+  });
 });
