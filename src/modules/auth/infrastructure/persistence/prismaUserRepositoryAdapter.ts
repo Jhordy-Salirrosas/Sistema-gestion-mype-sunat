@@ -27,7 +27,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           passwordHash: raw.password_hash,
         };
       }
-    } catch (error) {
+    } catch (_error) {
       // Si la BD remota de Supabase falla o no hay internet en el aula, entra en modo Demo Local
     }
 
