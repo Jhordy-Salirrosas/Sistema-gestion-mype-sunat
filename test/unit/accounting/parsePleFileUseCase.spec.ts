@@ -9,7 +9,8 @@ describe('ParsePleFileUseCase', () => {
   });
 
   it('debe procesar correctamente un archivo PLE válido de Diario (050100)', async () => {
-    const validFileName = 'LE1234567890120230100050100001111.txt'; // 37 caracteres
+    // Exactamente 37 caracteres con '050100' en las posiciones substring(13, 19)
+    const validFileName = 'LE2060123456705010020230100001111.txt';
     const content = '20230101|1|M1|10111|100.00|0.00|USD|1|\n';
     const buffer = Buffer.from(content, 'utf-8');
 
@@ -31,7 +32,8 @@ describe('ParsePleFileUseCase', () => {
   });
 
   it('debe lanzar BadRequestException si el código de libro no es soportado', async () => {
-    const invalidBookFileName = 'LE1234567890120230100999999001111.txt'; // Libro 999999
+    // Nombre de 37 caracteres pero con código '999999' en substring(13, 19)
+    const invalidBookFileName = 'LE2060123456799999920230100001111.txt';
     const buffer = Buffer.from('contenido');
 
     await expect(
@@ -40,7 +42,7 @@ describe('ParsePleFileUseCase', () => {
   });
 
   it('debe lanzar BadRequestException si una fila tiene menos de 8 campos', async () => {
-    const validFileName = 'LE1234567890120230100050100001111.txt';
+    const validFileName = 'LE2060123456705010020230100001111.txt';
     const invalidContent = '20230101|1|M1\n'; // Menos de 8 campos
     const buffer = Buffer.from(invalidContent, 'utf-8');
 
