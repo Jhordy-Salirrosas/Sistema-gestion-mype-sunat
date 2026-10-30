@@ -34,14 +34,16 @@ export class InvoiceDlqService {
     const { invoiceId, intento, estadoAnterior, ultimo, motivo } = params;
     const mensaje = `Reintentos agotados tras ${intento} intentos: ${motivo}`;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.invoice.update({
+    const companyId = await this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.update({
         where: { id: invoiceId },
         data: { estado: InvoiceStatus.ERROR_RED },
+        select: { company_id: true },
       });
 
       await tx.transactionHistory.create({
         data: {
+          company_id: invoice.company_id,
           invoice_id: invoiceId,
           intento,
           estado_anterior: estadoAnterior,
@@ -51,14 +53,19 @@ export class InvoiceDlqService {
           tiempo_respuesta_ms: ultimo?.tiempoRespuestaMs ?? null,
         },
       });
+
+      return invoice.company_id;
     });
 
-    await this.queue.sendToDlq(invoiceId, {
+    const jobId = await this.queue.sendToDlq(invoiceId, companyId, {
       intento,
       codigo_error: 'MAX_REINTENTOS',
       mensaje_error: mensaje,
       estado: InvoiceStatus.ERROR_RED,
     });
+    if (!jobId) {
+      throw new Error(`No se pudo encolar ${invoiceId} en la DLQ.`);
+    }
 
     this.logger.error(`[HU-04] ${invoiceId} enviado a la DLQ: ${mensaje}`);
     return mensaje;

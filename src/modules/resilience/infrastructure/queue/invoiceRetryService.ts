@@ -156,39 +156,6 @@ export class InvoiceRetryService {
     ultimo: ProcessCdrResult | null,
     motivo: string,
   ): Promise<RetryInvoiceResult> {
-<<<<<<< HEAD
-    const mensaje = `Reintentos agotados tras ${intento} intentos: ${motivo}`;
-
-    const companyId = await this.prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.update({
-        where: { id: job.invoiceId },
-        data: { estado: InvoiceStatus.ERROR_RED },
-        select: { company_id: true },
-      });
-
-      await tx.transactionHistory.create({
-        data: {
-          company_id: invoice.company_id,
-          invoice_id: job.invoiceId,
-          intento,
-          estado_anterior: estadoAnterior,
-          estado_nuevo: InvoiceStatus.ERROR_RED,
-          codigo_error: 'MAX_REINTENTOS',
-          mensaje_error: mensaje,
-          tiempo_respuesta_ms: ultimo?.tiempoRespuestaMs ?? null,
-        },
-      });
-
-      return invoice.company_id;
-    });
-
-    await this.queue.sendToDlq(job.invoiceId, companyId, {
-        intento,
-        codigo_error: 'MAX_REINTENTOS',
-        mensaje_error: mensaje,
-        estado: InvoiceStatus.ERROR_RED,
-      });
-=======
     const mensaje = await this.dlq.enviar({
       invoiceId: job.invoiceId,
       intento,
@@ -196,7 +163,6 @@ export class InvoiceRetryService {
       ultimo,
       motivo,
     });
->>>>>>> f65e879ff3e92a4af1e23116ae67252e569d6273
 
     return {
       invoiceId: job.invoiceId,
