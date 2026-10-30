@@ -7,4 +7,7 @@ export * from './registerDuaWizardDto';
 export * from './paySettlementDto';
 export * from './addLocalExpenseDto';
 export * from './calculateLandedCostDto';
-export * from './applyLandedCostToKardexDto';
+export * from './confirmGoodsReceiptDto';
+export * from './approveLandedCostDto';
+export * from './adjustLateImportCostDto';
+export * from './simulateDamTaxesDto';

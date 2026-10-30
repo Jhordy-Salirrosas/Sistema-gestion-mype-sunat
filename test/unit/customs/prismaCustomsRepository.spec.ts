@@ -17,17 +17,10 @@ describe('PrismaCustomsRepository', () => {
       customsItem: {
         create: jest.fn(),
       },
-      kardexMovement: {
-        create: jest.fn(),
-      },
     };
 
     prismaMock = {
       customsDeclaration: {
-        findFirst: jest.fn(),
-        findMany: jest.fn(),
-      },
-      kardexMovement: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
       },
@@ -37,7 +30,7 @@ describe('PrismaCustomsRepository', () => {
     repository = new PrismaCustomsRepository(prismaMock as unknown as PrismaService);
   });
 
-  it('debe persistir declaración, ítems y movimientos kardex en una transacción atómica', async () => {
+  it('debe persistir declaración y sus ítems en una transacción atómica', async () => {
     const date = new Date('2026-03-20T10:00:00Z');
     const declaration = new CustomsDeclarationEntity({
       companyId: 'comp-1',
@@ -93,7 +86,7 @@ describe('PrismaCustomsRepository', () => {
       ad_valorem_amount_pen: 170.24,
       igv_rate: 0.16,
       ipm_rate: 0.02,
-      igv_ipm_amount_pen: 796.72,
+      igvIpmAmount_pen: 796.72,
       perception_rate: 0.035,
       perception_amount_pen: 182.8,
       total_customs_taxes_pen: 1149.76,
@@ -118,36 +111,16 @@ describe('PrismaCustomsRepository', () => {
       final_landed_cost_unit_pen: 4426.24,
     });
 
-    txMock.kardexMovement.create.mockResolvedValue({ id: 'kardex-1' });
-
     const result = await repository.saveDeclarationWithItemsAndKardex(
       declaration,
       [item],
-      [
-        {
-          companyId: 'comp-1',
-          itemCode: 'ITEM-01',
-          movementDate: date,
-          movementType: 'INGRESO_IMPORTACION',
-          description: 'Laptop Core i7',
-          quantityIn: 1,
-          unitCostIn: 4426.24,
-          totalCostIn: 4426.24,
-          quantityOut: 0,
-          unitCostOut: 0,
-          totalCostOut: 0,
-          finalStockQuantity: 1,
-          finalAverageUnitCost: 4426.24,
-          finalTotalInventoryValue: 4426.24,
-        },
-      ],
+      [],
     );
 
     expect(result.id).toBe('decl-created');
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(txMock.customsDeclaration.create).toHaveBeenCalled();
     expect(txMock.customsItem.create).toHaveBeenCalled();
-    expect(txMock.kardexMovement.create).toHaveBeenCalled();
   });
 
   it('debe buscar declaración por id y retornar null si no existe', async () => {
@@ -157,71 +130,34 @@ describe('PrismaCustomsRepository', () => {
     expect(result).toBeNull();
   });
 
-  it('debe registrar movimientos diferidos en Kardex y actualizar estado de la DAM a APLICADO_KARDEX', async () => {
-    txMock.kardexMovement.create.mockResolvedValue({ id: 'k-1' });
-    txMock.customsDeclaration.update.mockResolvedValue({ id: 'decl-1' });
+  it('debe listar declaraciones por empresa ordenadas cronológicamente', async () => {
+    prismaMock.customsDeclaration.findMany.mockResolvedValue([
+      {
+        id: 'decl-1',
+        dua_number: '118-2026-10-123456',
+        customs_agency_code: '118',
+        numeration_date: new Date(),
+        cif_value_usd: 1000,
+        cif_value_pen: 3800,
+        total_customs_taxes_pen: 800,
+        status: 'NUMERADO',
+        _count: { items: 2 },
+        created_at: new Date(),
+      },
+    ]);
 
-    await repository.registerKardexMovements(
-      [
-        {
-          companyId: 'comp-1',
-          itemCode: 'ITEM-01',
-          movementDate: new Date(),
-          movementType: 'INGRESO_IMPORTACION',
-          description: 'Laptop Core i7',
-          quantityIn: 10,
-          unitCostIn: 4000,
-          totalCostIn: 40000,
-          quantityOut: 0,
-          unitCostOut: 0,
-          totalCostOut: 0,
-          finalStockQuantity: 10,
-          finalAverageUnitCost: 4000,
-          finalTotalInventoryValue: 40000,
-        },
-      ],
-      'decl-1',
-    );
-
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    expect(txMock.kardexMovement.create).toHaveBeenCalledTimes(1);
-    expect(txMock.customsDeclaration.update).toHaveBeenCalledWith({
-      where: { id: 'decl-1' },
-      data: { status: 'APLICADO_KARDEX' },
-    });
+    const list = await repository.findDeclarationsByCompany('comp-1');
+    expect(list.length).toBe(1);
+    expect(list[0].duaNumber).toBe('118-2026-10-123456');
   });
 
-  it('debe buscar el último movimiento Kardex de un ítem', async () => {
-    const now = new Date();
-    prismaMock.kardexMovement.findFirst.mockResolvedValue({
-      id: 'k-latest',
-      company_id: 'comp-1',
-      item_code: 'ITEM-01',
-      description: 'Laptop Core i7',
-      source_reference_id: 'decl-1',
-      movement_type: 'INGRESO_IMPORTACION',
-      quantity_in: 100,
-      unit_cost_in: 4000,
-      total_cost_in: 400000,
-      quantity_out: 0,
-      unit_cost_out: 0,
-      total_cost_out: 0,
-      final_stock_quantity: 100,
-      final_average_unit_cost: 4000,
-      final_total_inventory_value: 400000,
-      movement_date: now,
-      created_at: now,
-    });
+  it('debe manejar desacople devolviendo lista vacía en consultas Kardex', async () => {
+    const list = await repository.findKardexMovementsByCompany('comp-1');
+    expect(list).toEqual([]);
 
-    const result = await repository.findLatestKardexMovementByItem('comp-1', 'ITEM-01');
-    expect(result?.id).toBe('k-latest');
-    expect(result?.itemCode).toBe('ITEM-01');
-  });
+    const latest = await repository.findLatestKardexMovementByItem('comp-1', 'SKU-01');
+    expect(latest).toBeNull();
 
-  it('debe retornar null si no hay movimientos previos en Kardex', async () => {
-    prismaMock.kardexMovement.findFirst.mockResolvedValue(null);
-
-    const result = await repository.findLatestKardexMovementByItem('comp-1', 'ITEM-NONE');
-    expect(result).toBeNull();
+    await expect(repository.registerKardexMovements([])).resolves.not.toThrow();
   });
 });

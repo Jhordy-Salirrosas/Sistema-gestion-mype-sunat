@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -37,8 +38,10 @@ export class CustomsShipmentController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: CreateShipmentDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.createShipmentUseCase.execute(dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.createShipmentUseCase.execute(dto, companyId);
   }
 
   @Get()
@@ -50,8 +53,10 @@ export class CustomsShipmentController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.listShipmentsUseCase.execute(resolvedCompanyId, {
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.listShipmentsUseCase.execute(companyId, {
       status,
       search,
       page: page ? parseInt(page, 10) : 1,
@@ -65,8 +70,10 @@ export class CustomsShipmentController {
     @Param('id') id: string,
     @CurrentCompany() companyId: string | undefined,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.getShipmentByIdUseCase.execute(id, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.getShipmentByIdUseCase.execute(id, companyId);
   }
 
   @Post(':id/documents')
@@ -76,8 +83,10 @@ export class CustomsShipmentController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: AddDocumentDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.addShipmentDocumentUseCase.execute(id, dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.addShipmentDocumentUseCase.execute(id, dto, companyId);
   }
 
   @Post(':id/events')
@@ -87,7 +96,9 @@ export class CustomsShipmentController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: AddEventDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.addShipmentEventUseCase.execute(id, dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.addShipmentEventUseCase.execute(id, dto, companyId);
   }
 }
