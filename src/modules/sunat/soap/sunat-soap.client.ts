@@ -25,6 +25,14 @@ import {
   SUNAT_DEFAULT_TIMEOUT_MS,
   SUNAT_SEND_BILL_SOAP_ACTION,
 } from './soap.constants';
+import {
+  buildGetStatusCdrEnvelope,
+  GET_STATUS_CDR_SOAP_ACTION,
+  parseGetStatusCdrResponse,
+  SUNAT_CODE_NO_ENCONTRADO,
+  type GetStatusCdrParams,
+  type StatusCdrResult,
+} from './sunatStatusCdrOperation';
 
 /** Fallo de transporte: la peticion no obtuvo una respuesta valida. */
 export class SunatTransportError extends Error {
@@ -167,6 +175,88 @@ export class SunatSoapClient {
       httpStatus: response.status,
       rawResponse,
     };
+  }
+
+  /**
+   * Consulta el estado de un comprobante ya enviado (TA-30).
+   *
+   * Usa la MISMA política de timeout que `sendBill`: un cuelgue de SUNAT no
+   * puede bloquear el worker. A diferencia de `sendBill`, un 5xx aquí NO es
+   * concluyente: la consulta no cambia el estado del comprobante, así que se
+   * informa como error de transporte y quien llama decide si reintenta.
+   */
+  async getStatusCdr(
+    params: GetStatusCdrParams,
+    options?: { endpoint?: string },
+  ): Promise<StatusCdrResult> {
+    const endpoint = options?.endpoint ?? this.statusEndpoint();
+    const envelope = buildGetStatusCdrEnvelope(params);
+
+    const startedAt = Date.now();
+    let response: Response;
+    let rawResponse: string;
+
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          SOAPAction: `"${GET_STATUS_CDR_SOAP_ACTION}"`,
+          'Content-Length': String(Buffer.byteLength(envelope, 'utf8')),
+        },
+        body: envelope,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      rawResponse = await response.text();
+    } catch (error) {
+      const nombre = getErrorName(error);
+      if (nombre === 'TimeoutError' || nombre === 'AbortError') {
+        throw new SunatTransportError(
+          `Timeout de ${this.timeoutMs} ms esperando al consultService`,
+          { cause: error },
+        );
+      }
+      throw new SunatTransportError(
+        `Error de red contra el consultService: ${getErrorMessage(error)}`,
+        { cause: error },
+      );
+    }
+
+    const tiempoRespuestaMs = Date.now() - startedAt;
+    const parsed = parseGetStatusCdrResponse(rawResponse);
+
+    // SUNAT responde 200 incluso cuando el comprobante no existe (código
+    // 0127), así que el estado HTTP no alcanza para decidir si se encontró.
+    const noEncontrado = parsed.responseCode === SUNAT_CODE_NO_ENCONTRADO;
+
+    return {
+      encontrado: Boolean(parsed.applicationResponse) || !noEncontrado,
+      applicationResponse: parsed.applicationResponse,
+      responseCode: parsed.responseCode,
+      description: parsed.description,
+      referenceId: parsed.referenceId,
+      tiempoRespuestaMs,
+      httpStatus: response.status,
+      rawResponse,
+    };
+  }
+
+  /**
+   * Endpoint del consultService.
+   *
+   * Se deriva del del billService cuando no hay una URL explícita: beta y
+   * produccion exponen ambos servicios en el mismo host (`e-beta` /
+   * `e-factura`) y solo cambia la ruta. Así el entorno se configura una sola
+   * vez y no puede quedar apuntando a beta en producción.
+   */
+  private statusEndpoint(): string {
+    if (process.env.SUNAT_CONSULT_SERVICE_URL) {
+      return process.env.SUNAT_CONSULT_SERVICE_URL;
+    }
+    return this.endpoint.replace(
+      /\/billService$/,
+      '/billConsultService',
+    );
   }
 }
 
