@@ -1,3 +1,4 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { CustomsShipmentController } from '../../../src/modules/customs/infrastructure/controllers/customsShipmentController';
 import { CreateShipmentUseCase } from '../../../src/modules/customs/application/use-cases/createShipmentUseCase';
 import { ListShipmentsUseCase } from '../../../src/modules/customs/application/use-cases/listShipmentsUseCase';
@@ -37,7 +38,7 @@ describe('CustomsShipmentController', () => {
       shipment_number: 'EXP-2026-0001',
       incoterm: 'FOB',
     };
-    mockCreateShipment.execute.mockResolvedValue({ id: 'ship-1', shipment_number: 'EXP-2026-0001' });
+    mockCreateShipment.execute.mockResolvedValue({ id: 'ship-1', shipment_number: 'EXP-2026-0001' } as any);
 
     const result = await controller.createShipment('comp-1', dto);
 
@@ -46,7 +47,7 @@ describe('CustomsShipmentController', () => {
   });
 
   it('debe listar expedientes llamando a listShipmentsUseCase con filtros y paginación', async () => {
-    mockListShipments.execute.mockResolvedValue({ data: [], total: 0, page: 1, limit: 10, totalPages: 0 });
+    mockListShipments.execute.mockResolvedValue({ data: [], total: 0, page: 1, limit: 10, totalPages: 0 } as any);
 
     const result = await controller.listShipments('comp-1', 'EN_TRANSITO', 'EXP', '1', '10');
 
@@ -60,7 +61,7 @@ describe('CustomsShipmentController', () => {
   });
 
   it('debe obtener detalle de expediente por id', async () => {
-    mockGetShipmentById.execute.mockResolvedValue({ id: 'ship-1', shipment_number: 'EXP-2026-0001' });
+    mockGetShipmentById.execute.mockResolvedValue({ id: 'ship-1', shipment_number: 'EXP-2026-0001' } as any);
 
     const result = await controller.getShipmentById('ship-1', 'comp-1');
 
@@ -75,7 +76,7 @@ describe('CustomsShipmentController', () => {
       issue_date: new Date(),
       storage_url: 'https://supabase.co/file.pdf',
     };
-    mockAddDocument.execute.mockResolvedValue({ id: 'doc-1', document_number: 'INV-1001' });
+    mockAddDocument.execute.mockResolvedValue({ id: 'doc-1', document_number: 'INV-1001' } as any);
 
     const result = await controller.addDocument('ship-1', 'comp-1', dto);
 
@@ -89,11 +90,29 @@ describe('CustomsShipmentController', () => {
       event_timestamp: new Date(),
       registered_by: 'AGENTE_ADUANAS',
     };
-    mockAddEvent.execute.mockResolvedValue({ id: 'evt-1', event_type: 'ARRIBO' });
+    mockAddEvent.execute.mockResolvedValue({ id: 'evt-1', event_type: 'ARRIBO' } as any);
 
     const result = await controller.addEvent('ship-1', 'comp-1', dto);
 
     expect(result.id).toBe('evt-1');
     expect(mockAddEvent.execute).toHaveBeenCalledWith('ship-1', dto, 'comp-1');
+  });
+
+  it('debe arrojar UnauthorizedException si falta companyId en cualquiera de los endpoints', async () => {
+    await expect(controller.createShipment(undefined, {} as any)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(controller.listShipments(undefined)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(controller.getShipmentById('ship-1', undefined)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(controller.addDocument('ship-1', undefined, {} as any)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(controller.addEvent('ship-1', undefined, {} as any)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 });

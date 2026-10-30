@@ -4,6 +4,8 @@ import { CalculateDuaUseCase } from '../../../src/modules/customs/application/us
 import { RegisterDuaUseCase } from '../../../src/modules/customs/application/use-cases/registerDuaUseCase';
 import { GetCustomsDeclarationByIdUseCase } from '../../../src/modules/customs/application/use-cases/getCustomsDeclarationByIdUseCase';
 import { ListCustomsDeclarationsUseCase } from '../../../src/modules/customs/application/use-cases/listCustomsDeclarationsUseCase';
+import { RegisterDuaWizardUseCase } from '../../../src/modules/customs/application/use-cases/registerDuaWizardUseCase';
+import { SimulateDamTaxesUseCase } from '../../../src/modules/customs/application/use-cases/simulateDamTaxesUseCase';
 import { CalculateDuaDto } from '../../../src/modules/customs/application/dto/calculateDuaDto';
 import { RegisterDuaDto } from '../../../src/modules/customs/application/dto/registerDuaDto';
 
@@ -13,29 +15,24 @@ describe('CustomsController', () => {
   let registerDuaUseCase: jest.Mocked<RegisterDuaUseCase>;
   let getCustomsDeclarationByIdUseCase: jest.Mocked<GetCustomsDeclarationByIdUseCase>;
   let listCustomsDeclarationsUseCase: jest.Mocked<ListCustomsDeclarationsUseCase>;
+  let registerDuaWizardUseCase: jest.Mocked<RegisterDuaWizardUseCase>;
+  let simulateDamTaxesUseCase: jest.Mocked<SimulateDamTaxesUseCase>;
 
   beforeEach(() => {
-    calculateDuaUseCase = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<CalculateDuaUseCase>;
-
-    registerDuaUseCase = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<RegisterDuaUseCase>;
-
-    getCustomsDeclarationByIdUseCase = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<GetCustomsDeclarationByIdUseCase>;
-
-    listCustomsDeclarationsUseCase = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<ListCustomsDeclarationsUseCase>;
+    calculateDuaUseCase = { execute: jest.fn() } as any;
+    registerDuaUseCase = { execute: jest.fn() } as any;
+    getCustomsDeclarationByIdUseCase = { execute: jest.fn() } as any;
+    listCustomsDeclarationsUseCase = { execute: jest.fn() } as any;
+    registerDuaWizardUseCase = { execute: jest.fn() } as any;
+    simulateDamTaxesUseCase = { execute: jest.fn() } as any;
 
     controller = new CustomsController(
       calculateDuaUseCase,
       registerDuaUseCase,
       getCustomsDeclarationByIdUseCase,
       listCustomsDeclarationsUseCase,
+      registerDuaWizardUseCase,
+      simulateDamTaxesUseCase,
     );
   });
 
@@ -63,6 +60,54 @@ describe('CustomsController', () => {
     const result = controller.calculateLiquidation(dto);
     expect(result).toEqual(mockResponse);
     expect(calculateDuaUseCase.execute).toHaveBeenCalledWith(dto);
+  });
+
+  it('debe simular liquidación de tributos aduaneros DAM', async () => {
+    const mockSim = { total_taxes: 5000 };
+    simulateDamTaxesUseCase.execute.mockResolvedValue(mockSim as any);
+
+    const res = await controller.simulateDeclaration({} as any);
+    expect(res).toEqual(mockSim);
+    expect(simulateDamTaxesUseCase.execute).toHaveBeenCalled();
+  });
+
+  it('debe registrar DUA a través del Wizard paso a paso', async () => {
+    const mockWizardRes = { declarationId: 'decl-wizard-1' };
+    registerDuaWizardUseCase.execute.mockResolvedValue(mockWizardRes as any);
+
+    const res = await controller.registerDeclarationWizard('comp-001', {} as any);
+    expect(res).toEqual(mockWizardRes);
+    expect(registerDuaWizardUseCase.execute).toHaveBeenCalledWith({}, 'comp-001');
+  });
+
+  it('debe arrojar UnauthorizedException si falta companyId en wizard, list o get', async () => {
+    await expect(controller.registerDeclarationWizard(undefined, {} as any)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(controller.getDeclarationById('decl-1', undefined)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(controller.listDeclarations(undefined)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('debe arrojar Error si no están inyectados los casos de uso opcionales en CustomsController', async () => {
+    const bareController = new CustomsController(
+      calculateDuaUseCase,
+      registerDuaUseCase,
+      getCustomsDeclarationByIdUseCase,
+      listCustomsDeclarationsUseCase,
+      undefined,
+      undefined,
+    );
+
+    await expect(bareController.simulateDeclaration({} as any)).rejects.toThrow(
+      'SimulateDamTaxesUseCase no está inyectado',
+    );
+    await expect(bareController.registerDeclarationWizard('comp-001', {} as any)).rejects.toThrow(
+      'RegisterDuaWizardUseCase no está inyectado',
+    );
   });
 
   it('debe registrar una DUA y delegar al caso de uso con el companyId verificado', async () => {
