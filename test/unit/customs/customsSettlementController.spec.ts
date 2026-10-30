@@ -1,3 +1,4 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { CustomsSettlementController } from '../../../src/modules/customs/infrastructure/controllers/customsSettlementController';
 import { PaySettlementUseCase } from '../../../src/modules/customs/application/use-cases/paySettlementUseCase';
 import type { ICustomsSettlementRepositoryPort } from '../../../src/modules/customs/domain/ports/customsSettlementRepositoryPort';
@@ -35,15 +36,15 @@ describe('CustomsSettlementController', () => {
     expect(mockSettlementRepo.findPendingSettlementsByCompany).toHaveBeenCalledWith('comp-1');
   });
 
-  it('debe obtener liquidaciones por id de declaración', async () => {
+  it('debe obtener liquidaciones por id de declaración con companyId', async () => {
     mockSettlementRepo.findSettlementsByDeclarationId.mockResolvedValue([
       { id: 'sett-1', cda_number: '11826001058921' },
     ]);
 
-    const result = await controller.getSettlementsByDeclaration('decl-1');
+    const result = await controller.getSettlementsByDeclaration('decl-1', 'comp-1');
 
     expect(result).toHaveLength(1);
-    expect(mockSettlementRepo.findSettlementsByDeclarationId).toHaveBeenCalledWith('decl-1');
+    expect(mockSettlementRepo.findSettlementsByDeclarationId).toHaveBeenCalledWith('decl-1', 'comp-1');
   });
 
   it('debe registrar el pago de una liquidación CDA', async () => {
@@ -57,5 +58,11 @@ describe('CustomsSettlementController', () => {
 
     expect(result).toEqual({ id: 'sett-1', status: 'PAGADA' });
     expect(mockPaySettlementUseCase.execute).toHaveBeenCalledWith('sett-1', dto, 'comp-1');
+  });
+
+  it('debe arrojar UnauthorizedException si no se provee companyId', async () => {
+    await expect(controller.getPendingSettlements(undefined)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 });

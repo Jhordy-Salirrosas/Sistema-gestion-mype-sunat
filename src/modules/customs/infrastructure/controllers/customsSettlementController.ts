@@ -7,6 +7,7 @@ import {
   Inject,
   Param,
   Post,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -30,14 +31,22 @@ export class CustomsSettlementController {
   @Get('pending')
   @HttpCode(HttpStatus.OK)
   async getPendingSettlements(@CurrentCompany() companyId: string | undefined) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.settlementRepository.findPendingSettlementsByCompany(resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.settlementRepository.findPendingSettlementsByCompany(companyId);
   }
 
   @Get('declaration/:declarationId')
   @HttpCode(HttpStatus.OK)
-  async getSettlementsByDeclaration(@Param('declarationId') declarationId: string) {
-    return this.settlementRepository.findSettlementsByDeclarationId(declarationId);
+  async getSettlementsByDeclaration(
+    @Param('declarationId') declarationId: string,
+    @CurrentCompany() companyId: string | undefined,
+  ) {
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.settlementRepository.findSettlementsByDeclarationId(declarationId, companyId);
   }
 
   @Post(':id/pay')
@@ -47,7 +56,9 @@ export class CustomsSettlementController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: PaySettlementDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.paySettlementUseCase.execute(id, dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.paySettlementUseCase.execute(id, dto, companyId);
   }
 }

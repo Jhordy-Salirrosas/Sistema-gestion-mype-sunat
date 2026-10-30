@@ -1,25 +1,35 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { CreateAccountingEntryDto } from '../dto/createAccountingEntryDto';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 import { DoubleEntryRule } from '../../domain/rules/doubleEntryRule';
-import { PrismaService } from '../../../../database/prismaService';
+import { ACCOUNTING_REPOSITORY_PORT } from '../../domain/ports/accountingRepositoryPort';
+import type { IAccountingRepositoryPort } from '../../domain/ports/accountingRepositoryPort';
 
 @Injectable()
 export class GenerateAccountingEntryUseCase {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(ACCOUNTING_REPOSITORY_PORT)
+    private readonly accountingRepository: IAccountingRepositoryPort,
+  ) {}
 
   async execute(dto: CreateAccountingEntryDto): Promise<AccountingEntryEntity> {
-    // 1. Instanciar la entidad de dominio
+    const companyId = dto.companyId ?? '';
+    const period = dto.period;
+
+    // 1. Obtener dinámicamente el siguiente número correlativo
+    const nextEntryNumber = await this.accountingRepository.getNextEntryNumber(companyId, period);
+
+    // 2. Instanciar la entidad de dominio con el correlativo incremental
     const entry = new AccountingEntryEntity({
-      companyId: dto.companyId ?? '',
-      period: dto.period,
-      entryNumber: dto.entryNumber ?? 1,
+      companyId,
+      period,
+      entryNumber: nextEntryNumber,
       entryDate: new Date(dto.entryDate),
       glosa: dto.glosa,
       sourceModule: dto.sourceModule,
       sourceReferenceId: dto.sourceReferenceId,
-      lines: dto.lines.map((l) => ({
-        lineOrder: l.lineOrder,
+      lines: dto.lines.map((l, index) => ({
+        lineOrder: l.lineOrder ?? index + 1,
         accountCode: l.accountCode,
         accountName: l.accountName,
         debitAmount: l.debitAmount,
@@ -27,44 +37,10 @@ export class GenerateAccountingEntryUseCase {
       })),
     });
 
-    // 2. Validación estricta del Principio de Partida Doble
+    // 3. Validación estricta del Principio de Partida Doble
     DoubleEntryRule.validate(entry);
 
-    // 3. Calcular totales para los campos obligatorios del esquema de Prisma
-    const totalDebit = entry.lines.reduce((sum, line) => sum + (line.debitAmount || 0), 0);
-    const totalCredit = entry.lines.reduce((sum, line) => sum + (line.creditAmount || 0), 0);
-    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
-
-    // 4. PERSISTENCIA EN SUPABASE
-    try {
-      await this.prisma.accountingEntry.create({
-        data: {
-          company_id: (entry.companyId || dto.companyId) as string,
-          period: entry.period,
-          entry_number: entry.entryNumber,
-          entry_date: entry.entryDate,
-          glosa: entry.glosa,
-          source_module: entry.sourceModule,
-          source_reference_id: entry.sourceReferenceId,
-          total_debit: totalDebit,
-          total_credit: totalCredit,
-          is_balanced: isBalanced,
-          lines: {
-            create: entry.lines.map((l) => ({
-              line_order: l.lineOrder,
-              account_code: l.accountCode,
-              account_name: l.accountName,
-              debit_amount: l.debitAmount,
-              credit_amount: l.creditAmount,
-            })),
-          },
-        },
-      });
-      console.log('✅ ¡ASIENTO GUARDADO EXITOSAMENTE EN SUPABASE!');
-    } catch (error) {
-      console.error('❌ ERROR AL GUARDAR EN SUPABASE:', error);
-    }
-
-    return entry;
+    // 4. Persistir a través del puerto del repositorio
+    return await this.accountingRepository.saveEntry(entry);
   }
 }

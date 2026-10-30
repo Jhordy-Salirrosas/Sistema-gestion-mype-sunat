@@ -23,8 +23,8 @@ export const CUSTOMS_SETTLEMENT_REPOSITORY_PORT = Symbol('CUSTOMS_SETTLEMENT_REP
 
 export interface ICustomsSettlementRepositoryPort {
   createSettlements(settlements: CreateSettlementData[]): Promise<any[]>;
-  findSettlementById(id: string): Promise<any | null>;
-  findSettlementsByDeclarationId(declarationId: string): Promise<any[]>;
+  findSettlementById(id: string, companyId?: string): Promise<any | null>;
+  findSettlementsByDeclarationId(declarationId: string, companyId?: string): Promise<any[]>;
   findPendingSettlementsByCompany(companyId: string): Promise<any[]>;
   registerSettlementPayment(data: PaySettlementData): Promise<any>;
 }

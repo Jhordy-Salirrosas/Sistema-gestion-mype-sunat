@@ -34,8 +34,8 @@ export const LANDED_COST_REPOSITORY_PORT = Symbol('LANDED_COST_REPOSITORY_PORT')
 
 export interface ILandedCostRepositoryPort {
   addLocalExpense(data: CreateLocalExpenseData): Promise<any>;
-  findLocalExpensesByShipmentId(shipmentId: string): Promise<any[]>;
+  findLocalExpensesByShipmentId(shipmentId: string, companyId?: string): Promise<any[]>;
   deleteLocalExpense(expenseId: string): Promise<void>;
   saveLandedCostSheet(data: SaveLandedCostSheetData): Promise<any>;
-  findLandedCostSheetByShipmentId(shipmentId: string): Promise<any | null>;
+  findLandedCostSheetByShipmentId(shipmentId: string, companyId?: string): Promise<any | null>;
 }

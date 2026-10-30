@@ -30,33 +30,49 @@ export class ExportPleTxtUseCase {
     const lines: string[] = [];
 
     entries.forEach((entry, entryIndex) => {
-      entry.lines.forEach((line) => {
-        totalDebit += line.debitAmount;
-        totalCredit += line.creditAmount;
+      // Formateo estricto del CUO para SUNAT (ej. 001-202610-001)
+      const rawEntryNumber = entry.entryNumber ? String(entry.entryNumber) : '';
+      const isFormattedCuo = /^\d{3}-\d{6}-\d{3,}$/.test(rawEntryNumber);
 
-        // Formato estructurado PLE delimitado por tuberías |
+      const cuo = isFormattedCuo
+        ? rawEntryNumber
+        : `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(entryIndex + 1).padStart(3, '0')}`;
+
+      entry.lines.forEach((line, lineIdx) => {
+        const debitVal = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
+        const creditVal = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
+
+        totalDebit += debitVal;
+        totalCredit += creditVal;
+
+        const lineOrderNum = line.lineOrder ?? (line as any).line_order ?? (lineIdx + 1);
+        const lineCorrelative = `M${String(lineOrderNum).padStart(3, '0')}`;
+        const accountCode = line.accountCode || (line as any).account_code || '';
+
         const record = [
-          `${dto.year}${String(dto.month).padStart(2, '0')}00`, // Periodo
-          `${entryIndex + 1}_${line.lineOrder}`, // Correlativo / CUO
-          `M${line.lineOrder}`, // Número correlativo del asiento
-          line.accountCode, // Código de cuenta PCGE
-          line.debitAmount.toFixed(2), // Monto Debe
-          line.creditAmount.toFixed(2), // Monto Haber
-          entry.glosa, // Glosa
-          '1', // Estado de la operación
-          '', // Campo final obligatorio con tubería
+          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
+          cuo,
+          lineCorrelative,
+          accountCode,
+          debitVal.toFixed(2),
+          creditVal.toFixed(2),
+          entry.glosa || '',
+          '1',
+          '',
         ].join('|');
 
         lines.push(record);
       });
     });
 
+    const content = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
+
     return {
       fileName,
       recordsCount: lines.length,
       totalDebit: Math.round(totalDebit * 100) / 100,
       totalCredit: Math.round(totalCredit * 100) / 100,
-      content: lines.join('\r\n'),
+      content,
     };
   }
 }
