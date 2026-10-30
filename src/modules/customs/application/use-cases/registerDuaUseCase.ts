@@ -1,46 +1,28 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { RegisterDuaDto } from '../dto/registerDuaDto';
 import { DuaNumberVO } from '../../domain/value-objects/duaNumberVo';
+import { HsCodeVO } from '../../domain/value-objects/hsCodeVo';
 import { CalculateCifRule } from '../../domain/rules/calculateCifRule';
 import { CalculateCustomsTaxesRule } from '../../domain/rules/calculateCustomsTaxesRule';
 import { CustomsDeclarationEntity } from '../../domain/entities/customsDeclarationEntity';
 import { CustomsItemEntity } from '../../domain/entities/customsItemEntity';
-import { CUSTOMS_REPOSITORY_PORT } from '../../domain/ports/customsRepositoryPort';
-import type {
-  ICustomsRepositoryPort,
-  KardexMovementRecord,
+import {
+  CUSTOMS_REPOSITORY_PORT,
+  type ICustomsRepositoryPort,
 } from '../../domain/ports/customsRepositoryPort';
 
-export interface RegisteredDuaItemResponse {
-  id?: string;
-  item_order: number;
-  item_code?: string;
-  hs_code: string;
-  commercial_description: string;
-  quantity: number;
-  fob_total_usd: number;
-  allocated_cif_pen: number;
-  allocated_duties_pen: number;
-  landed_cost_unit_pen: number;
-}
-
 export interface RegisteredDuaResponse {
-  id?: string;
+  id: string;
   dua_number: string;
   customs_agency_code: string;
   regime_code: string;
   numeration_date: Date;
   cif_value_usd: number;
   cif_value_pen: number;
-  ad_valorem_amount_pen: number;
-  igv_ipm_amount_pen: number;
-  perception_amount_pen: number;
   total_customs_taxes_pen: number;
   status: string;
   items_count: number;
-  items: RegisteredDuaItemResponse[];
-  kardex_movements_registered: number;
-  created_at?: Date;
+  created_at: Date;
 }
 
 @Injectable()
@@ -60,22 +42,32 @@ export class RegisterDuaUseCase {
       );
     }
 
-    // 2. Validar integridad de cuadre FOB de los ítems vs cabecera
+    // 2. Validar cada Subpartida Nacional (SPN) usando Value Object
+    for (const item of dto.items) {
+      try {
+        new HsCodeVO(item.hs_code);
+      } catch (error) {
+        throw new BadRequestException(
+          `Ítem orden ${item.item_order}: ${error instanceof Error ? error.message : 'SPN inválida'}`,
+        );
+      }
+    }
+
+    // 3. Validar cuadre aritmético del FOB de los ítems vs cabecera
     const calculatedItemsFobTotal = dto.items.reduce(
       (sum, item) => sum + Number((item.quantity * item.fob_unit_usd).toFixed(2)),
       0,
     );
-
     const roundedItemsFob = Number(calculatedItemsFobTotal.toFixed(2));
     const roundedHeaderFob = Number(dto.fob_value_usd.toFixed(2));
 
-    if (Math.abs(roundedItemsFob - roundedHeaderFob) > 0.01) {
+    if (Math.abs(roundedItemsFob - roundedHeaderFob) > 0.05) {
       throw new BadRequestException(
-        `FOB sum mismatch: Items total (${roundedItemsFob.toFixed(2)}) does not match declaration FOB (${roundedHeaderFob.toFixed(2)})`,
+        `El valor FOB total de la cabecera ($${roundedHeaderFob}) no coincide con la suma de los ítems ($${roundedItemsFob})`,
       );
     }
 
-    // 3. Aplicar reglas puras de cálculo de CIF e Impuestos
+    // 4. Calcular CIF y tributos usando reglas puras de dominio
     const cif = CalculateCifRule.execute({
       fobUsd: dto.fob_value_usd,
       freightUsd: dto.freight_value_usd,
@@ -89,9 +81,8 @@ export class RegisterDuaUseCase {
       perceptionRate: dto.perception_rate,
     });
 
-    // 4. Prorrateo de Landed Cost por ítem y cálculo de Kardex Promedio Ponderado
+    // 5. Mapear y prorratear ítems de la DAM (desacoplado de Kardex)
     const customsItems: CustomsItemEntity[] = [];
-    const kardexMovements: KardexMovementRecord[] = [];
 
     for (const itemDto of dto.items) {
       const fobTotalUsd = Number((itemDto.quantity * itemDto.fob_unit_usd).toFixed(2));
@@ -118,44 +109,6 @@ export class RegisterDuaUseCase {
       });
 
       customsItems.push(itemEntity);
-
-      // 5. Consultar saldo previo para Kardex Promedio Ponderado Móvil
-      const previousMovement = await this.customsRepository.findLatestKardexMovementByItem(
-        companyId,
-        itemCode,
-      );
-
-      const previousStock = previousMovement ? Number(previousMovement.finalStockQuantity) : 0;
-      const previousAvgCost = previousMovement ? Number(previousMovement.finalAverageUnitCost) : 0;
-
-      const newStock = Number((previousStock + itemDto.quantity).toFixed(4));
-      let newAverageUnitCost = landedCostUnitPen;
-
-      if (previousStock > 0 && newStock > 0) {
-        const previousTotal = previousStock * previousAvgCost;
-        const currentTotal = itemDto.quantity * landedCostUnitPen;
-        newAverageUnitCost = Number(((previousTotal + currentTotal) / newStock).toFixed(4));
-      }
-
-      const finalTotalInventoryValue = Number((newStock * newAverageUnitCost).toFixed(2));
-
-      kardexMovements.push({
-        companyId,
-        movementDate: new Date(dto.numeration_date),
-        movementType: 'INGRESO_IMPORTACION',
-        itemCode,
-        description: itemDto.commercial_description,
-        sourceReferenceId: dto.dua_number,
-        quantityIn: itemDto.quantity,
-        unitCostIn: landedCostUnitPen,
-        totalCostIn: totalItemLandedPen,
-        quantityOut: 0,
-        unitCostOut: 0,
-        totalCostOut: 0,
-        finalStockQuantity: newStock,
-        finalAverageUnitCost: newAverageUnitCost,
-        finalTotalInventoryValue,
-      });
     }
 
     // 6. Instanciar agregado raíz CustomsDeclarationEntity
@@ -183,42 +136,26 @@ export class RegisterDuaUseCase {
       items: customsItems,
     });
 
-    // 7. Persistir atómicamente cabecera, series y Kardex
+    // 7. Persistir atómicamente cabecera y series (Kardex permanece intacto)
     const savedDeclaration = await this.customsRepository.saveDeclarationWithItemsAndKardex(
       declarationEntity,
       customsItems,
-      kardexMovements,
+      [],
     );
 
     // 8. Construir respuesta formal
     return {
-      id: savedDeclaration.id,
+      id: savedDeclaration.id ?? '',
       dua_number: savedDeclaration.duaNumber,
       customs_agency_code: savedDeclaration.customsAgencyCode,
       regime_code: savedDeclaration.regimeCode,
       numeration_date: savedDeclaration.numerationDate,
       cif_value_usd: savedDeclaration.cifValueUsd,
       cif_value_pen: savedDeclaration.cifValuePen,
-      ad_valorem_amount_pen: savedDeclaration.adValoremAmountPen,
-      igv_ipm_amount_pen: savedDeclaration.igvIpmAmountPen,
-      perception_amount_pen: savedDeclaration.perceptionAmountPen,
       total_customs_taxes_pen: savedDeclaration.totalCustomsTaxesPen,
       status: savedDeclaration.status,
       items_count: savedDeclaration.items.length,
-      items: savedDeclaration.items.map((item) => ({
-        id: item.id,
-        item_order: item.itemOrder,
-        item_code: item.itemCode,
-        hs_code: item.hsCode,
-        commercial_description: item.commercialDescription,
-        quantity: item.quantity,
-        fob_total_usd: item.fobTotalUsd,
-        allocated_cif_pen: item.allocatedCifPen,
-        allocated_duties_pen: item.allocatedDutiesPen,
-        landed_cost_unit_pen: item.landedCostUnitPen,
-      })),
-      kardex_movements_registered: kardexMovements.length,
-      created_at: savedDeclaration.createdAt,
+      created_at: savedDeclaration.createdAt ?? new Date(),
     };
   }
 }

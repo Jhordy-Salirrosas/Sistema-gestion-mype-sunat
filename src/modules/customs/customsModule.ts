@@ -4,6 +4,8 @@ import { CustomsController } from './infrastructure/controllers/customsControlle
 import { CustomsShipmentController } from './infrastructure/controllers/customsShipmentController';
 import { CustomsSettlementController } from './infrastructure/controllers/customsSettlementController';
 import { LandedCostController } from './infrastructure/controllers/landedCostController';
+import { GoodsReceiptController } from './infrastructure/controllers/goodsReceiptController';
+import { CustomsSirePurchasesController } from './infrastructure/controllers/customsSirePurchasesController';
 
 // Use Cases
 import {
@@ -11,7 +13,6 @@ import {
   RegisterDuaUseCase,
   GetCustomsDeclarationByIdUseCase,
   ListCustomsDeclarationsUseCase,
-  ListKardexMovementsUseCase,
   CreateShipmentUseCase,
   ListShipmentsUseCase,
   GetShipmentByIdUseCase,
@@ -21,7 +22,10 @@ import {
   PaySettlementUseCase,
   AddLocalExpenseUseCase,
   CalculateLandedCostUseCase,
-  ApplyLandedCostToKardexUseCase,
+  ConfirmGoodsReceiptUseCase,
+  ApproveLandedCostSheetUseCase,
+  AdjustLateImportCostUseCase,
+  SimulateDamTaxesUseCase,
 } from './application/use-cases';
 
 // Ports & Repositories
@@ -29,11 +33,15 @@ import { CUSTOMS_REPOSITORY_PORT } from './domain/ports/customsRepositoryPort';
 import { CUSTOMS_SHIPMENT_REPOSITORY_PORT } from './domain/ports/customsShipmentRepositoryPort';
 import { CUSTOMS_SETTLEMENT_REPOSITORY_PORT } from './domain/ports/customsSettlementRepositoryPort';
 import { LANDED_COST_REPOSITORY_PORT } from './domain/ports/landedCostRepositoryPort';
+import { GOODS_RECEIPT_REPOSITORY_PORT } from './domain/ports/goodsReceiptRepositoryPort';
+import { CUSTOMS_EVENT_PUBLISHER_PORT } from './domain/ports/customsEventPublisherPort';
 
 import { PrismaCustomsRepository } from './infrastructure/persistence/prismaCustomsRepository';
 import { PrismaCustomsShipmentRepository } from './infrastructure/persistence/prismaCustomsShipmentRepository';
 import { PrismaCustomsSettlementRepository } from './infrastructure/persistence/prismaCustomsSettlementRepository';
 import { PrismaLandedCostRepository } from './infrastructure/persistence/prismaLandedCostRepository';
+import { PrismaGoodsReceiptRepository } from './infrastructure/persistence/prismaGoodsReceiptRepository';
+import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nestCustomsEventPublisherAdapter';
 
 @Module({
   imports: [AuthModule],
@@ -42,6 +50,8 @@ import { PrismaLandedCostRepository } from './infrastructure/persistence/prismaL
     CustomsShipmentController,
     CustomsSettlementController,
     LandedCostController,
+    GoodsReceiptController,
+    CustomsSirePurchasesController,
   ],
   providers: [
     // Use Cases
@@ -49,7 +59,6 @@ import { PrismaLandedCostRepository } from './infrastructure/persistence/prismaL
     RegisterDuaUseCase,
     GetCustomsDeclarationByIdUseCase,
     ListCustomsDeclarationsUseCase,
-    ListKardexMovementsUseCase,
     CreateShipmentUseCase,
     ListShipmentsUseCase,
     GetShipmentByIdUseCase,
@@ -59,7 +68,10 @@ import { PrismaLandedCostRepository } from './infrastructure/persistence/prismaL
     PaySettlementUseCase,
     AddLocalExpenseUseCase,
     CalculateLandedCostUseCase,
-    ApplyLandedCostToKardexUseCase,
+    ConfirmGoodsReceiptUseCase,
+    ApproveLandedCostSheetUseCase,
+    AdjustLateImportCostUseCase,
+    SimulateDamTaxesUseCase,
 
     // Repositories & Ports
     PrismaCustomsRepository,
@@ -82,12 +94,24 @@ import { PrismaLandedCostRepository } from './infrastructure/persistence/prismaL
       provide: LANDED_COST_REPOSITORY_PORT,
       useClass: PrismaLandedCostRepository,
     },
+    PrismaGoodsReceiptRepository,
+    {
+      provide: GOODS_RECEIPT_REPOSITORY_PORT,
+      useClass: PrismaGoodsReceiptRepository,
+    },
+    NestCustomsEventPublisherAdapter,
+    {
+      provide: CUSTOMS_EVENT_PUBLISHER_PORT,
+      useClass: NestCustomsEventPublisherAdapter,
+    },
   ],
   exports: [
     CUSTOMS_REPOSITORY_PORT,
     CUSTOMS_SHIPMENT_REPOSITORY_PORT,
     CUSTOMS_SETTLEMENT_REPOSITORY_PORT,
     LANDED_COST_REPOSITORY_PORT,
+    GOODS_RECEIPT_REPOSITORY_PORT,
+    CUSTOMS_EVENT_PUBLISHER_PORT,
     CreateShipmentUseCase,
     ListShipmentsUseCase,
     GetShipmentByIdUseCase,
@@ -97,12 +121,14 @@ import { PrismaLandedCostRepository } from './infrastructure/persistence/prismaL
     PaySettlementUseCase,
     AddLocalExpenseUseCase,
     CalculateLandedCostUseCase,
-    ApplyLandedCostToKardexUseCase,
     CalculateDuaUseCase,
     RegisterDuaUseCase,
     GetCustomsDeclarationByIdUseCase,
     ListCustomsDeclarationsUseCase,
-    ListKardexMovementsUseCase,
+    ConfirmGoodsReceiptUseCase,
+    ApproveLandedCostSheetUseCase,
+    AdjustLateImportCostUseCase,
+    SimulateDamTaxesUseCase,
   ],
 })
 export class CustomsModule {}

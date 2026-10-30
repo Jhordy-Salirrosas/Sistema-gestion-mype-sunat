@@ -31,9 +31,12 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
     });
   }
 
-  async findLocalExpensesByShipmentId(shipmentId: string): Promise<any[]> {
+  async findLocalExpensesByShipmentId(shipmentId: string, companyId?: string): Promise<any[]> {
     return this.prisma.localExpenseInvoice.findMany({
-      where: { shipment_id: shipmentId },
+      where: {
+        shipment_id: shipmentId,
+        ...(companyId ? { shipment: { company_id: companyId } } : {}),
+      },
       orderBy: { issue_date: 'asc' },
     });
   }
@@ -91,8 +94,8 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
     });
   }
 
-  async findLandedCostSheetByShipmentId(shipmentId: string): Promise<any | null> {
-    return this.prisma.landedCostSheet.findUnique({
+  async findLandedCostSheetByShipmentId(shipmentId: string, companyId?: string): Promise<any | null> {
+    const sheet = await this.prisma.landedCostSheet.findUnique({
       where: { shipment_id: shipmentId },
       include: {
         shipment: {
@@ -107,5 +110,11 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
         },
       },
     });
+
+    if (sheet && companyId && sheet.shipment?.company_id !== companyId) {
+      return null;
+    }
+
+    return sheet;
   }
 }

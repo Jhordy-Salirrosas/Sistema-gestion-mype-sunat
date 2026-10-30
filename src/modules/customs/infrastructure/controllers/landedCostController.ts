@@ -5,21 +5,25 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Optional,
   Param,
   Post,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import {
   AddLocalExpenseDto,
+  AdjustLateImportCostDto,
+  ApproveLandedCostDto,
   CalculateLandedCostDto,
-  ApplyLandedCostToKardexDto,
 } from '../../application/dto';
 import {
   AddLocalExpenseUseCase,
+  AdjustLateImportCostUseCase,
+  ApproveLandedCostSheetUseCase,
   CalculateLandedCostUseCase,
-  ApplyLandedCostToKardexUseCase,
 } from '../../application/use-cases';
 import {
   LANDED_COST_REPOSITORY_PORT,
@@ -32,9 +36,12 @@ export class LandedCostController {
   constructor(
     private readonly addLocalExpenseUseCase: AddLocalExpenseUseCase,
     private readonly calculateLandedCostUseCase: CalculateLandedCostUseCase,
-    private readonly applyLandedCostToKardexUseCase: ApplyLandedCostToKardexUseCase,
     @Inject(LANDED_COST_REPOSITORY_PORT)
     private readonly landedCostRepository: ILandedCostRepositoryPort,
+    @Optional()
+    private readonly approveLandedCostSheetUseCase?: ApproveLandedCostSheetUseCase,
+    @Optional()
+    private readonly adjustLateImportCostUseCase?: AdjustLateImportCostUseCase,
   ) {}
 
   @Post('expenses')
@@ -43,14 +50,22 @@ export class LandedCostController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: AddLocalExpenseDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.addLocalExpenseUseCase.execute(dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.addLocalExpenseUseCase.execute(dto, companyId);
   }
 
   @Get('expenses/:shipmentId')
   @HttpCode(HttpStatus.OK)
-  async getExpenses(@Param('shipmentId') shipmentId: string) {
-    return this.landedCostRepository.findLocalExpensesByShipmentId(shipmentId);
+  async getExpenses(
+    @Param('shipmentId') shipmentId: string,
+    @CurrentCompany() companyId: string | undefined,
+  ) {
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.landedCostRepository.findLocalExpensesByShipmentId(shipmentId, companyId);
   }
 
   @Post('calculate')
@@ -59,23 +74,51 @@ export class LandedCostController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: CalculateLandedCostDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.calculateLandedCostUseCase.execute(dto, resolvedCompanyId);
-  }
-
-  @Post('apply-kardex')
-  @HttpCode(HttpStatus.CREATED)
-  async applyToKardex(
-    @CurrentCompany() companyId: string | undefined,
-    @Body() dto: ApplyLandedCostToKardexDto,
-  ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.applyLandedCostToKardexUseCase.execute(dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.calculateLandedCostUseCase.execute(dto, companyId);
   }
 
   @Get('sheet/:shipmentId')
   @HttpCode(HttpStatus.OK)
-  async getSheet(@Param('shipmentId') shipmentId: string) {
-    return this.landedCostRepository.findLandedCostSheetByShipmentId(shipmentId);
+  async getSheet(
+    @Param('shipmentId') shipmentId: string,
+    @CurrentCompany() companyId: string | undefined,
+  ) {
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.landedCostRepository.findLandedCostSheetByShipmentId(shipmentId, companyId);
+  }
+
+  @Post('approve')
+  @HttpCode(HttpStatus.OK)
+  async approveSheet(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() dto: ApproveLandedCostDto,
+  ) {
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    if (!this.approveLandedCostSheetUseCase) {
+      throw new Error('ApproveLandedCostSheetUseCase no está inyectado');
+    }
+    return this.approveLandedCostSheetUseCase.execute(dto, companyId);
+  }
+
+  @Post('late-cost')
+  @HttpCode(HttpStatus.CREATED)
+  async adjustLateCost(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() dto: AdjustLateImportCostDto,
+  ) {
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    if (!this.adjustLateImportCostUseCase) {
+      throw new Error('AdjustLateImportCostUseCase no está inyectado');
+    }
+    return this.adjustLateImportCostUseCase.execute(dto, companyId);
   }
 }
