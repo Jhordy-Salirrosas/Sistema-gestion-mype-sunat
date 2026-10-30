@@ -24,6 +24,7 @@ import type {
 } from '../../../src/modules/sunat/soap/sunatBillTypes';
 
 export interface HistoryRow {
+  company_id: string;
   invoice_id: string;
   intento: number;
   estado_anterior: InvoiceStatus | null;
@@ -65,7 +66,11 @@ export function crearDb(invoiceId: string): FakeDb {
         async (args: { where: { id: string }; data: { estado: InvoiceStatus } }) => {
           const actual = invoices.get(args.where.id);
           if (actual) actual.estado = args.data.estado;
-          return { id: args.where.id, estado: args.data.estado };
+          return {
+            id: args.where.id,
+            estado: args.data.estado,
+            company_id: 'company-ta34-test',
+          };
         },
       ),
     },

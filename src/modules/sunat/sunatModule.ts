@@ -4,6 +4,8 @@ import { SignatureService } from './signature.service';
 import { PrismaModule } from '../../database/prismaModule';
 import { CdrPersistenceService } from './cdr-persistence.service';
 import { SunatBillService } from './sunat-bill.service';
+import { ResilienceStateModule } from '../resilience/application/resilienceStateModule';
+import { ResilienceStateService } from '../resilience/application/resilienceStateService';
 
 /**
  * Modulo SUNAT.
@@ -15,7 +17,7 @@ import { SunatBillService } from './sunat-bill.service';
  *    (SunatBillService, CdrPersistenceService).
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, ResilienceStateModule],
   controllers: [],
   providers: [
     CertificateService,
@@ -26,9 +28,11 @@ import { SunatBillService } from './sunat-bill.service';
     // siendo testeable con un cliente que apunte al Mock.
     {
       provide: SunatBillService,
-      useFactory: (persistence: CdrPersistenceService) =>
-        SunatBillService.create(persistence),
-      inject: [CdrPersistenceService],
+      useFactory: (
+        persistence: CdrPersistenceService,
+        resilienceState: ResilienceStateService,
+      ) => SunatBillService.create(persistence, undefined, resilienceState),
+      inject: [CdrPersistenceService, ResilienceStateService],
     },
   ],
   exports: [SunatBillService, CertificateService, SignatureService],

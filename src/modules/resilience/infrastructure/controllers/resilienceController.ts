@@ -6,9 +6,11 @@ import {
   HttpStatus,
   Param,
   Post,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { CurrentCompany } from '../../../auth/infrastructure/decorators/currentCompanyDecorator';
 import { ChaosScenarioDto } from '../../application/dto/chaosScenarioDto';
 import { ResilienceStateService } from '../../application/resilienceStateService';
 import { QueueService } from '../queue/queue.service';
@@ -19,8 +21,7 @@ import { QueueService } from '../queue/queue.service';
  * El prefijo lleva `api/v1` porque el `baseURL` de Axios en el frontend ya es
  * `/api/v1`: si aqui se omitiera, la llamada saldria duplicada y daria 404.
  *
- * Contrato (ver `resilienceApi.ts` y `resilience.types.ts` del frontend):
- *   GET  /api/v1/resilience/metrics        -> CircuitBreakerMetrics
+ * Contrato:
  *   GET  /api/v1/resilience/dlq            -> DlqItem[]
  *   POST /api/v1/resilience/dlq/:id/retry  -> { success, message }
  *   POST /api/v1/resilience/chaos          -> ChaosScenario
@@ -33,24 +34,20 @@ export class ResilienceController {
     private readonly queue: QueueService,
   ) {}
 
-  /** Estado del Circuit Breaker y contadores de llamadas a SUNAT. */
-  @Get('metrics')
-  async getMetrics() {
-    const buffered = await this.queue.countQueued();
-    return this.state.snapshot(buffered);
-  }
-
   /** Comprobantes que agotaron los intentos y cayeron a la cola de muertos. */
   @Get('dlq')
-  async getDlq() {
-    return this.queue.listDlq();
+  async getDlq(@CurrentCompany() companyId?: string) {
+    return this.queue.listDlq(this.requireCompany(companyId));
   }
 
   /** Devuelve un comprobante de la DLQ a la cola principal. */
   @Post('dlq/:id/retry')
   @HttpCode(HttpStatus.OK)
-  async retryDlq(@Param('id') id: string) {
-    await this.queue.retryDlq(id);
+  async retryDlq(
+    @Param('id') id: string,
+    @CurrentCompany() companyId?: string,
+  ) {
+    await this.queue.retryDlq(id, this.requireCompany(companyId));
     return {
       success: true,
       message: `El comprobante ${id} volvio a la cola de envio`,
@@ -70,5 +67,15 @@ export class ResilienceController {
 
     this.state.setChaos(dto);
     return { ...this.state.getChaos(), active: true };
+  }
+
+  private requireCompany(companyId?: string): string {
+    if (!companyId) {
+      throw new UnauthorizedException(
+        'La empresa del usuario no está definida.',
+      );
+    }
+
+    return companyId;
   }
 }

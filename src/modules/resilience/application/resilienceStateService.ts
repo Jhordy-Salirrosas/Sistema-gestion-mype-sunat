@@ -6,46 +6,24 @@ import {
 import { SunatFaultMode } from '../infrastructure/mock/sunat-fault-injection.fixtures';
 import { ChaosScenarioDto } from './dto/chaosScenarioDto';
 
-/** Estados que espera el frontend en `CircuitBreakerMetrics.state`. */
+/** Estados operativos posibles del circuito. */
 export type CircuitBreakerStatus = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
-/** Forma exacta de `CircuitBreakerMetrics` en el frontend. */
-export interface CircuitBreakerMetrics {
+export interface CircuitBreakerSnapshot {
   state: CircuitBreakerStatus;
-  failureRate: number;
-  slowCallRate: number;
-  bufferedInvoicesCount: number;
-  totalCalls: number;
-  successfulCalls: number;
-  failedCalls: number;
   lastStateChange: string;
+  circuitBreakerScope: 'global';
 }
 
 /**
- * Estado en memoria de la resiliencia del sistema (M2).
- *
- * Reune las tres cosas que el frontend necesita y que no existian:
- *
- *  1. Una instancia viva del `CircuitBreaker` (hasta ahora la clase no se
- *     instanciaba en ningun sitio).
- *  2. Los contadores de llamadas a SUNAT (`total`, `exitosas`, `fallidas`).
- *  3. El escenario de caos activo, que el Inyector de Fallos consulta antes de
- *     resolver el modo por RUC.
- *
- * Los contadores se alimentan desde `SunatMockService.resolveResponse`, que es
- * por donde pasan todas las llamadas simuladas a SUNAT. Cuando se conecte el
- * cliente SOAP real, el `record*` se mueve a `SunatBillService`.
+ * Estado global del Circuit Breaker y del escenario de caos (M2).
+ * La actividad del Dashboard SIRE se consulta por separado desde PostgreSQL.
  */
 @Injectable()
 export class ResilienceStateService {
   private readonly logger = new Logger(ResilienceStateService.name);
 
   private readonly breaker = new CircuitBreaker();
-
-  private totalCalls = 0;
-  private successfulCalls = 0;
-  private failedCalls = 0;
-  private slowCalls = 0;
 
   private estadoPrevio: CircuitState = CircuitState.CLOSED;
   private lastStateChange = new Date().toISOString();
@@ -54,25 +32,18 @@ export class ResilienceStateService {
 
   /** Registra una llamada exitosa a SUNAT. */
   recordSuccess(): void {
-    this.totalCalls += 1;
-    this.successfulCalls += 1;
     this.breaker.registrarExito();
     this.sincronizarEstado();
   }
 
   /** Registra una llamada fallida a SUNAT (5xx o timeout). */
   recordFailure(): void {
-    this.totalCalls += 1;
-    this.failedCalls += 1;
     this.breaker.registrarFallo();
     this.sincronizarEstado();
   }
 
   /** Registra una llamada lenta (modo SLOW), que cuenta como exitosa. */
   recordSlow(): void {
-    this.totalCalls += 1;
-    this.successfulCalls += 1;
-    this.slowCalls += 1;
     this.breaker.registrarExito();
     this.sincronizarEstado();
   }
@@ -157,27 +128,18 @@ export class ResilienceStateService {
     return this.chaos;
   }
 
-  /**
-   * Foto de las metricas para `GET /api/v1/resilience/metrics`.
-   * `bufferedInvoicesCount` lo aporta la cola de pg-boss.
-   */
-  snapshot(bufferedInvoicesCount: number): CircuitBreakerMetrics {
+  /** Estado del circuito compartido, sin métricas de actividad por empresa. */
+  snapshot(): CircuitBreakerSnapshot {
+    this.sincronizarEstado();
     const estado = this.breaker.getState();
-    const porcentaje = (n: number): number =>
-      this.totalCalls === 0 ? 0 : Math.round((n * 100) / this.totalCalls);
 
     return {
       state:
         estado === CircuitState.HALF_OPEN
           ? 'HALF_OPEN'
           : (estado as CircuitBreakerStatus),
-      failureRate: porcentaje(this.failedCalls),
-      slowCallRate: porcentaje(this.slowCalls),
-      bufferedInvoicesCount,
-      totalCalls: this.totalCalls,
-      successfulCalls: this.successfulCalls,
-      failedCalls: this.failedCalls,
       lastStateChange: this.lastStateChange,
+      circuitBreakerScope: 'global',
     };
   }
 }

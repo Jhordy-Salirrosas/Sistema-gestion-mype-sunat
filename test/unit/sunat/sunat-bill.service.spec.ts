@@ -19,6 +19,7 @@ import {
   SunatTransportError,
 } from '../../../src/modules/sunat/soap/sunat-soap.client';
 import { SunatBillService } from '../../../src/modules/sunat/sunat-bill.service';
+import { ResilienceStateService } from '../../../src/modules/resilience/application/resilienceStateService';
 
 const RUC = '20123456786';
 
@@ -145,8 +146,74 @@ describe('SunatBillService (unitaria) - credenciales SOL', () => {
     expect(resultado.estado).toBe(InvoiceStatus.ENVIADO);
     expect(persistFailure).toHaveBeenCalledWith(
       expect.objectContaining({
-        codigoError: null,
+        codigoError: 'TRANSPORT_ERROR',
         estadoNuevo: InvoiceStatus.ENVIADO,
+        httpStatusCode: null,
+      }),
+    );
+  });
+
+  it('registra fallos de transporte y persiste estado HTTP y duración', async () => {
+    const state = new ResilienceStateService();
+    const recordFailure = jest.spyOn(state, 'recordFailure');
+    const recordSuccess = jest.spyOn(state, 'recordSuccess');
+    sendBill.mockRejectedValue(
+      new SunatTransportError('HTTP 503', {
+        httpStatus: 503,
+        elapsedMs: 5_500,
+      }),
+    );
+    service = new SunatBillService(
+      {
+        persist: jest.fn(),
+        persistFailure,
+      } as unknown as CdrPersistenceService,
+      { sendBill } as unknown as SunatSoapClient,
+      state,
+    );
+
+    await service.sendAndProcess(paramsBase);
+
+    expect(recordFailure).toHaveBeenCalledTimes(1);
+    expect(recordSuccess).not.toHaveBeenCalled();
+    expect(persistFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codigoError: 'HTTP_503',
+        httpStatusCode: 503,
+        tiempoRespuestaMs: 5_500,
+      }),
+    );
+  });
+
+  it('no interpreta un SOAP Fault de negocio como caída de disponibilidad', async () => {
+    const state = new ResilienceStateService();
+    const recordFailure = jest.spyOn(state, 'recordFailure');
+    const recordSuccess = jest.spyOn(state, 'recordSuccess');
+    const fault = new SunatSoapFaultError({
+      faultCode: '0102',
+      faultString: 'Credenciales inválidas',
+    });
+    fault.httpStatusCode = 500;
+    fault.elapsedMs = 123;
+    sendBill.mockRejectedValue(fault);
+    service = new SunatBillService(
+      {
+        persist: jest.fn(),
+        persistFailure,
+      } as unknown as CdrPersistenceService,
+      { sendBill } as unknown as SunatSoapClient,
+      state,
+    );
+
+    await service.sendAndProcess(paramsBase);
+
+    expect(recordFailure).not.toHaveBeenCalled();
+    expect(recordSuccess).toHaveBeenCalledTimes(1);
+    expect(persistFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codigoError: '0102',
+        httpStatusCode: 500,
+        tiempoRespuestaMs: 123,
       }),
     );
   });

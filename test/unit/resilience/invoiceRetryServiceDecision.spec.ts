@@ -58,6 +58,12 @@ describe('HU-04 · InvoiceRetryService (decisiones)', () => {
     expect(tx.invoice.update).toHaveBeenCalledWith({
       where: { id: paramsBase.invoiceId },
       data: { estado: InvoiceStatus.ERROR_RED },
+      select: { company_id: true },
     });
+    expect(queue.sendToDlq).toHaveBeenCalledWith(
+      paramsBase.invoiceId,
+      'company-test',
+      expect.objectContaining({ estado: InvoiceStatus.ERROR_RED }),
+    );
   });
 });

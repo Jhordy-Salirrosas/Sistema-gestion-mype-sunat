@@ -70,10 +70,12 @@ describe('HU-04 · InvoiceRetryService', () => {
     expect(tx.invoice.update).toHaveBeenCalledWith({
       where: { id: paramsBase.invoiceId },
       data: { estado: InvoiceStatus.ERROR_RED },
+      select: { company_id: true },
     });
     expect(tx.transactionHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          company_id: 'company-test',
           invoice_id: paramsBase.invoiceId,
           intento: 4,
           estado_anterior: InvoiceStatus.ENVIADO,
@@ -87,6 +89,7 @@ describe('HU-04 · InvoiceRetryService', () => {
     expect(queue.sendToDlq).toHaveBeenCalledTimes(1);
     expect(queue.sendToDlq).toHaveBeenCalledWith(
       paramsBase.invoiceId,
+      'company-test',
       expect.objectContaining({
         intento: 4,
         codigo_error: 'MAX_REINTENTOS',

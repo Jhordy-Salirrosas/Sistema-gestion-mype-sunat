@@ -55,6 +55,78 @@ $$\text{Retardo}(n) \in \{5,\ 15,\ 45\}\ \text{segundos} \quad \text{para } n = 
 * **MTTR (Mean Time to Recover):** Tiempo desde que SUNAT/Mock se restablece hasta que la cola de tareas pendientes es drenada en su totalidad.
   $$\text{MTTR} = T_{\text{cola\_vaciada}} - T_{\text{restablecimiento\_servicio}} \quad (\text{Meta: } \le 60\text{ s})$$
 
+### Contratos HTTP del Dashboard SIRE de resiliencia
+
+- El caso de uso, las consultas históricas y las rutas del dashboard pertenecen
+  a `src/modules/sire/`; el módulo `resilience` aporta el estado compartido del
+  Circuit Breaker y conserva sus operaciones de cola/caos.
+- `GET /api/v1/sire/dashboard/metrics` conserva todos sus campos anteriores y
+  añade `recentFailedCalls` (errores de red observados en la ventana inclusiva
+  `[ahora - 5 minutos, ahora]`) y `mttdSeconds`, `mttrSeconds`,
+  `mtbfSeconds`, además de `totalRetries`, que cuenta envíos reales con
+  `intento > 1` registrados en `TransactionHistory` y excluye la transición
+  terminal `MAX_REINTENTOS`.
+- `totalCalls`, `successfulCalls`, `failedCalls`, `failureRate`, `slowCallRate`,
+  `recentFailedCalls`, `totalRetries` y `bufferedInvoicesCount` se calculan para
+  la empresa del JWT usando `TransactionHistory` e invoices pendientes/en cola.
+  Cada registro
+  del historial es un intento SOAP real. Un fallo es timeout/red sin respuesta o
+  HTTP 5xx sin SOAP Fault; un SOAP Fault/CDR de negocio cuenta como respuesta del
+  servicio, no como fallo de disponibilidad. Se usa `http_status_code` cuando
+  está disponible y los códigos explícitos `TRANSPORT_ERROR`/`HTTP_<status>` para
+  intentos nuevos. Los registros históricos ambiguos sin código ni estado de
+  respuesta solo se pueden clasificar con el estado/código que quedó persistido.
+  Los contadores son acumulados desde el historial disponible; la tasa lenta usa
+  `tiempo_respuesta_ms >= 5000`. `state`, `lastStateChange` y
+  `circuitBreakerScope: "global"` representan el circuito SUNAT compartido por
+  todas las empresas; `activityScope: "company"` identifica los contadores
+  tenant-scoped. Los campos scope se incluyen en la respuesta para que la UI no
+  presente el estado operativo global como si fuera exclusivo del tenant.
+  El circuito y `lastStateChange` viven en memoria y se reinician al reiniciar
+  el proceso; las métricas históricas de actividad sí se leen de PostgreSQL.
+- `GET /api/v1/sire/metrics`, `GET /api/v1/metrics` y
+  `GET /api/v1/resilience/metrics` se mantienen como aliases autenticados por
+  compatibilidad. Los clientes nuevos deben usar
+  `/api/v1/sire/dashboard/metrics`.
+- Los tres tiempos se expresan en segundos y son promedios sobre incidentes
+  completos. MTTD es `circuitOpenedAt - firstObservedFailureAt`; MTTR es
+  `queueDrainedAt - serviceRestoredAt`; MTBF es
+  `nextIncidentStartedAt - priorIncidentResolvedAt` (tiempo operativo entre
+  incidentes). `TransactionHistory` no registra los cambios persistidos del
+  circuito, el restablecimiento del servicio, el drenado de la cola ni la
+  identidad/fin de cada incidente, por lo que estos campos actualmente son
+  `null`, no cero. Para habilitarlos se deben persistir esos hitos con sus
+  timestamps y una identidad de incidente.
+- `GET /api/v1/sire/dashboard/history?start=...&end=...&granularity=minute|hour|day`
+  devuelve `data` con timestamp, retries, disponibilidad y contadores observados,
+  más `pagination` (`limit`, `offset`, `hasMore`). El rango es `[start, end)`;
+  el máximo es 365 días y 10.000 buckets; `limit` admite 1–500 y `offset`
+  0–50.000. Las filas `MAX_REINTENTOS` solo documentan el traslado terminal a
+  DLQ y no son un envío adicional. Los intentos con `intento > 1` sí son
+  reintentos registrados. La disponibilidad es
+  `successfulCalls / observedCalls * 100`; los intervalos sin observaciones
+  tienen disponibilidad `null`.
+- `GET /api/v1/resilience/history` se mantiene como alias autenticado para el
+  cliente frontend actual. `GET /api/v1/sire/history` sigue reservado al
+  historial de conciliaciones SIRE; el dashboard usa el segmento `dashboard`
+  para no colisionar con esa ruta existente.
+- Las rutas usan el `companyId` firmado en la sesión; el cliente no puede
+  seleccionar una empresa mediante query string. Los historiales se agregan
+  desde eventos persistidos y no se generan datos sintéticos.
+- Los jobs de Outbox y DLQ nuevos transportan `company_id`; sus rutas solo
+  listan/reintentan jobs de la empresa autenticada. Jobs DLQ creados antes de
+  introducir ese dato no se exponen entre empresas.
+
+La migración `20261018173000_sire_history_and_export_data` ya incorpora
+`sire_discrepancies.emitter_ruc` como columna nullable, igual que el modelo
+Prisma. Si una base devuelve que la columna no existe, esa migración está
+pendiente en esa base o existe deriva de esquema; comprobar con
+`npx prisma migrate status --config prisma7.config.ts` y aplicar pendientes
+con `npx prisma migrate deploy --config prisma7.config.ts`. La migración nueva
+de resiliencia solo agrega el índice `transaction_history(invoice_id,
+created_at)`; puede revertirse con `DROP INDEX
+"transaction_history_invoice_id_created_at_idx"` si no está en uso.
+
 ---
 
 ## 3. Estructura de Directorios del Módulo (`src/modules/resilience/`)

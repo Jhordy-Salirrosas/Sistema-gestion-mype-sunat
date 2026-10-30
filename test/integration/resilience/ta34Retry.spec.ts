@@ -61,6 +61,11 @@ describe('TA-34 · 503 sostenido y timeout', () => {
       5_000, 15_000, 45_000,
     ]);
     expect(persistFailure).toHaveBeenCalledTimes(4);
+    expect(queue.sendToDlq).toHaveBeenCalledWith(
+      BASE.invoiceId,
+      'company-ta34-test',
+      expect.objectContaining({ estado: InvoiceStatus.ERROR_RED }),
+    );
     expect(db.invoices.get(BASE.invoiceId)?.estado).toBe(
       InvoiceStatus.ERROR_RED,
     );
@@ -68,6 +73,11 @@ describe('TA-34 · 503 sostenido y timeout', () => {
     expect(resultado.enviadoADlq).toBe(true);
     expect(
       db.history.some((fila) => fila.codigo_error === 'MAX_REINTENTOS'),
+    ).toBe(true);
+    expect(
+      db.history
+        .filter((fila) => fila.codigo_error === 'MAX_REINTENTOS')
+        .every((fila) => fila.company_id === 'company-ta34-test'),
     ).toBe(true);
   });
 

@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PgBoss, fromPrisma } from 'pg-boss';
 
 export const INVOICE_QUEUE = 'sunat-invoice-queue';
@@ -6,6 +12,12 @@ export const INVOICE_DLQ = 'sunat-invoice-dlq';
 
 export interface TxClient {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
+  invoice?: {
+    findUnique: (args: {
+      where: { id: string };
+      select: { company_id: true };
+    }) => Promise<{ company_id: string } | null>;
+  };
 }
 
 @Injectable()
@@ -61,47 +73,55 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     tx: TxClient,
     invoiceId: string,
   ): Promise<string | null> {
-    try {
-      const db = fromPrisma(tx);
-      return await this.boss.send(INVOICE_QUEUE, { invoice_id: invoiceId }, { db });
-    } catch (error) {
-      this.logger.error(`Error al encolar comprobante ${invoiceId}:`, error);
-      return null;
+    if (!tx.invoice?.findUnique) {
+      throw new Error('El cliente transaccional no permite obtener la empresa.');
     }
+
+    const invoice = await tx.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { company_id: true },
+    });
+    if (!invoice) {
+      throw new Error(`No existe el comprobante ${invoiceId} para encolarlo.`);
+    }
+
+    const db = fromPrisma(tx);
+
+    return this.boss.send(
+      INVOICE_QUEUE,
+      { invoice_id: invoiceId, company_id: invoice.company_id },
+      { db },
+    );
   }
 
   /**
    * Cuantos trabajos esperan en la cola principal.
-   * Lo usa `GET /api/v1/resilience/metrics` como `bufferedInvoicesCount`.
+   * Mantiene el conteo operativo de la cola para las tareas internas.
    */
   async countQueued(): Promise<number> {
-    try {
-      const jobs = await this.boss.findJobs(INVOICE_QUEUE);
-      return jobs.length;
-    } catch {
-      // Si pg-boss no responde, el dashboard no debe romperse: informa 0.
-      return 0;
-    }
+    const jobs = await this.boss.findJobs(INVOICE_QUEUE);
+    return jobs.length;
   }
 
   /**
    * Trabajos que agotaron los reintentos y cayeron a la cola de muertos.
    *
-   * El job de pg-boss solo guarda `invoice_id` en su payload, asi que los datos
-   * completos del comprobante (serie, RUC del cliente, monto y codigo SUNAT) se
-   * completan cuando se conecte el repositorio de facturas.
+   * Los jobs nuevos incluyen el company_id para filtrar resultados en la capa
+   * de pg-boss, antes de devolverlos al controlador.
    */
-  async listDlq(): Promise<Array<Record<string, unknown>>> {
-    try {
-      const jobs = await this.boss.findJobs<{
-        invoice_id?: string;
-        intento?: number;
-        codigo_error?: string;
-        mensaje_error?: string;
-        estado?: string;
-      }>(INVOICE_DLQ);
+  async listDlq(companyId: string): Promise<Array<Record<string, unknown>>> {
+    const jobs = await this.boss.findJobs<{
+      invoice_id?: string;
+      company_id?: string;
+      intento?: number;
+      codigo_error?: string;
+      mensaje_error?: string;
+      estado?: string;
+    }>(INVOICE_DLQ, { data: { company_id: companyId }, queued: true });
 
-      return jobs.map((job) => ({
+    return jobs
+      .filter((job) => job.data?.company_id === companyId)
+      .map((job) => ({
         id: job.id,
         comprobanteSerieNumero: job.data?.invoice_id ?? 'sin identificar',
         clienteRuc: '',
@@ -114,9 +134,6 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         estado: job.data?.estado ?? 'ERROR_RED',
         fechaUltimoIntento: new Date().toISOString(),
       }));
-    } catch {
-      return [];
-    }
   }
 
   /**
@@ -129,25 +146,26 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
    */
   async sendToDlq(
     invoiceId: string,
+    companyId: string,
     detalle: Record<string, unknown> = {},
   ): Promise<string | null> {
-    try {
-      return await this.boss.send(
-        INVOICE_DLQ,
-        { invoice_id: invoiceId, ...detalle },
-        { retryLimit: 0 },
-      );
-    } catch {
-      return null;
-    }
+    return this.boss.send(
+      INVOICE_DLQ,
+      { invoice_id: invoiceId, company_id: companyId, ...detalle },
+      { retryLimit: 0 },
+    );
   }
 
-  /** Devuelve un trabajo de la DLQ a la cola principal para reintentarlo. */
-  async retryDlq(id: string): Promise<void> {
-    try {
-      await this.boss.retry(INVOICE_DLQ, id);
-    } catch (error) {
-      this.logger.error(`Error al reintentar trabajo de DLQ ${id}:`, error);
+  /** Devuelve un trabajo propio de la empresa autenticada a la cola principal. */
+  async retryDlq(id: string, companyId: string): Promise<void> {
+    const [job] = await this.boss.findJobs<{ company_id?: string }>(
+      INVOICE_DLQ,
+      { id, queued: true },
+    );
+    if (!job || job.data?.company_id !== companyId) {
+      throw new NotFoundException('No se encontró el trabajo de DLQ.');
     }
+
+    await this.boss.retry(INVOICE_DLQ, id);
   }
 }

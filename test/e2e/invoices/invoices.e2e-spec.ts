@@ -8,6 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../../../src/appModule';
+import { TOKEN_SERVICE_PORT } from '../../../src/modules/auth/domain/ports/tokenServicePort';
 import { InvoicesService } from '../../../src/modules/invoices/application/services/invoicesService';
 import { NativeJwtAdapter } from '../../../src/modules/auth/infrastructure/security/nativeJwtAdapter';
 
@@ -39,6 +40,8 @@ describe('InvoicesController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
+      .overrideProvider(TOKEN_SERVICE_PORT)
+      .useValue(tokenService)
       .overrideProvider(InvoicesService)
       .useValue(mockInvoicesService)
       .overrideProvider(
