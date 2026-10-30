@@ -52,7 +52,7 @@ export class CustomsSirePurchasesController {
     const annexItems: SireRceAnnex8_4Item[] = declarations.map((d: any, idx: number) => {
       const duaParts = (d.duaNumber ?? '').split('-');
       const customsCode = duaParts[0] || '118';
-      const numYear = parseInt(duaParts[1] || year, 10);
+      const numYear = Number.parseInt(duaParts[1] || year, 10);
       const correlativeDua = duaParts[3] || '000001';
 
       return {
@@ -103,7 +103,7 @@ export class CustomsSirePurchasesController {
     return declarations.map((d: any, idx: number) => {
       const duaParts = (d.duaNumber ?? '').split('-');
       const customsCode = duaParts[0] || '118';
-      const numYear = parseInt(duaParts[1] || '2026', 10);
+      const numYear = Number.parseInt(duaParts[1] || '2026', 10);
       const correlativeDua = duaParts[3] || '000001';
 
       return {

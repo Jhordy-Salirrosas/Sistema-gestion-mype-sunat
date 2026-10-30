@@ -1,7 +1,6 @@
 import { ProcessImportCostOrderUseCase } from '../../../src/modules/inventory/application/use-cases/processImportCostOrderUseCase';
 import { InventoryWarehouseEntity } from '../../../src/modules/inventory/domain/entities/inventoryWarehouseEntity';
 import { InventoryProductEntity } from '../../../src/modules/inventory/domain/entities/inventoryProductEntity';
-import { InventoryBalanceEntity } from '../../../src/modules/inventory/domain/entities/inventoryBalanceEntity';
 
 describe('ProcessImportCostOrderUseCase', () => {
   let useCase: ProcessImportCostOrderUseCase;

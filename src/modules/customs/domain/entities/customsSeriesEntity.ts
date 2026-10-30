@@ -1,7 +1,6 @@
 import {
   CustomsItemEntity,
   CustomsItemProps,
-  SeriesDestinationType,
 } from './customsItemEntity';
 
 export interface CustomsSeriesProps extends CustomsItemProps {
