@@ -115,9 +115,11 @@ export function classifyResponseCode(
     };
   }
 
-  // >= 4000: observación
+  // >= 4000: observación. El comprobante tiene validez tributaria, pero no es
+  // una aceptación limpia: se distingue en OBSERVADO para que la consola fiscal
+  // y el reporte SIRE no lo cuenten como aceptado sin salvedades (TA-28).
   return {
-    status: InvoiceStatus.ACEPTADO,
+    status: InvoiceStatus.OBSERVADO,
     kind: 'OBSERVACION',
     valido: true,
     reintentable: false,

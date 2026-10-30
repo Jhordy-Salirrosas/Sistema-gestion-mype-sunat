@@ -142,6 +142,35 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * TA-28 (criterio 1): registra el consumidor de la cola de facturas.
+   *
+   * Hasta ahora `enqueueInvoiceInTx` publicaba jobs que nadie escuchaba: el
+   * comprobante entraba a pg-boss y se quedaba ahí para siempre. Con `work()`
+   * el worker de facturación los retira y los envía a SUNAT.
+   *
+   * `batchSize: 1` procesa un comprobante por vez: el pipeline fiscal no debe
+   * paralelizarse porque comparte el correlativo y el estado del Circuit
+   * Breaker. `teamSize` no se usa porque pg-boss v12 cambió la firma: el
+   * handler recibe la lista de jobs del lote.
+   */
+  async registerInvoiceWorker(
+    handler: (payload: { invoice_id: string }) => Promise<unknown>,
+  ): Promise<string> {
+    this.logger.log(`Registrando worker en la cola ${INVOICE_QUEUE}`);
+
+    return this.boss.work<{ invoice_id: string }>(
+      INVOICE_QUEUE,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+        this.logger.log(`[Job recibido] Comprobante: ${job.data.invoice_id}`);
+        await handler(job.data);
+      },
+    );
+  }
+
   /** Devuelve un trabajo de la DLQ a la cola principal para reintentarlo. */
   async retryDlq(id: string): Promise<void> {
     try {
