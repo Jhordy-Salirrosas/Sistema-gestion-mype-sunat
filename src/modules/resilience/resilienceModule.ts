@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/authModule';
+import { PrismaModule } from '../../database/prismaModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { ResilienceStateModule } from './application/resilienceStateModule';
 import { ResilienceController } from './infrastructure/controllers/resilienceController';
@@ -20,6 +21,7 @@ import { SunatMockModule } from './infrastructure/mock/sunatMockModule';
   // ResilienceModule.
   imports: [
     QueueModule,
+    PrismaModule,
     SunatMockModule,
     ResilienceStateModule,
     AuthModule,

@@ -22,6 +22,11 @@ import { classifyCdr } from './soap/cdr.classifier';
 import { handleSunatBillError } from './soap/sunatBillErrorHandler';
 import { parseCdr } from './soap/cdr.parser';
 import { SunatSoapClient } from './soap/sunat-soap.client';
+import {
+  isSunatSoapFaultError,
+  isSunatTransportError,
+} from './soap/sunat-soap.client';
+import { ResilienceStateService } from '../resilience/application/resilienceStateService';
 import { buildZipFileName } from './soap/soap.constants';
 
 import {
@@ -51,12 +56,14 @@ export class SunatBillService {
   constructor(
     private readonly persistence: CdrPersistenceService,
     private readonly soapClient: SunatSoapClient,
+    private readonly resilienceState?: ResilienceStateService,
   ) {}
 
   /** Crea el servicio resolviendo endpoint y timeout del entorno. */
   static create(
     persistence: CdrPersistenceService,
     client?: SunatSoapClient,
+    resilienceState?: ResilienceStateService,
   ): SunatBillService {
     return new SunatBillService(
       persistence,
@@ -65,6 +72,7 @@ export class SunatBillService {
           endpoint: resolveEndpoint(),
           timeoutMs: resolveTimeout(),
         }),
+      resilienceState,
     );
   }
 
@@ -115,13 +123,20 @@ export class SunatBillService {
    * para que la capa de cola decida el backoff.
    */
   async sendAndProcess(params: SendInvoiceParams): Promise<ProcessCdrResult> {
+    let soapResponded = false;
+    let httpStatusCode: number | null = null;
+    let elapsedMs: number | null = null;
     try {
-      const { applicationResponse, tiempoRespuestaMs } =
+      const { applicationResponse, tiempoRespuestaMs, httpStatus } =
         await this.soapClient.sendBill({
           fileName: this.buildFileName(params),
           zip: params.zip,
           credentials: this.resolveCredentials(params.rucEmisor),
         });
+      soapResponded = true;
+      httpStatusCode = httpStatus;
+      elapsedMs = tiempoRespuestaMs;
+      this.resilienceState?.recordSuccess();
 
       if (!applicationResponse) {
         return await handleSunatBillError(
@@ -131,6 +146,7 @@ export class SunatBillService {
           ),
           this.persistence,
           this.logger,
+          { httpStatusCode, elapsedMs },
         );
       }
 
@@ -151,6 +167,7 @@ export class SunatBillService {
           cdr,
           classification: clasificacion,
           tiempoRespuestaMs,
+          httpStatusCode,
           estadoAnterior: params.estadoActual ?? null,
           intento: params.intento ?? 1,
         });
@@ -180,19 +197,45 @@ export class SunatBillService {
         error: null,
       };
     } catch (error) {
+      if (isSunatTransportError(error)) {
+        httpStatusCode = error.httpStatus;
+        elapsedMs = error.elapsedMs;
+      } else if (isSunatSoapFaultError(error)) {
+        httpStatusCode = error.httpStatusCode;
+        elapsedMs = error.elapsedMs;
+      }
+
+      if (!soapResponded) {
+        if (isSunatTransportError(error) &&
+          (error.httpStatus === null || error.httpStatus >= 500)) {
+          this.resilienceState?.recordFailure();
+        } else {
+          this.resilienceState?.recordSuccess();
+        }
+      }
       // Si es el fallo de persistencia recien lanzado, no se debe enmascarar
       // como fallo de red: se propaga tal cual.
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
-      return await this.handleError(params, error);
+      return await this.handleError(params, error, {
+        httpStatusCode,
+        elapsedMs,
+      });
     }
   }
 
   private async handleError(
     params: SendInvoiceParams,
     error: unknown,
+    observation: { httpStatusCode: number | null; elapsedMs: number | null },
   ): Promise<ProcessCdrResult> {
-    return handleSunatBillError(params, error, this.persistence, this.logger);
+    return handleSunatBillError(
+      params,
+      error,
+      this.persistence,
+      this.logger,
+      observation,
+    );
   }
 }

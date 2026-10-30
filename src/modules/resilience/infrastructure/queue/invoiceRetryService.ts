@@ -129,14 +129,16 @@ export class InvoiceRetryService {
   ): Promise<RetryInvoiceResult> {
     const mensaje = `Reintentos agotados tras ${intento} intentos: ${motivo}`;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.invoice.update({
+    const companyId = await this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.update({
         where: { id: job.invoiceId },
         data: { estado: InvoiceStatus.ERROR_RED },
+        select: { company_id: true },
       });
 
       await tx.transactionHistory.create({
         data: {
+          company_id: invoice.company_id,
           invoice_id: job.invoiceId,
           intento,
           estado_anterior: estadoAnterior,
@@ -146,14 +148,16 @@ export class InvoiceRetryService {
           tiempo_respuesta_ms: ultimo?.tiempoRespuestaMs ?? null,
         },
       });
+
+      return invoice.company_id;
     });
 
-    await this.queue.sendToDlq(job.invoiceId, {
-      intento,
-      codigo_error: 'MAX_REINTENTOS',
-      mensaje_error: mensaje,
-      estado: InvoiceStatus.ERROR_RED,
-    });
+    await this.queue.sendToDlq(job.invoiceId, companyId, {
+        intento,
+        codigo_error: 'MAX_REINTENTOS',
+        mensaje_error: mensaje,
+        estado: InvoiceStatus.ERROR_RED,
+      });
 
     this.logger.error(`[HU-04] ${job.invoiceId} enviado a la DLQ: ${mensaje}`);
 

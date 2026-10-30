@@ -24,6 +24,8 @@ export interface PersistCdrParams {
   classification: CdrClassification;
   /** Milisegundos de la llamada SOAP (uno por intento). */
   tiempoRespuestaMs: number;
+  /** Código HTTP observado para distinguir disponibilidad de rechazo CDR. */
+  httpStatusCode?: number | null;
   /** Estado desde el que se actualiza, para la auditoria del historial. */
   estadoAnterior: InvoiceStatus | null;
   /** Numero de intento del envio. */
@@ -74,11 +76,12 @@ export class CdrPersistenceService {
           estado: classification.status,
           cdr_sunat: cdrSunat,
         },
-        select: { id: true, estado: true, updated_at: true },
+        select: { id: true, estado: true, updated_at: true, company_id: true },
       });
 
       const history = await tx.transactionHistory.create({
         data: {
+          company_id: invoice.company_id,
           invoice_id: invoiceId,
           intento,
           estado_anterior: estadoAnterior,
@@ -86,6 +89,7 @@ export class CdrPersistenceService {
           // El codigo de respuesta del CDR es el "codigo de error" desde el
           // punto de vista del pipeline; en un aceptado es '0'.
           codigo_error: cdr.responseCode,
+          http_status_code: params.httpStatusCode ?? null,
           mensaje_error:
             cdr.description ?? `CDR con codigo ${cdr.responseCode}`,
           tiempo_respuesta_ms: tiempoRespuestaMs,
@@ -118,6 +122,7 @@ export class CdrPersistenceService {
     codigoError: string | null;
     mensajeError: string;
     tiempoRespuestaMs: number | null;
+    httpStatusCode?: number | null;
   }) {
     const {
       invoiceId,
@@ -127,17 +132,19 @@ export class CdrPersistenceService {
       codigoError,
       mensajeError,
       tiempoRespuestaMs,
+      httpStatusCode,
     } = params;
 
     return this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.update({
         where: { id: invoiceId },
         data: { estado: estadoNuevo },
-        select: { id: true, estado: true, updated_at: true },
+        select: { id: true, estado: true, updated_at: true, company_id: true },
       });
 
       const history = await tx.transactionHistory.create({
         data: {
+          company_id: invoice.company_id,
           invoice_id: invoiceId,
           intento,
           estado_anterior: estadoAnterior,
@@ -145,6 +152,7 @@ export class CdrPersistenceService {
           codigo_error: codigoError,
           mensaje_error: mensajeError,
           tiempo_respuesta_ms: tiempoRespuestaMs,
+          http_status_code: httpStatusCode ?? null,
         },
         select: { id: true, estado_nuevo: true, tiempo_respuesta_ms: true },
       });

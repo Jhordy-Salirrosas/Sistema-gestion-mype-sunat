@@ -101,7 +101,9 @@ export interface Dobles {
 
 export function crearDobles(): Dobles {
   const tx = {
-    invoice: { update: jest.fn().mockResolvedValue({}) },
+    invoice: {
+      update: jest.fn().mockResolvedValue({ company_id: 'company-test' }),
+    },
     transactionHistory: { create: jest.fn().mockResolvedValue({}) },
   };
 

@@ -34,7 +34,7 @@ describe('HU-04 · QueueService (DLQ)', () => {
     const { service, boss } = crearServicio();
     boss.send.mockResolvedValue('dlq-job-1');
 
-    const id = await service.sendToDlq('inv-1', {
+    const id = await service.sendToDlq('inv-1', 'company-a', {
       intento: 4,
       codigo_error: 'MAX_REINTENTOS',
     });
@@ -43,6 +43,7 @@ describe('HU-04 · QueueService (DLQ)', () => {
       INVOICE_DLQ,
       {
         invoice_id: 'inv-1',
+        company_id: 'company-a',
         intento: 4,
         codigo_error: 'MAX_REINTENTOS',
       },
@@ -55,12 +56,35 @@ describe('HU-04 · QueueService (DLQ)', () => {
     const { service, boss } = crearServicio();
     boss.send.mockResolvedValue('dlq-job-2');
 
-    await service.sendToDlq('inv-2');
+    await service.sendToDlq('inv-2', 'company-b');
 
     expect(boss.send).toHaveBeenCalledWith(
       INVOICE_DLQ,
-      { invoice_id: 'inv-2' },
+      { invoice_id: 'inv-2', company_id: 'company-b' },
       { retryLimit: 0 },
+    );
+  });
+
+  it('incluye el company_id obtenido dentro de la transacción al encolar', async () => {
+    const { service, boss } = crearServicio();
+    boss.send.mockResolvedValue('queue-job-1');
+    const tx = {
+      $queryRawUnsafe: jest.fn(),
+      invoice: {
+        findUnique: jest.fn().mockResolvedValue({ company_id: 'company-a' }),
+      },
+    };
+
+    await service.enqueueInvoiceInTx(tx, 'invoice-a');
+
+    expect(tx.invoice.findUnique).toHaveBeenCalledWith({
+      where: { id: 'invoice-a' },
+      select: { company_id: true },
+    });
+    expect(boss.send).toHaveBeenCalledWith(
+      'sunat-invoice-queue',
+      { invoice_id: 'invoice-a', company_id: 'company-a' },
+      expect.objectContaining({ db: expect.anything() }),
     );
   });
 
@@ -72,6 +96,7 @@ describe('HU-04 · QueueService (DLQ)', () => {
         retryCount: 0,
         data: {
           invoice_id: 'inv-1',
+          company_id: 'company-a',
           intento: 4,
           codigo_error: 'MAX_REINTENTOS',
           mensaje_error: 'Reintentos agotados',
@@ -81,13 +106,24 @@ describe('HU-04 · QueueService (DLQ)', () => {
       {
         id: 'dlq-2',
         retryCount: 2,
-        data: {},
+        data: { company_id: 'company-a' },
+      },
+      {
+        id: 'dlq-other-company',
+        retryCount: 1,
+        data: {
+          invoice_id: 'inv-other',
+          company_id: 'company-b',
+        },
       },
     ]);
 
-    const items = await service.listDlq();
+    const items = await service.listDlq('company-a');
 
-    expect(boss.findJobs).toHaveBeenCalledWith(INVOICE_DLQ);
+    expect(boss.findJobs).toHaveBeenCalledWith(INVOICE_DLQ, {
+      data: { company_id: 'company-a' },
+      queued: true,
+    });
     expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({
       id: 'dlq-1',
@@ -107,29 +143,48 @@ describe('HU-04 · QueueService (DLQ)', () => {
     });
   });
 
-  it('devuelve una lista vacía si pg-boss falla al listar la DLQ', async () => {
+  it('propaga errores de pg-boss al listar la DLQ', async () => {
     const { service, boss } = crearServicio();
     boss.findJobs.mockRejectedValue(new Error('sin conexión'));
 
-    await expect(service.listDlq()).resolves.toEqual([]);
+    await expect(service.listDlq('company-a')).rejects.toThrow('sin conexión');
   });
 
-  it('cuenta los jobs en cola y devuelve 0 si pg-boss falla', async () => {
+  it('cuenta los jobs en cola y propaga errores de pg-boss', async () => {
     const { service, boss } = crearServicio();
 
     boss.findJobs.mockResolvedValueOnce([{}, {}, {}]);
     await expect(service.countQueued()).resolves.toBe(3);
 
     boss.findJobs.mockRejectedValueOnce(new Error('sin conexión'));
-    await expect(service.countQueued()).resolves.toBe(0);
+    await expect(service.countQueued()).rejects.toThrow('sin conexión');
   });
 
   it('devuelve un job de la DLQ a la cola de reintento', async () => {
     const { service, boss } = crearServicio();
+    boss.findJobs.mockResolvedValue([
+      { data: { company_id: 'company-a' } },
+    ]);
 
-    await service.retryDlq('dlq-1');
+    await service.retryDlq('dlq-1', 'company-a');
 
+    expect(boss.findJobs).toHaveBeenCalledWith(INVOICE_DLQ, {
+      id: 'dlq-1',
+      queued: true,
+    });
     expect(boss.retry).toHaveBeenCalledWith(INVOICE_DLQ, 'dlq-1');
+  });
+
+  it('does not retry a DLQ job belonging to another company', async () => {
+    const { service, boss } = crearServicio();
+    boss.findJobs.mockResolvedValue([
+      { data: { company_id: 'company-b' } },
+    ]);
+
+    await expect(service.retryDlq('dlq-1', 'company-a')).rejects.toThrow(
+      'No se encontró el trabajo de DLQ.',
+    );
+    expect(boss.retry).not.toHaveBeenCalled();
   });
 
   it('exige DATABASE_URL para construir el servicio', () => {

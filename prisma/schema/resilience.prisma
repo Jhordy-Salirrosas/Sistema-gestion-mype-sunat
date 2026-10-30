@@ -16,6 +16,7 @@ model TransactionHistory {
   created_at          DateTime       @default(now())
 
   @@index([invoice_id, intento])
+  @@index([invoice_id, created_at])
   @@index([company_id, created_at])
   @@map("transaction_history")
 }

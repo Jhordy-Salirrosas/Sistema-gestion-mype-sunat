@@ -28,7 +28,12 @@ function createPrismaStub(): { prisma: PrismaService; llamadas: Llamadas } {
       update: jest.fn(async (args: Record<string, unknown>) => {
         llamadas.invoiceUpdate.push(args);
         const data = args.data as { estado: InvoiceStatus };
-        return { id: 'inv-1', estado: data.estado, updated_at: new Date() };
+        return {
+          id: 'inv-1',
+          estado: data.estado,
+          updated_at: new Date(),
+          company_id: 'company-test',
+        };
       }),
     },
     transactionHistory: {
@@ -104,6 +109,7 @@ describe('CdrPersistenceService', () => {
       cdr,
       classification: classifyCdr(cdr),
       tiempoRespuestaMs: 847,
+      httpStatusCode: 200,
       estadoAnterior: InvoiceStatus.PROCESANDO,
       intento: 3,
     });
@@ -112,10 +118,12 @@ describe('CdrPersistenceService', () => {
     const data = llamadas.historyCreate[0].data as Record<string, unknown>;
 
     expect(data.invoice_id).toBe('inv-1');
+    expect(data.company_id).toBe('company-test');
     expect(data.intento).toBe(3);
     expect(data.estado_anterior).toBe(InvoiceStatus.PROCESANDO);
     expect(data.estado_nuevo).toBe(InvoiceStatus.ACEPTADO);
     expect(data.codigo_error).toBe('0');
+    expect(data.http_status_code).toBe(200);
     expect(data.tiempo_respuesta_ms).toBe(847);
     expect(String(data.mensaje_error)).toContain('ha sido aceptada');
   });

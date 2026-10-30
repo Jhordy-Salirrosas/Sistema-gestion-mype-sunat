@@ -15,6 +15,10 @@ export async function handleSunatBillError(
   error: unknown,
   persistence: CdrPersistenceService,
   logger: Logger,
+  observation: {
+    httpStatusCode?: number | null;
+    elapsedMs?: number | null;
+  } = {},
 ): Promise<ProcessCdrResult> {
   if (isSunatSoapFaultError(error)) {
     const codigo = error.sunatCode ?? '';
@@ -30,6 +34,11 @@ export async function handleSunatBillError(
       clasificacion.reintentable,
       persistence,
       logger,
+      {
+        httpStatusCode: error.httpStatusCode,
+        elapsedMs: error.elapsedMs,
+        errorCode: error.sunatCode ?? 'SOAP_FAULT',
+      },
     );
   }
 
@@ -43,6 +52,7 @@ export async function handleSunatBillError(
       true,
       persistence,
       logger,
+      { ...observation, errorCode: 'CDR_DECODE_ERROR' },
     );
   }
 
@@ -56,6 +66,14 @@ export async function handleSunatBillError(
       true,
       persistence,
       logger,
+      {
+        httpStatusCode: error.httpStatus,
+        elapsedMs: error.elapsedMs,
+        errorCode:
+          error.httpStatus === null
+            ? 'TRANSPORT_ERROR'
+            : `HTTP_${error.httpStatus}`,
+      },
     );
   }
 
@@ -71,6 +89,7 @@ export async function handleSunatBillError(
     true,
     persistence,
     logger,
+    observation,
   );
 }
 
@@ -83,7 +102,11 @@ async function failure(
   reintentable: boolean,
   persistence: CdrPersistenceService,
   logger: Logger,
-  tiempoRespuestaMs: number | null = null,
+  observation: {
+    httpStatusCode?: number | null;
+    elapsedMs?: number | null;
+    errorCode?: string;
+  } = {},
 ): Promise<ProcessCdrResult> {
   try {
     await persistence.persistFailure({
@@ -91,9 +114,10 @@ async function failure(
       estadoNuevo: estado,
       estadoAnterior: params.estadoActual ?? null,
       intento: params.intento ?? 1,
-      codigoError: responseCode,
+      codigoError: observation.errorCode ?? responseCode,
       mensajeError: mensaje,
-      tiempoRespuestaMs,
+      tiempoRespuestaMs: observation.elapsedMs ?? null,
+      httpStatusCode: observation.httpStatusCode ?? null,
     });
   } catch (err) {
     logger.error(
@@ -111,7 +135,7 @@ async function failure(
     reintentable,
     clasificacion: clasificacion ?? classifyCdr(EMPTY_PARSED_CDR),
     cdr: null,
-    tiempoRespuestaMs,
+    tiempoRespuestaMs: observation.elapsedMs ?? null,
     error: mensaje,
   };
 }
