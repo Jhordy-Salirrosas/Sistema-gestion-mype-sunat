@@ -1,21 +1,25 @@
 /**
  * Validador local con las XSL oficiales de SUNAT (TA-31).
  *
- * SUNAT publica, dentro de `validacpe/programas`, una hoja XSL por tipo de
- * comprobante que devuelve la lista de errores de validación de un XML. Esa
- * hoja es la referencia normativa: reproducir sus reglas a mano sería
- * duplicar (y desactualizar) el estándar, así que aquí se EJECUTA la hoja.
+ * SUNAT publica una hoja XSL por tipo de comprobante que devuelve la lista de
+ * errores de validación de un XML. Esa hoja es la referencia normativa:
+ * reproducir sus reglas a mano sería duplicar (y desactualizar) el estándar,
+ * así que aquí se EJECUTA la hoja.
  *
  * Decisiones de diseño:
  *
- *  - Las XSL no se versionan en el repositorio. Son material de SUNAT, pesan
- *    cientos de KB cada una y cambian con el estándar; se leen del directorio
- *    que indique `SUNAT_XSL_DIR`.
+ *  - Las XSL no se versionan en el repositorio (son material de SUNAT, pesan
+ *    cientos de KB y cambian con el estándar). Se leen del directorio que
+ *    indique `SUNAT_XSL_DIR`.
  *
  *  - Si la hoja no se puede cargar, el envío se BLOQUEA. El criterio 4 del
  *    backlog es explícito, y dejar pasar un comprobante sin validar porque
  *    faltaba un archivo es peor que detenerlo: el error silencioso aparecería
- *    recién cuando SUNAT lo rechace, con intentos del backoff ya gastados.
+ *    recién cuando SUNAT lo rechace, con los intentos del backoff ya gastados.
+ *
+ *  - Las hojas oficiales no son XSLT estándar (usan funciones de IBM
+ *    DataPower). La conversión vive en `sunatXslAdapter.ts`, para que este
+ *    archivo se lea como lo que es: ejecutar la hoja y leer su salida.
  *
  *  - La traducción de cada código a un mensaje legible vive en
  *    `sunatValidationCatalog.ts`, no aquí.
@@ -29,6 +33,7 @@ import {
   type ReglaSunat,
   reglaPorCodigo,
 } from './sunatValidationCatalog';
+import { nombreArchivoDesdeXml, normalizarHojaSunat } from './sunatXslAdapter';
 
 /** Resultado de ejecutar la hoja oficial sobre un XML. */
 export interface ResultadoValidacionXsl {
@@ -54,16 +59,14 @@ export interface ErrorValidacionXsl {
 /**
  * Nombre del archivo XSL oficial por tipo de comprobante.
  *
- * La hoja de SUNAT es la misma para los cuatro tipos 2.0.1: la
- * `2.0.1` del programa de validación cubre factura, boleta y notas, y la
- * propia hoja distingue por la raíz del documento. Se deja el mapa explícito
- * porque el criterio 2 del backlog exige el mapeo por tipo.
+ * SUNAT publica una hoja por tipo, con estos nombres exactos. Se deja el mapa
+ * explícito porque el criterio 2 del backlog exige el mapeo por tipo.
  */
-const XSL_POR_TIPO: Record<string, string> = {
-  '01': '2.0.1.xsl',
-  '03': '2.0.1.xsl',
-  '07': '2.0.1.xsl',
-  '08': '2.0.1.xsl',
+export const XSL_POR_TIPO: Record<string, string> = {
+  '01': 'Factura 2.0.1.xsl',
+  '03': 'Boleta 2.0.1.xsl',
+  '07': 'Nota de Credito 2.0.1.xsl',
+  '08': 'Nota de Debito 2.0.1.xsl',
 };
 
 /** Tiempo máximo que se acepta para validar un comprobante (criterio 4). */
@@ -103,7 +106,15 @@ export class SunatXslValidatorService {
     const inicio = Date.now();
     let salida: string;
     try {
-      salida = await new Xslt().xsltProcess(
+      // Los parámetros XSLT se pasan al CONSTRUCTOR de `Xslt`, no a
+      // `xsltProcess`. La hoja oficial los lee para reconstruir el nombre del
+      // archivo enviado (`$nombreArchivoEnviado`).
+      const procesador = new Xslt({
+        parameters: [
+          { name: 'nombreArchivoEnviado', value: nombreArchivoDesdeXml(xml) },
+        ],
+      });
+      salida = await procesador.xsltProcess(
         this.parser.xmlParse(xml),
         this.parser.xmlParse(hoja),
       );
@@ -137,7 +148,7 @@ export class SunatXslValidatorService {
     return process.env.SUNAT_XSL_DIR ?? join(process.cwd(), 'sunat-xsl');
   }
 
-  /** Lee y cachea la hoja; `null` si el archivo no está. */
+  /** Lee, normaliza y cachea la hoja; `null` si el archivo no está. */
   private cargarHoja(archivo: string): string | null {
     const cacheada = this.hojas.get(archivo);
     if (cacheada !== undefined) return cacheada;
@@ -149,7 +160,7 @@ export class SunatXslValidatorService {
     }
 
     try {
-      const contenido = readFileSync(ruta, 'utf8');
+      const contenido = normalizarHojaSunat(readFileSync(ruta, 'utf8'));
       this.hojas.set(archivo, contenido);
       return contenido;
     } catch (error) {

@@ -167,3 +167,8 @@ docs/
 *.cer
 *.crt
 
+# Hojas XSL oficiales de SUNAT (TA-31).
+# No se versionan: son material de SUNAT, pesan ~1.5 MB en total y cambian con
+# el estándar. Se descargan aparte y se apunta SUNAT_XSL_DIR al directorio.
+sunat-xsl/
+
