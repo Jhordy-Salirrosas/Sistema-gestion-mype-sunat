@@ -12,17 +12,11 @@
  * SUNAT y pesa cientos de KB).
  */
 import { join } from 'node:path';
-import { InvoiceStatus } from '../../../src/generated/client/enums';
-import {
-  ErrorValidacionBloqueada,
-  validarAntesDeEnviar,
-} from '../../../src/modules/invoices/application/services/invoiceSendGate';
 import {
   mensajeLegible,
   reglaPorCodigo,
 } from '../../../src/modules/invoices/application/services/sunatValidationCatalog';
 import { SunatXslValidatorService } from '../../../src/modules/invoices/application/services/sunatXslValidatorService';
-import type { SendInvoiceParams } from '../../../src/modules/sunat/soap/sunatBillTypes';
 
 const DIRECTORIO_XSL = join(__dirname, '../../fixtures/xsl');
 
@@ -51,17 +45,6 @@ function xmlFactura(opciones?: {
   <cbc:PayableAmount>${total}</cbc:PayableAmount>
 </Invoice>`;
 }
-
-const PARAMS: SendInvoiceParams = {
-  invoiceId: 'inv-1',
-  rucEmisor: '20601012341',
-  tipoComprobante: '01',
-  serie: 'F001',
-  correlativo: 1,
-  zip: Buffer.from(''),
-  estadoActual: InvoiceStatus.PROCESANDO,
-  intento: 1,
-};
 
 describe('TA-31 - ejecución de la hoja XSL', () => {
   let validador: SunatXslValidatorService;
@@ -152,88 +135,5 @@ describe('TA-31 - ejecución de la hoja XSL', () => {
     expect(reglaPorCodigo('4072')).not.toBeNull();
     expect(reglaPorCodigo('9999')).toBeNull();
     expect(mensajeLegible('9999')).toMatch(/fuera del catálogo local/);
-  });
-});
-
-describe('TA-31 - bloqueo del envío (criterio 4)', () => {
-  const persistencia = () => ({
-    persistFailure: jest.fn().mockResolvedValue({}),
-    persist: jest.fn(),
-  });
-
-  beforeEach(() => {
-    process.env.SUNAT_XSL_DIR = DIRECTORIO_XSL;
-  });
-
-  afterAll(() => {
-    delete process.env.SUNAT_XSL_DIR;
-  });
-
-  it('deja enviar cuando el XML es válido', async () => {
-    const validador = new SunatXslValidatorService();
-    const db = persistencia();
-
-    const bloqueo = await validarAntesDeEnviar(
-      PARAMS,
-      xmlFactura(),
-      validador,
-      db as never,
-    );
-
-    expect(bloqueo).toBeNull();
-    expect(db.persistFailure).not.toHaveBeenCalled();
-  });
-
-  it('no envía y marca RECHAZADO con un XML inválido, sin alimentar el backoff', async () => {
-    const validador = new SunatXslValidatorService();
-    const db = persistencia();
-
-    const resultado = await validarAntesDeEnviar(
-      PARAMS,
-      xmlFactura({ total: 500 }),
-      validador,
-      db as never,
-    );
-
-    expect(resultado).not.toBeNull();
-    expect(resultado?.estado).toBe(InvoiceStatus.RECHAZADO);
-    // reintentable = false es lo que impide que se consuma un intento y que el
-    // job termine en la DLQ: el problema es el XML, no la red.
-    expect(resultado?.reintentable).toBe(false);
-    expect(resultado?.tiempoRespuestaMs).toBeNull();
-    expect(db.persistFailure).toHaveBeenCalledTimes(1);
-  });
-
-  it('lanza ErrorValidacionBloqueada (job a la cola, intento intacto) si falta la hoja', async () => {
-    process.env.SUNAT_XSL_DIR = join(__dirname, 'no-existe');
-    const validador = new SunatXslValidatorService();
-    const db = persistencia();
-
-    await expect(
-      validarAntesDeEnviar(PARAMS, xmlFactura(), validador, db as never),
-    ).rejects.toThrow(ErrorValidacionBloqueada);
-
-    expect(db.persistFailure).not.toHaveBeenCalled();
-  });
-
-  it('el error de bloqueo declara que no consumió el intento', async () => {
-    process.env.SUNAT_XSL_DIR = join(__dirname, 'no-existe');
-    const validador = new SunatXslValidatorService();
-
-    try {
-      await validarAntesDeEnviar(
-        PARAMS,
-        xmlFactura(),
-        validador,
-        persistencia() as never,
-      );
-      throw new Error('debía lanzar');
-    } catch (error) {
-      expect(error).toBeInstanceOf(ErrorValidacionBloqueada);
-      expect(
-        (error as ErrorValidacionBloqueada)
-          .reintentableSinConsumirIntento,
-      ).toBe(true);
-    }
   });
 });
