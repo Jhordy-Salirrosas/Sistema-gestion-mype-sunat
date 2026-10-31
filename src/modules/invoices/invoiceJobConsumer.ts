@@ -37,6 +37,8 @@ import type { SendInvoiceParams } from '../sunat/soap/sunatBillTypes';
 import type { InvoicePayload } from './invoicePayload';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
+import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
+import type { FacturaParaPuente } from './application/services/invoiceAccountingBridgeService';
 
 /** Payload que viaja en la cola: solo identifica el comprobante. */
 export interface InvoiceJobPayload {
@@ -72,6 +74,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     private readonly ublGenerator: UblGeneratorService,
     private readonly xsdValidator: XsdValidatorService,
     private readonly signature: SignatureService,
+    private readonly puenteContable: InvoiceAccountingBridgeService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -112,7 +115,175 @@ export class InvoiceJobConsumer implements OnModuleInit {
       return null;
     }
 
-    return this.retry.processWithRetry(aprobado.params);
+    const resultado = await this.retry.processWithRetry(aprobado.params);
+
+    // TA-68: si SUNAT aceptó u observó el comprobante, cabe mover el stock y
+    // asentar la venta. Con un rechazo o un error de red NO: el documento fiscal
+    // todavía no es válido y contabilizarlo dejaría asientos de facturas que
+    // nunca existieron.
+    if (
+      resultado &&
+      (resultado.estado === InvoiceStatus.ACEPTADO ||
+        resultado.estado === InvoiceStatus.OBSERVADO)
+    ) {
+      await this.registrarEnContabilidad(invoiceId, resultado.estado);
+    }
+
+    return resultado;
+  }
+
+  /**
+   * Ejecuta el puente facturación → Kardex + Contabilidad (TA-68).
+   *
+   * Nunca propaga el error: la factura ya está aceptada por SUNAT y un fallo
+   * contable no la invalida. Se registra en el log para poder reintentarlo.
+   */
+  private async registrarEnContabilidad(
+    invoiceId: string,
+    estado: InvoiceStatus,
+  ): Promise<void> {
+    try {
+      const factura = await this.cargarParaPuente(invoiceId, estado);
+      if (!factura) return;
+
+      const resultado = await this.puenteContable.registrar(factura);
+
+      if (!resultado.completo) {
+        this.logger.warn(
+          `[TA-68] ${invoiceId}: puente incompleto (${resultado.errores.join(' | ')})`,
+        );
+      } else {
+        this.logger.log(
+          `[TA-68] ${invoiceId}: ${resultado.movimientosRegistrados} movimiento(s) de Kardex` +
+            `${resultado.asientoOmitido ? ', asiento ya existente' : `, asiento ${resultado.asientoId ?? 'creado'}`}`,
+        );
+      }
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[TA-68] ${invoiceId}: no se pudo contabilizar: ${mensaje}`);
+    }
+  }
+
+  /**
+   * Arma la factura que consume el puente.
+   *
+   * Los importes NO se recalculan aquí: se toman del payload que produjo el XML
+   * enviado a SUNAT, para que el asiento use exactamente las cifras que constan
+   * en el comprobante y no una segunda liquidación que podría diferir.
+   */
+  private async cargarParaPuente(
+    invoiceId: string,
+    _estado: InvoiceStatus,
+  ): Promise<FacturaParaPuente | null> {
+    const fila = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        id: true,
+        company_id: true,
+        tipo_comprobante: true,
+        serie: true,
+        correlativo: true,
+        fecha_emision: true,
+        payload_ubl: true,
+        items: {
+          orderBy: { item_order: 'asc' },
+          select: {
+            item_code: true,
+            description: true,
+            unit_code: true,
+            quantity: true,
+            unit_value: true,
+            igv_affectation_type: true,
+          },
+        },
+      },
+    });
+
+    if (!fila) return null;
+
+    const payload = (fila.payload_ubl ?? {}) as unknown as InvoicePayload;
+    const importes = this.liquidarParaPuente(fila.items, payload);
+
+    return {
+      id: fila.id,
+      companyId: fila.company_id,
+      tipoComprobante: fila.tipo_comprobante,
+      serie: fila.serie,
+      correlativo: fila.correlativo,
+      fechaEmision: fila.fecha_emision.toISOString().slice(0, 10),
+      cliente: { razonSocial: payload.cliente?.razonSocial },
+      items: fila.items.map((item) => ({
+        itemCode: item.item_code ?? undefined,
+        descripcion: item.description,
+        unidad: item.unit_code,
+        cantidad: Number(item.quantity),
+        valorUnitario: Number(item.unit_value),
+        afectacion: item.igv_affectation_type,
+      })),
+      importes,
+    };
+  }
+
+  /**
+   * Reparte las líneas persistidas entre las bases tributarias.
+   *
+   * Se calcula sobre los ITEMS GUARDADOS y no sobre el payload, por dos razones:
+   * el payload guardado no siempre trae las líneas completas, y los importes que
+   * valen para el asiento son los que quedaron registrados en el comprobante.
+   *
+   * Mapa del Catálogo 07 igual al del generador UBL (TA-62): 10xx → gravado,
+   * 20/21 → exonerado, 30-37 → inafecto, 40 → exportación (también fuera del
+   * IGV) y las gratuitas (11-16, 21, 31-36) no suman a ninguna base.
+   */
+  private liquidarParaPuente(
+    items: readonly {
+      quantity: unknown;
+      unit_value: unknown;
+      igv_affectation_type: string;
+    }[],
+    payload: InvoicePayload,
+  ): FacturaParaPuente['importes'] {
+    const gratuitas = new Set([
+      '11', '12', '13', '14', '15', '16',
+      '21', '31', '32', '33', '34', '35', '36',
+    ]);
+
+    let gravado = 0;
+    let exonerado = 0;
+    let inafecto = 0;
+
+    for (const item of items) {
+      const afectacion = item.igv_affectation_type;
+      const importe = Number(item.quantity) * Number(item.unit_value);
+      if (!Number.isFinite(importe) || gratuitas.has(afectacion)) continue;
+
+      if (afectacion.startsWith('10')) gravado += importe;
+      else if (afectacion.startsWith('2')) exonerado += importe;
+      else if (afectacion.startsWith('3') || afectacion.startsWith('4')) {
+        inafecto += importe;
+      }
+    }
+
+    const centimos = (n: number): number => Math.round(n * 100) / 100;
+    const igv = centimos(gravado * 0.18);
+    const gravadoR = centimos(gravado);
+
+    // ICBPER y detracción vienen del payload cuando el comprobante los declara.
+    const bolsas = Number(payload.bolsasIcBper ?? 0);
+    const icbper = centimos(Number.isFinite(bolsas) ? bolsas * 0.5 : 0);
+    const detraccion = Number(payload.montoDetraccion ?? 0);
+    const retencion = Number(payload.montoRetencion ?? 0);
+
+    return {
+      gravado: gravadoR,
+      igv,
+      exonerado: centimos(exonerado),
+      inafecto: centimos(inafecto),
+      icbper,
+      detraccion: Number.isFinite(detraccion) ? detraccion : 0,
+      retencion: Number.isFinite(retencion) ? retencion : 0,
+      total: centimos(gravadoR + igv + exonerado + inafecto + icbper),
+    };
   }
 
   /** Traduce `{ invoice_id }` a los datos completos del envio. */

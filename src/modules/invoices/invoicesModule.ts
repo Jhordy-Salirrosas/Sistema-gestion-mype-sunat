@@ -15,11 +15,26 @@ import { InvoiceWorkerService } from './invoiceWorkerService';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
+import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
+import { InventoryModule } from '../inventory/inventoryModule';
+import { AccountingModule } from '../accounting/accountingModule';
 
 @Module({
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas
   // provee InvoiceRetryService, que el InvoiceJobConsumer de TA-28 necesita.
-  imports: [PrismaModule, AuthModule, ResilienceModule, SunatModule],
+  //
+  // TA-68: InventoryModule y AccountingModule aportan los casos de uso que el
+  // puente contable reutiliza. Se importan los modulos enteros en lugar de
+  // duplicar sus proveedores, para que el promedio ponderado del Kardex y la
+  // partida doble sigan existiendo en un solo sitio.
+  imports: [
+    PrismaModule,
+    AuthModule,
+    ResilienceModule,
+    SunatModule,
+    InventoryModule,
+    AccountingModule,
+  ],
   // TA-29: el controlador de consulta va aparte del de emisión; comparten
   // prefijo y guard, pero no responsabilidades.
   controllers: [InvoicesController, InvoiceQueryController],
@@ -40,6 +55,8 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     // que la capa de envío (worker de TA-28 y reintentos) lo consuma antes de
     // tocar la red.
     SunatXslValidatorService,
+    // TA-68: puente facturación -> Kardex + Contabilidad.
+    InvoiceAccountingBridgeService,
   ],
   exports: [
     CreateInvoiceUseCase,
@@ -50,6 +67,7 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     UblGeneratorService,
     XsdValidatorService,
     SunatXslValidatorService,
+    InvoiceAccountingBridgeService,
   ],
 })
 export class InvoicesModule {}

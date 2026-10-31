@@ -94,6 +94,9 @@ export class RegisterManualMovementUseCase {
       resultingUnitCost: calculation.resultingAverageCost,
       resultingTotalValue: calculation.resultingTotalValue,
       notes: dto.notes,
+      // TA-68: el puente de facturación manda aquí el número de la factura que
+      // originó la salida, y es lo que hace idempotente el registro.
+      sourceReferenceId: dto.source_reference_id,
     });
 
     const savedMovement = await this.movementRepository.create(movement);

@@ -44,5 +44,18 @@ export class RegisterManualMovementDto {
   @IsString()
   @IsOptional()
   movement_date?: string;
+
+  /**
+   * Referencia del documento de origen (TA-68).
+   *
+   * Es la factura que provocó el movimiento, con su número completo. Se
+   * persiste en `source_reference_id`, que junto con el código de operación y el
+   * producto forma la llave única `@@unique([company_id, source_reference_id,
+   * operation_type_code, product_id])`: es lo que impide que reprocesar una
+   * factura duplique su salida de almacén.
+   */
+  @IsString()
+  @IsOptional()
+  source_reference_id?: string;
 }
 
