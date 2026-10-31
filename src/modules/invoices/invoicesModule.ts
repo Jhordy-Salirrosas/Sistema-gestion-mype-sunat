@@ -14,6 +14,7 @@ import { InvoiceJobConsumer } from './invoiceJobConsumer';
 import { InvoiceWorkerService } from './invoiceWorkerService';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
+import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 
 @Module({
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas
@@ -35,6 +36,10 @@ import { XsdValidatorService } from './xsdValidatorService';
     InvoiceJobConsumer,
     UblGeneratorService,
     XsdValidatorService,
+    // TA-31: validador local con las XSL oficiales de SUNAT. Se exporta para
+    // que la capa de envío (worker de TA-28 y reintentos) lo consuma antes de
+    // tocar la red.
+    SunatXslValidatorService,
   ],
   exports: [
     CreateInvoiceUseCase,
@@ -44,6 +49,7 @@ import { XsdValidatorService } from './xsdValidatorService';
     InvoiceWorkerService,
     UblGeneratorService,
     XsdValidatorService,
+    SunatXslValidatorService,
   ],
 })
 export class InvoicesModule {}
