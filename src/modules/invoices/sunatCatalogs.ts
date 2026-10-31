@@ -44,6 +44,12 @@ export const CATALOGO_05_TRIBUTO = {
 /**
  * Códigos de afectación del IGV (Catálogo 07).
  * El primer dígito agrupa la naturaleza tributaria de la operación.
+ *
+ * Los códigos 11-16, 21 y 31-36 son RETIROS Y TRANSFERENCIAS GRATUITAS: la
+ * operación está gravada (o exonerada, o inafecta) pero no se cobra nada. SUNAT
+ * exige que se declaren con `PriceAmount = 0`, `PriceTypeCode = '02'` y
+ * EXCLUIDAS del `LineExtensionAmount` (regla XSL 3278). Declararlas como una
+ * venta normal infla la base imponible del comprobante.
  */
 export const CATALOGO_07_AFECTACION = {
   '10': 'Gravado - Operación Onerosa',
@@ -52,12 +58,53 @@ export const CATALOGO_07_AFECTACION = {
   '13': 'Gravado - Retiro por publicidad',
   '14': 'Gravado - Bonificaciones',
   '15': 'Gravado - Retiro por entrega a trabajadores',
+  '16': 'Gravado - Retiro',
+  '17': 'Gravado - Retiro por premio (IVAP)',
   '20': 'Exonerado - Operación Onerosa',
   '21': 'Exonerado - Transferencia gratuita',
   '30': 'Inafecto - Operación Onerosa',
   '31': 'Inafecto - Retiro por bonificación',
+  '32': 'Inafecto - Retiro',
+  '33': 'Inafecto - Retiro por muestras médicas',
+  '34': 'Inafecto - Retiro por convenio colectivo',
+  '35': 'Inafecto - Retiro por premio',
+  '36': 'Inafecto - Retiro por publicidad',
+  '37': 'Inafecto - Retiro por entrega a trabajadores',
   '40': 'Exportación de bienes o servicios',
 } as const;
+
+/**
+ * Afectaciones del Catálogo 07 que se declaran como transferencia GRATUITA.
+ *
+ * Se listan explícitamente y no por rango ("el primer dígito es 1 y no es 10")
+ * porque un rango capturaría códigos onerosos que SUNAT añada en el futuro.
+ */
+export const AFECTACIONES_GRATUITAS: readonly string[] = [
+  '11', '12', '13', '14', '15', '16',
+  '21',
+  '31', '32', '33', '34', '35', '36',
+];
+
+/**
+ * Afectaciones cuya operación está gravada con IGV.
+ *
+ * Incluye las gratuitas gravadas (11-16): el IGV se calcula sobre el valor
+ * referencial aunque no se cobre, porque el retiro está gravado por ley.
+ */
+export const AFECTACIONES_GRAVADAS: readonly string[] = [
+  '10', '11', '12', '13', '14', '15', '16', '17',
+];
+
+/** Códigos de afectación exonerados del IGV (no llevan tributo 1000). */
+export const AFECTACIONES_EXONERADAS: readonly string[] = ['20', '21'];
+
+/** Códigos de afectación inafectos (no llevan tributo 1000). */
+export const AFECTACIONES_INAFECTAS: readonly string[] = [
+  '30', '31', '32', '33', '34', '35', '36', '37',
+];
+
+/** Código de afectación de exportación: tasa 0%, tributo 9995. */
+export const AFECTACION_EXPORTACION = '40';
 
 /** Catálogo 09: motivo de la Nota de Crédito. */
 export const CATALOGO_09_NOTA_CREDITO = {
@@ -93,6 +140,42 @@ export const CATALOGO_51_TIPO_OPERACION = {
   '2001': 'Operación sujeta a percepción',
 } as const;
 
+/**
+ * Unidades de medida del Catálogo 03 usadas en una ferretería (TA-62).
+ *
+ * El nombre es el `unitCode` exacto que SUNAT valida en el
+ * `cbc:InvoicedQuantity`; el símbolo es lo que se muestra en pantalla. Se
+ * incluye la descripción de la unidad del sistema internacional para que la
+ * cajera entienda qué significa "BG" (saco o bolsa) frente a "BX" (caja).
+ */
+export const CATALOGO_03_UNIDADES = {
+  NIU: { nombre: 'Unidad', simbolo: 'UND' },
+  DZN: { nombre: 'Docena', simbolo: 'DOC' },
+  CEN: { nombre: 'Ciento', simbolo: 'CIO' },
+  MIL: { nombre: 'Millar', simbolo: 'MLL' },
+  KGM: { nombre: 'Kilogramo', simbolo: 'KG' },
+  MTR: { nombre: 'Metro', simbolo: 'M' },
+  BG: { nombre: 'Bolsa', simbolo: 'BLS' },
+  BX: { nombre: 'Caja', simbolo: 'CJA' },
+} as const;
+
+/** Unidades de ferretería válidas, para validar el DTO y la grilla del front. */
+export const UNIDADES_FERRETERIA: readonly string[] = Object.keys(
+  CATALOGO_03_UNIDADES,
+);
+
+/**
+ * Catálogo 53: tipo de descuento o cargo global. (TA-62)
+ *
+ * El descuento por ÍTEM no usa este catálogo: va dentro de la línea con un
+ * `cac:AllowanceCharge` y `ChargeIndicator = false`. Aquí solo viven los
+ * ajustes GLOBALES, que se reflejan en el `LegalMonetaryTotal`.
+ */
+export const CATALOGO_53_DESCUENTO_GLOBAL = {
+  '00': 'Fleteros / Ley 29256',
+  '02': 'Descuento global que afecta la base imponible',
+} as const;
+
 /** Catálogo 54: código de bien o servicio sujeto a detracción (SPOT). */
 export const CATALOGO_54_DETRACCION = {
   '012': { descripcion: 'Demás servicios gravados con el IGV', porcentaje: 0.12 },
@@ -102,6 +185,20 @@ export const CATALOGO_54_DETRACCION = {
   '035': { descripcion: 'Intermediación laboral', porcentaje: 0.12 },
   '039': { descripcion: 'Arrendamiento de bienes muebles', porcentaje: 0.1 },
 } as const;
+
+/**
+ * Códigos del Catálogo 54 que SUNAT retiró (TA-63).
+ *
+ * Existen en los sistemas viejos y en muchas plantillas de Excel, pero emitir
+ * con uno de ellos produce un rechazo. Se rechazan en la validación con un
+ * mensaje claro en lugar de dejar que SUNAT lo descubra después del envío.
+ */
+export const CODIGOS_DETRACCION_DADOS_DE_BAJA: readonly string[] = [
+  '006',
+  '018',
+  '029',
+  '033',
+];
 
 /** Umbral en soles por encima del cual la detracción es obligatoria (SPOT). */
 export const UMBRAL_DETRACCION_SOLES = 700;
