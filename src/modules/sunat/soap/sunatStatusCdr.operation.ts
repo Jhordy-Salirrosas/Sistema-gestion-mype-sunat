@@ -1,11 +1,11 @@
 /**
  * Operacion getStatusCdr del billConsultService de SUNAT.
  *
- * Es la hermana de sendBill y se usa cuando el envio queda en estado
- * INCERTIDUMBRE: el sobre salio, pero la respuesta se perdio (timeout, corte de
- * red). Reenviar sendBill a ciegas en ese escenario provoca los rechazos por
- * duplicidad 1032/1033, asi que lo correcto es PREGUNTAR por el estado del
- * comprobante y recuperar el CDR si SUNAT ya lo proceso.
+ * Es la hermana de sendBill y se usa cuando el envio queda en estado INCIERTO:
+ * el sobre salio, pero la respuesta se perdio (timeout, corte de red). Reenviar
+ * sendBill a ciegas en ese escenario provoca los rechazos por duplicidad
+ * 1032/1033, asi que lo correcto es PREGUNTAR por el estado del comprobante y
+ * recuperar el CDR si SUNAT ya lo proceso.
  *
  * Contrato (WSDL oficial del billConsultService):
  *   - Namespace del Body: el mismo http://service.sunat.gob.pe que sendBill.
@@ -24,10 +24,12 @@ import {
   WSSE_PASSWORD_TYPE,
 } from './soap.constants';
 import type { SendBillCredentials } from './soap-envelope';
-import { asRecord, escapeXml, nodeText } from './soap-xml.util';
 
 /** Valor del encabezado HTTP SOAPAction para la operacion getStatusCdr. */
 export const GET_STATUS_CDR_SOAP_ACTION = 'urn:getStatusCdr';
+
+/** Codigo oficial de "no existe informacion del comprobante". */
+export const SUNAT_CODE_NO_ENCONTRADO = '0127';
 
 export interface GetStatusCdrParams {
   /** RUC del emisor del comprobante consultado. */
@@ -43,9 +45,9 @@ export interface GetStatusCdrParams {
 }
 
 /**
- * Respuesta de la consulta. `encontrado: false` significa que SUNAT no tiene
- * registro de ese comprobante (normalmente codigo 0127): el envio NO llego y
- * reenviar sendBill es seguro.
+ * Respuesta de la consulta. `noEncontrado: true` significa que SUNAT no tiene
+ * registro de ese comprobante (codigo 0127): el envio NO llego y reenviar
+ * sendBill es seguro.
  */
 export interface StatusCdrResult {
   /** Codigo oficial del CDR (0000, 0127, 1032...). */
@@ -60,6 +62,37 @@ export interface StatusCdrResult {
   tiempoRespuestaMs: number;
   httpStatus: number;
   rawResponse: string;
+}
+
+/** Escapa el texto para que sea seguro dentro de un nodo XML. */
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/** Estrecha un valor desconocido a un objeto plano, o null. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+/**
+ * Texto de un nodo, soportando que fast-xml-parser lo entregue como string o
+ * como objeto con #text cuando el nodo trae atributos.
+ */
+function nodeText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  const record = asRecord(value);
+  if (record && '#text' in record) return nodeText(record['#text']);
+  return null;
 }
 
 function buildSecurityHeader(credentials: SendBillCredentials): string {
@@ -79,8 +112,8 @@ function buildSecurityHeader(credentials: SendBillCredentials): string {
 
 /**
  * Arma el sobre de getStatusCdr. Los cuatro campos van sin prefijo porque el
- * XSD del billConsultService los declara como elementos locales del Body,
- * tal como en sendBill.
+ * XSD del billConsultService los declara como elementos locales del Body, tal
+ * como en sendBill.
  */
 export function buildGetStatusCdrEnvelope(
   params: GetStatusCdrParams,
@@ -120,8 +153,21 @@ const responseParser = new XMLParser({
   ignoreDeclaration: true,
 });
 
-/** Codigo oficial de "no existe informacion del comprobante". */
-export const SUNAT_CODE_NO_ENCONTRADO = '0127';
+export interface ParsedStatusCdrResponse {
+  statusCode: string | null;
+  statusMessage: string | null;
+  applicationResponse: string | null;
+  faultCode: string | null;
+  faultString: string | null;
+}
+
+const RESPUESTA_VACIA: ParsedStatusCdrResponse = {
+  statusCode: null,
+  statusMessage: null,
+  applicationResponse: null,
+  faultCode: null,
+  faultString: null,
+};
 
 /**
  * Extrae statusCdr del sobre de respuesta del billConsultService.
@@ -129,44 +175,23 @@ export const SUNAT_CODE_NO_ENCONTRADO = '0127';
  * El Fault se devuelve aparte en vez de lanzarse para que el cliente decida:
  * un 0127 llega como statusCdr normal, no como Fault.
  */
-export function parseGetStatusCdrResponse(xml: string): {
-  statusCode: string | null;
-  statusMessage: string | null;
-  applicationResponse: string | null;
-  faultCode: string | null;
-  faultString: string | null;
-} {
+export function parseGetStatusCdrResponse(
+  xml: string,
+): ParsedStatusCdrResponse {
   let parsed: unknown;
   try {
     parsed = responseParser.parse(xml);
   } catch {
-    return {
-      statusCode: null,
-      statusMessage: null,
-      applicationResponse: null,
-      faultCode: null,
-      faultString: null,
-    };
+    return RESPUESTA_VACIA;
   }
 
-  const envelope = asRecord(asRecord(parsed)?.Envelope);
-  const body = asRecord(envelope?.Body);
-  if (!body) {
-    return {
-      statusCode: null,
-      statusMessage: null,
-      applicationResponse: null,
-      faultCode: null,
-      faultString: null,
-    };
-  }
+  const body = asRecord(asRecord(asRecord(parsed)?.Envelope)?.Body);
+  if (!body) return RESPUESTA_VACIA;
 
   const faultNode = asRecord(body.Fault);
   if (faultNode) {
     return {
-      statusCode: null,
-      statusMessage: null,
-      applicationResponse: null,
+      ...RESPUESTA_VACIA,
       faultCode:
         nodeText(faultNode.faultcode) ?? nodeText(faultNode.Code) ?? null,
       faultString:
@@ -174,8 +199,7 @@ export function parseGetStatusCdrResponse(xml: string): {
     };
   }
 
-  const responseNode = asRecord(body.getStatusCdrResponse);
-  const statusCdr = asRecord(responseNode?.statusCdr);
+  const statusCdr = asRecord(asRecord(body.getStatusCdrResponse)?.statusCdr);
   const content = nodeText(statusCdr?.content);
 
   return {

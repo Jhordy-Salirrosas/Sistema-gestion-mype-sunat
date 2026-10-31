@@ -33,7 +33,7 @@ model Invoice {
   company_id                  String
   company                     Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
   
-  // Datos principales de compatibilidad y emisión
+  // Datos principales de compatibilidad y emisiÃ³n
   ruc_emisor                  String
   serie                       String
   correlativo                 Int
@@ -59,7 +59,7 @@ model Invoice {
   xml_hash_sha256             String?
   cdr_storage_url             String?
   
-  // Referencias para Notas de Crédito / Débito
+  // Referencias para Notas de CrÃ©dito / DÃ©bito
   referenced_invoice_id       String?
   referenced_document_type    String?
   referenced_series_correlative String?
