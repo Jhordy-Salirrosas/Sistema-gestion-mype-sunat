@@ -6,6 +6,7 @@ import { CdrPersistenceService } from './cdr-persistence.service';
 import { SunatBillService } from './sunat-bill.service';
 import { ResilienceStateModule } from '../resilience/application/resilienceStateModule';
 import { ResilienceStateService } from '../resilience/application/resilienceStateService';
+import { SunatStatusConsultaService } from './statusConsultaService';
 
 /**
  * Modulo SUNAT.
@@ -15,6 +16,8 @@ import { ResilienceStateService } from '../resilience/application/resilienceStat
  *    (CertificateService, SignatureService).
  *  - TA-03: cliente SOAP del billService, parseo del CDR y persistencia
  *    (SunatBillService, CdrPersistenceService).
+ *  - TA-30: consulta de estado y recuperacion del CDR de un envio que quedo
+ *    en timeout (SunatStatusConsultaService).
  */
 @Module({
   imports: [PrismaModule, ResilienceStateModule],
@@ -23,6 +26,7 @@ import { ResilienceStateService } from '../resilience/application/resilienceStat
     CertificateService,
     SignatureService,
     CdrPersistenceService,
+    SunatStatusConsultaService,
     // El servicio se construye con su factory, que resuelve el endpoint y el
     // timeout del entorno. Al recibir sus dependencias por constructor sigue
     // siendo testeable con un cliente que apunte al Mock.
@@ -35,6 +39,11 @@ import { ResilienceStateService } from '../resilience/application/resilienceStat
       inject: [CdrPersistenceService, ResilienceStateService],
     },
   ],
-  exports: [SunatBillService, CertificateService, SignatureService],
+  exports: [
+    SunatBillService,
+    CertificateService,
+    SignatureService,
+    SunatStatusConsultaService,
+  ],
 })
 export class SunatModule {}

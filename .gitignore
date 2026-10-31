@@ -167,3 +167,14 @@ docs/
 *.cer
 *.crt
 
+# Hojas XSL oficiales de SUNAT (TA-31).
+# SÍ se versionan, en assets/sunat-xsl/: el validador las ejecuta, y sin ellas el
+# sistema bloquea todos los envíos. Al clonar tiene que funcionar sin pasos
+# manuales. Si SUNAT publica una versión nueva, se reemplazan y se actualizan
+# las huellas de test/unit/invoices/ta31-xsl-oficial.spec.ts.
+# La antigua carpeta de trabajo local (sin versionar) queda ignorada por si
+# alguien todavía la tiene apuntada desde SUNAT_XSL_DIR. Ojo con la barra
+# inicial: sin ella el patrón también captura `assets/sunat-xsl/`, que es justo
+# el que SÍ debe versionarse.
+/sunat-xsl/
+

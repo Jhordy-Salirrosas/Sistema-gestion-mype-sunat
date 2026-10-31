@@ -10,6 +10,12 @@ export interface InvoiceEntityProps {
   payload_ubl: Record<string, unknown>;
   estado?: string;
   created_at?: Date;
+  /**
+   * Huella del comprobante para reconocer un reenvío (TA-32). No es una
+   * columna de la base: el repositorio la usa solo para registrar en el log
+   * qué petición provocó un choque con `uq_invoices_idempotencia`.
+   */
+  clave_idempotencia?: string;
 }
 
 export class InvoiceEntity {
@@ -24,6 +30,8 @@ export class InvoiceEntity {
   public readonly payload_ubl: Record<string, unknown>;
   public readonly estado: string;
   public readonly created_at?: Date;
+  /** Huella del comprobante para reconocer un reenvío (TA-32). */
+  public readonly clave_idempotencia?: string;
 
   constructor(props: InvoiceEntityProps) {
     this.id = props.id;
@@ -37,5 +45,6 @@ export class InvoiceEntity {
     this.payload_ubl = props.payload_ubl;
     this.estado = props.estado ?? 'PENDIENTE_ENVIO';
     this.created_at = props.created_at;
+    this.clave_idempotencia = props.clave_idempotencia;
   }
 }

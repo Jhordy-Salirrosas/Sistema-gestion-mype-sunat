@@ -35,12 +35,12 @@ describe('TA-33 · Circuit Breaker', () => {
     for (let i = 0; i < 4; i += 1) {
       state.registrarResultadoEnvio(true);
     }
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(state.puedeEnviar()).toBe(true);
 
     state.registrarResultadoEnvio(true);
 
-    expect(state.snapshot(0).state).toBe('OPEN');
+    expect(state.snapshot().state).toBe('OPEN');
     expect(state.puedeEnviar()).toBe(false);
   });
 
@@ -50,11 +50,11 @@ describe('TA-33 · Circuit Breaker', () => {
 
     jest.advanceTimersByTime(29_999);
     expect(state.puedeEnviar()).toBe(false);
-    expect(state.snapshot(0).state).toBe('OPEN');
+    expect(state.snapshot().state).toBe('OPEN');
 
     jest.advanceTimersByTime(1);
     expect(state.puedeEnviar()).toBe(true);
-    expect(state.snapshot(0).state).toBe('HALF_OPEN');
+    expect(state.snapshot().state).toBe('HALF_OPEN');
   });
 
   it('cierra el circuito si la petición de prueba acierta', () => {
@@ -64,7 +64,7 @@ describe('TA-33 · Circuit Breaker', () => {
 
     state.registrarResultadoEnvio(false);
 
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(state.puedeEnviar()).toBe(true);
   });
 
@@ -75,7 +75,7 @@ describe('TA-33 · Circuit Breaker', () => {
 
     state.registrarResultadoEnvio(true);
 
-    expect(state.snapshot(0).state).toBe('OPEN');
+    expect(state.snapshot().state).toBe('OPEN');
     expect(state.puedeEnviar()).toBe(false);
   });
 
@@ -86,7 +86,7 @@ describe('TA-33 · Circuit Breaker', () => {
       state.registrarResultadoEnvio(false);
     }
 
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(state.puedeEnviar()).toBe(true);
   });
 });

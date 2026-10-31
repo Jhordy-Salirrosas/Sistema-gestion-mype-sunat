@@ -14,6 +14,7 @@ import {
   WSSE_NAMESPACE,
   WSSE_PASSWORD_TYPE,
 } from './soap.constants';
+import { asRecord, escapeXml, nodeText } from './soap-xml.util';
 
 export interface SendBillCredentials {
   /**
@@ -36,16 +37,6 @@ export interface BuildSendBillEnvelopeParams {
    * valida credenciales.
    */
   credentials?: SendBillCredentials | null;
-}
-
-/** Escapa el texto para que sea seguro dentro de un nodo XML. */
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 /**
@@ -162,26 +153,6 @@ const responseParser = new XMLParser({
   trimValues: true,
   ignoreDeclaration: true,
 });
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return null;
-}
-
-/**
- * Devuelve el texto de un nodo, soportando que fast-xml-parser lo entregue como
- * string o como objeto con #text cuando el nodo trae atributos.
- */
-function nodeText(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number') return String(value);
-  const record = asRecord(value);
-  if (record && '#text' in record) return nodeText(record['#text']);
-  return null;
-}
 
 export interface ParsedSoapResponse {
   /** applicationResponse tal cual (Base64 del ZIP con el CDR). */
