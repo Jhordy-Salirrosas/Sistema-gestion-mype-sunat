@@ -22,6 +22,7 @@ import { InvoiceWorkerService } from './invoiceWorkerService';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
+import { InvoiceNoteService } from './application/services/invoiceNoteService';
 
 @Module({
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas
@@ -60,6 +61,8 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     InvoiceDownloadService,
     InvoicePdfService,
     InvoiceQrService,
+    // TA-66: notas de crédito y débito con control de saldo.
+    InvoiceNoteService,
   ],
   exports: [
     CreateInvoiceUseCase,
