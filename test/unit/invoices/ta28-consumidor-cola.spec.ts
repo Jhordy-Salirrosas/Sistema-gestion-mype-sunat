@@ -74,6 +74,14 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     errors: [],
   }));
 
+  const registrar = jest.fn<(factura: unknown) => Promise<unknown>>(async () => ({
+    movimientosRegistrados: 0,
+    movimientosOmitidos: 0,
+    asientoOmitido: false,
+    errores: [],
+    completo: true,
+  }));
+
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker } as never,
     { processWithRetry } as never,
@@ -94,6 +102,8 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
       })),
     } as never,
     { persistFailure: jest.fn() } as never,
+    // TA-68: puente contable. En esta suite es un doble que no hace nada.
+    { registrar } as never,
   );
 
   return {

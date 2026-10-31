@@ -24,11 +24,26 @@ import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 import { InvoiceNoteService } from './application/services/invoiceNoteService';
+import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
+import { InventoryModule } from '../inventory/inventoryModule';
+import { AccountingModule } from '../accounting/accountingModule';
 
 @Module({
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas
   // provee InvoiceRetryService, que el InvoiceJobConsumer de TA-28 necesita.
-  imports: [PrismaModule, AuthModule, ResilienceModule, SunatModule],
+  //
+  // TA-68: InventoryModule y AccountingModule aportan los casos de uso que el
+  // puente contable reutiliza. Se importan los modulos enteros en lugar de
+  // duplicar sus proveedores, para que el promedio ponderado del Kardex y la
+  // partida doble sigan existiendo en un solo sitio.
+  imports: [
+    PrismaModule,
+    AuthModule,
+    ResilienceModule,
+    SunatModule,
+    InventoryModule,
+    AccountingModule,
+  ],
   // TA-29 / TA-60 / TA-65: un controlador por responsabilidad. El de consulta,
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
@@ -66,6 +81,8 @@ import { InvoiceNoteService } from './application/services/invoiceNoteService';
     InvoiceNoteService,
     // TA-69: métricas del periodo para la barra de KPIs del módulo.
     InvoiceMetricsService,
+    // TA-68: puente facturación -> Kardex + Contabilidad.
+    InvoiceAccountingBridgeService,
   ],
   exports: [
     CreateInvoiceUseCase,
@@ -80,6 +97,7 @@ import { InvoiceNoteService } from './application/services/invoiceNoteService';
     UblGeneratorService,
     XsdValidatorService,
     SunatXslValidatorService,
+    InvoiceAccountingBridgeService,
   ],
 })
 export class InvoicesModule {}

@@ -57,6 +57,7 @@ const VALIDO: ResultadoValidacionXsl = {
   codigosDesconocidos: [],
   bloqueado: false,
   motivoBloqueo: null,
+  validadoDeVerdad: true,
 };
 
 /** La hoja oficial encontró una regla incumplida (código 2xxx). */
@@ -71,6 +72,7 @@ function conErrores(...codigos: string[]): ResultadoValidacionXsl {
     codigosDesconocidos: [],
     bloqueado: false,
     motivoBloqueo: null,
+    validadoDeVerdad: true,
   };
 }
 
@@ -82,6 +84,7 @@ function bloqueada(motivo: string): ResultadoValidacionXsl {
     codigosDesconocidos: [],
     bloqueado: true,
     motivoBloqueo: motivo,
+    validadoDeVerdad: false,
   };
 }
 
@@ -138,6 +141,9 @@ function crearConsumidor(
     { signXml: jest.fn() } as never,
     { validar: validarXsl } as never,
     { persistFailure } as never,
+    // TA-68: el puente contable se ejercita en su propia suite; aqui es un
+    // doble inerte para no mezclar dos responsabilidades en las mismas pruebas.
+    { registrar: jest.fn() } as never,
   );
 
   return { consumidor, processWithRetry, validarXsl, persistFailure, update };
