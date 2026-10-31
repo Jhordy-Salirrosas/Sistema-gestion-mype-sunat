@@ -182,7 +182,7 @@ describe('TA-28 criterio 6b: 503 sostenido -> DLQ + ERROR_RED', () => {
 
   it('ante un SOAP Fault no reintenta: corta en el primer intento', async () => {
     const { SunatSoapFaultError } = await import(
-      '../../../src/modules/sunat/soap/soap-envelope'
+      '../../../src/modules/sunat/soap/soap-envelope.js'
     );
     const soapClient = {
       sendBill: jest.fn().mockRejectedValue(
