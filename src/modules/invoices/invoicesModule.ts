@@ -5,8 +5,11 @@ import { ResilienceModule } from '../resilience/resilienceModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
 import { InvoiceQueryController } from './infrastructure/controllers/invoiceQueryController';
+import { InvoiceConfigController } from './infrastructure/controllers/invoiceConfigController';
 import { InvoicesService } from './application/services/invoicesService';
 import { InvoiceQueryService } from './application/services/invoiceQueryService';
+import { InvoiceSeriesService } from './application/services/invoiceSeriesService';
+import { InvoiceConfigService } from './application/services/invoiceConfigService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
@@ -22,11 +25,18 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
   imports: [PrismaModule, AuthModule, ResilienceModule, SunatModule],
   // TA-29: el controlador de consulta va aparte del de emisión; comparten
   // prefijo y guard, pero no responsabilidades.
-  controllers: [InvoicesController, InvoiceQueryController],
+  controllers: [
+    InvoicesController,
+    InvoiceQueryController,
+    InvoiceConfigController,
+  ],
   providers: [
     CreateInvoiceUseCase,
     InvoicesService,
     InvoiceQueryService,
+    // TA-60: series con reserva atómica del correlativo + configuración.
+    InvoiceSeriesService,
+    InvoiceConfigService,
     {
       provide: INVOICE_REPOSITORY_PORT,
       useClass: PrismaInvoiceRepository,
@@ -45,6 +55,8 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     CreateInvoiceUseCase,
     InvoicesService,
     InvoiceQueryService,
+    InvoiceSeriesService,
+    InvoiceConfigService,
     INVOICE_REPOSITORY_PORT,
     InvoiceWorkerService,
     UblGeneratorService,
