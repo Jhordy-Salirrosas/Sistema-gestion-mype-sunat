@@ -112,6 +112,16 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
 }
 
 /**
+ * Comparación alfabética estable para ordenar nombres de campo.
+ *
+ * Sin comparador, `Array.prototype.sort` ordena por UTF-16 y el resultado es
+ * dependiente de los datos; `localeCompare` hace explícito el criterio.
+ */
+function compararCampos(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
+/**
  * Campos de la llave de idempotencia (TA-32), ya ordenados.
  *
  * Ordenados para poder compararlos con `camposViolados`, que también ordena:
@@ -123,7 +133,7 @@ const CAMPOS_LLAVE_IDEMPOTENCIA = [
   'tipo_comprobante',
   'serie',
   'correlativo',
-].sort();
+].sort(compararCampos);
 
 /** ¿El error es una violación del índice único (P2002)? */
 function esViolacionDeUnicidad(error: unknown): boolean {
@@ -145,12 +155,12 @@ function camposViolados(error: unknown): string[] {
   const meta = (error as { meta?: { target?: unknown } }).meta;
   const target = meta?.target;
 
-  if (Array.isArray(target)) return target.map(String).sort();
+  if (Array.isArray(target)) return target.map(String).sort(compararCampos);
   if (typeof target === 'string') {
     return target
       .split(',')
       .map((c) => c.trim())
-      .sort();
+      .sort(compararCampos);
   }
   return [];
 }

@@ -53,6 +53,14 @@ function errorP2002(target: string[]) {
   });
 }
 
+/** Variante con `meta.target` en cualquiera de las formas que reporta Prisma. */
+function errorP2002ConTarget(target: unknown) {
+  return Object.assign(new Error('Unique constraint failed'), {
+    code: 'P2002',
+    meta: { target },
+  });
+}
+
 const RESULTADO_INCIERTO: ProcessCdrResult = {
   invoiceId: 'inv-1',
   responseCode: '',
@@ -212,6 +220,49 @@ describe('TA-32 - repositorio y llave única', () => {
 
     await expect(repo.saveWithTransactionalOutbox(entidad())).rejects.toThrow(
       /No se pudo registrar el comprobante/,
+    );
+  });
+
+  it('reconoce la llave cuando Prisma reporta el target como string', async () => {
+    const existente = {
+      id: 'inv-existente',
+      estado: InvoiceStatus.PENDIENTE,
+      created_at: new Date('2026-10-30T10:00:00Z'),
+    };
+    const repo = crearRepositorio(
+      errorP2002ConTarget(
+        'correlativo, company_id, serie, tipo_comprobante, ruc_emisor',
+      ),
+      existente,
+    );
+
+    await expect(repo.saveWithTransactionalOutbox(entidad())).resolves.toBe(
+      existente,
+    );
+  });
+
+  it('responde 409 si choca la llave completa y el registro ya no está', async () => {
+    const repo = crearRepositorio(
+      errorP2002([
+        'company_id',
+        'ruc_emisor',
+        'tipo_comprobante',
+        'serie',
+        'correlativo',
+      ]),
+      null,
+    );
+
+    await expect(repo.saveWithTransactionalOutbox(entidad())).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('trata un P2002 sin target como un choque que no es de idempotencia', async () => {
+    const repo = crearRepositorio(errorP2002ConTarget(undefined), null);
+
+    await expect(repo.saveWithTransactionalOutbox(entidad())).rejects.toThrow(
+      ConflictException,
     );
   });
 });

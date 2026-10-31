@@ -108,8 +108,6 @@ export function clasificarFallo(error: unknown): FalloClasificado {
   // 2. Error de transporte del cliente SOAP.
   if (isSunatTransportError(error)) {
     const httpStatus = (error as SunatTransportError).httpStatus;
-    const esIndisponibilidad =
-      httpStatus !== null && (httpStatus >= 500 || httpStatus === 429);
 
     // Timeout: el sobre pudo haber salido -> estado incierto.
     if (/timeout/i.test(mensaje)) {
@@ -123,8 +121,10 @@ export function clasificarFallo(error: unknown): FalloClasificado {
       };
     }
 
+    // El resto de fallos de transporte (5xx, 429, red caída) son transitorios:
+    // SUNAT no atendió o la red falló antes de transmitir.
     return {
-      clase: esIndisponibilidad ? 'TRANSIENTE' : 'TRANSIENTE',
+      clase: 'TRANSIENTE',
       reintentable: true,
       requiereConsultaEstado: false,
       codigo: httpStatus ? `HTTP_${httpStatus}` : 'ERROR_RED',

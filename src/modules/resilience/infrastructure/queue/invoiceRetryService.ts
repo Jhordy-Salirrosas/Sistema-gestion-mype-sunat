@@ -133,7 +133,7 @@ export class InvoiceRetryService {
       // TA-32 criterio 3: si el intento anterior quedó en estado incierto
       // (timeout), se reconcilia con SUNAT ANTES de volver a enviar. Si SUNAT
       // ya tenía el comprobante, su CDR se recupera y no se reenvía nada.
-      const conciliado = await this.conciliar(job, ultimo);
+      const conciliado = await this.conciliar(job, ultimo, intento);
       if (conciliado) {
         return this.resultado(job.invoiceId, conciliado, intento, false, false);
       }
@@ -186,6 +186,7 @@ export class InvoiceRetryService {
   private async conciliar(
     job: RetryInvoiceJob,
     ultimo: ProcessCdrResult | null,
+    intento: number,
   ): Promise<ProcessCdrResult | null> {
     if (!this.consultaEstado) return null;
     if (!requiereConciliacion(ultimo, null)) return null;
@@ -198,7 +199,7 @@ export class InvoiceRetryService {
         serie: job.serie,
         correlativo: job.correlativo,
         estadoActual: ultimo?.estado ?? null,
-        intento: ultimo ? 1 : 1,
+        intento,
       });
 
       const recuperado = resultadoTrasConciliacion(consultado);
