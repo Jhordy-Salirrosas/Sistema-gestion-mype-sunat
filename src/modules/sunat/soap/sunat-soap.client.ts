@@ -70,6 +70,24 @@ export function isSunatSoapFaultError(
   return error instanceof SunatSoapFaultError;
 }
 
+/**
+ * ¿El envío terminó en timeout? (TA-32, frente 2)
+ *
+ * Es la condición que deja el comprobante en un estado INCIERTO: SUNAT pudo
+ * haberlo procesado y su CDR se perdió en el camino. En ese caso reenviar a
+ * ciegas produciría el duplicado que la TA-32 evita, así que el orquestador
+ * consulta primero el estado.
+ *
+ * Se detecta por el mensaje y no por el tipo porque `SunatTransportError`
+ * cubre también DNS y conexión rechazada, que sí son seguros de reintentar.
+ * La condición se compara en minúsculas: el mensaje lo construye este mismo
+ * módulo en un único lugar.
+ */
+export function esTimeoutDeEnvio(error: unknown): boolean {
+  if (!isSunatTransportError(error)) return false;
+  return /timeout/i.test(error.message);
+}
+
 export interface SendBillParams {
   /** Nombre del ZIP: RUC-TIPO-SERIE-CORRELATIVO.zip */
   fileName: string;
