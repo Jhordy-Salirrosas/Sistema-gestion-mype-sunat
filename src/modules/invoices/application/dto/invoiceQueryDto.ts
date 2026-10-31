@@ -32,6 +32,15 @@ export interface ComprobanteListadoDto {
   cliente_nombre: string | null;
   /** Código del CDR si ya se recibió, `null` mientras no haya respuesta. */
   cdr_codigo: string | null;
+  /** Base imponible y IGV reales del comprobante (no derivados del total). */
+  base_imponible?: number;
+  total_igv?: number;
+  exonerada?: number;
+  inafecta?: number;
+  /** Documento afectado, solo en notas de crédito/débito. */
+  documento_afectado?: string | null;
+  /** Huella del XML firmado, para la ficha del comprobante. */
+  hash_cpe?: string | null;
 }
 
 /** Página de resultados. */
