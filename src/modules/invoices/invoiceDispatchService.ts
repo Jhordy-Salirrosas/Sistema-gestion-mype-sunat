@@ -268,7 +268,7 @@ export class InvoiceDispatchService {
     );
 
     try {
-      const consulta = await this.soapClient.getStatusCdr({
+      const consulta = await this.soapClient.getStatusCdrLegacy({
         rucComprobante: params.rucEmisor,
         tipoComprobante: params.tipoComprobante,
         serieComprobante: params.serie,

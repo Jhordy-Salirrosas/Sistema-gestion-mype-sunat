@@ -5,7 +5,7 @@
  *
  *   6a. sendBill 202 con CDR 0      -> ACEPTADO
  *   6b. 503 sostenido               -> 3 reintentos, DLQ y ERROR_RED
- *   6c. timeout tras transmitir     -> getStatusCdr, sin reenvio ciego
+ *   6c. timeout tras transmitir     -> getStatusCdrLegacy, sin reenvio ciego
  *
  * Ademas del criterio 5 (Circuit Breaker OPEN no consume intento) y del 3
  * (el CDR queda persistido con su estado).
@@ -112,7 +112,7 @@ describe('TA-28 criterio 6a: CDR 0 -> ACEPTADO', () => {
         httpStatus: 200,
         rawResponse: '<soap/>',
       }),
-      getStatusCdr: jest.fn(),
+      getStatusCdrLegacy: jest.fn(),
     };
 
     const { servicio, prisma } = montar({ soapClient });
@@ -122,7 +122,7 @@ describe('TA-28 criterio 6a: CDR 0 -> ACEPTADO', () => {
     expect(r.status).toBe('ACEPTADO');
     expect(prisma.estados).toContain('ACEPTADO');
     expect(soapClient.sendBill).toHaveBeenCalledTimes(1);
-    expect(soapClient.getStatusCdr).not.toHaveBeenCalled();
+    expect(soapClient.getStatusCdrLegacy).not.toHaveBeenCalled();
   });
 
   it('marca OBSERVADO cuando el CDR trae un codigo >= 4000', async () => {
@@ -133,7 +133,7 @@ describe('TA-28 criterio 6a: CDR 0 -> ACEPTADO', () => {
         httpStatus: 200,
         rawResponse: '<soap/>',
       }),
-      getStatusCdr: jest.fn(),
+      getStatusCdrLegacy: jest.fn(),
     };
 
     const { servicio } = montar({ soapClient });
@@ -153,7 +153,7 @@ describe('TA-28 criterio 6b: 503 sostenido -> DLQ + ERROR_RED', () => {
             httpStatus: 503,
           }),
         ),
-      getStatusCdr: jest.fn(),
+      getStatusCdrLegacy: jest.fn(),
     };
 
     const { servicio, prisma, queue } = montar({ soapClient });
@@ -171,13 +171,13 @@ describe('TA-28 criterio 6b: 503 sostenido -> DLQ + ERROR_RED', () => {
       sendBill: jest.fn().mockRejectedValue(
         new SunatTransportError('HTTP 503', { httpStatus: 503 }),
       ),
-      getStatusCdr: jest.fn(),
+      getStatusCdrLegacy: jest.fn(),
     };
 
     const { servicio } = montar({ soapClient });
     await servicio.despachar(PARAMS);
 
-    expect(soapClient.getStatusCdr).not.toHaveBeenCalled();
+    expect(soapClient.getStatusCdrLegacy).not.toHaveBeenCalled();
   }, 30_000);
 
   it('ante un SOAP Fault no reintenta: corta en el primer intento', async () => {
@@ -191,7 +191,7 @@ describe('TA-28 criterio 6b: 503 sostenido -> DLQ + ERROR_RED', () => {
           faultString: '0102 Usuario o contrasena incorrectos',
         }),
       ),
-      getStatusCdr: jest.fn(),
+      getStatusCdrLegacy: jest.fn(),
     };
 
     const { servicio, prisma } = montar({ soapClient });
@@ -203,7 +203,7 @@ describe('TA-28 criterio 6b: 503 sostenido -> DLQ + ERROR_RED', () => {
   });
 });
 
-describe('TA-28 criterio 6c: timeout -> getStatusCdr sin reenvio ciego', () => {
+describe('TA-28 criterio 6c: timeout -> getStatusCdrLegacy sin reenvio ciego', () => {
   it('consulta el estado y recupera el CDR cuando SUNAT ya lo proceso', async () => {
     const soapClient = {
       sendBill: jest
@@ -213,7 +213,7 @@ describe('TA-28 criterio 6c: timeout -> getStatusCdr sin reenvio ciego', () => {
             'Timeout de 30000 ms esperando al billService. El comprobante quedo en estado incierto: NO reenviar a ciegas',
           ),
         ),
-      getStatusCdr: jest.fn().mockResolvedValue({
+      getStatusCdrLegacy: jest.fn().mockResolvedValue({
         statusCode: '0',
         statusMessage: 'El comprobante fue aceptado',
         applicationResponse: cdrBase64('0'),
@@ -230,7 +230,7 @@ describe('TA-28 criterio 6c: timeout -> getStatusCdr sin reenvio ciego', () => {
 
     // Lo esencial: sendBill se llamo UNA sola vez (no hubo reenvio ciego).
     expect(soapClient.sendBill).toHaveBeenCalledTimes(1);
-    expect(soapClient.getStatusCdr).toHaveBeenCalledTimes(1);
+    expect(soapClient.getStatusCdrLegacy).toHaveBeenCalledTimes(1);
     expect(r.status).toBe('ACEPTADO');
     expect(prisma.auditorias.some((a) => a.codigo_error === 'SOAP_TIMEOUT_RECOVERY')).toBe(true);
   });
@@ -248,7 +248,7 @@ describe('TA-28 criterio 6c: timeout -> getStatusCdr sin reenvio ciego', () => {
           httpStatus: 200,
           rawResponse: '<soap/>',
         }),
-      getStatusCdr: jest.fn().mockResolvedValue({
+      getStatusCdrLegacy: jest.fn().mockResolvedValue({
         statusCode: '0127',
         statusMessage: 'No existe informacion del comprobante',
         applicationResponse: null,
@@ -263,7 +263,7 @@ describe('TA-28 criterio 6c: timeout -> getStatusCdr sin reenvio ciego', () => {
     const { servicio } = montar({ soapClient });
     const r = await servicio.despachar(PARAMS);
 
-    expect(soapClient.getStatusCdr).toHaveBeenCalledTimes(1);
+    expect(soapClient.getStatusCdrLegacy).toHaveBeenCalledTimes(1);
     expect(soapClient.sendBill).toHaveBeenCalledTimes(2);
     expect(r.status).toBe('ACEPTADO');
   });
@@ -274,7 +274,7 @@ describe('TA-28 criterio 5: Circuit Breaker OPEN', () => {
     const circuit = new CircuitBreaker();
     circuit.abrir();
 
-    const soapClient = { sendBill: jest.fn(), getStatusCdr: jest.fn() };
+    const soapClient = { sendBill: jest.fn(), getStatusCdrLegacy: jest.fn() };
     const { servicio, prisma } = montar({
       soapClient,
       circuitBreaker: circuit,
@@ -296,7 +296,7 @@ describe('TA-28 criterio 5: Circuit Breaker OPEN', () => {
     const circuit = new CircuitBreaker();
     circuit.abrir();
     const { servicio, prisma } = montar({
-      soapClient: { sendBill: jest.fn(), getStatusCdr: jest.fn() },
+      soapClient: { sendBill: jest.fn(), getStatusCdrLegacy: jest.fn() },
       circuitBreaker: circuit,
     });
 
