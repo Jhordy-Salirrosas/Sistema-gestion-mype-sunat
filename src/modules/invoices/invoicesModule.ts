@@ -14,6 +14,7 @@ import { InvoiceConfigService } from './application/services/invoiceConfigServic
 import { InvoiceDownloadService } from './application/services/invoiceDownloadService';
 import { InvoicePdfService } from './application/services/invoicePdfService';
 import { InvoiceQrService } from './application/services/invoiceQrService';
+import { InvoiceMetricsService } from './application/services/invoiceMetricsService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
@@ -63,6 +64,8 @@ import { InvoiceNoteService } from './application/services/invoiceNoteService';
     InvoiceQrService,
     // TA-66: notas de crédito y débito con control de saldo.
     InvoiceNoteService,
+    // TA-69: métricas del periodo para la barra de KPIs del módulo.
+    InvoiceMetricsService,
   ],
   exports: [
     CreateInvoiceUseCase,
@@ -71,6 +74,7 @@ import { InvoiceNoteService } from './application/services/invoiceNoteService';
     InvoiceSeriesService,
     InvoiceConfigService,
     InvoiceDownloadService,
+    InvoiceMetricsService,
     INVOICE_REPOSITORY_PORT,
     InvoiceWorkerService,
     UblGeneratorService,
