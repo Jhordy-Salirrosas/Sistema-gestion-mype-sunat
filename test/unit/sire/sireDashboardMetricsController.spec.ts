@@ -74,7 +74,7 @@ describe('SIRE dashboard metrics routes', () => {
     const query = {
       start: '2026-10-29T11:00:00.000Z',
       end: '2026-10-29T12:00:00.000Z',
-      granularity: 'hour',
+      granularity: 'hour' as const,
       limit: 100,
       offset: 0,
     };

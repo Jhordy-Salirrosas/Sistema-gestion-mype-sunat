@@ -84,7 +84,7 @@ describe('TA-34 · caída y retorno', () => {
 
     const mttr = Date.now() - restauradoEn;
     expect(mttr).toBeLessThanOrEqual(60_000);
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(new Set(procesados).size).toBe(jobs.length);
     expect(jobs.filter((job) => !procesados.includes(job.invoiceId))).toEqual(
       [],
