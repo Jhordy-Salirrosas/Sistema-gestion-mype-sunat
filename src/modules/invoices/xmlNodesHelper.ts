@@ -217,15 +217,34 @@ export interface CuotaXml {
   vencimiento: string;
 }
 
-/** Bloque `<cac:PaymentTerms>` con la forma de pago y su cronograma. */
+/**
+ * Bloque `<cac:PaymentTerms>` con la forma de pago y su cronograma (TA-63).
+ *
+ * CAMBIO respecto de la versión anterior: el bloque `FormaPago` de una venta
+ * al crédito ahora lleva `<cbc:Amount>` con el monto neto pendiente.
+ *
+ * Es obligatorio y no cosmético: la regla 3319 de la hoja oficial compara
+ * `sum(PaymentTerms[PaymentMeansID='Credito']/Amount)` contra
+ * `sum(PaymentTerms[PaymentMeansID[starts-with(.,'Cuota')]]/Amount)`. Sin el
+ * `Amount` en la cabecera, el lado izquierdo de la comparación vale 0 y TODA
+ * factura al crédito se rechaza, por bien que esté el cronograma.
+ *
+ * `montoNetoPendiente` debe venir ya calculado (total menos detracción), porque
+ * este módulo formatea y no liquida.
+ */
 export const bloqueFormaPago = (
   formaPago: string,
   moneda: string,
   cuotas: CuotaXml[],
+  montoNetoPendiente?: number,
 ): string => {
   const cabecera = `  <cac:PaymentTerms>
     <cbc:ID>FormaPago</cbc:ID>
-    <cbc:PaymentMeansID>${esc(formaPago)}</cbc:PaymentMeansID>
+    <cbc:PaymentMeansID>${esc(formaPago)}</cbc:PaymentMeansID>${
+      montoNetoPendiente !== undefined
+        ? `\n    <cbc:Amount currencyID="${moneda}">${dinero(montoNetoPendiente)}</cbc:Amount>`
+        : ''
+    }
   </cac:PaymentTerms>`;
 
   if (cuotas.length === 0) return cabecera;
@@ -243,6 +262,34 @@ export const bloqueFormaPago = (
 
   return `${cabecera}\n${cronograma}`;
 };
+
+/**
+ * Leyenda 2006 del monto en letras para operaciones con detracción (TA-63).
+ *
+ * La regla 4265 la exige en cuanto el tipo de operación es 100x. Va como
+ * `<cbc:Note languageLocaleID="2006">`, distinta de la Leyenda 1000 (importe
+ * en letras) y de la 2000/2001, y SUNAT rechaza si aparece más de una vez con
+ * el mismo `languageLocaleID` (regla 3014).
+ */
+export const bloqueLeyenda2006 = (montoEnLetras: string): string =>
+  `  <cbc:Note languageLocaleID="2006">${esc(montoEnLetras)}</cbc:Note>`;
+
+/**
+ * `cac:PaymentMeans` de la detracción (TA-63).
+ *
+ * La regla 3034 lo exige con `cbc:ID = 'Detraccion'` para los tipos 100x. La
+ * cuenta del Banco de la Nación va en `PaymentDestinationAccountID` cuando se
+ * conoce; si no, se omite y SUNAT lo acepta igual.
+ */
+export const bloquePaymentMeansDetraccion = (
+  cuentaBancoNacion?: string,
+): string => `  <cac:PaymentMeans>
+    <cbc:ID>Detraccion</cbc:ID>${
+      cuentaBancoNacion
+        ? `\n    <cbc:PaymentDestinationAccountID>${esc(cuentaBancoNacion)}</cbc:PaymentDestinationAccountID>`
+        : ''
+    }
+  </cac:PaymentMeans>`;
 
 /** Bloque `DiscrepancyResponse` + `BillingReference` de las notas (07/08). */
 export const bloqueReferenciaNota = (
