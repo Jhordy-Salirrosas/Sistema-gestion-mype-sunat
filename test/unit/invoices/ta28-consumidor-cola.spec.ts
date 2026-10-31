@@ -43,9 +43,11 @@ interface Dobles {
   registerInvoiceWorker: jest.Mock<
     (handler: (payload: { invoice_id: string }) => Promise<unknown>) => Promise<string>
   >;
-  processWithRetry: jest.Mock<() => Promise<RetryInvoiceResult>>;
+  processWithRetry: jest.Mock<
+    (params: unknown) => Promise<RetryInvoiceResult>
+  >;
   findUnique: jest.Mock<() => Promise<unknown>>;
-  update: jest.Mock<() => Promise<unknown>>;
+  update: jest.Mock<(args: unknown) => Promise<unknown>>;
   signXml: jest.Mock<(xml: string) => { signedXml: string }>;
   generateInvoiceXml: jest.Mock<(payload: unknown) => string>;
   validate: jest.Mock<() => { isValid: boolean; errors: string[] }>;
@@ -56,11 +58,11 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     (handler: (payload: { invoice_id: string }) => Promise<unknown>) => Promise<string>
   >(async () => 'worker-1');
 
-  const processWithRetry = jest.fn<() => Promise<RetryInvoiceResult>>(
+  const processWithRetry = jest.fn<(params: unknown) => Promise<RetryInvoiceResult>>(
     async () => RESULTADO,
   );
   const findUnique = jest.fn<() => Promise<unknown>>(async () => fila);
-  const update = jest.fn<() => Promise<unknown>>(async () => ({}));
+  const update = jest.fn<(args: unknown) => Promise<unknown>>(async () => ({}));
   const signXml = jest.fn<(xml: string) => { signedXml: string }>((xml) => ({
     signedXml: `${xml}<ds:Signature/>`,
   }));

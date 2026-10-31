@@ -14,37 +14,34 @@ import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { classifyResponseCode } from '../../../src/modules/sunat/soap/cdr-classifier';
 
 describe('TA-28 clasificacion de codigos CDR', () => {
+  // `classifyResponseCode` recibe SOLO el codigo: la descripcion la resuelve
+  // internamente con `describeSunatCode`. Pasarle un segundo argumento no
+  // compilaba (TS2554) aunque Jest lo ignorara en tiempo de ejecucion.
   it('un CDR 0 es aceptacion limpia', () => {
-    const r = classifyResponseCode('0', 'Aceptado');
+    const r = classifyResponseCode('0');
     expect(r.status).toBe(InvoiceStatus.ACEPTADO);
     expect(r.kind).toBe('ACEPTADO');
   });
 
   it('un CDR de observacion queda en OBSERVADO, no en ACEPTADO', () => {
-    const r = classifyResponseCode('4000', 'El comprobante fue aceptado con observaciones');
+    const r = classifyResponseCode('4000');
     expect(r.status).toBe(InvoiceStatus.OBSERVADO);
     expect(r.kind).toBe('OBSERVACION');
   });
 
   it('una observacion sigue siendo un comprobante valido y no reintentable', () => {
-    const r = classifyResponseCode('4120', 'Observacion');
+    const r = classifyResponseCode('4120');
     expect(r.valido).toBe(true);
     expect(r.reintentable).toBe(false);
   });
 
   it('un codigo 4100 tambien es observacion', () => {
-    expect(classifyResponseCode('4100', 'obs').status).toBe(
-      InvoiceStatus.OBSERVADO,
-    );
+    expect(classifyResponseCode('4100').status).toBe(InvoiceStatus.OBSERVADO);
   });
 
   it('un codigo 2000-3999 sigue siendo rechazo', () => {
-    expect(classifyResponseCode('2017', 'Rechazado').status).toBe(
-      InvoiceStatus.RECHAZADO,
-    );
-    expect(classifyResponseCode('3999', 'Rechazado').status).toBe(
-      InvoiceStatus.RECHAZADO,
-    );
+    expect(classifyResponseCode('2017').status).toBe(InvoiceStatus.RECHAZADO);
+    expect(classifyResponseCode('3999').status).toBe(InvoiceStatus.RECHAZADO);
   });
 
   it('el enum incluye EN_COLA y OBSERVADO tras la migracion', () => {
