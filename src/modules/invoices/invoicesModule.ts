@@ -6,10 +6,14 @@ import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
 import { InvoiceQueryController } from './infrastructure/controllers/invoiceQueryController';
 import { InvoiceConfigController } from './infrastructure/controllers/invoiceConfigController';
+import { InvoiceDownloadController } from './infrastructure/controllers/invoiceDownloadController';
 import { InvoicesService } from './application/services/invoicesService';
 import { InvoiceQueryService } from './application/services/invoiceQueryService';
 import { InvoiceSeriesService } from './application/services/invoiceSeriesService';
 import { InvoiceConfigService } from './application/services/invoiceConfigService';
+import { InvoiceDownloadService } from './application/services/invoiceDownloadService';
+import { InvoicePdfService } from './application/services/invoicePdfService';
+import { InvoiceQrService } from './application/services/invoiceQrService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
@@ -23,18 +27,20 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas
   // provee InvoiceRetryService, que el InvoiceJobConsumer de TA-28 necesita.
   imports: [PrismaModule, AuthModule, ResilienceModule, SunatModule],
-  // TA-29: el controlador de consulta va aparte del de emisión; comparten
-  // prefijo y guard, pero no responsabilidades.
+  // TA-29 / TA-60 / TA-65: un controlador por responsabilidad. El de consulta,
+  // el de configuracion y el de emision devuelven JSON; el de descargas entrega
+  // binarios con su Content-Disposition.
   controllers: [
     InvoicesController,
     InvoiceQueryController,
     InvoiceConfigController,
+    InvoiceDownloadController,
   ],
   providers: [
     CreateInvoiceUseCase,
     InvoicesService,
     InvoiceQueryService,
-    // TA-60: series con reserva atómica del correlativo + configuración.
+    // TA-60: series con reserva atomica del correlativo + configuracion.
     InvoiceSeriesService,
     InvoiceConfigService,
     {
@@ -47,9 +53,13 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     UblGeneratorService,
     XsdValidatorService,
     // TA-31: validador local con las XSL oficiales de SUNAT. Se exporta para
-    // que la capa de envío (worker de TA-28 y reintentos) lo consuma antes de
+    // que la capa de envio (worker de TA-28 y reintentos) lo consuma antes de
     // tocar la red.
     SunatXslValidatorService,
+    // TA-65: descargas de XML, CDR y PDF con su QR.
+    InvoiceDownloadService,
+    InvoicePdfService,
+    InvoiceQrService,
   ],
   exports: [
     CreateInvoiceUseCase,
@@ -57,6 +67,7 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     InvoiceQueryService,
     InvoiceSeriesService,
     InvoiceConfigService,
+    InvoiceDownloadService,
     INVOICE_REPOSITORY_PORT,
     InvoiceWorkerService,
     UblGeneratorService,
