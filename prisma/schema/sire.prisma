@@ -31,6 +31,23 @@ enum SireDuplicateSource {
   AMBOS
 }
 
+model SireReportUpload {
+  id            String        @id @default(uuid())
+  company_id    String
+  company       Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period        String
+  book_type     SireBookType
+  archivo_origen String
+  tipo_reporte  String
+  file_hash     String
+  fecha_carga   DateTime      @default(now())
+  proposals     SireProposal[]
+
+  @@unique([company_id, file_hash])
+  @@index([company_id, period, book_type])
+  @@map("sire_report_uploads")
+}
+
 model SireProposal {
   id                  String        @id @default(uuid())
   company_id          String
@@ -49,6 +66,8 @@ model SireProposal {
   total_amount        Decimal       @db.Decimal(14, 2)
   raw_line_data       Json?
   imported_at         DateTime      @default(now())
+  source_upload_id    String?
+  source_upload       SireReportUpload? @relation(fields: [source_upload_id], references: [id], onDelete: SetNull)
 
   discrepancies       SireDiscrepancy[]
 

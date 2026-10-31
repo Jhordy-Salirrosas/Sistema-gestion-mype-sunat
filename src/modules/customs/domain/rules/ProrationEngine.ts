@@ -1,65 +1,67 @@
 export interface ProrationItemInput {
   itemId: string;
   itemCode?: string;
-  description: string;
+  description?: string;
+  commercialDescription?: string;
   quantity: number;
-  netWeightKg: number;
   fobUsd: number;
   cifPen: number;
   adValoremPen: number;
+  weightKg?: number;
+  netWeightKg?: number;
 }
 
 export interface LocalExpenseInput {
   expenseId?: string;
-  concept: string; // 'AGENCIA', 'ALMACENAJE', 'TRANSPORTE_LOCAL', 'VISTO_BUENO'
+  concept?: string;
+  expenseConcept?: string;
   supplierRuc?: string;
   invoiceNumber?: string;
-  netAmountPen: number; // Monto neto SIN IGV (NIC 2)
-  prorationMethod: 'VALOR_FOB' | 'PESO_BRUTO' | 'UNIDADES';
+  invoiceSerialNumber?: string;
+  netAmountPen: number;
+  igvAmountPen?: number;
+  totalAmountPen?: number;
   isCapitalizable?: boolean;
+  prorationMethod: 'VALOR_FOB' | 'PESO_BRUTO' | 'UNIDADES';
 }
 
 export interface ProratedItemResult {
   itemId: string;
-  itemCode?: string;
-  description: string;
+  itemCode: string;
   quantity: number;
-  netWeightKg: number;
   fobUsd: number;
   cifPen: number;
   adValoremPen: number;
   allocatedValueExpensePen: number;
   allocatedWeightExpensePen: number;
-  allocatedUnitExpensePen: number;
+  allocatedUnitsExpensePen: number;
+  allocatedValueExpensesPen: number;
+  allocatedWeightExpensesPen: number;
+  allocatedUnitsExpensesPen: number;
   totalAllocatedLocalExpensesPen: number;
-  totalInventoryCostPen: number; // CIF + AdValorem + Gastos Locales
-  unitLandedCostPen: number; // Costo Unitario Nacionalizado (4 decimales)
+  totalInventoryCostPen: number;
+  unitLandedCostPen: number;
 }
 
 export interface ProrationResult {
   totalFobUsd: number;
-  totalWeightKg: number;
-  totalQuantity: number;
   totalCifPen: number;
   totalDutiesPen: number;
   totalLocalExpensesPen: number;
-  totalInventoryCostPen: number; // Total a debitar a Cuenta 20111 (Inventarios)
+  totalInventoryCostPen: number;
   items: ProratedItemResult[];
 }
 
 export class ProrationEngine {
-  /**
-   * Ejecuta el prorrateo multivariable de costos de adquisición según la Norma Internacional de Contabilidad 2 (NIC 2)
-   */
-  public static calculateLandedCost(
+  public static execute(
     items: ProrationItemInput[],
-    expenses: LocalExpenseInput[],
+    localExpenses: LocalExpenseInput[],
   ): ProrationResult {
     if (!items || items.length === 0) {
       throw new Error('Debe proporcionar al menos un ítem para calcular el Landed Cost.');
     }
 
-    // 1. Totales base de los ítems
+    // 1. Totales de base para factores de asignación
     let totalFobUsd = 0;
     let totalWeightKg = 0;
     let totalQuantity = 0;
@@ -68,13 +70,10 @@ export class ProrationEngine {
 
     for (const item of items) {
       if (item.quantity <= 0) {
-        throw new Error(`La cantidad del ítem '${item.description}' debe ser mayor a cero.`);
-      }
-      if (item.fobUsd <= 0) {
-        throw new Error(`El valor FOB del ítem '${item.description}' debe ser mayor a cero.`);
+        throw new Error(`La cantidad del ítem ${item.itemCode || item.itemId} debe ser mayor a cero.`);
       }
       totalFobUsd += item.fobUsd;
-      totalWeightKg += item.netWeightKg > 0 ? item.netWeightKg : 1; // Fallback mínimo si no declaran peso
+      totalWeightKg += item.weightKg ?? item.netWeightKg ?? 0;
       totalQuantity += item.quantity;
       totalCifPen += item.cifPen;
       totalDutiesPen += item.adValoremPen;
@@ -89,22 +88,24 @@ export class ProrationEngine {
     let totalExpensesByWeight = 0;
     let totalExpensesByUnits = 0;
 
-    for (const exp of expenses) {
-      // Por defecto todo gasto directo de desaduanaje es capitalizable según NIC 2 párr. 11
-      const isCapitalizable = exp.isCapitalizable ?? true;
-      if (!isCapitalizable) continue;
-
-      if (exp.netAmountPen < 0) {
-        throw new Error(`El gasto '${exp.concept}' no puede tener un monto negativo.`);
+    for (const expense of localExpenses) {
+      if (expense.isCapitalizable === false) {
+        continue; // Excluir gastos operativos o no capitalizables según NIC 2
       }
 
-      if (exp.prorationMethod === 'PESO_BRUTO') {
-        totalExpensesByWeight += exp.netAmountPen;
-      } else if (exp.prorationMethod === 'UNIDADES') {
-        totalExpensesByUnits += exp.netAmountPen;
-      } else {
-        // Por defecto: VALOR_FOB
-        totalExpensesByValue += exp.netAmountPen;
+      const netAmount = expense.netAmountPen; // Solo base imponible, IGV se excluye (crédito fiscal)
+
+      switch (expense.prorationMethod) {
+        case 'PESO_BRUTO':
+          totalExpensesByWeight += netAmount;
+          break;
+        case 'UNIDADES':
+          totalExpensesByUnits += netAmount;
+          break;
+        case 'VALOR_FOB':
+        default:
+          totalExpensesByValue += netAmount;
+          break;
       }
     }
 
@@ -116,22 +117,24 @@ export class ProrationEngine {
       2,
     );
 
-    // 3. Prorratear a cada ítem
+    // 3. Prorratear gastos a cada ítem según corresponda
     const proratedItems: ProratedItemResult[] = [];
     let sumAllocatedLocalExpenses = 0;
     let highestValueItemIndex = 0;
-    let maxFob = -1;
+    let maxFobUsd = -1;
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.fobUsd > maxFob) {
-        maxFob = item.fobUsd;
+
+      if (item.fobUsd > maxFobUsd) {
+        maxFobUsd = item.fobUsd;
         highestValueItemIndex = i;
       }
 
-      const weightUsed = item.netWeightKg > 0 ? item.netWeightKg : 1;
       const factorValue = totalFobUsd > 0 ? item.fobUsd / totalFobUsd : 0;
-      const factorWeight = totalWeightKg > 0 ? weightUsed / totalWeightKg : 0;
+      const weight = item.weightKg ?? item.netWeightKg ?? 0;
+      const factorWeight =
+        totalWeightKg > 0 && weight > 0 ? weight / totalWeightKg : 0;
       const factorUnits = totalQuantity > 0 ? item.quantity / totalQuantity : 0;
 
       const allocatedVal = this.round(totalExpensesByValue * factorValue, 2);
@@ -146,16 +149,17 @@ export class ProrationEngine {
 
       proratedItems.push({
         itemId: item.itemId,
-        itemCode: item.itemCode,
-        description: item.description,
+        itemCode: item.itemCode || item.itemId,
         quantity: item.quantity,
-        netWeightKg: item.netWeightKg,
         fobUsd: item.fobUsd,
         cifPen: item.cifPen,
         adValoremPen: item.adValoremPen,
         allocatedValueExpensePen: allocatedVal,
         allocatedWeightExpensePen: allocatedWeight,
-        allocatedUnitExpensePen: allocatedUnits,
+        allocatedUnitsExpensePen: allocatedUnits,
+        allocatedValueExpensesPen: allocatedVal,
+        allocatedWeightExpensesPen: allocatedWeight,
+        allocatedUnitsExpensesPen: allocatedUnits,
         totalAllocatedLocalExpensesPen: itemAllocatedExpenses,
         totalInventoryCostPen: totalItemCost,
         unitLandedCostPen: unitLandedCost,
@@ -164,7 +168,7 @@ export class ProrationEngine {
 
     // 4. Ajuste de centavos por redondeo (Garantía de cuadre contable exacto)
     const difference = this.round(totalLocalExpensesPen - sumAllocatedLocalExpenses, 2);
-    if (Math.abs(difference) > 0 && Math.abs(difference) <= 0.05 && proratedItems.length > 0) {
+    if (Math.abs(difference) > 0 && proratedItems.length > 0) {
       const target = proratedItems[highestValueItemIndex];
       target.totalAllocatedLocalExpensesPen = this.round(
         target.totalAllocatedLocalExpensesPen + difference,
@@ -184,14 +188,22 @@ export class ProrationEngine {
 
     return {
       totalFobUsd,
-      totalWeightKg,
-      totalQuantity,
       totalCifPen,
       totalDutiesPen,
       totalLocalExpensesPen,
       totalInventoryCostPen,
       items: proratedItems,
     };
+  }
+
+  /**
+   * Alias de compatibilidad para cálculo de Landed Cost
+   */
+  public static calculateLandedCost(
+    items: ProrationItemInput[],
+    localExpenses: LocalExpenseInput[],
+  ): ProrationResult {
+    return this.execute(items, localExpenses);
   }
 
   private static round(value: number, decimals: number): number {

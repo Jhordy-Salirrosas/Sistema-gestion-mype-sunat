@@ -12,16 +12,37 @@ import { IngestSireProposalUseCase } from './application/use-cases/ingestSirePro
 import { ExportSireProposalUseCase } from './application/use-cases/exportSireProposalUseCase';
 import { GetReconciliationHistoryUseCase } from './application/use-cases/getReconciliationHistoryUseCase';
 import { CloseFiscalPeriodUseCase } from './application/use-cases/closeFiscalPeriodUseCase';
+import { ResilienceStateModule } from '../resilience/application/resilienceStateModule';
+import { SireDashboardMetricsService } from './application/sireDashboardMetricsService';
+import { SireDashboardMetricsRepository } from './infrastructure/persistence/sireDashboardMetricsRepository';
+import {
+  LegacySireMetricsController,
+  SireDashboardMetricsController,
+  SireMetricsCompatibilityController,
+  SireResilienceMetricsCompatibilityController,
+} from './infrastructure/controllers/sireDashboardMetricsController';
+import { UploadSireReportUseCase } from './application/use-cases/uploadSireReportUseCase';
+import { SireReportFileParser } from './infrastructure/parsers/sireReportFileParser';
 
 @Module({
-  imports: [AuthModule],
-  controllers: [SireController],
+  imports: [AuthModule, ResilienceStateModule],
+  controllers: [
+    SireController,
+    SireDashboardMetricsController,
+    SireMetricsCompatibilityController,
+    SireResilienceMetricsCompatibilityController,
+    LegacySireMetricsController,
+  ],
   providers: [
     ReconcileSireUseCase,
     IngestSireProposalUseCase,
     ExportSireProposalUseCase,
     GetReconciliationHistoryUseCase,
     CloseFiscalPeriodUseCase,
+    SireDashboardMetricsService,
+    SireDashboardMetricsRepository,
+    UploadSireReportUseCase,
+    SireReportFileParser,
     PrismaSireRepository,
     SireTxtParserAdapter,
     SireTxtWriterAdapter,

@@ -67,7 +67,7 @@ export class ChaosHarness {
   async enviar(fileName: string): Promise<EnvioResultado> {
     // Un Mock OPEN/lento debe observarse: se espera con Promise.race y un
     // limite corto en lugar de bloquear la prueba 15 s.
-    let respuesta: { status: number } | null = null;
+    let respuesta: any = null;
 
     try {
       const resultado = await this.circuito.ejecutar(async () => {

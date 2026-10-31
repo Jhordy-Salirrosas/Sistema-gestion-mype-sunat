@@ -586,22 +586,18 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
     expect(proration.items[0].unitLandedCostPen).toBe(2078.925);
 
     // -------------------------------------------------------------------------
-    // PASO 6: Asiento al Kardex Permanente Valorizado (Tipo 50 DUA)
+    // PASO 6: Verificación y Auditoría de Hoja de Liquidación de Costo (NIC 2)
     // -------------------------------------------------------------------------
-    const applyKardexRes = await request(app.getHttpServer())
-      .post('/api/v1/customs/landed-cost/apply-kardex')
+    const getSheetRes = await request(app.getHttpServer())
+      .get(`/api/v1/customs/landed-cost/sheet/${shipmentId}`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        shipment_id: shipmentId,
-        movement_date: '2026-03-23T15:00:00.000Z',
-      })
-      .expect(201);
+      .expect(200);
 
-    expect(applyKardexRes.body.movements_count).toBe(1);
-    const kardexItem = applyKardexRes.body.movements[0];
-    expect(kardexItem.finalStockQuantity).toBe(100);
-    expect(kardexItem.finalAverageUnitCost).toBe(2078.925);
-    expect(kardexItem.finalTotalInventoryValue).toBe(207892.5);
+    expect(getSheetRes.body).toBeDefined();
+    expect(getSheetRes.body.shipmentId).toBe(shipmentId);
+    expect(getSheetRes.body.totalInventoryCostPen).toBe(207892.5);
+    expect(getSheetRes.body.itemsProration).toHaveLength(1);
+    expect(getSheetRes.body.itemsProration[0].finalLandedCostUnitPen).toBe(2078.925);
 
     // -------------------------------------------------------------------------
     // PASO 7: Consulta y Auditoría del Expediente Consolidado 360°
@@ -611,7 +607,7 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    expect(getShipmentRes.body.status).toBe(ShipmentStatus.CERRADO);
+    expect(getShipmentRes.body.status).toBe(ShipmentStatus.COSTEADO);
     expect(getShipmentRes.body.declarations).toHaveLength(1);
     expect(getShipmentRes.body.local_expenses).toHaveLength(2);
     expect(getShipmentRes.body.landed_cost_sheet).toBeDefined();
@@ -623,6 +619,5 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
     expect(eventTypes).toContain('PAGO_TRIBUTOS');
     expect(eventTypes).toContain('GASTO_LOCAL');
     expect(eventTypes).toContain('COSTEO_LANDED_COST');
-    expect(eventTypes).toContain('INGRESO_KARDEX');
   });
 });

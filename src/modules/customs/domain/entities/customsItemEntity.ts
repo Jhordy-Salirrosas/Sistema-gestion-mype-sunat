@@ -1,3 +1,5 @@
+export type SeriesDestinationType = 'MERCADERIA' | 'ACTIVO_FIJO';
+
 export interface CustomsItemProps {
   id?: string;
   declarationId?: string;
@@ -8,6 +10,7 @@ export interface CustomsItemProps {
   hsCode: string;
   commercialDescription: string;
   goodsState?: string;
+  destinationType?: SeriesDestinationType;
   quantity: number;
   unitCode: string;
   netWeightKg?: number | null;
@@ -88,6 +91,14 @@ export class CustomsItemEntity {
     return this.props.goodsState;
   }
 
+  get destinationType(): SeriesDestinationType {
+    return this.props.destinationType ?? 'MERCADERIA';
+  }
+
+  get isFixedAsset(): boolean {
+    return this.destinationType === 'ACTIVO_FIJO';
+  }
+
   get netWeightKg(): number | null | undefined {
     return this.props.netWeightKg;
   }
@@ -105,6 +116,6 @@ export class CustomsItemEntity {
   }
 
   toPrimitives(): CustomsItemProps {
-    return { ...this.props };
+    return { ...this.props, destinationType: this.destinationType };
   }
 }

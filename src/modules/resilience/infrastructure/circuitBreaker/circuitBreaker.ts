@@ -96,6 +96,23 @@ export class CircuitBreaker {
   }
 
   /**
+   * Reserva el paso de UNA petición.
+   *
+   * En HALF-OPEN solo la primera reserva obtiene `true`; las concurrentes
+   * reciben `false`. En CLOSED siempre pasa y en OPEN siempre bloquea.
+   */
+  reservarPeticion(): boolean {
+    if (this.estaBloqueando()) return false;
+    if (this.getState() === CircuitState.HALF_OPEN) this.pruebaEnCurso = true;
+    return true;
+  }
+
+  /** Libera la reserva; un éxito o fallo ya la reinician. */
+  liberarPeticion(): void {
+    this.pruebaEnCurso = false;
+  }
+
+  /**
    * Ejecuta `operacion` si el circuito lo permite.
    *
    * Devuelve `{ ejecutado: false }` cuando se rechaza sin tocar la red, y
@@ -103,13 +120,8 @@ export class CircuitBreaker {
    * propagan al llamador despues de registrarse en los contadores.
    */
   async ejecutar<T>(operacion: () => Promise<T>): Promise<CircuitResult<T>> {
-    if (this.estaBloqueando()) {
+    if (!this.reservarPeticion()) {
       return { ejecutado: false, motivo: 'CIRCUIT_OPEN' };
-    }
-
-    const estabaEnSemiabierto = this.getState() === CircuitState.HALF_OPEN;
-    if (estabaEnSemiabierto) {
-      this.pruebaEnCurso = true;
     }
 
     try {
@@ -120,7 +132,7 @@ export class CircuitBreaker {
       this.registrarFallo();
       throw error;
     } finally {
-      this.pruebaEnCurso = false;
+      this.liberarPeticion();
     }
   }
 

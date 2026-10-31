@@ -39,15 +39,21 @@ export class SunatTransportError extends Error {
   /** true: el comprobante no fue informado, reintentar es seguro. */
   readonly reintentable = true;
   readonly httpStatus: number | null;
+  readonly elapsedMs: number | null;
   readonly cause?: unknown;
 
   constructor(
     message: string,
-    options: { httpStatus?: number | null; cause?: unknown } = {},
+    options: {
+      httpStatus?: number | null;
+      elapsedMs?: number | null;
+      cause?: unknown;
+    } = {},
   ) {
     super(message);
     this.name = 'SunatTransportError';
     this.httpStatus = options.httpStatus ?? null;
+    this.elapsedMs = options.elapsedMs ?? null;
     this.cause = options.cause;
   }
 }
@@ -142,13 +148,13 @@ export class SunatSoapClient {
       if (nombre === 'TimeoutError' || nombre === 'AbortError') {
         throw new SunatTransportError(
           `Timeout de ${this.timeoutMs} ms esperando al billService. El comprobante quedo en estado incierto: NO reenviar a ciegas, conciliar con billConsultService`,
-          { cause: error },
+          { cause: error, elapsedMs: tiempoRespuestaMs },
         );
       }
 
       throw new SunatTransportError(
         `Error de red contra el billService (${tiempoRespuestaMs} ms): ${mensaje}`,
-        { cause: error },
+        { cause: error, elapsedMs: tiempoRespuestaMs },
       );
     }
 
@@ -159,13 +165,15 @@ export class SunatSoapClient {
     // solo repetiria el mismo error.
     const { applicationResponse, fault } = parseSendBillResponse(rawResponse);
     if (fault) {
+      fault.httpStatusCode = response.status;
+      fault.elapsedMs = tiempoRespuestaMs;
       throw fault;
     }
 
     if (!response.ok) {
       throw new SunatTransportError(
         `El billService respondio HTTP ${response.status} sin SOAP Fault parseable`,
-        { httpStatus: response.status },
+        { httpStatus: response.status, elapsedMs: tiempoRespuestaMs },
       );
     }
 

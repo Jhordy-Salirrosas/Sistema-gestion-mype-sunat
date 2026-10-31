@@ -14,6 +14,56 @@ import { persistSireReconciliation } from './sireReconciliationWriter';
 export class PrismaSireRepository implements ISireRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
+  async hasReportUploadHash(
+    companyId: string,
+    fileHash: string,
+  ): Promise<boolean> {
+    const upload = await this.prisma.sireReportUpload.findUnique({
+      where: { company_id_file_hash: { company_id: companyId, file_hash: fileHash } },
+      select: { id: true },
+    });
+    return Boolean(upload);
+  }
+
+  async saveReportUpload(input: {
+    companyId: string;
+    period: string;
+    bookType: 'RVIE' | 'RCE';
+    fileName: string;
+    fileHash: string;
+    proposals: SireProposalEntity[];
+  }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const upload = await tx.sireReportUpload.create({
+        data: {
+          company_id: input.companyId,
+          period: input.period,
+          book_type: input.bookType === 'RVIE' ? 'RVIE_VENTAS' : 'RCE_COMPRAS',
+          archivo_origen: input.fileName,
+          tipo_reporte: input.bookType,
+          file_hash: input.fileHash,
+        },
+      });
+      await tx.sireProposal.createMany({
+        data: input.proposals.map((proposal) => ({
+          company_id: proposal.companyId,
+          period: proposal.period,
+          book_type: proposal.bookType === 'RVIE' ? 'RVIE_VENTAS' : 'RCE_COMPRAS',
+          car_sunat: proposal.carSunat,
+          emitter_ruc: proposal.emitterRuc,
+          document_type: proposal.documentType,
+          series: proposal.series,
+          correlative: proposal.correlative,
+          issue_date: proposal.issueDate,
+          taxable_base: proposal.taxableBase,
+          igv_amount: proposal.igvAmount,
+          total_amount: proposal.totalAmount,
+          source_upload_id: upload.id,
+        })),
+      });
+    }, { isolationLevel: 'Serializable' });
+  }
+
   async saveBatchProposals(proposals: SireProposalEntity[]): Promise<void> {
     if (proposals.length === 0) return;
     const first = proposals[0];

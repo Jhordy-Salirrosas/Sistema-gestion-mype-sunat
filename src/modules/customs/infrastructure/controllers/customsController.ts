@@ -7,6 +7,7 @@ import {
   Optional,
   Param,
   Post,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -14,6 +15,7 @@ import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CalculateDuaDto } from '../../application/dto/calculateDuaDto';
 import { RegisterDuaDto } from '../../application/dto/registerDuaDto';
 import { RegisterDuaWizardDto } from '../../application/dto/registerDuaWizardDto';
+import { SimulateDamTaxesDto } from '../../application/dto/simulateDamTaxesDto';
 import {
   CalculateDuaUseCase,
   type CalculatedDuaResponse,
@@ -28,11 +30,8 @@ import {
   type CustomsDeclarationDetailResponse,
 } from '../../application/use-cases/getCustomsDeclarationByIdUseCase';
 import { ListCustomsDeclarationsUseCase } from '../../application/use-cases/listCustomsDeclarationsUseCase';
-import { ListKardexMovementsUseCase } from '../../application/use-cases/listKardexMovementsUseCase';
-import type {
-  CustomsDeclarationSummary,
-  KardexMovementRecord,
-} from '../../domain/ports/customsRepositoryPort';
+import { SimulateDamTaxesUseCase } from '../../application/use-cases/simulateDamTaxesUseCase';
+import type { CustomsDeclarationSummary } from '../../domain/ports/customsRepositoryPort';
 
 @Controller('api/v1/customs')
 export class CustomsController {
@@ -41,14 +40,23 @@ export class CustomsController {
     private readonly registerDuaUseCase: RegisterDuaUseCase,
     private readonly getCustomsDeclarationByIdUseCase: GetCustomsDeclarationByIdUseCase,
     private readonly listCustomsDeclarationsUseCase: ListCustomsDeclarationsUseCase,
-    private readonly listKardexMovementsUseCase: ListKardexMovementsUseCase,
     @Optional() private readonly registerDuaWizardUseCase?: RegisterDuaWizardUseCase,
+    @Optional() private readonly simulateDamTaxesUseCase?: SimulateDamTaxesUseCase,
   ) {}
 
   @Post('calculate')
   @HttpCode(HttpStatus.OK)
   calculateLiquidation(@Body() dto: CalculateDuaDto): CalculatedDuaResponse {
     return this.calculateDuaUseCase.execute(dto);
+  }
+
+  @Post('declarations/simulate')
+  @HttpCode(HttpStatus.OK)
+  async simulateDeclaration(@Body() dto: SimulateDamTaxesDto) {
+    if (!this.simulateDamTaxesUseCase) {
+      throw new Error('SimulateDamTaxesUseCase no está inyectado');
+    }
+    return this.simulateDamTaxesUseCase.execute(dto);
   }
 
   @Post('declarations/wizard')
@@ -58,11 +66,13 @@ export class CustomsController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: RegisterDuaWizardDto,
   ) {
-    const resolvedCompanyId = companyId || 'default-company-id';
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
     if (!this.registerDuaWizardUseCase) {
       throw new Error('RegisterDuaWizardUseCase no está inyectado');
     }
-    return this.registerDuaWizardUseCase.execute(dto, resolvedCompanyId);
+    return this.registerDuaWizardUseCase.execute(dto, companyId);
   }
 
   @Post('declarations')
@@ -72,8 +82,10 @@ export class CustomsController {
     @CurrentCompany() companyId: string | undefined,
     @Body() dto: RegisterDuaDto,
   ): Promise<RegisteredDuaResponse> {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.registerDuaUseCase.execute(dto, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.registerDuaUseCase.execute(dto, companyId);
   }
 
   @Get('declarations/:id')
@@ -83,8 +95,10 @@ export class CustomsController {
     @Param('id') id: string,
     @CurrentCompany() companyId: string | undefined,
   ): Promise<CustomsDeclarationDetailResponse> {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.getCustomsDeclarationByIdUseCase.execute(id, resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.getCustomsDeclarationByIdUseCase.execute(id, companyId);
   }
 
   @Get('declarations')
@@ -93,17 +107,9 @@ export class CustomsController {
   async listDeclarations(
     @CurrentCompany() companyId: string | undefined,
   ): Promise<CustomsDeclarationSummary[]> {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.listCustomsDeclarationsUseCase.execute(resolvedCompanyId);
-  }
-
-  @Get('kardex')
-  @UseGuards(AuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async listKardexMovements(
-    @CurrentCompany() companyId: string | undefined,
-  ): Promise<KardexMovementRecord[]> {
-    const resolvedCompanyId = companyId || 'default-company-id';
-    return this.listKardexMovementsUseCase.execute(resolvedCompanyId);
+    if (!companyId) {
+      throw new UnauthorizedException('Identificador de empresa (company_id) requerido.');
+    }
+    return this.listCustomsDeclarationsUseCase.execute(companyId);
   }
 }

@@ -20,14 +20,26 @@ Garantizar la alta disponibilidad y tolerancia a fallos del sistema frente a ca�
 
 ## 2. Reglas Matemáticas y de Resiliencia (Capa de Dominio)
 
-### 2.1. Regla 1: Política de Exponential Backoff
-$$\text{Retardo} = 2^{\text{intento}} \text{ segundos} \quad \text{donde } \text{intento} \in [1, 5]$$
-* Intento 1: reintento a los 2 segundos.
-* Intento 2: reintento a los 4 segundos.
-* Intento 3: reintento a los 8 segundos.
-* Intento 4: reintento a los 16 segundos.
-* Intento 5: reintento a los 32 segundos.
-* Si el intento 5 falla, el trabajo se mueve a la DLQ (`pgboss.archive`) y el estado se actualiza a `FALLO_CRITICO`.
+### 2.1. Regla 1: Política de Exponential Backoff (HU-04)
+La política es pura y vive en `domain/rules/backoffPolicy.ts`. Se aplica a cada
+envío de comprobante:
+$$\text{Retardo}(n) \in \{5,\ 15,\ 45\}\ \text{segundos} \quad \text{para } n = 1, 2, 3$$
+* Envío inicial inmediato.
+* Tras el fallo 1: reintento a los 5 segundos.
+* Tras el fallo 2: reintento a los 15 segundos.
+* Tras el fallo 3: reintento a los 45 segundos.
+* Tras el fallo 4 (3 reintentos agotados): el job se mueve a la DLQ
+  (`sunat-invoice-dlq`) y la Invoice pasa a `ERROR_RED`.
+* Solo se reintenta si el resultado es `reintentable` (error de red, timeout,
+  5xx o CDR ilegible). Un rechazo de negocio del CDR (`reintentable = false`)
+  detiene el flujo sin DLQ y conserva el estado que persistió SUNAT.
+* Cada intento queda auditado en `TransactionHistory` con su número de intento
+  (`intento` 1..4).
+
+> Nota de lectura: la historia habla de "3 intentos" y de tres retardos. Un
+> retardo solo aplica si hay un envío posterior, por lo que se implementan
+> **3 reintentos (4 envíos)**. Es la misma lectura de TA-38 ("se agotan 3
+> reintentos") y TA-57 ("se reintentan 3 veces").
 
 ### 2.2. Regla 2: Máquina de Estados del Circuit Breaker
 * **CLOSED (Operación Normal):** Las peticiones fluyen al cliente SOAP/Mock. Si se acumulan 5 errores consecutivos (HTTP 503 o timeouts $\ge 5000\text{ ms}$), el circuito transiciona inmediatamente a **OPEN**.
@@ -35,12 +47,85 @@ $$\text{Retardo} = 2^{\text{intento}} \text{ segundos} \quad \text{donde } \text
 * **HALF-OPEN (Prueba de Recuperación):** Transcurridos los 30 segundos, el circuito permite pasar exactamente **1 petición de prueba**:
   * Si la petición es exitosa $\rightarrow$ El circuito se cierra (**CLOSED**) y los contadores se reinician.
   * Si la petición falla $\rightarrow$ El circuito vuelve a abrirse (**OPEN**) por otros 30 segundos.
+* **Integración con el envío (TA-33):** `InvoiceRetryService` consulta `ResilienceStateService.puedeEnviar()` antes de cada intento. Si es `false`, devuelve `circuitoAbierto = true` sin tocar SUNAT, sin cambiar la Invoice y sin enviar a la DLQ: el worker debe dejar el job en cola. Cada resultado reintentable alimenta `registrarResultadoEnvio(true)`; un CDR de negocio lo cierra (`false`).
 
 ### 2.3. Regla 3: Métricas de Resiliencia (MTTD y MTTR)
 * **MTTD (Mean Time to Detect):** Tiempo transcurrido desde el primer error 503 inyectado hasta la apertura del Circuit Breaker.
   $$\text{MTTD} = T_{\text{circuito\_open}} - T_{\text{primer\_error\_503}} \quad (\text{Meta: } \le 5\text{ s})$$
 * **MTTR (Mean Time to Recover):** Tiempo desde que SUNAT/Mock se restablece hasta que la cola de tareas pendientes es drenada en su totalidad.
   $$\text{MTTR} = T_{\text{cola\_vaciada}} - T_{\text{restablecimiento\_servicio}} \quad (\text{Meta: } \le 60\text{ s})$$
+
+### Contratos HTTP del Dashboard SIRE de resiliencia
+
+- El caso de uso, las consultas históricas y las rutas del dashboard pertenecen
+  a `src/modules/sire/`; el módulo `resilience` aporta el estado compartido del
+  Circuit Breaker y conserva sus operaciones de cola/caos.
+- `GET /api/v1/sire/dashboard/metrics` conserva todos sus campos anteriores y
+  añade `recentFailedCalls` (errores de red observados en la ventana inclusiva
+  `[ahora - 5 minutos, ahora]`) y `mttdSeconds`, `mttrSeconds`,
+  `mtbfSeconds`, además de `totalRetries`, que cuenta envíos reales con
+  `intento > 1` registrados en `TransactionHistory` y excluye la transición
+  terminal `MAX_REINTENTOS`.
+- `totalCalls`, `successfulCalls`, `failedCalls`, `failureRate`, `slowCallRate`,
+  `recentFailedCalls`, `totalRetries` y `bufferedInvoicesCount` se calculan para
+  la empresa del JWT usando `TransactionHistory` e invoices pendientes/en cola.
+  Cada registro
+  del historial es un intento SOAP real. Un fallo es timeout/red sin respuesta o
+  HTTP 5xx sin SOAP Fault; un SOAP Fault/CDR de negocio cuenta como respuesta del
+  servicio, no como fallo de disponibilidad. Se usa `http_status_code` cuando
+  está disponible y los códigos explícitos `TRANSPORT_ERROR`/`HTTP_<status>` para
+  intentos nuevos. Los registros históricos ambiguos sin código ni estado de
+  respuesta solo se pueden clasificar con el estado/código que quedó persistido.
+  Los contadores son acumulados desde el historial disponible; la tasa lenta usa
+  `tiempo_respuesta_ms >= 5000`. `state`, `lastStateChange` y
+  `circuitBreakerScope: "global"` representan el circuito SUNAT compartido por
+  todas las empresas; `activityScope: "company"` identifica los contadores
+  tenant-scoped. Los campos scope se incluyen en la respuesta para que la UI no
+  presente el estado operativo global como si fuera exclusivo del tenant.
+  El circuito y `lastStateChange` viven en memoria y se reinician al reiniciar
+  el proceso; las métricas históricas de actividad sí se leen de PostgreSQL.
+- `GET /api/v1/sire/metrics`, `GET /api/v1/metrics` y
+  `GET /api/v1/resilience/metrics` se mantienen como aliases autenticados por
+  compatibilidad. Los clientes nuevos deben usar
+  `/api/v1/sire/dashboard/metrics`.
+- Los tres tiempos se expresan en segundos y son promedios sobre incidentes
+  completos. MTTD es `circuitOpenedAt - firstObservedFailureAt`; MTTR es
+  `queueDrainedAt - serviceRestoredAt`; MTBF es
+  `nextIncidentStartedAt - priorIncidentResolvedAt` (tiempo operativo entre
+  incidentes). `TransactionHistory` no registra los cambios persistidos del
+  circuito, el restablecimiento del servicio, el drenado de la cola ni la
+  identidad/fin de cada incidente, por lo que estos campos actualmente son
+  `null`, no cero. Para habilitarlos se deben persistir esos hitos con sus
+  timestamps y una identidad de incidente.
+- `GET /api/v1/sire/dashboard/history?start=...&end=...&granularity=minute|hour|day`
+  devuelve `data` con timestamp, retries, disponibilidad y contadores observados,
+  más `pagination` (`limit`, `offset`, `hasMore`). El rango es `[start, end)`;
+  el máximo es 365 días y 10.000 buckets; `limit` admite 1–500 y `offset`
+  0–50.000. Las filas `MAX_REINTENTOS` solo documentan el traslado terminal a
+  DLQ y no son un envío adicional. Los intentos con `intento > 1` sí son
+  reintentos registrados. La disponibilidad es
+  `successfulCalls / observedCalls * 100`; los intervalos sin observaciones
+  tienen disponibilidad `null`.
+- `GET /api/v1/resilience/history` se mantiene como alias autenticado para el
+  cliente frontend actual. `GET /api/v1/sire/history` sigue reservado al
+  historial de conciliaciones SIRE; el dashboard usa el segmento `dashboard`
+  para no colisionar con esa ruta existente.
+- Las rutas usan el `companyId` firmado en la sesión; el cliente no puede
+  seleccionar una empresa mediante query string. Los historiales se agregan
+  desde eventos persistidos y no se generan datos sintéticos.
+- Los jobs de Outbox y DLQ nuevos transportan `company_id`; sus rutas solo
+  listan/reintentan jobs de la empresa autenticada. Jobs DLQ creados antes de
+  introducir ese dato no se exponen entre empresas.
+
+La migración `20261018173000_sire_history_and_export_data` ya incorpora
+`sire_discrepancies.emitter_ruc` como columna nullable, igual que el modelo
+Prisma. Si una base devuelve que la columna no existe, esa migración está
+pendiente en esa base o existe deriva de esquema; comprobar con
+`npx prisma migrate status --config prisma7.config.ts` y aplicar pendientes
+con `npx prisma migrate deploy --config prisma7.config.ts`. La migración nueva
+de resiliencia solo agrega el índice `transaction_history(invoice_id,
+created_at)`; puede revertirse con `DROP INDEX
+"transaction_history_invoice_id_created_at_idx"` si no está en uso.
 
 ---
 
@@ -52,6 +137,7 @@ src/modules/resilience/
 │
 ├── domain/                           # [CAPA 1: DOMINIO PURO]
 │   ├── entities/                     # TransactionHistoryEntity, CircuitBreakerStateEntity
+│   ├── rules/                        # backoffPolicy.ts: retardos 5/15/45 s y decisión de reintento
 │   ├── value-objects/                # BackoffDelayVo, BreakerThresholdVo
 │   └── ports/                        # IOutboxQueuePort, ICircuitBreakerPort, IChaosSimulatorPort
 │
@@ -61,7 +147,9 @@ src/modules/resilience/
 │
 └── infrastructure/                   # [CAPA 3: ADAPTADORES TECNOLÓGICOS]
     ├── queue/
-    │   ├── queue.service.ts          # Adaptador pg-boss (fromPrisma, send, start, stop)
+    │   ├── queue.service.ts          # Adaptador pg-boss (fromPrisma, send, DLQ, start, stop)
+    │   ├── invoiceRetryService.ts    # Orquestador HU-04/TA-33: backoff, circuito y DLQ
+    │   ├── invoiceDlqService.ts      # Transición terminal ERROR_RED + DLQ
     │   └── queueModule.ts            # Módulo NestJS exportable para enqueueInvoiceInTx
     ├── mock/
     │   ├── sunat-mock.controller.ts  # Endpoints REST de inyección de caos y simulación SOAP
@@ -96,7 +184,7 @@ src/modules/resilience/
   * Mezclar el almacenamiento de `pg-boss` en una base de datos distinta a la de negocio (deben compartir la misma BD para preservar transaccionalidad ACID sin Sagas distribuidas).
 
 ### 4.4. Fronteras Modulares (Anti-Acoplamiento)
-* **Servicio público exportado:** `QueueService.enqueueInvoiceInTx(tx, invoiceId)` es la **única** función que el módulo `invoices` tiene permitido invocar directamente.
+* **Servicios públicos exportados:** `QueueService.enqueueInvoiceInTx(tx, invoiceId)` para el Outbox y `InvoiceRetryService.processWithRetry(job)` para que el consumidor de TA-57 aplique el backoff de HU-04. `InvoiceRetryService` es el único punto que mueve jobs a la DLQ y marca la Invoice en `ERROR_RED`; el worker de facturación no debe reimplementar esa secuencia.
 * **Prohibido:** Modificar tablas de facturación desde workers de resiliencia mediante SQL directo. Se deben utilizar los puertos públicos o eventos emitidos.
 
 ---
@@ -146,7 +234,12 @@ Cuando Oliver deba implementar o extender una funcionalidad de resiliencia:
 1. **`sunat-mock.service.spec.ts`:** Verificación de inyección de error 503 y respuesta de fixture CDR válida cuando el caos está inactivo.
 2. **`sunat-mock.controller.spec.ts`:** Control de encendido/apagado del modo caos vía REST.
 3. **`queue.service.spec.ts`:** Encolado transaccional con cliente `fromPrisma(tx)` y manejo de excepciones.
-4. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
+4. **`backoffPolicy.spec.ts`:** Retardos 5/15/45 s, 3 reintentos, decisión DLQ y rechazo de negocio sin reintento.
+5. **`invoiceRetryService.spec.ts`:** Con fallos de red forzados, verifica la secuencia de esperas, la auditoría de los 4 intentos, el paso a la DLQ y la Invoice en `ERROR_RED`; además, que un rechazo de negocio no se reintenta.
+6. **`circuitBreaker.spec.ts`:** 5 fallos consecutivos abren el circuito, 30 s de enfriamiento permiten la prueba, y el resultado la cierra o la reabre.
+7. **`invoiceRetryServiceCircuit.spec.ts`:** Con el circuito OPEN no se llama a `SunatBillService`, no se actualiza la Invoice y no se manda a la DLQ (el job queda en cola). Tras 30 s se permite la prueba; si acierta cierra, si falla reabre.
+8. **`test/integration/resilience/` (TA-34):** 503 sostenido → 3 reintentos + DLQ; timeout → reintento y `TransactionHistory`; caída/retorno → 0 comprobantes perdidos, MTTD ≤ 5 s y MTTR ≤ 60 s.
+9. **Pruebas de Caos (`test/chaos/`):** Medición automatizada de MTTD $\le 5\text{ s}$ ante inyección masiva de 503 y MTTR $\le 60\text{ s}$ tras apagado de caos.
 
 ---
 

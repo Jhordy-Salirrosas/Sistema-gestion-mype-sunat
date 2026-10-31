@@ -101,6 +101,8 @@ export class SunatSoapFaultError extends Error {
   readonly faultString: string | null;
   /** Codigo de negocio de 4 digitos extraido de faultcode/faultstring. */
   readonly sunatCode: string | null;
+  httpStatusCode: number | null = null;
+  elapsedMs: number | null = null;
 
   constructor(params: {
     faultCode?: string | null;
