@@ -35,6 +35,39 @@ const DECL_MONTO_DESCUENTO =
   'select="sum(cac:AllowanceCharge[cbc:AllowanceChargeReasonCode[text() = \'02\']]/cbc:Amount)"/>';
 
 /**
+ * Archivos de los que depende una hoja oficial y que SUNAT no publica.
+ *
+ * Se nombran para que el diagnóstico no se pierda: quien lea la deuda sabe
+ * exactamente qué falta, no "algo de commons".
+ */
+export const DEPENDENCIAS_NO_PUBLICADAS = [
+  'commons/error/validate_utils.xsl',
+  'commons/error/error_utils.xsl',
+] as const;
+
+/**
+ * ¿La hoja normalizada puede validar de verdad? (TA-62)
+ *
+ * HOY SIEMPRE DEVUELVE `false`, y es a propósito. Una hoja oficial de SUNAT
+ * delega toda la validación en plantillas que viven en
+ * `commons/error/validate_utils.xsl`, archivo que SUNAT no distribuye; sin él
+ * las llamadas se descartan y la salida no contiene ningún código de error.
+ *
+ * La función existe para que el llamador no tenga que razonar sobre esto: si
+ * `validaDeVerdad()` es `false`, el validador NO puede afirmar que un XML es
+ * válido. Un validador que aprueba todo es más peligroso que uno honesto
+ * consigo mismo, porque el comprobante inválido llega a la DLQ y nadie sabe
+ * por qué.
+ *
+ * Cuando se resuelva la dependencia (ver el diagnóstico en
+ * `specs/DEUDA_VALIDADOR_XSL.md`), esta función pasará a comprobar que las
+ * plantillas estén presentes y el resto del validador funcionará sin cambios.
+ */
+export function validaDeVerdad(): boolean {
+  return false;
+}
+
+/**
  * Convierte una hoja oficial de SUNAT en una hoja XSLT 1.0 ejecutable.
  *
  * Es idempotente: aplicarla dos veces da el mismo resultado.
@@ -81,8 +114,33 @@ export function normalizarHojaSunat(original: string): string {
     }
   }
 
-  // 6) `xsl:include` a la carpeta `commons` de SUNAT: el archivo no viaja con
-  //    la hoja y solo aporta utilidades de mensaje, así que se retira.
+  // 6) `xsl:include` a la carpeta `commons` de SUNAT.
+  //
+  //    CORRECCIÓN (TA-62): el comentario anterior decía que ese archivo "solo
+  //    aporta utilidades de mensaje, así que se retira". ERA FALSO.
+  //
+  //    `validate_utils.xsl` y `error_utils.xsl` contienen las plantillas que
+  //    HACEN la validación: `isTrueExpresion` (277 llamadas en la hoja de
+  //    Factura), `regexpValidateElementIfExist` (251) y
+  //    `existAndRegexpValidateElement` (20). Sin ellas, las 1 552 llamadas de
+  //    la hoja se descartan en SILENCIO: XSLT no falla, simplemente la llamada
+  //    a una plantilla inexistente no produce nada y NO se escribe ningún
+  //    código de error.
+  //
+  //    Consecuencia: la hoja "se ejecuta" pero no valida. El único contenido de
+  //    la salida es el XML copiado, y el validador leía los números de ese XML
+  //    (RUC, base imponible, total) como si fueran códigos de SUNAT.
+  //
+  //    SUNAT NO publica esos dos archivos: el ZIP oficial
+  //    (`XSL Actualizado al 06092022.zip`) trae solo la carpeta `validaciones/`
+  //    con las 15 hojas, y todas ellas incluyen `commons/error/*.xsl` por ruta
+  //    `local:///` o relativa `../../../commons/...`. Se verificó el 31 oct.
+  //
+  //    Por eso este `replace` NO es una limpieza cosmética: es el punto exacto
+  //    donde la hoja pierde su capacidad de validar. Se mantiene el borrado
+  //    (dejar el include haría fallar el motor), pero la consecuencia queda
+  //    declarada en `validaDeVerdad()`, que el servicio usa para NO afirmar
+  //    que un XML es válido.
   hoja = hoja.replaceAll(/<xsl:include[^>]*\/>/g, '');
 
   // 7) el namespace dp debe seguir declarado aunque ya no se use

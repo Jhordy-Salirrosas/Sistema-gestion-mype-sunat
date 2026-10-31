@@ -38,7 +38,7 @@ import {
   type ReglaSunat,
   reglaPorCodigo,
 } from './sunatValidationCatalog';
-import { nombreArchivoDesdeXml, normalizarHojaSunat } from './sunatXslAdapter';
+import { nombreArchivoDesdeXml, normalizarHojaSunat, validaDeVerdad } from './sunatXslAdapter';
 
 /** Resultado de ejecutar la hoja oficial sobre un XML. */
 export interface ResultadoValidacionXsl {
@@ -52,6 +52,15 @@ export interface ResultadoValidacionXsl {
   bloqueado: boolean;
   /** Motivo del bloqueo, para la auditoría. */
   motivoBloqueo: string | null;
+  /**
+   * ¿La hoja ejecutada era capaz de validar? (TA-62)
+   *
+   * `false` significa que la hoja corrió pero no tiene sus plantillas de
+   * validación, así que NO se puede afirmar nada sobre el comprobante. En ese
+   * caso `valido` es `false` y `motivoBloqueo` explica por qué: es la única
+   * forma honesta de no aprobar a ciegas.
+   */
+  validadoDeVerdad: boolean;
 }
 
 export interface ErrorValidacionXsl {
@@ -189,6 +198,25 @@ export class SunatXslValidatorService {
    * versiones y lo que importa es el código de 3 o 4 dígitos.
    */
   private interpretar(salida: string): ResultadoValidacionXsl {
+    // TA-62: si la hoja no puede validar, la salida NO contiene códigos de
+    // error; busca lo que busca, cualquier secuencia de 3-4 dígitos que
+    // encuentre (el RUC del emisor, la base imponible, el total) sería un
+    // falso positivo. En vez de inventar errores, se responde con la verdad:
+    // no se pudo validar.
+    if (!validaDeVerdad()) {
+      return {
+        valido: false,
+        errores: [],
+        codigosDesconocidos: [],
+        bloqueado: true,
+        motivoBloqueo:
+          'La hoja XSL oficial se ejecutó pero NO puede validar: le faltan las ' +
+          'plantillas de `commons/error/validate_utils.xsl`, que SUNAT no publica. ' +
+          'No se afirma que el comprobante sea válido.',
+        validadoDeVerdad: false,
+      };
+    }
+
     const codigos = new Set<string>();
 
     for (const coincidencia of salida.matchAll(/(\d{3,4})/g)) {
@@ -225,6 +253,7 @@ export class SunatXslValidatorService {
       codigosDesconocidos,
       bloqueado: false,
       motivoBloqueo: null,
+      validadoDeVerdad: true,
     };
   }
 
@@ -236,6 +265,7 @@ export class SunatXslValidatorService {
       codigosDesconocidos: [],
       bloqueado: true,
       motivoBloqueo: motivo,
+      validadoDeVerdad: false,
     };
   }
 
