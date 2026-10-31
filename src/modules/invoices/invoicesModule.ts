@@ -7,6 +7,7 @@ import { InvoicesController } from './infrastructure/controllers/invoicesControl
 import { InvoiceQueryController } from './infrastructure/controllers/invoiceQueryController';
 import { InvoicesService } from './application/services/invoicesService';
 import { InvoiceQueryService } from './application/services/invoiceQueryService';
+import { InvoiceMetricsService } from './application/services/invoiceMetricsService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
@@ -40,11 +41,14 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
     // que la capa de envío (worker de TA-28 y reintentos) lo consuma antes de
     // tocar la red.
     SunatXslValidatorService,
+    // TA-69: métricas del periodo para la barra de KPIs del módulo.
+    InvoiceMetricsService,
   ],
   exports: [
     CreateInvoiceUseCase,
     InvoicesService,
     InvoiceQueryService,
+    InvoiceMetricsService,
     INVOICE_REPOSITORY_PORT,
     InvoiceWorkerService,
     UblGeneratorService,

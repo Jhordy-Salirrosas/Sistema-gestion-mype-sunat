@@ -20,11 +20,33 @@ import {
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InvoiceQueryService } from '../../application/services/invoiceQueryService';
+import { InvoiceMetricsService } from '../../application/services/invoiceMetricsService';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
 export class InvoiceQueryController {
-  constructor(private readonly consultas: InvoiceQueryService) {}
+  constructor(
+    private readonly consultas: InvoiceQueryService,
+    private readonly metricas: InvoiceMetricsService,
+  ) {}
+
+  /**
+   * GET /api/v1/invoices/metrics
+   *
+   * Resumen del periodo para la barra de KPIs (TA-69): emitidos, aceptados,
+   * rechazados, pendientes, importe facturado (con las notas de crédito ya
+   * restadas) y tasa de aceptación.
+   *
+   * Va declarado ANTES de `GET /:id`, porque Nest resuelve las rutas en orden
+   * de declaración y `metrics` encajaría como un id.
+   */
+  @Get('metrics')
+  resumen(
+    @CurrentCompany() companyId: string,
+    @Query('periodo') periodo?: string,
+  ) {
+    return this.metricas.metricas(companyId, periodo);
+  }
 
   /**
    * GET /api/v1/invoices
