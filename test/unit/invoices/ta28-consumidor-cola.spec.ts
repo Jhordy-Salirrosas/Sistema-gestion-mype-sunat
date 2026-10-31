@@ -81,6 +81,19 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
     { signXml } as never,
+    // TA-58: el consumidor ahora aplica la compuerta XSL antes de enviar.
+    // Aqui se devuelve "valido" para que estas pruebas sigan midiendo lo suyo
+    // (recarga del payload, firma y empaquetado) y no la compuerta.
+    {
+      validar: jest.fn<() => Promise<unknown>>(async () => ({
+        valido: true,
+        errores: [],
+        codigosDesconocidos: [],
+        bloqueado: false,
+        motivoBloqueo: null,
+      })),
+    } as never,
+    { persistFailure: jest.fn() } as never,
   );
 
   return {

@@ -10,7 +10,8 @@
  *  2. Traducir el payload minimo del job (`{ invoice_id }`) a los datos
  *     completos que necesita el envio: XML del payload_ubl, firma XMLDSig,
  *     ZIP y credenciales SOL.
- *  3. Delegar el envio en `InvoiceRetryService.processWithRetry`, que es quien
+ *  3. Aplicar la compuerta XSL oficial de TA-31 ANTES de tocar la red (TA-58).
+ *  4. Delegar el envio en `InvoiceRetryService.processWithRetry`, que es quien
  *     aplica el backoff de 5/15/45 s (HU-04) y el Circuit Breaker (TA-33).
  *
  * Lo que este archivo NO hace, a proposito: backoff, conteo de intentos y
@@ -31,9 +32,18 @@ import {
   RetryInvoiceResult,
 } from '../resilience/infrastructure/queue/invoiceRetryService';
 import { QueueService } from '../resilience/infrastructure/queue/queue.service';
+import { CdrPersistenceService } from '../sunat/cdr-persistence.service';
 import { SignatureService } from '../sunat/signature.service';
 import { buildZipFileName } from '../sunat/soap/soap.constants';
-import type { SendInvoiceParams } from '../sunat/soap/sunatBillTypes';
+import type {
+  ProcessCdrResult,
+  SendInvoiceParams,
+} from '../sunat/soap/sunatBillTypes';
+import {
+  ErrorValidacionBloqueada,
+  validarAntesDeEnviar,
+} from './application/services/invoiceSendGate';
+import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 import type { InvoicePayload } from './invoicePayload';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
@@ -59,6 +69,13 @@ interface InvoiceRow {
 export interface JobAprobado {
   params: SendInvoiceParams;
   firmado: boolean;
+  /**
+   * TA-58: lo que decidio la compuerta XSL antes de tocar la red.
+   *  - `null`: el XML paso la validacion y se puede enviar.
+   *  - `ProcessCdrResult`: el XML esta mal emitido; el comprobante queda en el
+   *    estado de ese resultado y NO se llama a SUNAT.
+   */
+  bloqueoXsl: ProcessCdrResult | null;
 }
 
 @Injectable()
@@ -72,6 +89,12 @@ export class InvoiceJobConsumer implements OnModuleInit {
     private readonly ublGenerator: UblGeneratorService,
     private readonly xsdValidator: XsdValidatorService,
     private readonly signature: SignatureService,
+    // TA-58: las dos piezas que faltaban para cerrar la compuerta XSL.
+    // `SunatXslValidatorService` ejecuta la hoja oficial de TA-31 y
+    // `CdrPersistenceService` deja el rechazo en el historial, igual que un
+    // rechazo de SUNAT.
+    private readonly xslValidator: SunatXslValidatorService,
+    private readonly cdrPersistence: CdrPersistenceService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -92,6 +115,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
    * Un job de la cola. Nunca lanza hacia pg-boss: un throw haria que el
    * transporte marque el job como fallido y lo reintente por su cuenta,
    * saltandose el backoff de `InvoiceRetryService`.
+   *
+   * UNICA excepcion (TA-58): `ErrorValidacionBloqueada`, que se relanza a
+   * proposito. Explicado en `bloqueoDeInfraestructura`.
    */
   async procesar(job: InvoiceJobPayload): Promise<RetryInvoiceResult | null> {
     const invoiceId = job?.invoice_id;
@@ -104,6 +130,10 @@ export class InvoiceJobConsumer implements OnModuleInit {
     try {
       aprobado = await this.preparar(invoiceId);
     } catch (error) {
+      if (error instanceof ErrorValidacionBloqueada) {
+        return this.bloqueoDeInfraestructura(invoiceId, error);
+      }
+
       // Fallo al generar, validar o firmar: no tiene sentido reintentar contra
       // SUNAT porque el XML saldria igual de invalido. Se deja en ERROR_RED.
       const mensaje = error instanceof Error ? error.message : String(error);
@@ -112,7 +142,41 @@ export class InvoiceJobConsumer implements OnModuleInit {
       return null;
     }
 
+    // TA-58, criterio 1: si la compuerta XSL marco defectos en el comprobante,
+    // el objeto ya quedo ENVIADO/RECHAZADO en la base de datos y NO se abre
+    // socket SOAP. Antes de este corte, `processWithRetry` se llamaba igual y
+    // el XML invalido gastaba los 3 intentos del backoff hasta la DLQ.
+    if (aprobado.bloqueoXsl) {
+      this.logger.error(
+        `[TA-58] ${invoiceId} bloqueado antes de enviar por la validacion XSL: ${aprobado.bloqueoXsl.error ?? 'sin detalle'}`,
+      );
+      return null;
+    }
+
     return this.retry.processWithRetry(aprobado.params);
+  }
+
+  /**
+   * TA-58, criterio 2: el comprobante no se puede validar (falta la hoja XSL
+   * oficial o su ejecucion fallo).
+   *
+   * Es un problema de INFRAESTRUCTURA, no del comprobante, asi que:
+   *  - no se marca RECHAZADO: el XML puede estar perfecto;
+   *  - no se manda a la DLQ ni se consume un intento del backoff;
+   *  - el error se relanza para que pg-boss vuelva a entregar el job cuando
+   *    la hoja exista. Devolver `null` dejaria el comprobante trabado en
+   *    EN_COLA para siempre.
+   *
+   * `reintentableSinConsumirIntento` documenta justo esa intencion.
+   */
+  private bloqueoDeInfraestructura(
+    invoiceId: string,
+    error: ErrorValidacionBloqueada,
+  ): never {
+    this.logger.error(
+      `[TA-58] ${invoiceId} no se puede validar (${error.motivo}): el job vuelve a la cola sin consumir intento`,
+    );
+    throw error;
   }
 
   /** Traduce `{ invoice_id }` a los datos completos del envio. */
@@ -122,19 +186,33 @@ export class InvoiceJobConsumer implements OnModuleInit {
     const xml = this.firmar(invoice, xmlSinFirma);
     const zip = this.comprimir(invoice, xml);
 
+    const params: SendInvoiceParams = {
+      invoiceId: invoice.id,
+      rucEmisor: invoice.ruc_emisor,
+      tipoComprobante: invoice.tipo_comprobante,
+      serie: invoice.serie,
+      correlativo: invoice.correlativo,
+      zip,
+      estadoActual: invoice.estado,
+    };
+
+    // TA-58: la compuerta va DESPUES de firmar, porque la hoja oficial valida
+    // el XML tal como se envia (el `ds:DigestValue` forma parte del
+    // documento). Puede lanzar `ErrorValidacionBloqueada`, que se captura en
+    // `procesar()`.
+    const bloqueoXsl = await validarAntesDeEnviar(
+      params,
+      xml,
+      this.xslValidator,
+      this.cdrPersistence,
+    );
+
     return {
       // Un XML que ya traia la firma tampoco se vuelve a firmar: cuenta como
       // firmado porque el sobre sale con XMLDSig.
       firmado: xml.includes('<ds:Signature'),
-      params: {
-        invoiceId: invoice.id,
-        rucEmisor: invoice.ruc_emisor,
-        tipoComprobante: invoice.tipo_comprobante,
-        serie: invoice.serie,
-        correlativo: invoice.correlativo,
-        zip,
-        estadoActual: invoice.estado,
-      },
+      params,
+      bloqueoXsl,
     };
   }
 
