@@ -18,6 +18,12 @@ export interface PartesDocumento {
   emisor: string;
   cliente: string;
   formaPago: string;
+  /**
+   * `cac:PaymentMeans` de la detracción (TA-63). Va vacío si no hay detracción.
+   * La regla 3034 de la hoja oficial lo exige con `ID = 'Detraccion'` para los
+   * tipos de operación 100x.
+   */
+  mediosPago?: string;
   impuestos: string;
   totales: string;
   lineas: string;
@@ -42,7 +48,7 @@ ${p.extensiones}
   <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>
   <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.opcionales}
 ${p.emisor}${p.cliente}
-${p.formaPago}
+${p.formaPago}${p.mediosPago ? `\n${p.mediosPago}` : ''}
 ${p.impuestos}
 ${p.totales}
 ${p.lineas}
