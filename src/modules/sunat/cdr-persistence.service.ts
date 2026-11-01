@@ -75,6 +75,15 @@ export class CdrPersistenceService {
         data: {
           estado: classification.status,
           cdr_sunat: cdrSunat,
+          /**
+           * El código va TAMBIÉN a su columna, no solo dentro del JSON.
+           *
+           * El listado y el modal lo leen de `sunat_response_code`; al dejarlo
+           * solo en `cdr_sunat` el campo quedaba en NULL y la pantalla mostraba
+           * "Código PENDIENTE — Sin respuesta de SUNAT todavía" en facturas ya
+           * ACEPTADAS, contradiciendo el badge de la propia fila.
+           */
+          sunat_response_code: cdr.responseCode,
         },
         select: { id: true, estado: true, updated_at: true, company_id: true },
       });

@@ -59,6 +59,7 @@ const montar = (
 ) => {
   const creadas: Array<Record<string, unknown>> = [];
   const lineasGuardadas: Array<Record<string, unknown>> = [];
+  const actualizaciones: Array<Record<string, unknown>> = [];
 
   const prisma = {
     company: {
@@ -73,6 +74,17 @@ const montar = (
       findMany: jest.fn(async () => opciones.notasPrevias ?? []),
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
         creadas.push(data);
+        return data;
+      }),
+      /**
+       * Actualización de los importes desglosados.
+       *
+       * `taxable_operations` y `total_igv` son columnas propias de la tabla; al
+       * quedarse en 0 la trama QR mostraba `|0.00|` en el IGV de una factura de
+       * S/ 1,046.66.
+       */
+      update: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        actualizaciones.push(data);
         return data;
       }),
     },
@@ -144,7 +156,16 @@ const montar = (
     repositorio as never,
   );
 
-  return { servicio, prisma, series, stock, repositorio, creadas, lineasGuardadas };
+  return {
+    servicio,
+    prisma,
+    series,
+    stock,
+    repositorio,
+    creadas,
+    lineasGuardadas,
+    actualizaciones,
+  };
 };
 
 describe('EmitirComprobanteService — emisión de factura', () => {
@@ -196,6 +217,25 @@ describe('EmitirComprobanteService — emisión de factura', () => {
    * almacén. Se detectó emitiendo contra SUNAT BETA el 31-10 (la factura salió
    * ACEPTADA y el stock no se movió).
    */
+  /**
+   * Los importes desglosados van a sus columnas, no solo a `monto_total`.
+   *
+   * Al quedarse en 0, el detalle de la API devolvía `total_igv: 0` en una
+   * factura con S/ 159.66 de IGV y la trama QR del modal salía con `|0.00|`
+   * en el IGV. Se detectó abriendo el modal en el navegador el 31-10.
+   */
+  it('guarda el IGV y la base gravada en sus columnas', async () => {
+    const { servicio, actualizaciones } = montar();
+
+    await servicio.emitir(factura(), COMPANY_ID);
+
+    expect(actualizaciones).toHaveLength(1);
+    expect(actualizaciones[0]).toMatchObject({
+      taxable_operations: 100,
+      total_igv: 18,
+    });
+  });
+
   it('persiste las líneas en invoice_items para que el Kardex pueda mover stock', async () => {
     const { servicio, lineasGuardadas } = montar();
 

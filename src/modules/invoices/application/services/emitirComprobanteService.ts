@@ -147,7 +147,7 @@ export class EmitirComprobanteService {
 
     const traducido = traducirEmision(dto, emisor, correlativo);
 
-    await this.persistir(traducido.dto, companyId);
+    await this.persistir(traducido.dto, companyId, traducido.importes);
     const numero = `${traducido.dto.serie}-${String(correlativo).padStart(8, '0')}`;
     this.logger.log(
       `[M1] Emitido ${numero} por S/ ${traducido.importes.total.toFixed(2)} ` +
@@ -419,6 +419,7 @@ export class EmitirComprobanteService {
   private async persistir(
     dto: CreateInvoiceDto,
     companyId: string,
+    importes?: ComprobanteTraducido['importes'],
   ): Promise<InvoicePersistenceResult> {
     const entidad = new InvoiceEntity({
       company_id: companyId,
@@ -437,6 +438,25 @@ export class EmitirComprobanteService {
     });
 
     const resultado = await this.repositorio.saveWithTransactionalOutbox(entidad);
+
+    // LOS IMPORTES DESGLOSADOS TAMBIÉN SON COLUMNAS DE LA TABLA.
+    //
+    // `taxable_operations`, `total_igv` y las demás existen desde el Sprint 1 y
+    // quedaban en 0: solo se guardaba `monto_total`. Por eso la trama QR del
+    // modal salía con `|0.00|` en el IGV y el detalle de la API devolvía
+    // `total_igv: 0` en una factura de S/ 1,046.66 con S/ 159.66 de IGV.
+    // La base de la trama QR es lo que SUNAT valida al leer el código.
+    if (importes) {
+      await this.prisma.invoice.update({
+        where: { id: resultado.id },
+        data: {
+          taxable_operations: importes.gravado,
+          exempt_operations: importes.exonerado,
+          unaffected_operations: importes.inafecto,
+          total_igv: importes.igv,
+        },
+      });
+    }
 
     // LAS LÍNEAS TIENEN QUE QUEDAR EN `invoice_items`.
     //
