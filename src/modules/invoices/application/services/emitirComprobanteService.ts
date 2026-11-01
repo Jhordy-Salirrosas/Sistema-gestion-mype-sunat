@@ -24,6 +24,7 @@
  */
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -33,7 +34,7 @@ import {
 import { PrismaService } from '../../../../database/prismaService';
 import type { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
-import { InvoiceSeriesService } from './invoiceSeriesService';
+import { InvoiceSeriesService, SerieNoDisponibleError } from './invoiceSeriesService';
 import { StockValidationService, type ItemAValidar } from './stockValidationService';
 import {
   traducirEmision,
@@ -137,11 +138,12 @@ export class EmitirComprobanteService {
     this.validarCuentaDetraccion(dto);
 
     // 5. Recién ahora se consume un número de la serie.
-    const correlativo = await this.series.reservarCorrelativo(
-      companyId,
-      dto.tipo_comprobante,
-      dto.serie.toUpperCase(),
-    );
+    //
+    // `reservarCorrelativo` lanza `SerieNoDisponibleError`, una excepción de
+    // DOMINIO y no de Nest. Sin traducirla, Nest la devuelve como 500 "Internal
+    // Server Error", que hace creer que el servidor falló cuando en realidad
+    // falta configurar la serie. Se convierte en 404 (no existe) o 409 (inactiva).
+    const correlativo = await this.reservarNumero(dto, companyId);
 
     const traducido = traducirEmision(dto, emisor, correlativo);
 
@@ -328,6 +330,34 @@ export class EmitirComprobanteService {
     }
 
     return [serie, correlativo];
+  }
+
+  /**
+   * Reserva el correlativo traduciendo el error de dominio a un código HTTP.
+   *
+   * Un 500 le dice al usuario "el sistema falló". Lo que pasa en realidad es que
+   * la serie no está dada de alta o está inactiva, y eso se arregla en la
+   * pantalla de configuración: 404 o 409 con el motivo.
+   */
+  private async reservarNumero(
+    dto: EmitirComprobanteDto,
+    companyId: string,
+  ): Promise<number> {
+    try {
+      return await this.series.reservarCorrelativo(
+        companyId,
+        dto.tipo_comprobante,
+        dto.serie.toUpperCase(),
+      );
+    } catch (error) {
+      if (error instanceof SerieNoDisponibleError) {
+        if (error.motivo === 'INACTIVA') {
+          throw new ConflictException(error.message);
+        }
+        throw new NotFoundException(error.message);
+      }
+      throw error;
+    }
   }
 
   /**

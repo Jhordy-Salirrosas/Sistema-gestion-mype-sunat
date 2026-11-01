@@ -319,7 +319,7 @@ export class InvoiceDownloadService {
       fechaEmision: fecha,
       moneda: fila.currency_code ?? 'PEN',
       clienteRazonSocial: fila.customer_legal_name ?? 'CLIENTE',
-      clienteDocumento: fila.customer_identity_number,
+      clienteDocumento: fila.customer_identity_number ?? '',
       nombreTipo:
         NOMBRE_TIPO[fila.tipo_comprobante] ?? 'COMPROBANTE ELECTRÓNICO',
       lineas,

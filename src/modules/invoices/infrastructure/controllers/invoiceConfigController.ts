@@ -34,6 +34,10 @@ import {
   InvoiceSeriesService,
   type AltaSerieParams,
 } from '../../application/services/invoiceSeriesService';
+import {
+  REGLAS_SERIE,
+  serieCorrespondeATipo,
+} from '../../domain/rules/serieRules';
 
 /** Cuerpo de POST /api/v1/invoices/series. */
 interface AltaSerieBody {
@@ -100,9 +104,22 @@ export class InvoiceConfigController {
         'document_type debe ser 01 (factura), 03 (boleta), 07 (NC) u 08 (ND)',
       );
     }
-    if (!/^[A-Za-z]\d{3}$/.test(serie)) {
+    /**
+     * La serie se valida con la MISMA regla de dominio que usan el DTO de
+     * emisión y el value object, no con un patrón propio.
+     *
+     * Antes aquí había `/^[A-Za-z]\d{3}$/` ("una letra y tres dígitos"), que
+     * rechazaba FC01 y BC01: justo las series que SUNAT exige para las notas de
+     * crédito. Con ese patrón era imposible dar de alta la serie y, por tanto,
+     * emitir una nota de crédito. Se detectó emitiendo una NC el 31-10.
+     *
+     * `serieCorrespondeATipo` ya conocía F/B/FC/BC/FD/BD y EB, así que tener dos
+     * validaciones distintas para lo mismo era el defecto de fondo.
+     */
+    if (!serieCorrespondeATipo(serie, tipo)) {
       throw new BadRequestException(
-        'series debe ser una letra y tres dígitos, por ejemplo F001 o B001',
+        REGLAS_SERIE[tipo]?.mensaje ??
+          'La serie no corresponde al tipo de comprobante',
       );
     }
 

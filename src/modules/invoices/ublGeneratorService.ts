@@ -180,12 +180,23 @@ export class UblGeneratorService {
       extensiones: bloqueUblExtensions(),
       emisor: bloqueEmisor(emisor),
       cliente: clienteXml,
-      formaPago: bloqueFormaPago(
-        formaPago,
-        moneda,
-        payload.cuotas ?? [],
-        netoPendiente,
-      ),
+      /**
+       * LAS NOTAS NO LLEVAN FORMA DE PAGO.
+       *
+       * Una Nota de Crédito o de Débito no es una venta: no se cobra, solo
+       * ajusta un comprobante anterior. SUNAT la rechaza con el código 3246
+       * ("El tipo de transacción o el identificador de la cuota no cumple con el
+       * formato esperado") señalando `cac:PaymentTerms/cbc:PaymentMeansID` con el
+       * valor 'Contado'.
+       *
+       * Tampoco llevan cronograma de cuotas: esos datos son del documento
+       * original. Se detectó emitiendo una NC contra BETA el 31-10; ningún test
+       * emitía una nota de punta a punta.
+       */
+      formaPago:
+        raiz === 'Invoice'
+          ? bloqueFormaPago(formaPago, moneda, payload.cuotas ?? [], netoPendiente)
+          : '',
       mediosPago,
       // Detracción y retención: van con los demás PaymentTerms, al principio.
       // La detracción necesita su código del Catálogo 54 (012, 037...).
@@ -196,7 +207,16 @@ export class UblGeneratorService {
       ).join('\n'),
       impuestos,
       totales: bloqueTotales(totales, moneda),
-      lineas: this.lineasDe(payload).join('\n'),
+      /**
+       * Las NOTAS no llevan `cac:InvoiceLine`: el esquema UBL 2.1 usa
+       * `cac:CreditNoteLine` para la Nota de Crédito (07) y `cac:DebitNoteLine`
+       * para la de Débito (08). SUNAT rechaza el XML si aparece InvoiceLine
+       * ("found <cac:InvoiceLine>, but next item should be CreditNoteLine").
+       *
+       * La raíz ya se elegía bien con `raizDe`, pero las líneas se emitían
+       * siempre como InvoiceLine. Se detectó emitiendo una NC contra BETA.
+       */
+      lineas: this.lineasDe(payload, raiz).join('\n'),
       opcionales: `${leyenda2006}${observaciones}${ordenCompra}${referenciaNota}`,
     });
   }
@@ -247,7 +267,10 @@ export class UblGeneratorService {
    * El ICBPER va como línea INDEPENDIENTE del detalle (regla 3306), siempre al
    * final, para que la numeración de las líneas de mercadería no cambie.
    */
-  private lineasDe(payload: InvoicePayload): string[] {
+  private lineasDe(
+    payload: InvoicePayload,
+    raiz: 'Invoice' | 'CreditNote' | 'DebitNote' = 'Invoice',
+  ): string[] {
     const moneda = payload.tipoMoneda ?? 'PEN';
     const crudas = payload.lineas ?? (payload.linea ? [payload.linea] : []);
 
@@ -277,10 +300,10 @@ export class UblGeneratorService {
         totalLinea: (payload.montoGravado ?? 0) + igv,
         igvLinea: igv,
       };
-      return [bloqueLinea(linea, moneda)];
+      return [bloqueLinea(linea, moneda, raiz)];
     }
 
-    const xml = validadas.map((l) => bloqueLinea(l, moneda));
+    const xml = validadas.map((l) => bloqueLinea(l, moneda, raiz));
 
     // ICBPER: se añade su línea al final si el payload declara bolsas y
     // ninguna línea del detalle ya la representa.
@@ -288,7 +311,7 @@ export class UblGeneratorService {
     const yaIncluida = validadas.some((l) => (l.icbperLinea ?? 0) > 0);
     if (bolsas > 0 && !yaIncluida) {
       const linea = lineaBolsaIcBper(validadas.length + 1, { cantidad: bolsas });
-      if (linea) xml.push(bloqueLinea(linea, moneda));
+      if (linea) xml.push(bloqueLinea(linea, moneda, raiz));
     }
 
     return xml;

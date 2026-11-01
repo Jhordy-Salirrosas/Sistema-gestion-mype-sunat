@@ -136,7 +136,23 @@ const categoriaLinea = (afectacion: string, tributo: string): string => {
  *  - Admite `cac:AllowanceCharge` por línea.
  *  - La bolsa plástica añade el tributo 7152 en su propia línea.
  */
-export const bloqueLinea = (l: LineaDetalle, moneda: string): string => {
+export const bloqueLinea = (
+  l: LineaDetalle,
+  moneda: string,
+  /**
+   * Raíz del documento: `Invoice`, `CreditNote` o `DebitNote`.
+   *
+   * El nombre del elemento de línea CAMBIA con la raíz: las notas usan
+   * `cac:CreditNoteLine` / `cac:DebitNoteLine`, no `cac:InvoiceLine`. Emitir
+   * siempre InvoiceLine hacía que SUNAT rechazara toda nota con
+   * "found <cac:InvoiceLine>, but next item should be CreditNoteLine".
+   *
+   * Cambia también la etiqueta de la cantidad: una nota lleva
+   * `cbc:CreditedQuantity` / `cbc:DebitedQuantity` donde la factura lleva
+   * `cbc:InvoicedQuantity`. Se detectó emitiendo una NC contra BETA el 31-10.
+   */
+  raiz: 'Invoice' | 'CreditNote' | 'DebitNote' = 'Invoice',
+): string => {
   const unidad = l.unidad ?? 'NIU';
   const precio = l.precioUnitario ?? l.valorUnitario * 1.18;
   const gratuita = esAfectacionGratuita(l.afectacion);
@@ -199,9 +215,9 @@ export const bloqueLinea = (l: LineaDetalle, moneda: string): string => {
   // `cac:Item` va ANTES de `cac:Price`. Los tests comparaban fragmentos sueltos
   // y ninguno miraba el orden, así que pasaban con el XML inválido; solo se vio
   // enviando de verdad.
-  return `  <cac:InvoiceLine>
+  return `  <cac:${raiz}Line>
     <cbc:ID>${l.id}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="${esc(unidad)}">${l.cantidad}</cbc:InvoicedQuantity>
+    <cbc:${etiquetaCantidad(raiz)} unitCode="${esc(unidad)}">${l.cantidad}</cbc:${etiquetaCantidad(raiz)}>
     <cbc:LineExtensionAmount currencyID="${moneda}">${dinero(neto)}</cbc:LineExtensionAmount>
 ${descuentosXml ? `${descuentosXml}\n` : ''}    <cac:PricingReference>
       <cac:AlternativeConditionPrice>
@@ -221,7 +237,19 @@ ${item}
     <cac:Price>
       <cbc:PriceAmount currencyID="${moneda}">${dinero(gratuita ? 0 : l.valorUnitario)}</cbc:PriceAmount>
     </cac:Price>
-  </cac:InvoiceLine>`;
+  </cac:${raiz}Line>`;
+};
+
+/**
+ * Etiqueta de la cantidad según la raíz del documento.
+ *
+ * `InvoicedQuantity` en factura/boleta; `CreditedQuantity` y `DebitedQuantity`
+ * en las notas. El esquema UBL 2.1 las distingue y SUNAT valida el nombre.
+ */
+const etiquetaCantidad = (raiz: 'Invoice' | 'CreditNote' | 'DebitNote'): string => {
+  if (raiz === 'CreditNote') return 'CreditedQuantity';
+  if (raiz === 'DebitNote') return 'DebitedQuantity';
+  return 'InvoicedQuantity';
 };
 
 export interface CuotaXml {
