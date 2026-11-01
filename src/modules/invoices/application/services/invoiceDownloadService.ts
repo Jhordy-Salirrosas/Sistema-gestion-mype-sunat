@@ -133,14 +133,22 @@ export class InvoiceDownloadService {
     return fila;
   }
 
-  /** Nombre del archivo XML según la convención de SUNAT. */
+  /**
+   * Nombre del archivo según la convención de SUNAT.
+   *
+   * El correlativo va con 8 dígitos, igual que el `cbc:ID` del XML y que el
+   * nombre del ZIP que se envió: 20601234567-01-F001-00000032.xml. Antes el PDF
+   * salía con 8 dígitos y el XML sin relleno (F001-32), así que el mismo
+   * comprobante se descargaba con dos nombres distintos.
+   */
   private nombreBase(fila: {
     ruc_emisor: string;
     tipo_comprobante: string;
     serie: string;
     correlativo: number;
   }): string {
-    return `${fila.ruc_emisor}-${fila.tipo_comprobante}-${fila.serie}-${fila.correlativo}`;
+    const correlativo = String(fila.correlativo).padStart(8, '0');
+    return `${fila.ruc_emisor}-${fila.tipo_comprobante}-${fila.serie}-${correlativo}`;
   }
 
   /** XML del comprobante: el guardado si existe, o regenerado desde el payload. */

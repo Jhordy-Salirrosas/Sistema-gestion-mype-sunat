@@ -32,6 +32,7 @@ import type { InvoicePayload } from '../../invoicePayload';
 import type { LineaDetalle } from '../../xmlNodesHelper';
 import { calcularRetencion, TASA_IGV } from '../../ublTotalesHelper';
 import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalogsQuery';
+import { importeEnLetras } from './importeEnLetras';
 
 /** Datos del emisor que vienen de la empresa autenticada, no del formulario. */
 export interface DatosEmisor {
@@ -313,6 +314,20 @@ export const traducirEmision = (
       : undefined,
     montoDetraccion: detraccion > 0 ? detraccion : undefined,
     montoRetencion: retencion > 0 ? retencion : undefined,
+    /**
+     * Leyenda 2006: el importe en letras.
+     *
+     * SUNAT la exige cuando el comprobante lleva detracción y lo deja con la
+     * observación 4265 si falta:
+     *   "4265 - El XML no contiene el codigo de leyenda 2006 para tipo de
+     *    operacion de detracciones"
+     *
+     * El generador ya sabía emitir el bloque, pero solo si recibía este campo, y
+     * nadie lo calculaba: las facturas con detracción salían
+     * ACEPTADAS_CON_OBSERVACIONES. Se descubrió leyendo el CDR descargado el
+     * 31-10.
+     */
+    montoEnLetras: detraccion > 0 ? importeEnLetras(total) : undefined,
     /**
      * Cuenta del Banco de la Nación para depositar la detracción.
      *

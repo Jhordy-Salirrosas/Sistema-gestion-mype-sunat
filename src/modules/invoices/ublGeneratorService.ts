@@ -217,7 +217,10 @@ export class UblGeneratorService {
        * siempre como InvoiceLine. Se detectó emitiendo una NC contra BETA.
        */
       lineas: this.lineasDe(payload, raiz).join('\n'),
-      opcionales: `${leyenda2006}${observaciones}${ordenCompra}${referenciaNota}`,
+      // `cbc:Note` (leyenda 2006 y observaciones) va antes de
+      // DocumentCurrencyCode; la referencia de nota, después de las partes.
+      notas: `${leyenda2006}${observaciones}`,
+      referenciaNota: `${ordenCompra}${referenciaNota}`,
     });
   }
 

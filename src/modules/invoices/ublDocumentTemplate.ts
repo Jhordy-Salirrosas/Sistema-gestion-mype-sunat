@@ -35,8 +35,24 @@ export interface PartesDocumento {
    */
   retenciones?: string;
   lineas: string;
-  /** Bloques opcionales: observaciones, orden de compra y referencia de nota. */
-  opcionales: string;
+  /**
+   * `cbc:Note`: leyenda 2006 y observaciones.
+   *
+   * VAN ANTES DE `DocumentCurrencyCode`. En la secuencia de `InvoiceType` del
+   * XSD oficial, `cbc:Note` está justo después de `InvoiceTypeCode` (y antes de
+   * `TaxPointDate` y `DocumentCurrencyCode`). Emitirlas después hacía que SUNAT
+   * rechazara con "found <cbc:Note>, but next item should be
+   * AccountingSupplierParty". Se detectó al empezar a generar la leyenda 2006.
+   */
+  notas: string;
+  /**
+   * `DiscrepancyResponse` + `BillingReference` de las notas de crédito/débito.
+   *
+   * No son `cbc:Note`: van después de las partes (tras
+   * `AccountingCustomerParty` y antes de `PaymentMeans`), que es donde el
+   * esquema los sitúa.
+   */
+  referenciaNota?: string;
 }
 
 /** Compone el XML UBL 2.1 con la estructura que exige SUNAT. */
@@ -53,9 +69,9 @@ ${p.extensiones}
   <cbc:ID>${p.documentoId}</cbc:ID>
   <cbc:IssueDate>${p.fecha}</cbc:IssueDate>
   <cbc:IssueTime>${p.hora}</cbc:IssueTime>
-  <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>
-  <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.opcionales}
-${p.emisor}${p.cliente}${p.mediosPago ? `\n${p.mediosPago}` : ''}
+  <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>${p.notas}
+  <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>
+${p.emisor}${p.cliente}${p.referenciaNota ? `\n${p.referenciaNota}` : ''}${p.mediosPago ? `\n${p.mediosPago}` : ''}
 ${p.formaPago}${p.retenciones ? `\n${p.retenciones}` : ''}
 ${p.impuestos}
 ${p.totales}

@@ -278,7 +278,7 @@ describe('TA-65 · descargas', () => {
     const { descargas } = servicio();
     const archivo = await descargas.descargar('emp-1', 'inv-1', 'xml');
 
-    expect(archivo.nombre).toBe('20601012341-01-F001-143.xml');
+    expect(archivo.nombre).toBe('20601012341-01-F001-00000143.xml');
     expect(archivo.contentType).toContain('xml');
     expect(archivo.contenido.toString('utf8')).toContain('<Invoice/>');
   });
@@ -308,7 +308,7 @@ describe('TA-65 · descargas', () => {
     const { descargas } = servicio();
     const archivo = await descargas.descargar('emp-1', 'inv-1', 'cdr');
 
-    expect(archivo.nombre).toBe('20601012341-01-F001-143.cdr.xml');
+    expect(archivo.nombre).toBe('20601012341-01-F001-00000143.cdr.xml');
     expect(archivo.contenido.toString('utf8')).toContain('ApplicationResponse');
   });
 
