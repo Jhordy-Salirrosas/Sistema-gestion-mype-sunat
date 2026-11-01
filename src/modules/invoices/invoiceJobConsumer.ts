@@ -300,6 +300,71 @@ export class InvoiceJobConsumer implements OnModuleInit {
       '21', '31', '32', '33', '34', '35', '36',
     ]);
 
+    const centimos = (n: number): number => Math.round(n * 100) / 100;
+
+    /**
+     * PRIORIDAD AL DESGLOSE YA DECLARADO EN EL PAYLOAD
+     *
+     * Si el payload trae `lineasTributarias` (lo hace la emisión desde pantalla,
+     * que liquida línea por línea en `emitirComprobanteAdapter`), se usa ESE
+     * desglose y no se recalcula nada.
+     *
+     * Recalcular aquí con `quantity × unit_value` daba cifras distintas de las
+     * que se enviaron a SUNAT: SUNAT aceptaba un total de 1046.66 mientras el
+     * asiento contable se armaba con 887 + 159.66 y no cuadraba ("debe 96.00
+     * contra haber 0.00"). Es decir, el documento fiscal salía bien y la
+     * contabilidad se descuadraba. Se detectó emitiendo de verdad: el CDR llegó
+     * ACEPTADO y aun así el puente contable fallaba.
+     *
+     * La regla del proyecto es una sola verdad por cifra: la que se declaró en
+     * el XML es la que se asienta.
+     */
+    const tributarias = payload.lineasTributarias;
+    if (tributarias && tributarias.length > 0) {
+      let gravado = 0;
+      let igv = 0;
+      let exonerado = 0;
+      let inafecto = 0;
+      let icbper = 0;
+
+      for (const linea of tributarias) {
+        const valor = Number(linea.valorVenta ?? 0);
+        if (!Number.isFinite(valor)) continue;
+
+        const afectacion = String(linea.afectacion ?? '');
+        const esGratuita = gratuitas.has(afectacion);
+
+        if (!esGratuita) {
+          if (afectacion.startsWith('1')) gravado += valor;
+          else if (afectacion.startsWith('2')) exonerado += valor;
+          else inafecto += valor;
+          icbper += Number(linea.icbper ?? 0) || 0;
+        }
+        igv += Number(linea.igv ?? 0) || 0;
+      }
+
+      const gravadoR = centimos(gravado);
+      const igvR = centimos(igv);
+      const exoneradoR = centimos(exonerado);
+      const inafectoR = centimos(inafecto);
+      const icbperR = centimos(icbper);
+
+      const detraccion = Number(payload.montoDetraccion ?? 0);
+      const retencion = Number(payload.montoRetencion ?? 0);
+
+      return {
+        gravado: gravadoR,
+        igv: igvR,
+        exonerado: exoneradoR,
+        inafecto: inafectoR,
+        icbper: icbperR,
+        detraccion: Number.isFinite(detraccion) ? detraccion : 0,
+        retencion: Number.isFinite(retencion) ? retencion : 0,
+        total: centimos(gravadoR + igvR + exoneradoR + inafectoR + icbperR),
+      };
+    }
+
+    // Camino anterior (integraciones que solo mandan líneas sin desglose).
     let gravado = 0;
     let exonerado = 0;
     let inafecto = 0;
@@ -316,7 +381,6 @@ export class InvoiceJobConsumer implements OnModuleInit {
       }
     }
 
-    const centimos = (n: number): number => Math.round(n * 100) / 100;
     const igv = centimos(gravado * 0.18);
     const gravadoR = centimos(gravado);
 

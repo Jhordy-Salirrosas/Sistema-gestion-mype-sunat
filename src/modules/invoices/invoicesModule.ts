@@ -27,6 +27,11 @@ import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 import { InvoiceNoteService } from './application/services/invoiceNoteService';
+// Corrección del docente (31-10): la emisión desde la pantalla necesitaba su
+// propio camino. `StockValidationService` ya existía y estaba probado, pero solo
+// lo invocaba su test: ninguna emisión validaba la cantidad contra el almacén.
+import { StockValidationService } from './application/services/stockValidationService';
+import { EmitirComprobanteService } from './application/services/emitirComprobanteService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
 import { SummaryDispatchService } from './application/services/summaryDispatchService';
 import { SummaryJobConsumer } from './summaryJobConsumer';
@@ -54,8 +59,17 @@ import { AccountingModule } from '../accounting/accountingModule';
   // binarios con su Content-Disposition.
   controllers: [
     InvoicesController,
-    InvoiceQueryController,
+    // ORDEN IMPORTANTE. `InvoiceQueryController` declara `GET :id`, que actúa
+    // como comodín y se traga cualquier segmento. Nest registra las rutas en el
+    // orden en que aparecen los controladores, así que si este va antes,
+    // `GET /invoices/series` entra al detalle del comprobante "series" y
+    // responde 404 "El comprobante no existe". Comprobado contra el servidor
+    // real el 31-10: pasaba exactamente eso, y en consecuencia la pantalla de
+    // configuración no podía listar las series.
+    //
+    // Los controladores con rutas literales (`config`, `series`) van primero.
     InvoiceConfigController,
+    InvoiceQueryController,
     InvoiceDownloadController,
   ],
   providers: [
@@ -97,6 +111,10 @@ import { AccountingModule } from '../accounting/accountingModule';
     // TA-67: encolado y sondeo del ticket de resumenes y bajas.
     SummaryDispatchService,
     SummaryJobConsumer,
+    // Docente 31-10: validación de cantidad contra el stock disponible.
+    StockValidationService,
+    // Docente 31-10: emisión desde la pantalla (traduce, valida y reserva).
+    EmitirComprobanteService,
   ],
   exports: [
     CreateInvoiceUseCase,
