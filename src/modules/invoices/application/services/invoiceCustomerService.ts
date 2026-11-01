@@ -128,6 +128,16 @@ export class InvoiceCustomerService {
     texto: string,
   ): Promise<ClienteEncontrado[]> {
     const cartera = await this.cartera(companyId);
+
+    // Sin texto se devuelve la cartera completa: el buscador la carga una vez
+    // al montar y filtra en el navegador. `filtrarCartera` devuelve [] para
+    // texto vacío (correcto para una búsqueda) y por eso la ruta sin `q`
+    // respondía siempre cero, aunque el comentario del controlador decía que
+    // devolvía "la cartera completa".
+    if ((texto ?? '').trim().length === 0) {
+      return cartera.slice(0, LIMITE_RESULTADOS * 10);
+    }
+
     return [...filtrarCartera(cartera, texto)];
   }
 }
