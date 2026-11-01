@@ -33,6 +33,7 @@ import type { LineaDetalle } from '../../xmlNodesHelper';
 import { calcularRetencion, TASA_IGV } from '../../ublTotalesHelper';
 import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalogsQuery';
 import { importeEnLetras } from './importeEnLetras';
+import { numeroDeCuota } from './paymentTermsAndSpotValidator';
 
 /** Datos del emisor que vienen de la empresa autenticada, no del formulario. */
 export interface DatosEmisor {
@@ -295,6 +296,15 @@ export const traducirEmision = (
     // contra BETA el 31-10, después de corregir el importe total.
     tipoOperacion: detraccion > 0 ? '1001' : '0101',
     formaPago: dto.forma_pago ?? 'Contado',
+    // Cronograma de la venta al crédito. El DTO llega con `{monto, vencimiento}`
+    // y el generador UBL necesita el número de cuota (Cuota001...) que es lo
+    // que se escribe en el XML. Se numera aquí y no en el front para que la
+    // numeración sea consecutiva aunque el cliente mande el arreglo desordenado.
+    cuotas: (dto.cuotas ?? []).map((c, i) => ({
+      numero: numeroDeCuota(i + 1),
+      monto: c.monto,
+      vencimiento: c.vencimiento,
+    })),
     tipoMoneda: 'PEN',
 
     // Los montos agregados y el detalle por línea viajan juntos para que el

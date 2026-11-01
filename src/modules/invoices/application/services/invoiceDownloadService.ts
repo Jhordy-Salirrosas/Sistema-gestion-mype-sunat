@@ -31,6 +31,7 @@ import type { InvoicePayload } from '../../invoicePayload';
 import {
   InvoicePdfService,
   type DatosPdfComprobante,
+  type FormatoPdf,
   type LineaImpresa,
 } from './invoicePdfService';
 import { InvoiceQrService } from './invoiceQrService';
@@ -73,17 +74,23 @@ export class InvoiceDownloadService {
     private readonly xmlFirmadoGuardado: SignedXmlStorageService,
   ) {}
 
-  /** Devuelve el archivo solicitado o lanza 404 si no corresponde. */
+  /**
+   * Devuelve el archivo solicitado o lanza 404 si no corresponde.
+   *
+   * @param formato Solo aplica al PDF: `a4` (por defecto) o `ticket80mm` para
+   *   la impresora térmica de mostrador.
+   */
   public async descargar(
     companyId: string,
     invoiceId: string,
     tipo: TipoDescarga,
+    formato: FormatoPdf = 'a4',
   ): Promise<ArchivoDescarga> {
     const fila = await this.cargar(companyId, invoiceId);
 
     if (tipo === 'xml') return this.xml(fila);
     if (tipo === 'cdr') return this.cdr(fila);
-    return this.pdfDelComprobante(fila);
+    return this.pdfDelComprobante(fila, formato);
   }
 
   /**
@@ -290,12 +297,13 @@ export class InvoiceDownloadService {
   /** Representación impresa en PDF. */
   private async pdfDelComprobante(
     fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+    formato: FormatoPdf = 'a4',
   ): Promise<ArchivoDescarga> {
     const datos = await this.datosPdf(fila);
-    const contenido = await this.pdf.generar(datos);
+    const contenido = await this.pdf.generar(datos, formato);
 
     return {
-      nombre: this.pdf.nombreArchivo(datos),
+      nombre: this.pdf.nombreArchivo(datos, formato),
       contentType: 'application/pdf',
       contenido,
     };

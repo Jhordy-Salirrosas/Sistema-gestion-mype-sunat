@@ -52,6 +52,20 @@ export const AFECTACIONES_GRILLA = [
   '40',
 ] as const;
 
+/** Una cuota del cronograma de una venta al crédito (TA-63). */
+export class CuotaEmisionDto {
+  /** Monto de la cuota, con impuestos. */
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  monto: number;
+
+  /** Vencimiento `YYYY-MM-DD`, posterior a la fecha de emisión (regla 3267). */
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'El vencimiento de la cuota debe tener el formato YYYY-MM-DD',
+  })
+  vencimiento: string;
+}
+
 /** Una línea de la grilla de emisión. */
 export class LineaEmisionDto {
   @IsString()
@@ -147,6 +161,21 @@ export class EmitirComprobanteDto {
   @IsOptional()
   @IsIn(['Contado', 'Credito'])
   forma_pago?: 'Contado' | 'Credito';
+
+  /**
+   * Cronograma de la venta al crédito.
+   *
+   * El generador UBL (`bloqueFormaPago`) ya sabía escribir los
+   * `cac:PaymentTerms` de Cuota001..N y el validador ya comprobaba las reglas
+   * 3267 y 3319, pero el contrato de la pantalla no tenía por dónde recibirlas:
+   * el formulario emitía siempre al contado. Sin este campo, `forma_pago:
+   * 'Credito'` pasaba la validación del DTO y llegaba al generador sin cuotas.
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CuotaEmisionDto)
+  cuotas?: CuotaEmisionDto[];
 
   @IsArray()
   @ArrayMinSize(1, { message: 'El comprobante necesita al menos una línea' })

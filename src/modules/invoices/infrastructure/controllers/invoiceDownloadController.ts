@@ -12,6 +12,7 @@ import {
   Controller,
   Get,
   Param,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -19,6 +20,7 @@ import type { Response } from 'express';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InvoiceDownloadService } from '../../application/services/invoiceDownloadService';
+import { normalizarFormato } from '../../application/services/invoicePdfService';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -58,17 +60,29 @@ export class InvoiceDownloadController {
   }
 
   /**
-   * GET /api/v1/invoices/:id/pdf
+   * GET /api/v1/invoices/:id/pdf?format=a4|ticket80mm
    *
    * Representación impresa con el QR de la trama oficial de SUNAT.
+   *
+   * `format` es opcional: sin él se entrega la A4, que es la que se archiva.
+   * `ticket80mm` produce la tira de 80 mm para la impresora térmica del
+   * mostrador, con la caja útil de ~64 mm y el detalle en una sola columna.
+   * Cualquier valor desconocido cae en A4 en lugar de dar 400: el formato no
+   * cambia el contenido fiscal del comprobante, solo su maquetación.
    */
   @Get(':id/pdf')
   async pdf(
     @CurrentCompany() companyId: string,
     @Param('id') id: string,
+    @Query('format') format: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
-    const archivo = await this.descargas.descargar(companyId, id, 'pdf');
+    const archivo = await this.descargas.descargar(
+      companyId,
+      id,
+      'pdf',
+      normalizarFormato(format),
+    );
     this.entregar(res, archivo);
   }
 
