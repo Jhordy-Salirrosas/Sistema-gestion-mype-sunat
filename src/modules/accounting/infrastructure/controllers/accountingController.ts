@@ -58,9 +58,15 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
     const companyId = currentCompanyId || dto.companyId || '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
-    
-    // 1. Obtener los asientos contables persistidos de la empresa
-    const entries = await this.getEntriesUseCase.execute(companyId);
+
+    // El periodo se toma del cuerpo de la petición (year/month). Antes se usaba
+    // el valor por defecto del caso de uso, que está fijo en 2026-10: el libro
+    // se generaba con los asientos de octubre aunque se pidiera otro mes, así
+    // que las ventas del mes pedido no aparecían en la trama.
+    const period = `${dto.year}-${String(dto.month).padStart(2, '0')}`;
+
+    // 1. Obtener los asientos contables persistidos de la empresa y del periodo
+    const entries = await this.getEntriesUseCase.execute(companyId, period);
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);
