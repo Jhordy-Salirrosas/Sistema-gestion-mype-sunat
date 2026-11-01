@@ -26,6 +26,14 @@ export interface PartesDocumento {
   mediosPago?: string;
   impuestos: string;
   totales: string;
+  /**
+   * `cac:PaymentTerms` de detracción y retención.
+   *
+   * Van DESPUÉS de `LegalMonetaryTotal`, no junto a los impuestos: el esquema
+   * UBL 2.1 lo exige y SUNAT rechaza el XML con `0306 / cvc-particle 2.1` si
+   * aparecen antes. Se separa de `impuestos` por eso.
+   */
+  retenciones?: string;
   lineas: string;
   /** Bloques opcionales: observaciones, orden de compra y referencia de nota. */
   opcionales: string;
@@ -47,8 +55,8 @@ ${p.extensiones}
   <cbc:IssueTime>${p.hora}</cbc:IssueTime>
   <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>
   <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.opcionales}
-${p.emisor}${p.cliente}
-${p.formaPago}${p.mediosPago ? `\n${p.mediosPago}` : ''}
+${p.emisor}${p.cliente}${p.mediosPago ? `\n${p.mediosPago}` : ''}
+${p.formaPago}${p.retenciones ? `\n${p.retenciones}` : ''}
 ${p.impuestos}
 ${p.totales}
 ${p.lineas}

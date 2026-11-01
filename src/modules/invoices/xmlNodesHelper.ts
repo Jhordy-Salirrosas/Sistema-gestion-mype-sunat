@@ -186,6 +186,19 @@ export const bloqueLinea = (l: LineaDetalle, moneda: string): string => {
 
   const totalImpuestosLinea = dinero((gratuita ? 0 : l.igvLinea) + (l.icbperLinea ?? 0));
 
+  // ORDEN DE LOS HIJOS DE `cac:InvoiceLine` (UBL 2.1)
+  //
+  // El esquema es una SECUENCIA, no una lista: cada hijo tiene su posición fija.
+  // Emitiendo contra SUNAT BETA apareció `cvc-particle 2.1 ... found <cac:Price>
+  // ... but next item should be Item`, porque `Price` se emitía antes de `Item`.
+  //
+  // Secuencia verificada en el XSD oficial (InvoiceLineType, UBL 2.1):
+  //   cbc:ID, cbc:InvoicedQuantity, cbc:LineExtensionAmount,
+  //   cac:PricingReference, cac:TaxTotal*, cac:Item, cac:Price
+  //
+  // `cac:Item` va ANTES de `cac:Price`. Los tests comparaban fragmentos sueltos
+  // y ninguno miraba el orden, así que pasaban con el XML inválido; solo se vio
+  // enviando de verdad.
   return `  <cac:InvoiceLine>
     <cbc:ID>${l.id}</cbc:ID>
     <cbc:InvoicedQuantity unitCode="${esc(unidad)}">${l.cantidad}</cbc:InvoicedQuantity>
@@ -204,10 +217,10 @@ ${descuentosXml ? `${descuentosXml}\n` : ''}    <cac:PricingReference>
 ${categoriaLinea(l.afectacion, tributo)}
       </cac:TaxSubtotal>${icbperXml}
     </cac:TaxTotal>
+${item}
     <cac:Price>
       <cbc:PriceAmount currencyID="${moneda}">${dinero(gratuita ? 0 : l.valorUnitario)}</cbc:PriceAmount>
     </cac:Price>
-${item}
   </cac:InvoiceLine>`;
 };
 
@@ -277,16 +290,27 @@ export const bloqueLeyenda2006 = (montoEnLetras: string): string =>
 /**
  * `cac:PaymentMeans` de la detracción (TA-63).
  *
- * La regla 3034 lo exige con `cbc:ID = 'Detraccion'` para los tipos 100x. La
- * cuenta del Banco de la Nación va en `PaymentDestinationAccountID` cuando se
- * conoce; si no, se omite y SUNAT lo acepta igual.
+ * Tres cosas que SUNAT exige y que costaron un rechazo cada una al emitir
+ * contra BETA el 31-10:
+ *
+ *  1. `cbc:PaymentMeansCode` NO puede ser texto libre: es un código del
+ *     Catálogo 59 (medio de pago) y SUNAT responde 3174 si no lo es. Para la
+ *     detracción se usa `999` ("Otros medios de pago").
+ *  2. La cuenta del Banco de la Nación va en
+ *     `cac:PayeeFinancialAccount/cbc:ID`; `cbc:PaymentDestinationAccountID` no
+ *     existe en el esquema y rompía la validación XSD.
+ *  3. El `cbc:ID` sí es el texto 'Detraccion', que es el que la regla 3034 usa
+ *     para identificar este medio de pago.
  */
 export const bloquePaymentMeansDetraccion = (
   cuentaBancoNacion?: string,
 ): string => `  <cac:PaymentMeans>
-    <cbc:ID>Detraccion</cbc:ID>${
+    <cbc:ID>Detraccion</cbc:ID>
+    <cbc:PaymentMeansCode>999</cbc:PaymentMeansCode>${
       cuentaBancoNacion
-        ? `\n    <cbc:PaymentDestinationAccountID>${esc(cuentaBancoNacion)}</cbc:PaymentDestinationAccountID>`
+        ? `\n    <cac:PayeeFinancialAccount>
+      <cbc:ID>${esc(cuentaBancoNacion)}</cbc:ID>
+    </cac:PayeeFinancialAccount>`
         : ''
     }
   </cac:PaymentMeans>`;

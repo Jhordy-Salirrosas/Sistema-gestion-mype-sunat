@@ -164,7 +164,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const AdmZip = (await import('adm-zip')).default;
     const nombres = new AdmZip(params.zip).getEntries().map((e) => e.entryName);
 
-    expect(nombres).toEqual(['20601012341-01-F001-1.xml']);
+    expect(nombres).toEqual(['20601012341-01-F001-00000001.xml']);
   });
 
   it('firma el XML cuando hay certificado configurado', async () => {

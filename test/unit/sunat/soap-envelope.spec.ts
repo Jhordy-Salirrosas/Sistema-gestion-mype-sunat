@@ -165,7 +165,17 @@ describe('extractSunatCode', () => {
 });
 
 describe('buildZipFileName', () => {
-  it('arma el nombre que espera SUNAT sin ceros de relleno', () => {
+  /**
+   * El correlativo va CON 8 DÍGITOS, igual que el `cbc:ID` del XML.
+   *
+   * Esta prueba afirmaba lo contrario ("sin ceros de relleno") y por eso daba
+   * verde mientras SUNAT rechazaba cada envío con el código 1036: "Número de
+   * documento en el nombre del archivo no coincide con el consignado en el
+   * contenido del XML". Se descubrió emitiendo contra BETA el 31-10.
+   *
+   * La prueba estaba fijando el defecto, no el comportamiento correcto.
+   */
+  it('arma el nombre que espera SUNAT con el correlativo a 8 dígitos', () => {
     expect(
       buildZipFileName({
         ruc: '20123456786',
@@ -173,6 +183,19 @@ describe('buildZipFileName', () => {
         serie: 'f001',
         correlativo: 1,
       }),
-    ).toBe('20123456786-01-F001-1.zip');
+    ).toBe('20123456786-01-F001-00000001.zip');
+  });
+
+  it('el nombre coincide con el cbc:ID que se escribe en el XML', () => {
+    const nombre = buildZipFileName({
+      ruc: '20123456786',
+      tipoComprobante: '01',
+      serie: 'F001',
+      correlativo: 29,
+    });
+
+    // Lo que va dentro del archivo, según ublGeneratorService.
+    const cbcId = `F001-${String(29).padStart(8, '0')}`;
+    expect(nombre).toContain(cbcId);
   });
 });

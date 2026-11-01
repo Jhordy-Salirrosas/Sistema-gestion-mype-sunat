@@ -147,10 +147,27 @@ export class UblGeneratorService {
       ? `\n  <cac:OrderReference>\n    <cbc:ID>${esc(payload.ordenCompra)}</cbc:ID>\n  </cac:OrderReference>`
       : '';
 
-    const impuestos = [
-      ...bloqueImpuestos(totales, moneda, TASA_IGV),
-      ...bloqueRetenciones(totales, moneda),
-    ].join('\n');
+    // ORDEN EXIGIDO POR EL ESQUEMA UBL 2.1 (defecto encontrado contra SUNAT BETA)
+    //
+    // Se envió de verdad y el billService respondió con `0306 cvc-particle 2.1`
+    // señalando el elemento mal ubicado. Pasó dos veces:
+    //   1) con `PaymentTerms` de detracción antes de `LegalMonetaryTotal`;
+    //   2) al moverlos después de `LegalMonetaryTotal`, porque entonces esperaba
+    //      `InvoiceLine`.
+    //
+    // Conclusión verificada: TODOS los `cac:PaymentTerms` (forma de pago,
+    // detracción y retención) van juntos al principio, antes de los `TaxTotal`.
+    // La secuencia que acepta el esquema es:
+    //
+    //   cac:PaymentTerms   (contado/crédito, detracción, retención)
+    //   cac:TaxTotal       ...
+    //   cac:LegalMonetaryTotal
+    //   cac:InvoiceLine    ...
+    //
+    // Los tests unitarios no lo detectaron porque comparan fragmentos sueltos y
+    // ninguno valida el orden contra el XSD. Solo apareció emitiendo de verdad,
+    // que es justo lo que el docente pedía probar.
+    const impuestos = bloqueImpuestos(totales, moneda, TASA_IGV).join('\n');
 
     return construirDocumentoUbl({
       raiz,
@@ -170,6 +187,13 @@ export class UblGeneratorService {
         netoPendiente,
       ),
       mediosPago,
+      // Detracción y retención: van con los demás PaymentTerms, al principio.
+      // La detracción necesita su código del Catálogo 54 (012, 037...).
+      retenciones: bloqueRetenciones(
+        totales,
+        moneda,
+        payload.codigoDetraccion,
+      ).join('\n'),
       impuestos,
       totales: bloqueTotales(totales, moneda),
       lineas: this.lineasDe(payload).join('\n'),

@@ -531,12 +531,27 @@ describe('TA-63 · XML de la detracción SPOT', () => {
     expect(xml).toContain('MIL CIENTO OCHENTA CON 00/100 SOLES');
   });
 
+  /**
+   * La cuenta del Banco de la Nación va en `cac:PayeeFinancialAccount/cbc:ID`.
+   *
+   * Antes se emitía `cbc:PaymentDestinationAccountID`, que NO existe en
+   * `PaymentMeansType` del esquema UBL 2.1: SUNAT rechazaba el XML con
+   * "found <cbc:PaymentDestinationAccountID>, but next item should be
+   * end-element". Esta prueba fijaba ese nodo inválido y por eso daba verde.
+   * Se descubrió emitiendo contra BETA el 31-10.
+   */
   it('emite el PaymentMeans de detracción con la cuenta del Banco de la Nación', () => {
     const xml = generador.generateInvoiceXml(facturaConDetraccion());
     expect(xml).toContain('<cbc:ID>Detraccion</cbc:ID>');
-    expect(xml).toContain(
-      '<cbc:PaymentDestinationAccountID>00019123456</cbc:PaymentDestinationAccountID>',
-    );
+    expect(xml).toContain('<cac:PayeeFinancialAccount>');
+    expect(xml).toContain('<cbc:ID>00019123456</cbc:ID>');
+  });
+
+  // El medio de pago tiene que ser un código del Catálogo 59, no texto libre:
+  // con 'Detraccion' SUNAT responde 3174.
+  it('usa el código 999 del Catálogo 59 en el medio de pago', () => {
+    const xml = generador.generateInvoiceXml(facturaConDetraccion());
+    expect(xml).toContain('<cbc:PaymentMeansCode>999</cbc:PaymentMeansCode>');
   });
 
   it('sin cuenta del Banco de la Nación omite el destino pero conserva el bloque', () => {
@@ -544,7 +559,7 @@ describe('TA-63 · XML de la detracción SPOT', () => {
       facturaConDetraccion({ cuentaBancoNacion: undefined }),
     );
     expect(xml).toContain('<cbc:ID>Detraccion</cbc:ID>');
-    expect(xml).not.toContain('PaymentDestinationAccountID');
+    expect(xml).not.toContain('PayeeFinancialAccount');
   });
 
   it('una venta sin detracción no emite Leyenda 2006 ni PaymentMeans', () => {

@@ -60,10 +60,20 @@ export const SUNAT_DEFAULT_TIMEOUT_MS = 30_000;
 /**
  * Arma el nombre del ZIP que espera SUNAT: RUC-TIPO-SERIE-CORRELATIVO.zip
  *
- * El correlativo va SIN ceros de relleno (el nombre real es F001-1.zip),
- * mientras que el cbc:ID interno del XML si va a 8 digitos (F001-00000001).
- * Mezclar ambas convenciones produce los codigos 1034/1035/1036/1049/0161,
- * asi que el nombre se construye en un unico lugar.
+ * EL CORRELATIVO VA CON 8 DÍGITOS, IGUAL QUE EL `cbc:ID` DEL XML.
+ *
+ * Esta función devolvía el correlativo SIN ceros de relleno ("...-F001-16.zip")
+ * mientras el XML llevaba `<cbc:ID>F001-00000016</cbc:ID>`. SUNAT rechaza esa
+ * combinación con el código 1036: "Número de documento en el nombre del archivo
+ * no coincide con el consignado en el contenido del XML".
+ *
+ * Se comprobó contra SUNAT BETA el 31-10 emitiendo de verdad; los tests pasaban
+ * porque el nombre se probaba en aislamiento y nunca se comparaba con el `cbc:ID`
+ * que genera `ublGeneratorService`.
+ *
+ * La regla de SUNAT es que ambos coincidan EXACTAMENTE, así que aquí se usa el
+ * mismo formato de 8 dígitos que el XML. Un único lugar arma el nombre, y ahora
+ * también un único lugar decide el relleno.
  */
 export function buildZipFileName(params: {
   ruc: string;
@@ -73,5 +83,6 @@ export function buildZipFileName(params: {
 }): string {
   const tipo = params.tipoComprobante.padStart(2, '0');
   const serie = params.serie.trim().toUpperCase();
-  return `${params.ruc}-${tipo}-${serie}-${params.correlativo}.zip`;
+  const correlativo = String(params.correlativo).padStart(8, '0');
+  return `${params.ruc}-${tipo}-${serie}-${correlativo}.zip`;
 }

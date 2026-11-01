@@ -151,15 +151,25 @@ ${subtotales
 export const bloqueRetenciones = (
   t: TotalesCalculados,
   moneda: string,
+  codigoDetraccion?: string,
 ): string[] => {
   const partes: string[] = [];
 
   if (t.detraccion > 0) {
-    partes.push(`  <cac:PaymentTerms>
+    // `cbc:PaymentMeansID` va el CÓDIGO DEL CATÁLOGO 54 (012, 037...), no la
+    // palabra "Detraccion": SUNAT rechaza con 3033 "Valor no se encuentra en el
+    // catalogo: 54". El texto 'Detraccion' es el valor de `cbc:ID`.
+    //
+    // Si no llega el código se omite el bloque en lugar de inventar uno: sin
+    // código del catálogo la detracción no es declarable.
+    const codigo = codigoDetraccion?.trim();
+    if (codigo) {
+      partes.push(`  <cac:PaymentTerms>
     <cbc:ID>Detraccion</cbc:ID>
-    <cbc:PaymentMeansID>Detraccion</cbc:PaymentMeansID>
+    <cbc:PaymentMeansID>${codigo}</cbc:PaymentMeansID>
     <cbc:Amount currencyID="${moneda}">${dinero(t.detraccion)}</cbc:Amount>
   </cac:PaymentTerms>`);
+    }
   }
 
   if (t.retencion > 0) {
@@ -184,6 +194,14 @@ export const bloqueRetenciones = (
  *
  * `LineExtensionAmount` es la suma de los valores de venta SIN impuestos de
  * todas las líneas onerosas; las gratuitas aportan 0 por la regla 3278.
+ *
+ * `PayableAmount` ES EL TOTAL CON IGV, SIN DESCONTAR LA DETRACCIÓN.
+ *
+ * La versión anterior ponía `importePagar` (total − detracción − retención), y
+ * SUNAT lo rechaza con el código 3280: "El importe total del comprobante no
+ * coincide con el valor calculado". El importe a pagar al proveedor es un dato
+ * informativo que viaja en el `cac:PaymentTerms` de detracción; el total del
+ * comprobante sigue siendo base + IGV. Se detectó emitiendo contra BETA.
  */
 export const bloqueTotales = (
   t: TotalesCalculados,
@@ -200,6 +218,6 @@ export const bloqueTotales = (
     <cbc:AllowanceTotalAmount currencyID="${moneda}">0.00</cbc:AllowanceTotalAmount>
     <cbc:ChargeTotalAmount currencyID="${moneda}">0.00</cbc:ChargeTotalAmount>
     <cbc:PrepaidAmount currencyID="${moneda}">0.00</cbc:PrepaidAmount>
-    <cbc:PayableAmount currencyID="${moneda}">${dinero(t.importePagar)}</cbc:PayableAmount>
+    <cbc:PayableAmount currencyID="${moneda}">${dinero(totalConIgv)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
 };

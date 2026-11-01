@@ -83,6 +83,14 @@ export const XSL_POR_TIPO: Record<string, string> = {
   '08': 'Nota de Debito 2.0.1.xsl',
 };
 
+/**
+ * Hoja que se usa para saber si un directorio contiene el juego completo.
+ *
+ * Es la de facturas porque es la que existe siempre que estén las hojas
+ * versionadas: si falta esta, el directorio no sirve.
+ */
+const HOJA_DE_REFERENCIA = XSL_POR_TIPO['01'];
+
 /** Tiempo máximo que se acepta para validar un comprobante (criterio 4). */
 export const LIMITE_VALIDACION_MS = 2000;
 
@@ -155,18 +163,49 @@ export class SunatXslValidatorService {
   /**
    * Directorio de las hojas oficiales.
    *
-   * Por defecto las versionadas en `assets/sunat-xsl/`, para que un clon
-   * recién hecho valide sin configurar nada. Se lee en cada llamada y no en el
+   * Por defecto las versionadas en `assets/sunat-xsl/`, para que un clon recién
+   * hecho valide sin configurar nada. Se lee en cada llamada y no en el
    * constructor para que las pruebas puedan apuntar a un directorio temporal
    * sin volver a instanciar el servicio.
+   *
+   * POR QUÉ NO BASTA CON `cwd` (defecto encontrado el 31-10)
+   *
+   * `nest build` copia `assets/` a `dist/assets/`, y la app compilada se arranca
+   * con `node dist/main.js` DESDE LA RAÍZ del repo. Con `join(cwd, 'assets')` se
+   * buscaba en `<repo>/assets/sunat-xsl`, que no existe: las hojas están en
+   * `<repo>/dist/assets/sunat-xsl`. Resultado: la compuerta XSL bloqueaba TODOS
+   * los envíos con "No existe la hoja XSL oficial", el comprobante se quedaba
+   * PENDIENTE para siempre y nunca se generaba el Kardex. Se detectó emitiendo
+   * de verdad; los tests no lo veían porque apuntan a un directorio temporal.
+   *
+   * Ahora se prueban las ubicaciones reales en orden y se usa la primera que
+   * tenga las hojas, en lugar de asumir una sola.
    */
   private directorio(): string {
-    return process.env.SUNAT_XSL_DIR ?? join(process.cwd(), 'assets', 'sunat-xsl');
+    if (process.env.SUNAT_XSL_DIR) return process.env.SUNAT_XSL_DIR;
+
+    const candidatos = [
+      // Ejecución normal: `node dist/main.js` desde la raíz del repo. Las hojas
+      // se versionan en `assets/sunat-xsl/` y `nest build` NO las copia a dist,
+      // así que se leen del árbol de fuentes. (Comprobado: dist/ no tiene
+      // carpeta assets.)
+      join(process.cwd(), 'assets', 'sunat-xsl'),
+      // Si algún día se configura el build para copiarlas junto al JS.
+      join(__dirname, '..', '..', '..', '..', 'assets', 'sunat-xsl'),
+      join(process.cwd(), 'dist', 'assets', 'sunat-xsl'),
+    ];
+
+    for (const candidato of candidatos) {
+      if (existsSync(join(candidato, HOJA_DE_REFERENCIA))) return candidato;
+    }
+
+    // Ninguna sirve: se devuelve la primera para que el mensaje de error del
+    // llamador muestre una ruta concreta y ubicable.
+    return candidatos[0];
   }
 
   /** Lee, normaliza y cachea la hoja; `null` si el archivo no está. */
-  private cargarHoja(archivo: string): string | null {
-    const cacheada = this.hojas.get(archivo);
+  private cargarHoja(archivo: string): string | null {    const cacheada = this.hojas.get(archivo);
     if (cacheada !== undefined) return cacheada;
 
     const ruta = join(this.directorio(), archivo);
