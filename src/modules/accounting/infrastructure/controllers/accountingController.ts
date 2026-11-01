@@ -15,6 +15,12 @@ import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-case
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
+/** Periodo `YYYY-MM` del mes en curso en Lima (UTC-5). */
+const periodoLima = (): string => {
+  const lima = new Date(Date.now() - 5 * 60 * 60 * 1000);
+  return `${lima.getUTCFullYear()}-${String(lima.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
 @Controller('api/v1/accounting')
 export class AccountingController {
   constructor(
@@ -26,13 +32,23 @@ export class AccountingController {
   // ==========================================
   // GET: Obtener lista de asientos de la empresa
   // ==========================================
+  /**
+   * @param period Periodo `YYYY-MM`. Si no llega se usa el mes en curso en Lima.
+   *
+   * Antes se llamaba al caso de uso SIN periodo, así que caía siempre en su
+   * valor por defecto (`2026-10`) y el Libro Diario mostraba los asientos de
+   * octubre aunque la empresa ya facturara en noviembre. El `AccountingEntry`
+   * que genera el módulo de facturación se asienta en el mes del comprobante,
+   * así que el filtro tiene que venir de la petición.
+   */
   @Get('entries')
   async getEntries(
     @CurrentCompany() currentCompanyId?: string,
     @Query('companyId') queryCompanyId?: string,
+    @Query('period') period?: string,
   ): Promise<AccountingEntryEntity[]> {
     const companyId = currentCompanyId || queryCompanyId || '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
-    return this.getEntriesUseCase.execute(companyId);
+    return this.getEntriesUseCase.execute(companyId, period || periodoLima());
   }
 
   // ==========================================
