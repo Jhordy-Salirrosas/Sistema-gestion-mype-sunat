@@ -10,6 +10,7 @@
  * ninguna ruta acepta la empresa por query o body (criterio 4).
  */
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -20,11 +21,38 @@ import {
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InvoiceQueryService } from '../../application/services/invoiceQueryService';
+import {
+  InvoiceNoteService,
+  type SolicitudNota,
+} from '../../application/services/invoiceNoteService';
+import { InvoiceMetricsService } from '../../application/services/invoiceMetricsService';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
 export class InvoiceQueryController {
-  constructor(private readonly consultas: InvoiceQueryService) {}
+  constructor(
+    private readonly consultas: InvoiceQueryService,
+    private readonly notas: InvoiceNoteService,
+    private readonly metricas: InvoiceMetricsService,
+  ) {}
+
+  /**
+   * GET /api/v1/invoices/metrics
+   *
+   * Resumen del periodo para la barra de KPIs (TA-69): emitidos, aceptados,
+   * rechazados, pendientes, importe facturado (con las notas de crédito ya
+   * restadas) y tasa de aceptación.
+   *
+   * Va declarado ANTES de `GET /:id`, porque Nest resuelve las rutas en orden
+   * de declaración y `metrics` encajaría como un id.
+   */
+  @Get('metrics')
+  resumen(
+    @CurrentCompany() companyId: string,
+    @Query('periodo') periodo?: string,
+  ) {
+    return this.metricas.metricas(companyId, periodo);
+  }
 
   /**
    * GET /api/v1/invoices
@@ -75,5 +103,53 @@ export class InvoiceQueryController {
     @Param('id') id: string,
   ) {
     return this.consultas.reintentarCdr(companyId, id);
+  }
+
+  /**
+   * GET /api/v1/invoices/:id/saldo
+   *
+   * Saldo del comprobante que todavía se puede acreditar con notas (TA-66).
+   * Responde 409 si el comprobante no está en un estado que admita notas.
+   */
+  @Get(':id/saldo')
+  saldo(@CurrentCompany() companyId: string, @Param('id') id: string) {
+    return this.notas.saldo(companyId, id);
+  }
+
+  /**
+   * POST /api/v1/invoices/:id/notas-credito
+   *
+   * Valida el motivo del Catálogo 09 y que el importe quepa en el saldo antes
+   * de emitir. Un importe que supera el saldo responde 409 y no 400: es un
+   * conflicto con el estado del comprobante, no un error de formato.
+   */
+  @Post(':id/notas-credito')
+  notaCredito(
+    @CurrentCompany() companyId: string,
+    @Param('id') id: string,
+    @Body() cuerpo: Omit<SolicitudNota, 'comprobanteOrigenId'>,
+  ) {
+    return this.notas.autorizarCredito(companyId, {
+      ...cuerpo,
+      comprobanteOrigenId: id,
+    });
+  }
+
+  /**
+   * POST /api/v1/invoices/:id/notas-debito
+   *
+   * Valida el motivo del Catálogo 10 y el importe. Una nota de débito aumenta
+   * el importe de la operación, así que no consume el saldo del comprobante.
+   */
+  @Post(':id/notas-debito')
+  notaDebito(
+    @CurrentCompany() companyId: string,
+    @Param('id') id: string,
+    @Body() cuerpo: Omit<SolicitudNota, 'comprobanteOrigenId'>,
+  ) {
+    return this.notas.autorizarDebito(companyId, {
+      ...cuerpo,
+      comprobanteOrigenId: id,
+    });
   }
 }

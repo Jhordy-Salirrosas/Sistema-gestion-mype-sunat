@@ -4,7 +4,9 @@ import {
   bloqueCliente,
   bloqueEmisor,
   bloqueFormaPago,
+  bloqueLeyenda2006,
   bloqueLinea,
+  bloquePaymentMeansDetraccion,
   bloqueReferenciaNota,
   bloqueUblExtensions,
   esc,
@@ -18,14 +20,26 @@ import {
   calcularRetencion,
   calcularTotales,
   type DatosTributarios,
+  type LineaTributaria,
   type TotalesCalculados,
 } from './ublTotalesHelper';
 import { construirDocumentoUbl } from './ublDocumentTemplate';
 import { asegurarTipoUbl, raizDe } from './ublTipoGuard';
+import { lineaBolsaIcBper } from './ublIcbperLine';
+import { esUnidadFerreteria } from './sunatCatalogsQuery';
+import {
+  esOperacionConDetraccion,
+  montoNetoPendiente,
+  validarDetraccion,
+  validarPago,
+} from './application/services/paymentTermsAndSpotValidator';
 import type { InvoicePayload } from './invoicePayload';
 
 export type { TotalesCalculados } from './ublTotalesHelper';
 export type { InvoicePayload } from './invoicePayload';
+
+/** Redondeo monetario a dos decimales sin arrastrar error de coma flotante. */
+const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 @Injectable()
 export class UblGeneratorService {
@@ -68,9 +82,55 @@ export class UblGeneratorService {
       distrito: payload.distritoEmisor,
     };
 
-    const totales = calcularTotales(payload);
+    // BUG corregido en TA-63: aquí se llamaba a `calcularTotales(payload)`,
+    // SIN pasar por `conLineas()`. El payload de la API no trae
+    // `lineasTributarias` (lo construye `conLineas` a partir de `lineas`), así
+    // que el cálculo caía en la rama sin detalle y usaba `montoTotal`, que
+    // quien arma el payload puede no haber rellenado: llegaba 0 y la regla
+    // 3319 rechazaba todo cronograma al crédito con "neto pendiente 0.00".
+    const totales = calcularTotales(this.conLineas(payload));
     const clienteXml = payload.cliente
       ? `\n${bloqueCliente(payload.cliente)}`
+      : '';
+
+    // TA-63: validar el pago ANTES de construir nada. Un cronograma que no
+    // cuadra o una cuota vencida en el pasado se detecta aquí, con un mensaje
+    // que dice qué línea está mal; descubrirlo por el CDR de SUNAT cuesta el
+    // envío y el rechazo no indica cuál de las cuotas falla.
+    validarPago({
+      formaPago,
+      montoTotal: totales.total,
+      fechaEmision: payload.fechaEmision ?? '',
+      cuotas: payload.cuotas ?? [],
+      detraccion: totales.detraccion,
+      tipoOperacion,
+    });
+
+    validarDetraccion({
+      codigoDetraccion: payload.codigoDetraccion,
+      moneda,
+      montoTotal: totales.total,
+      tipoComprobante: tipo,
+    });
+
+    // TA-63: solo una venta al crédito declara el neto pendiente en la
+    // cabecera de FormaPago; es lo que la regla 3319 compara con la suma de
+    // las cuotas.
+    const netoPendiente =
+      formaPago === 'Credito'
+        ? montoNetoPendiente({
+            montoTotal: totales.total,
+            detraccion: totales.detraccion,
+          })
+        : undefined;
+
+    const conDetraccion = esOperacionConDetraccion(tipoOperacion);
+    const leyenda2006 =
+      conDetraccion && payload.montoEnLetras
+        ? `\n${bloqueLeyenda2006(payload.montoEnLetras)}`
+        : '';
+    const mediosPago = conDetraccion
+      ? bloquePaymentMeansDetraccion(payload.cuentaBancoNacion)
       : '';
     const referenciaNota =
       payload.documentoAfectado && (tipo === '07' || tipo === '08')
@@ -103,33 +163,110 @@ export class UblGeneratorService {
       extensiones: bloqueUblExtensions(),
       emisor: bloqueEmisor(emisor),
       cliente: clienteXml,
-      formaPago: bloqueFormaPago(formaPago, moneda, payload.cuotas ?? []),
+      formaPago: bloqueFormaPago(
+        formaPago,
+        moneda,
+        payload.cuotas ?? [],
+        netoPendiente,
+      ),
+      mediosPago,
       impuestos,
       totales: bloqueTotales(totales, moneda),
       lineas: this.lineasDe(payload).join('\n'),
-      opcionales: `${observaciones}${ordenCompra}${referenciaNota}`,
+      opcionales: `${leyenda2006}${observaciones}${ordenCompra}${referenciaNota}`,
     });
   }
 
-  /** Lista de líneas del comprobante (admite `linea` suelta por compatibilidad). */
+  /**
+   * Traduce las líneas del payload al contrato del cálculo tributario.
+   *
+   * Se hace aquí y no en `calcularTotales` para que ese módulo siga siendo
+   * puro y no dependa de la forma del payload UBL.
+   */
+  private conLineas(payload: InvoicePayload): DatosTributarios {
+    const crudas = payload.lineas ?? (payload.linea ? [payload.linea] : []);
+    if (crudas.length === 0) return payload;
+
+    const lineas: LineaTributaria[] = crudas.map((l) => ({
+      afectacion: l.afectacion,
+      valorVenta: l.totalLinea - l.igvLinea,
+      igv: l.igvLinea,
+      icbper: l.icbperLinea,
+    }));
+
+    // La bolsa plástica aporta su ICBPER aunque no esté en `lineas`: el
+    // payload puede declararla solo como cantidad.
+    const bolsas = payload.bolsasIcBper ?? 0;
+    if (bolsas > 0 && !lineas.some((l) => (l.icbper ?? 0) > 0)) {
+      lineas.push({ afectacion: '10', valorVenta: 0, igv: 0 });
+    }
+
+    // TA-63: el importe de las líneas se usa como `montoTotal` cuando quien
+    // arma el payload no lo informó. `calcularTotales` prefiere `montoTotal`
+    // sobre la suma calculada (`payload.montoTotal ?? ...`), de modo que un
+    // payload con `montoTotal: 0` —el caso real de la API, que solo envía las
+    // líneas— dejaba el neto en 0.00 y rechazaba todo cronograma al crédito.
+    const totalLineas = centimos(
+      lineas.reduce((suma, l) => suma + l.valorVenta + l.igv, 0),
+    );
+
+    return {
+      ...payload,
+      montoTotal: payload.montoTotal > 0 ? payload.montoTotal : totalLineas,
+      lineasTributarias: lineas,
+    };
+  }
+
+  /**
+   * Valida las unidades y añade la línea del ICBPER (TA-62).
+   *
+   * El ICBPER va como línea INDEPENDIENTE del detalle (regla 3306), siempre al
+   * final, para que la numeración de las líneas de mercadería no cambie.
+   */
   private lineasDe(payload: InvoicePayload): string[] {
     const moneda = payload.tipoMoneda ?? 'PEN';
     const crudas = payload.lineas ?? (payload.linea ? [payload.linea] : []);
 
-    if (crudas.length > 0) return crudas.map((l) => bloqueLinea(l, moneda));
+    const validadas = crudas.map((linea) => {
+      const unidad = (linea.unidad ?? 'NIU').trim().toUpperCase();
+      // Una unidad fuera del Catálogo 03 hace que la hoja oficial devuelva
+      // error 2xxx sobre el `unitCode`. Se rechaza antes, con un mensaje que
+      // dice qué valor se acepta.
+      if (!esUnidadFerreteria(unidad)) {
+        throw new BadRequestException(
+          `La unidad '${linea.unidad}' de la línea ${linea.id} no pertenece al ` +
+            'Catálogo 03 (se aceptan NIU, DZN, CEN, MIL, KGM, MTR, BG, BX)',
+        );
+      }
+      return { ...linea, unidad };
+    });
 
-    // Retrocompatibilidad: sin detalle se sintetiza una línea con los totales.
-    const igv = payload.montoIgv ?? 0;
-    const linea: LineaDetalle = {
-      id: 1,
-      descripcion: 'Servicio prestado',
-      cantidad: 1,
-      valorUnitario: payload.montoGravado ?? 0,
-      afectacion: '10',
-      totalLinea: (payload.montoGravado ?? 0) + igv,
-      igvLinea: igv,
-    };
+    if (validadas.length === 0) {
+      // Retrocompatibilidad: sin detalle se sintetiza una línea con los totales.
+      const igv = payload.montoIgv ?? 0;
+      const linea: LineaDetalle = {
+        id: 1,
+        descripcion: 'Servicio prestado',
+        cantidad: 1,
+        valorUnitario: payload.montoGravado ?? 0,
+        afectacion: '10',
+        totalLinea: (payload.montoGravado ?? 0) + igv,
+        igvLinea: igv,
+      };
+      return [bloqueLinea(linea, moneda)];
+    }
 
-    return [bloqueLinea(linea, moneda)];
+    const xml = validadas.map((l) => bloqueLinea(l, moneda));
+
+    // ICBPER: se añade su línea al final si el payload declara bolsas y
+    // ninguna línea del detalle ya la representa.
+    const bolsas = payload.bolsasIcBper ?? 0;
+    const yaIncluida = validadas.some((l) => (l.icbperLinea ?? 0) > 0);
+    if (bolsas > 0 && !yaIncluida) {
+      const linea = lineaBolsaIcBper(validadas.length + 1, { cantidad: bolsas });
+      if (linea) xml.push(bloqueLinea(linea, moneda));
+    }
+
+    return xml;
   }
 }

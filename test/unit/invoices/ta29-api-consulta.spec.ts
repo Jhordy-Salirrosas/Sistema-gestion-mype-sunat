@@ -323,7 +323,7 @@ describe('TA-29 - controlador', () => {
       detalle: jest.fn(),
       reintentarCdr: jest.fn(),
     };
-    const controlador = new InvoiceQueryController(servicio as never);
+    const controlador = new InvoiceQueryController(servicio as never, {} as never, {} as never);
 
     const respuesta = await controlador.listar(EMPRESA, undefined, undefined, undefined, undefined, undefined, '1', '20');
 
@@ -348,7 +348,7 @@ describe('TA-29 - controlador', () => {
       detalle: jest.fn().mockResolvedValue({ id: 'inv-1' }),
       reintentarCdr: jest.fn(),
     };
-    const controlador = new InvoiceQueryController(servicio as never);
+    const controlador = new InvoiceQueryController(servicio as never, {} as never, {} as never);
 
     await controlador.detalle(EMPRESA, 'inv-1');
 
