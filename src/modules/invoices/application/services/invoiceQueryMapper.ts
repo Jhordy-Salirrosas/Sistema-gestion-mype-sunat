@@ -36,6 +36,8 @@ export interface FilaDetalle extends FilaListado {
   taxable_operations: { toString(): string } | number;
   total_igv: { toString(): string } | number;
   cdr_sunat: unknown;
+  /** SHA-256 del XML firmado; `null` si aún no se guardó. */
+  xml_hash_sha256?: string | null;
   created_at: Date;
   updated_at: Date;
   history: Array<{
@@ -140,6 +142,14 @@ export function aDetalle(fila: FilaDetalle): ComprobanteDetalleDto {
     ruc_emisor: fila.ruc_emisor,
     base_imponible: numero(fila.taxable_operations),
     total_igv: numero(fila.total_igv),
+    /**
+     * SHA-256 del XML FIRMADO que se envió a SUNAT.
+     *
+     * Permite verificar que el archivo descargado es exactamente el que viajó.
+     * Antes la columna quedaba en NULL (nadie la escribía) y la pantalla decía
+     * "No disponible en esta vista".
+     */
+    hash_xml: fila.xml_hash_sha256 ?? null,
     cdr: aCdr(fila.cdr_sunat),
     historial: aHistorial(fila.history),
     created_at: fila.created_at.toISOString(),

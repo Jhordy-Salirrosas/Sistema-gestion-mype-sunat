@@ -32,6 +32,7 @@ import { InvoiceNoteService } from './application/services/invoiceNoteService';
 // lo invocaba su test: ninguna emisión validaba la cantidad contra el almacén.
 import { StockValidationService } from './application/services/stockValidationService';
 import { EmitirComprobanteService } from './application/services/emitirComprobanteService';
+import { SignedXmlStorageService } from './application/services/signedXmlStorageService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
 import { SummaryDispatchService } from './application/services/summaryDispatchService';
 import { SummaryJobConsumer } from './summaryJobConsumer';
@@ -115,6 +116,9 @@ import { AccountingModule } from '../accounting/accountingModule';
     StockValidationService,
     // Docente 31-10: emisión desde la pantalla (traduce, valida y reserva).
     EmitirComprobanteService,
+    // Guarda el XML firmado que se envía, para que la descarga entregue el
+    // documento real y no una reconstrucción sin firma.
+    SignedXmlStorageService,
   ],
   exports: [
     CreateInvoiceUseCase,

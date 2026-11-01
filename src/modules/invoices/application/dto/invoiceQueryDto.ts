@@ -69,6 +69,8 @@ export interface ComprobanteDetalleDto extends ComprobanteListadoDto {
   ruc_emisor: string;
   base_imponible: number;
   total_igv: number;
+  /** SHA-256 del XML firmado que se envió; `null` si no se guardó. */
+  hash_xml: string | null;
   cdr: CdrDto | null;
   historial: HistorialEstadoDto[];
   created_at: string;

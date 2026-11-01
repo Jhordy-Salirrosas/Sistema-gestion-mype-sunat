@@ -104,6 +104,8 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     { persistFailure: jest.fn() } as never,
     // TA-68: puente contable. En esta suite es un doble que no hace nada.
     { registrar } as never,
+    // Guarda el XML firmado para que la descarga entregue el documento real.
+    { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );
 
   return {

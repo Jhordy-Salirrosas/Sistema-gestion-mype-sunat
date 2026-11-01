@@ -49,6 +49,8 @@ const SELECT_DETALLE = {
   taxable_operations: true,
   total_igv: true,
   cdr_sunat: true,
+  /** SHA-256 del XML firmado, para verificar la descarga. */
+  xml_hash_sha256: true,
   created_at: true,
   updated_at: true,
   history: {

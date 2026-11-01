@@ -152,6 +152,19 @@ export class InvoiceDownloadService {
   }
 
   /** XML del comprobante: el guardado si existe, o regenerado desde el payload. */
+  /**
+   * XML del comprobante.
+   *
+   * SE ENTREGA EL FIRMADO, tal como se envió a SUNAT.
+   *
+   * `signedXmlStorageService` lo guarda en `xml_storage_url` en cuanto el worker
+   * lo firma. Antes no se guardaba y aquí se regeneraba desde el payload, así
+   * que el archivo descargado NO tenía `<ds:Signature>`: se llamaba como el
+   * comprobante pero no era el que viajó a SUNAT.
+   *
+   * La regeneración queda solo como último recurso para un comprobante antiguo
+   * que no llegó a pasar por el worker, y se avisa en el log.
+   */
   private xml(fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>): ArchivoDescarga {
     const guardado = fila.xml_storage_url;
     const esXml = guardado && guardado.trimStart().startsWith('<?xml');

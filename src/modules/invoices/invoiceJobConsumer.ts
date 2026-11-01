@@ -50,6 +50,7 @@ import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
 import type { FacturaParaPuente } from './application/services/invoiceAccountingBridgeService';
+import { SignedXmlStorageService } from './application/services/signedXmlStorageService';
 
 /** Payload que viaja en la cola: solo identifica el comprobante. */
 export interface InvoiceJobPayload {
@@ -109,6 +110,14 @@ export class InvoiceJobConsumer implements OnModuleInit {
     // TA-68: puente facturacion -> Kardex + Contabilidad, solo tras ACEPTADO
     // u OBSERVADO.
     private readonly puenteContable: InvoiceAccountingBridgeService,
+    /**
+     * Guarda el XML firmado que se envía.
+     *
+     * Sin esto la descarga regeneraba el documento desde el payload y entregaba
+     * un XML sin `<ds:Signature>`: el archivo se llamaba como el comprobante
+     * pero no era el que viajó a SUNAT.
+     */
+    private readonly xmlFirmado: SignedXmlStorageService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -431,6 +440,22 @@ export class InvoiceJobConsumer implements OnModuleInit {
     const xmlSinFirma = this.xmlDelComprobante(invoice);
     const xml = this.firmar(invoice, xmlSinFirma);
     const zip = this.comprimir(invoice, xml);
+
+    // SE GUARDA EL XML FIRMADO, el que se envía.
+    //
+    // Antes no se guardaba y la descarga regeneraba el documento desde el
+    // payload, entregando un XML SIN `<ds:Signature>`: un archivo con el nombre
+    // del comprobante que no era el que viajó a SUNAT. Se detectó abriendo el
+    // XML descargado el 31-10.
+    //
+    // Va antes de la compuerta XSL para que la copia exista incluso si el envío
+    // se bloquea: el documento firmado ya es un hecho y hay que poder auditarlo.
+    const hashGuardado = await this.xmlFirmado.guardar(invoiceId, xml);
+    if (hashGuardado) {
+      this.logger.log(
+        `XML firmado de ${invoice.serie}-${invoice.correlativo} guardado (sha256 ${hashGuardado.slice(0, 16)}…)`,
+      );
+    }
 
     const params: SendInvoiceParams = {
       invoiceId: invoice.id,
