@@ -429,6 +429,11 @@ export class EmitirComprobanteService {
       monto_total: dto.monto_total,
       fecha_emision: new Date(dto.fecha_emision),
       payload_ubl: dto.payload_ubl,
+      // La bandeja y el PDF leen el cliente de las columnas propias de la
+      // tabla, no del payload: si no se copian aquí la fila sale sin cliente.
+      customer_identity_type: dto.customer_identity_type,
+      customer_identity_number: dto.customer_identity_number,
+      customer_legal_name: dto.customer_legal_name,
     });
 
     const resultado = await this.repositorio.saveWithTransactionalOutbox(entidad);

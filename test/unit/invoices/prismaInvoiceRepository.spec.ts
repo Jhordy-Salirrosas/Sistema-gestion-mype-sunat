@@ -80,6 +80,11 @@ describe('PrismaInvoiceRepository', () => {
         monto_total: invoiceEntity.monto_total,
         fecha_emision: invoiceEntity.fecha_emision,
         payload_ubl: invoiceEntity.payload_ubl,
+        // Datos del adquirente: la bandeja y el PDF los leen de estas columnas.
+        // Sin ellos la fila de la grilla mostraba "CLIENTE SIN NOMBRE".
+        customer_identity_type: invoiceEntity.customer_identity_type ?? null,
+        customer_identity_number: invoiceEntity.customer_identity_number ?? null,
+        customer_legal_name: invoiceEntity.customer_legal_name ?? null,
       },
       select: { id: true, estado: true, created_at: true },
     });

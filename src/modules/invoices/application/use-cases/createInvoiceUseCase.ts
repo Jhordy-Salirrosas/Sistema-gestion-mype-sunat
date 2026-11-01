@@ -84,6 +84,10 @@ export class CreateInvoiceUseCase {
       fecha_emision: new Date(dto.fecha_emision),
       payload_ubl: dto.payload_ubl,
       clave_idempotencia: claveIdempotencia,
+      // La bandeja y el PDF leen el cliente de las columnas propias de la tabla.
+      customer_identity_type: dto.customer_identity_type,
+      customer_identity_number: dto.customer_identity_number,
+      customer_legal_name: dto.customer_legal_name,
     });
 
     return this.invoiceRepository.saveWithTransactionalOutbox(entity);

@@ -36,6 +36,12 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
               monto_total: invoice.monto_total,
               fecha_emision: invoice.fecha_emision,
               payload_ubl: invoice.payload_ubl as Prisma.InputJsonValue,
+              // Datos del adquirente: la bandeja y el PDF los leen de estas
+              // columnas. Sin ellos la fila mostraba "CLIENTE SIN NOMBRE"
+              // aunque el cliente viajara dentro del payload.
+              customer_identity_type: invoice.customer_identity_type ?? null,
+              customer_identity_number: invoice.customer_identity_number ?? null,
+              customer_legal_name: invoice.customer_legal_name ?? null,
             },
             select: {
               id: true,
