@@ -17,6 +17,7 @@ import { InvoiceQrService } from './application/services/invoiceQrService';
 import { InvoiceMetricsService } from './application/services/invoiceMetricsService';
 import { InvoiceAlertService } from './application/services/invoiceAlertService';
 import { InvoiceCustomerService } from './application/services/invoiceCustomerService';
+import { InvoiceSummaryService } from './application/services/invoiceSummaryService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
@@ -89,6 +90,8 @@ import { AccountingModule } from '../accounting/accountingModule';
     InvoiceAlertService,
     // TA-61: buscador de clientes sobre la cartera ya emitida.
     InvoiceCustomerService,
+    // TA-67: vista previa de resumenes diarios y comunicaciones de baja.
+    InvoiceSummaryService,
     // TA-68: puente facturación -> Kardex + Contabilidad.
     InvoiceAccountingBridgeService,
     // TA-67: encolado y sondeo del ticket de resumenes y bajas.

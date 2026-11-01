@@ -28,6 +28,7 @@ import {
 import { InvoiceMetricsService } from '../../application/services/invoiceMetricsService';
 import { InvoiceAlertService } from '../../application/services/invoiceAlertService';
 import { InvoiceCustomerService } from '../../application/services/invoiceCustomerService';
+import { InvoiceSummaryService } from '../../application/services/invoiceSummaryService';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -38,6 +39,7 @@ export class InvoiceQueryController {
     private readonly metricas: InvoiceMetricsService,
     private readonly alertasOperativas: InvoiceAlertService,
     private readonly clientes: InvoiceCustomerService,
+    private readonly resumenes: InvoiceSummaryService,
   ) {}
 
   /**
@@ -90,6 +92,56 @@ export class InvoiceQueryController {
     @Query('q') consulta?: string,
   ) {
     return this.clientes.buscar(companyId, consulta ?? '');
+  }
+
+  /**
+   * GET /api/v1/invoices/resumenes/diario?fecha=YYYY-MM-DD
+   *
+   * Vista previa del resumen diario de boletas (RC): qué entra, qué queda
+   * fuera y por qué, y el XML que se enviaría. Va antes de `/:id` por el mismo
+   * motivo que `metrics`, `alertas` y `customers/lookup`.
+   */
+  @Get('resumenes/diario')
+  vistaResumen(
+    @CurrentCompany() companyId: string,
+    @Query('fecha') fecha?: string,
+    @Query('correlativo') correlativo?: string,
+  ) {
+    return this.resumenes.vistaResumenDiario(
+      companyId,
+      this.fechaDe(fecha),
+      Number(correlativo ?? 1) || 1,
+    );
+  }
+
+  /**
+   * GET /api/v1/invoices/resumenes/baja?fecha=YYYY-MM-DD
+   *
+   * Vista previa de la comunicación de baja (RA): los comprobantes anulables de
+   * la fecha y el XML que se enviaría.
+   */
+  @Get('resumenes/baja')
+  vistaBaja(
+    @CurrentCompany() companyId: string,
+    @Query('fecha') fecha?: string,
+    @Query('correlativo') correlativo?: string,
+  ) {
+    return this.resumenes.vistaComunicacionBaja(
+      companyId,
+      this.fechaDe(fecha),
+      Number(correlativo ?? 1) || 1,
+    );
+  }
+
+  /** Fecha del día de hoy en hora de Perú si no se indica otra. */
+  private fechaDe(fecha?: string): string {
+    if (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) {
+      return fecha.trim();
+    }
+    // Lima es UTC-5 todo el año: sin el ajuste, a partir de las 19:00 el
+    // resumen se armaría con la fecha del día siguiente.
+    const lima = new Date(Date.now() - 5 * 60 * 60 * 1000);
+    return lima.toISOString().slice(0, 10);
   }
 
   /**
