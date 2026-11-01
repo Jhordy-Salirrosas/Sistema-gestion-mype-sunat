@@ -175,6 +175,20 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Cuántos trabajos de la empresa están esperando en la cola de muertos.
+   *
+   * Lo consume la barra de métricas del M1 (TA-69): `pendientes` cuenta los
+   * comprobantes con error de red, pero un comprobante que agotó los reintentos
+   * y está en la DLQ figura igual como pendiente y el operador no se entera de
+   * que necesita intervención manual. Se reutiliza `listDlq` en vez de contar
+   * en la tabla de pg-boss para no duplicar el filtro por `company_id`.
+   */
+  async countDlq(companyId: string): Promise<number> {
+    const jobs = await this.listDlq(companyId);
+    return jobs.length;
+  }
+
+  /**
    * Mueve explícitamente un comprobante a la DLQ.
    *
    * Lo usa `InvoiceRetryService` al agotar los 3 reintentos de HU-04. Se crea

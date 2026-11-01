@@ -26,6 +26,8 @@ import {
   type SolicitudNota,
 } from '../../application/services/invoiceNoteService';
 import { InvoiceMetricsService } from '../../application/services/invoiceMetricsService';
+import { InvoiceAlertService } from '../../application/services/invoiceAlertService';
+import { InvoiceCustomerService } from '../../application/services/invoiceCustomerService';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -34,6 +36,8 @@ export class InvoiceQueryController {
     private readonly consultas: InvoiceQueryService,
     private readonly notas: InvoiceNoteService,
     private readonly metricas: InvoiceMetricsService,
+    private readonly alertasOperativas: InvoiceAlertService,
+    private readonly clientes: InvoiceCustomerService,
   ) {}
 
   /**
@@ -52,6 +56,40 @@ export class InvoiceQueryController {
     @Query('periodo') periodo?: string,
   ) {
     return this.metricas.metricas(companyId, periodo);
+  }
+
+  /**
+   * GET /api/v1/invoices/alertas
+   *
+   * Riesgos operativos que la barra de KPIs no cubre (TA-69): cuántos días le
+   * quedan al certificado de firma y cuántos comprobantes están trabados en la
+   * cola de muertos.
+   *
+   * Va en su propia ruta y no dentro de `metrics` porque tiene otro costo: la
+   * DLQ abre pg-boss, mientras que las métricas son un `groupBy`. Así la
+   * barra puede pintar las cifras del periodo sin esperar a la cola.
+   */
+  @Get('alertas')
+  alertas(@CurrentCompany() companyId: string) {
+    return this.alertasOperativas.estado(companyId);
+  }
+
+  /**
+   * GET /api/v1/invoices/customers/lookup?q=...
+   *
+   * Buscador de clientes de TA-61. La ruta va ANTES de `GET /:id` por el mismo
+   * motivo que `metrics` y `alertas`: si se declarara después, `customers`
+   * encajaría como un id y el buscador respondería 404.
+   *
+   * Sin `q` devuelve la cartera completa, que es lo que necesita el
+   * desplegable al abrirse.
+   */
+  @Get('customers/lookup')
+  buscarClientes(
+    @CurrentCompany() companyId: string,
+    @Query('q') consulta?: string,
+  ) {
+    return this.clientes.buscar(companyId, consulta ?? '');
   }
 
   /**

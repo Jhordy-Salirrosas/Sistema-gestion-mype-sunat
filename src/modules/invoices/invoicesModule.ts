@@ -15,6 +15,8 @@ import { InvoiceDownloadService } from './application/services/invoiceDownloadSe
 import { InvoicePdfService } from './application/services/invoicePdfService';
 import { InvoiceQrService } from './application/services/invoiceQrService';
 import { InvoiceMetricsService } from './application/services/invoiceMetricsService';
+import { InvoiceAlertService } from './application/services/invoiceAlertService';
+import { InvoiceCustomerService } from './application/services/invoiceCustomerService';
 import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCase';
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
@@ -83,6 +85,10 @@ import { AccountingModule } from '../accounting/accountingModule';
     InvoiceNoteService,
     // TA-69: métricas del periodo para la barra de KPIs del módulo.
     InvoiceMetricsService,
+    // TA-69: alertas de vencimiento del certificado y de la cola de muertos.
+    InvoiceAlertService,
+    // TA-61: buscador de clientes sobre la cartera ya emitida.
+    InvoiceCustomerService,
     // TA-68: puente facturación -> Kardex + Contabilidad.
     InvoiceAccountingBridgeService,
     // TA-67: encolado y sondeo del ticket de resumenes y bajas.
