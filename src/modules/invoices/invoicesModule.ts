@@ -25,6 +25,8 @@ import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 import { InvoiceNoteService } from './application/services/invoiceNoteService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
+import { SummaryDispatchService } from './application/services/summaryDispatchService';
+import { SummaryJobConsumer } from './summaryJobConsumer';
 import { InventoryModule } from '../inventory/inventoryModule';
 import { AccountingModule } from '../accounting/accountingModule';
 
@@ -83,6 +85,9 @@ import { AccountingModule } from '../accounting/accountingModule';
     InvoiceMetricsService,
     // TA-68: puente facturación -> Kardex + Contabilidad.
     InvoiceAccountingBridgeService,
+    // TA-67: encolado y sondeo del ticket de resumenes y bajas.
+    SummaryDispatchService,
+    SummaryJobConsumer,
   ],
   exports: [
     CreateInvoiceUseCase,

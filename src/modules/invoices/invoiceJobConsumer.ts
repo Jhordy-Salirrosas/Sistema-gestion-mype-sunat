@@ -40,8 +40,9 @@ import type {
   SendInvoiceParams,
 } from '../sunat/soap/sunatBillTypes';
 import {
+  AVISO_DEMO,
   ErrorValidacionBloqueada,
-  validarAntesDeEnviar,
+  decidirEnvio,
 } from './application/services/invoiceSendGate';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 import type { InvoicePayload } from './invoicePayload';
@@ -78,6 +79,14 @@ export interface JobAprobado {
    *    estado de ese resultado y NO se llama a SUNAT.
    */
   bloqueoXsl: ProcessCdrResult | null;
+  /**
+   * true si la compuerta se omitio por `BYPASS_XSL_GATE_DEMO=true`.
+   *
+   * Se propaga hasta aqui, y no solo hasta el log, para que quien inspeccione
+   * el resultado de `preparar()` pueda saber si ese comprobante se envio sin
+   * validar. En una exposicion eso es justo lo que hay que poder demostrar.
+   */
+  omitidaPorDemo: boolean;
 }
 
 @Injectable()
@@ -373,19 +382,28 @@ export class InvoiceJobConsumer implements OnModuleInit {
     // el XML tal como se envia (el `ds:DigestValue` forma parte del
     // documento). Puede lanzar `ErrorValidacionBloqueada`, que se captura en
     // `procesar()`.
-    const bloqueoXsl = await validarAntesDeEnviar(
+    //
+    // TA-58/DEUDA: `decidirEnvio` es el mismo camino, pero ademas informa si la
+    // compuerta se omitio por la bandera de demostracion. Cuando eso pasa el
+    // aviso sale por consola con nivel WARN para que se vea en la terminal
+    // durante la exposicion y no solo en el historial.
+    const decision = await decidirEnvio(
       params,
       xml,
       this.xslValidator,
       this.cdrPersistence,
     );
+    if (decision.omitidaPorDemo) {
+      this.logger.warn(`[WARN][DEMO] ${invoiceId}: ${AVISO_DEMO}`);
+    }
 
     return {
       // Un XML que ya traia la firma tampoco se vuelve a firmar: cuenta como
       // firmado porque el sobre sale con XMLDSig.
       firmado: xml.includes('<ds:Signature'),
       params,
-      bloqueoXsl,
+      bloqueoXsl: decision.bloqueo,
+      omitidaPorDemo: decision.omitidaPorDemo,
     };
   }
 

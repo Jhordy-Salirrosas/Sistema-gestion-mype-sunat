@@ -9,6 +9,28 @@ import { PgBoss, fromPrisma } from 'pg-boss';
 
 export const INVOICE_QUEUE = 'sunat-invoice-queue';
 export const INVOICE_DLQ = 'sunat-invoice-dlq';
+/**
+ * TA-67: cola de resúmenes diarios y comunicaciones de baja.
+ *
+ * Es una cola aparte de la de comprobantes a propósito. Un resumen no espera
+ * CDR de inmediato sino un ticket que hay que sondear, y su payload no es
+ * `{ invoice_id }`. Compartir cola obligaría al consumidor de facturas a
+ * distinguir dos flujos en cada job.
+ */
+export const SUMMARY_QUEUE = 'sunat-summary-queue';
+/** Cola de muertos propia: un resumen atascado no debe mezclarse con facturas. */
+export const SUMMARY_DLQ = 'sunat-summary-dlq';
+
+/** Payload que viaja en la cola de resúmenes. */
+export interface SummaryJobData {
+  tipo: 'RESUMEN_DIARIO' | 'COMUNICACION_BAJA';
+  identificador: string;
+  zipBase64: string;
+  fileName: string;
+  companyId: string;
+  maxConsultas?: number;
+  esperaMs?: number;
+}
 
 export interface TxClient {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
@@ -52,6 +74,17 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       await this.boss.createQueue(INVOICE_QUEUE, {
         retryLimit: 0,
         deadLetter: INVOICE_DLQ,
+      });
+
+      // TA-67: la cola de resúmenes se declara con su propia DLQ. Aquí SÍ se
+      // deja un `retryLimit` > 0, al contrario que en la cola de comprobantes:
+      // un fallo de red al enviar un resumen no tiene un orquestador propio con
+      // backoff (no hay `InvoiceRetryService` para resúmenes), y perder un
+      // resumen diario deja el día sin informar a SUNAT.
+      await this.boss.createQueue(SUMMARY_DLQ);
+      await this.boss.createQueue(SUMMARY_QUEUE, {
+        retryLimit: 3,
+        deadLetter: SUMMARY_DLQ,
       });
 
       this.logger.log('Servicio de colas PgBoss iniciado correctamente');
@@ -225,5 +258,70 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         }`,
       );
     }
+  }
+
+  /**
+   * TA-67: encola el envío de un resumen diario o de una comunicación de baja.
+   *
+   * Devuelve el id del job (o `null` si pg-boss no está disponible) para que
+   * quien llama pueda informarlo; no se espera el resultado dentro de la misma
+   * petición HTTP porque el CDR de un resumen puede tardar.
+   */
+  async encolarResumen(job: SummaryJobData): Promise<string | null> {
+    try {
+      return await this.boss.send(SUMMARY_QUEUE, job);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo encolar el ${job.tipo} ${job.identificador}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * TA-67: registra el consumidor de resúmenes.
+   *
+   * Igual que en la cola de comprobantes, `batchSize: 1`: el resumen de un día
+   * se procesa de uno en uno para que el sondeo del ticket no compita con otra
+   * operación del mismo periodo.
+   */
+  async registerSummaryWorker(
+    handler: (job: SummaryJobData) => Promise<unknown>,
+  ): Promise<string> {
+    this.logger.log(
+      `Registrando worker de resumenes en la cola ${SUMMARY_QUEUE}`,
+    );
+
+    return this.boss.work<SummaryJobData>(
+      SUMMARY_QUEUE,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+
+        this.logger.log(
+          `[Job resumen recibido] ${job.data.tipo} ${job.data.identificador}`,
+        );
+        await handler(job.data);
+      },
+    );
+  }
+
+  /** TA-67: trabajos de resumen que quedaron sin procesar en la DLQ. */
+  async listSummaryDlq(companyId: string): Promise<Array<Record<string, unknown>>> {
+    const jobs = await this.boss.findJobs<SummaryJobData>(SUMMARY_DLQ, {
+      queued: true,
+    });
+
+    return jobs
+      .filter((job) => job.data?.companyId === companyId)
+      .map((job) => ({
+        id: job.id,
+        identificador: job.data?.identificador ?? 'sin identificar',
+        tipo: job.data?.tipo ?? 'RESUMEN_DIARIO',
+        intentosFallidos: job.retryCount ?? 0,
+      }));
   }
 }

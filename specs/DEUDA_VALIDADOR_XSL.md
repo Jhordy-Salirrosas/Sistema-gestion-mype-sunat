@@ -92,6 +92,81 @@ de transformación. `xslt-processor` (JS, XSLT 1.0) no los expone igual que
 1. Las plantillas (`validate_utils.xsl` + `error_utils.xsl`).
 2. Un motor que emita el código como `xsl:message` y se pueda leer.
 
+## 4-bis. Tercer bloqueo: `xslt-processor` no ejecuta `xsl:call-template` (verificado)
+
+Detectado el 31 de octubre de 2026 al intentar cerrar esta deuda. **Este bloqueo
+cambia la conclusión del apartado anterior: las opciones A y B no son viables.**
+
+Lo que se comprobó, ejecutando la hoja oficial
+(`assets/sunat-xsl/Factura 2.0.1.xsl`) sobre un XML válido
+(`fixtures/sunat-invoice/factura-ubl21.xml`, S/ 1000 + IGV 180):
+
+| Prueba | Resultado observado |
+|---|---|
+| Hoja oficial tal como está | Cabecera de salida `\n\t\t\n\t\t-`: **cero códigos** |
+| Reemplazar `isTrueExpresion` por una plantilla propia con `name=` | **No se ejecuta nunca** (0 llamadas), pese a ser 277 en la hoja |
+| `<xsl:call-template name="X"/>` desde `match="/*"` | Emite **cadena vacía**, sin lanzar error |
+| Lo mismo desde dentro de otra plantilla | Igual: se pierde en silencio |
+| `<xsl:choose>` + `<xsl:value-of>` sueltos, en el mismo sitio | Funcionan correctamente |
+
+**Causa:** `xslt-processor` (v5.1.2) no resuelve las llamadas a plantillas con
+`name=`. No falla: descarta la llamada. La consecuencia es que las 1 552
+llamadas de la hoja oficial nunca se ejecutan, **aunque se añada
+`validate_utils.xsl`**. Reproducible en una hoja mínima de 5 líneas.
+
+**Qué implica:**
+
+- El apartado 4 explicaba por qué no se veían los errores. Este añade que las
+  reglas tampoco se ejecutan: el problema es del **motor**, no solo del archivo.
+- La opción C del apartado 7 ("libxslt real") deja de ser la alternativa
+  conservadora y pasa a ser la única vía que reutiliza las plantillas de SUNAT.
+- La opción B ("motor propio que lea `xsl:message`") tampoco sirve si el motor
+  reimplementado no resuelve `call-template`. Y reimplementar XSLT 1.0 no es el
+  objetivo de este proyecto.
+- Un validador **parcial** es peor que ninguno: al conectar solo
+  `regexpValidateElementIfExist` (251 de 1 552), el fixture válido de
+  S/ 1000 + IGV 180 sale **RECHAZADO**, porque la hoja busca
+  `cac:AccountingCustomerParty` y el XML no lo trae. Un veredicto equivocado
+  frena comprobantes correctos con el mismo criterio con el que deja pasar los
+  incorrectos.
+
+**Alternativas reales, en orden de preferencia:**
+
+| Opción | Costo | Riesgo |
+|---|---|---|
+| C1. `saxon-js` (XSLT 2.0/3.0 en JS, compilador SE compilado a SJS) | Medio | Bajo: motor probado que sí resuelve `call-template` |
+| C2. `libxslt` en un proceso hijo o contenedor | Medio | Bajo, pero añade un binario al despliegue |
+| D. No validar localmente: confiar en el XSD + la validación de SUNAT | Bajo | El error llega en el CDR, después de gastar el envío |
+
+---
+
+## 4-ter. Salida adoptada: bandera explícita de demostración
+
+Mientras la deuda siga abierta, la compuerta hace lo correcto: **se cierra**.
+Pero un sistema que no emite no se puede demostrar, así que desde el 31 de
+octubre existe un interruptor explícito, `BYPASS_XSL_GATE_DEMO=true`:
+
+- **Solo** el valor exacto `true` lo activa (`TRUE`, `1`, `si` y cualquier otro
+  valor **no** lo activan). Sin la variable, todo sigue como antes.
+- Cuando está activo, el comprobante pasa a `processWithRetry` **sin** ejecutar
+  el validador (se comprueba antes de invocarlo, para no gastar el costo de una
+  hoja de 500 KB que se va a descartar).
+- Deja constancia visible en **dos** sitios:
+  - consola: `[WARN][DEMO] <id>: Compuerta XSL omitida por bandera explícita de
+    demostración (BYPASS_XSL_GATE_DEMO=true; limitación de xslt-processor con
+    xsl:call-template documentada en specs/DEUDA_VALIDADOR_XSL.md)`;
+  - historial del comprobante (`CdrPersistenceService.persistFailure`, con el
+    **mismo** texto, `codigoError: null` y **sin** cambiar el estado): la
+    omisión no es un rechazo.
+- Si el historial no se puede escribir, el envío **no** se detiene: se decide
+  enviar y se pierde solo la constancia, no el comprobante.
+
+Implementación: `bypassDemoActivo()`, `decidirEnvio()` y `AVISO_DEMO` en
+`src/modules/invoices/application/services/invoiceSendGate.ts`. Pruebas:
+`test/unit/invoices/ta58-bypass-demo.spec.ts` (17 casos).
+
+---
+
 ## 5. Por qué el Sprint 2 no lo detectó
 
 El único test contra la hoja real
@@ -124,24 +199,35 @@ validador real: no se envía a ciegas.
 
 ## 7. Opciones para la tarea nueva
 
-| Opción | Trabajo | Riesgo |
-|---|---|---|
-| A. Reimplementar `validate_utils.xsl` y `error_utils.xsl` | Alto: son las 3 plantillas más el segundo archivo | **Alto**: si una regla se desvía, aprueba algo inválido y nadie lo sabe |
-| B. Motor que lea `xsl:message` + plantillas propias | Alto | Medio-alto: mismo riesgo que A, más el motor |
-| C. Validar con libxslt real (contenedor o proceso hijo) | Medio | Bajo, pero sigue faltando el archivo |
-| D. No validar localmente: confiar en el XSD + validación de SUNAT | Bajo | El error llega en el CDR, después de gastar el envío |
+> **Actualizado el 31 de octubre tras verificar el apartado 4-bis.** Las filas A
+> y B se conservan porque explican cómo se pensó el problema, pero **ya no se
+> recomiendan**: con el motor actual no llegan a ejecutar ninguna regla.
+
+| Opción | Trabajo | Riesgo | ¿Viable hoy? |
+|---|---|---|---|
+| A. Reimplementar `validate_utils.xsl` y `error_utils.xsl` | Alto: son las 3 plantillas más el segundo archivo | **Alto**: si una regla se desvía, aprueba algo inválido y nadie lo sabe | **No**: `xslt-processor` no ejecuta `call-template` |
+| B. Motor que lea `xsl:message` + plantillas propias | Alto | Medio-alto: mismo riesgo que A, más el motor | **No**: un motor que no resuelve `call-template` no sirve aquí |
+| C1. `saxon-js` para ejecutar las hojas oficiales | Medio | Bajo: motor probado con soporte real de plantillas | **Sí, es la preferida** |
+| C2. `libxslt` en proceso hijo o contenedor | Medio | Bajo, pero añade un binario al despliegue | **Sí** |
+| D. No validar localmente: confiar en el XSD + validación de SUNAT | Bajo | El error llega en el CDR, después de gastar el envío | Sí |
 
 **Recomendación:** ninguna de A o B se acepta sin un corpus de regresión
 (decenas de XML válidos e inválidos con su resultado esperado). Un validador
-que falla en verde es peor que no tenerlo.
+que falla en verde es peor que no tenerlo. Hoy la vía corta es C1: cambiar el
+motor y conservar las hojas y el adaptador; la deuda real deja de ser "falta un
+archivo" y pasa a ser "falta el motor adecuado".
+
+**Mientras tanto:** la compuerta se cierra y, si hay que exponer el sistema, se
+activa `BYPASS_XSL_GATE_DEMO=true` con el aviso correspondiente (apartado 4-ter).
 
 ## 8. Archivos relevantes
 
 - `src/modules/invoices/application/services/sunatXslAdapter.ts` — paso 6
 - `src/modules/invoices/application/services/sunatXslValidatorService.ts`
-- `src/modules/invoices/application/services/invoiceSendGate.ts`
+- `src/modules/invoices/application/services/invoiceSendGate.ts` — bandera de demo
 - `src/modules/invoices/invoiceJobConsumer.ts`
 - `assets/sunat-xsl/` — las 4 hojas, idénticas a las oficiales
 - `test/unit/invoices/ta31-validador-xsl.spec.ts`
 - `test/unit/invoices/ta31-xsl-oficial.spec.ts`
 - `test/unit/invoices/ta62-multi-item-catalogo07-icbper.spec.ts`
+- `test/unit/invoices/ta58-bypass-demo.spec.ts` — bandera de demostración
