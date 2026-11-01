@@ -12,6 +12,7 @@ import {
   type InvoicePersistenceResult,
 } from '../../domain/ports/invoiceRepositoryPort';
 import { InvoiceSeriesService } from '../services/invoiceSeriesService';
+import { validarAdquirente } from '../../domain/rules/taxpayerIdValidator';
 
 @Injectable()
 export class CreateInvoiceUseCase {
@@ -51,6 +52,22 @@ export class CreateInvoiceUseCase {
         'La peticion no tiene empresa asociada: falta companyId en el token',
       );
     }
+
+    // TA-60: se valida el documento del adquirente ANTES de reservar el
+    // correlativo. El orden importa: reservar consume un número de la serie y,
+    // como el correlativo rechazado queda "quemado", validar después dejaría un
+    // hueco por cada cliente mal escrito. Un dato del cliente no debe costar un
+    // número fiscal.
+    validarAdquirente(
+      dto.customer_identity_number
+        ? {
+            tipoDoc: dto.customer_identity_type ?? '',
+            numeroDoc: dto.customer_identity_number,
+            razonSocial: dto.customer_legal_name,
+          }
+        : null,
+      { tipoComprobante: dto.tipo_comprobante, importeTotal: dto.monto_total },
+    );
 
     // TA-60: el correlativo lo reserva la base de datos, no el navegador.
     // Se reserva ANTES de construir la entidad porque la entidad es inmutable

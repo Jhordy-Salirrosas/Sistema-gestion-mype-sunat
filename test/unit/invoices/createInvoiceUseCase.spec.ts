@@ -20,6 +20,10 @@ describe('CreateInvoiceUseCase', () => {
     monto_total: 236.0,
     fecha_emision: '2026-10-14T10:00:00.000Z',
     payload_ubl: { items: [] },
+    // TA-60: el caso de uso valida el documento del adquirente antes de emitir.
+    customer_identity_type: '6',
+    customer_identity_number: '20100066603',
+    customer_legal_name: 'CLIENTE S.A.C.',
   };
 
   const expectedResult = {

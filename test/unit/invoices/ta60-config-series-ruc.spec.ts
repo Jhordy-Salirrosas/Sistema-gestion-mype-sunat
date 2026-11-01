@@ -89,20 +89,20 @@ function crearPrismaFalso(correlativoInicial: number, activa = true) {
 }
 
 describe('TA-60 · reserva atómica del correlativo', () => {
-  it('20 reservas simultáneas producen 20 números consecutivos sin repetir', async () => {
+  it('25 reservas simultáneas producen 25 números consecutivos sin repetir', async () => {
     const { prisma } = crearPrismaFalso(0);
     const servicio = new InvoiceSeriesService(prisma as never);
 
     const numeros = await Promise.all(
-      Array.from({ length: 20 }, () =>
+      Array.from({ length: 25 }, () =>
         servicio.reservarCorrelativo('company-1', '01', 'F001'),
       ),
     );
 
     const ordenados = [...numeros].sort((a, b) => a - b);
-    expect(ordenados).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
-    // Sin duplicados: el conjunto tiene los mismos 20 elementos.
-    expect(new Set(numeros).size).toBe(20);
+    expect(ordenados).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+    // Sin duplicados: el conjunto tiene los mismos 25 elementos.
+    expect(new Set(numeros).size).toBe(25);
   });
 
   it('la versión ingenua (leer y luego escribir) SÍ colisiona', async () => {
@@ -229,6 +229,10 @@ function dtoFalso(overrides: Partial<CreateInvoiceDto> = {}): CreateInvoiceDto {
     monto_total: 118,
     fecha_emision: '2026-10-31',
     payload_ubl: {},
+    // TA-60: una factura (01) exige RUC del adquirente.
+    customer_identity_type: '6',
+    customer_identity_number: '20100066603',
+    customer_legal_name: 'CLIENTE S.A.C.',
     ...overrides,
   } as CreateInvoiceDto;
 }

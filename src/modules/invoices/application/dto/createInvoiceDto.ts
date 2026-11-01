@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsDateString,
   IsObject,
+  IsOptional,
   Min,
   Max,
   Length,
@@ -49,4 +50,25 @@ export class CreateInvoiceDto {
   @IsNotEmpty()
   @IsObject()
   payload_ubl: Record<string, unknown>;
+
+  /**
+   * TA-60: documento del adquirente (Catálogo 06).
+   *
+   * Opcional en el DTO a propósito, porque la obligación depende del tipo de
+   * comprobante y del importe, y eso lo decide `validarAdquirente` con un
+   * mensaje que explica cuál de las dos reglas se incumplió. Marcarlo
+   * `@IsNotEmpty` aquí haría fallar una boleta sin documento por debajo de los
+   * S/ 700, que es una emisión perfectamente legal.
+   */
+  @IsOptional()
+  @IsString()
+  customer_identity_type?: string;
+
+  @IsOptional()
+  @IsString()
+  customer_identity_number?: string;
+
+  @IsOptional()
+  @IsString()
+  customer_legal_name?: string;
 }
