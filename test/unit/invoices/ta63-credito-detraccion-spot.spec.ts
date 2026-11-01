@@ -360,7 +360,9 @@ describe('TA-63 · XML de las cuotas al crédito', () => {
       xml.indexOf('</cac:PaymentTerms>'),
     );
     expect(cabecera).not.toContain('<cbc:Amount');
-    expect(xml).not.toContain('<cbc:PaymentMeansID>Cuota</cbc:PaymentMeansID>');
+    // Una venta al contado no lleva bloques de cuota de ninguna forma.
+    expect(xml).not.toContain('<cbc:PaymentDueDate>');
+    expect(xml).not.toContain('<cbc:PaymentMeansID>Cuota001</cbc:PaymentMeansID>');
   });
 
   it('al crédito la cabecera FormaPago lleva el monto neto pendiente', () => {
@@ -392,8 +394,24 @@ describe('TA-63 · XML de las cuotas al crédito', () => {
       }),
     );
 
-    expect(xml).toContain('<cbc:ID>Cuota001</cbc:ID>');
-    expect(xml).toContain('<cbc:PaymentMeansID>Cuota</cbc:PaymentMeansID>');
+    // TODOS los términos de pago llevan `cbc:ID` = "FormaPago"; lo que
+    // distingue la cabecera de cada cuota es `cbc:PaymentMeansID`
+    // (Credito / Cuota001 / Cuota002).
+    //
+    // Antes el `cbc:ID` de la cuota llevaba su número, y SUNAT rechazaba la
+    // factura al crédito con la regla 3249 ("Si el tipo de transacción es al
+    // Crédito debe existir al menos información de una cuota de pago"): busca
+    // las cuotas como `PaymentTerms[ID='FormaPago']` y bajo cualquier otro ID no
+    // las ve. Verificado contra BETA el 01-11 (F001-00000038/39/40/41).
+    const ids = [...xml.matchAll(/<cbc:ID>(FormaPago|Cuota\d+)<\/cbc:ID>/g)].map((m) => m[1]);
+    expect(ids).toEqual(['FormaPago', 'FormaPago', 'FormaPago']);
+    expect(xml).not.toContain('<cbc:ID>Cuota001</cbc:ID>');
+    expect(xml).toContain(
+      '<cbc:PaymentMeansID>Cuota001</cbc:PaymentMeansID>',
+    );
+    expect(xml).toContain(
+      '<cbc:PaymentMeansID>Cuota002</cbc:PaymentMeansID>',
+    );
     expect(xml).toContain(
       '<cbc:Amount currencyID="PEN">590.00</cbc:Amount>\n    ' +
         '<cbc:PaymentDueDate>2026-11-30</cbc:PaymentDueDate>',

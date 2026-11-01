@@ -240,7 +240,14 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
     });
 
     expect(xml).toContain('<cbc:PaymentMeansID>Credito</cbc:PaymentMeansID>');
-    expect(xml).toContain('<cbc:PaymentMeansID>Cuota</cbc:PaymentMeansID>');
+    // Cada cuota se identifica por su propio nombre (Cuota001, Cuota002): con
+    // la palabra "Cuota" repetida SUNAT no las reconoce y rechaza por 3249.
+    expect(xml).toContain(
+      '<cbc:PaymentMeansID>Cuota001</cbc:PaymentMeansID>',
+    );
+    expect(xml).toContain(
+      '<cbc:PaymentMeansID>Cuota002</cbc:PaymentMeansID>',
+    );
     expect(xml).toContain('<cbc:PaymentDueDate>2026-11-20</cbc:PaymentDueDate>');
   });
 });

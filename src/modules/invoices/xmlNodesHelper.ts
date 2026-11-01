@@ -290,11 +290,18 @@ export const bloqueFormaPago = (
 
   if (cuotas.length === 0) return cabecera;
 
+  // TODOS los términos de pago llevan `cbc:ID` = "FormaPago"; lo que distingue
+  // la cabecera de cada cuota es `cbc:PaymentMeansID` (Credito / Cuota001 /
+  // Cuota002). Antes el `ID` de la cuota llevaba el número (`Cuota001`) y SUNAT
+  // seguía rechazando la factura al crédito con la regla 3249 ("Si el tipo de
+  // transacción es al Crédito debe existir al menos información de una cuota de
+  // pago"): busca las cuotas como `PaymentTerms[ID='FormaPago']` y, al no
+  // encontrar ninguna bajo ese ID, concluye que el cronograma no existe.
   const cronograma = cuotas
     .map(
       (c) => `  <cac:PaymentTerms>
-    <cbc:ID>${esc(c.numero)}</cbc:ID>
-    <cbc:PaymentMeansID>Cuota</cbc:PaymentMeansID>
+    <cbc:ID>FormaPago</cbc:ID>
+    <cbc:PaymentMeansID>${esc(c.numero)}</cbc:PaymentMeansID>
     <cbc:Amount currencyID="${moneda}">${dinero(c.monto)}</cbc:Amount>
     <cbc:PaymentDueDate>${esc(c.vencimiento)}</cbc:PaymentDueDate>
   </cac:PaymentTerms>`,
