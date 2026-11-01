@@ -240,25 +240,29 @@ export class SummaryEnvioService {
    * `identificador` llega ya con el correlativo a tres dígitos
    * (`RC-20261105-001`), así que solo se reordena.
    *
-   * PENDIENTE CONOCIDO — el nombre del XML dentro del ZIP.
+   * NOMBRE DEL XML INTERNO — RESUELTO el 01-11.
    *
-   * SUNAT BETA sigue respondiendo, con esta combinación:
+   * El XML dentro del ZIP se llama IGUAL que el ZIP salvo la extensión:
    *
-   *   "El nombre del archivo XML no coincide con el nombre del archivo ZIP -
-   *    Validation Filename error zip name: 20601234567-RC-20261105-001.zip;
-   *    xml name: "
+   *   ZIP -> 20601234567-RC-20261101-001.zip
+   *   XML -> 20601234567-RC-20261101-001.xml
    *
-   * El campo `xml name:` sale VACÍO, lo que significa que SUNAT espera el XML
-   * con un nombre que no es ninguno de los probados hasta ahora. Se
-   * descartaron, contra el servidor real: `RC-...xml` con ZIP `RUC-RC-...zip`,
-   * `RUC-RC-...xml` con el mismo ZIP, y las variantes de `cbc:ID` con y sin
-   * RUC. El XML YA PASA el esquema (valida estructura, namespaces y la regla
-   * 2346); lo único que falta es el nombre del archivo interno.
+   * Antes el XML iba como `RC-20261101-001.xml` (sin RUC) y SUNAT respondía
+   * "Validation Filename error ... xml name: " con el segundo campo VACÍO. Al
+   * alinearlo con el del ZIP ese rechazo desapareció.
    *
-   * Para cerrarlo hace falta el manual del programador de SUNAT (el enlace de
-   * cpe.sunat.gob.pe redirige a la portada) o un resumen de ejemplo descargado
-   * de una cuenta propia. Mientras tanto la pantalla de Bajas muestra la vista
-   * previa honesta del XML y no promete un envío que no se completa.
+   * PENDIENTE CONOCIDO — la SECUENCIA de nodos del XML.
+   *
+   * Resuelto el nombre, el rechazo pasó al contenido: el esquema de SUNAT
+   * impone un orden de elementos en `sac:SummaryDocumentsLine` que ni la guía
+   * oficial ni el Anexo describen. Se iteró contra BETA hasta el límite de
+   * intentos acordado y la evidencia quedó en `specs/DEUDA_RESUMEN_DIARIO_XML.md`:
+   * ahí está el orden ya confirmado por el esquema, los cinco errores
+   * devueltos y cómo cerrarlo (leer el XSD `SummaryDocumentsLineType`, no la
+   * guía). El generador volvió a su versión estable mientras tanto.
+   *
+   * La pantalla de Bajas muestra la vista previa honesta del XML y no promete
+   * un envío que no se completa.
    */
   private comprimir(
     xmlFirmado: string,
