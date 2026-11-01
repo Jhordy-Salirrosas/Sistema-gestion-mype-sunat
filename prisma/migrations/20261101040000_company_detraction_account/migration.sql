@@ -1,0 +1,24 @@
+-- Migración ADITIVA: cuenta del Banco de la Nación por empresa (M1).
+--
+-- POR QUÉ ESTA MIGRACIÓN EXISTE
+--
+-- La cuenta del Banco de la Nación donde el cliente deposita la detracción se
+-- pedía en el FORMULARIO de emisión. Es un dato fiscal fijo del contribuyente,
+-- no algo que cambie de un comprobante a otro: si el usuario la escribe mal en
+-- una emisión, SUNAT rechaza con 3034 y el correlativo se consume.
+--
+-- Se añade la columna a `companies` para que la cuenta se configure una vez.
+-- El formulario queda como respaldo para el caso de una cuenta distinta.
+--
+-- POR QUÉ ES ADITIVA
+--
+-- Solo agrega una columna nullable. No toca ninguna tabla existente, no cambia
+-- tipos y no elimina nada: los compañeros que trabajan sobre `companies`
+-- (customs, sire) no se ven afectados y la aplicación anterior sigue
+-- funcionando sin cambios.
+--
+-- La columna es NULLABLE a propósito: las empresas ya existentes no tienen el
+-- dato y forzarlo con NOT NULL rompería la migración. El servicio de emisión
+-- valida que exista en la empresa o en el formulario antes de enviar.
+
+ALTER TABLE "companies" ADD COLUMN "detraction_account" TEXT;

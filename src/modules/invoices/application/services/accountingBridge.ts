@@ -6,19 +6,28 @@
  * balance. Lo que aporta este archivo es la TRADUCCIÓN de un comprobante a
  * cuentas y montos.
  *
- * Las cuentas son las del Plan Contable General Empresarial que exige SUNAT para
- * el registro de ventas (formato 14.1 del PLE):
+ * Las cuentas son las del Plan Contable General Empresarial 2019 que exige SUNAT
+ * para el registro de ventas (formato 14.1 del PLE):
  *
  *  - **12121** — Facturas, boletas y otros comprobantes por cobrar, emitidas.
- *    Se carga por el total a cobrar (incluye IGV).
- *  - **1212** / **1011** — Variante cuando el cliente es agente de retención:
- *    el importe retenido no se cobra, así que no puede ir a cuentas por cobrar.
- *  - **40111** — IGV, cuenta propia. Se abona por el IGV trasladado.
+ *    Se carga por el importe que el cliente paga directamente al proveedor.
+ *  - **12129** — Cuentas por cobrar - detracciones. El cliente deposita la
+ *    detracción en el Banco de la Nación, no en la cuenta del proveedor; es una
+ *    cuenta por cobrar distinta y no se cobra por la misma vía.
+ *  - **40114** — IGV - Retenciones. Cuando el cliente es agente de retención, el
+ *    importe retenido se entera al fisco a nombre del proveedor: es un crédito
+ *    contra el IGV, no una cuenta por cobrar.
+ *  - **40111** — IGV, cuenta propia. Se abona por el IGV trasladado al cliente.
  *  - **70121** — Servicios prestados / venta de mercadería gravada.
  *  - **70321** — Exoneradas.
  *  - **70521** — Inafectas.
  *  - **74111** — ICBPER por pagar. Se abona por el impuesto a las bolsas.
- *  - **74121** — Detracción del IGV (en la variante con SPOT).
+ *
+ * DEFECTO CORREGIDO: antes `porCobrarRetenido` y `detraccion` compartían el
+ * código **1212**, así que el asiento mezclaba dos conceptos tributarios bajo la
+ * misma cuenta. La 1212 del PCGE es "Efectos y cuentas por cobrar al personal",
+ * que no es ni retención ni detracción. El asiento cuadraba en el balance y por
+ * eso ningún test de partida doble lo detectó: cuadrar no es clasificar bien.
  *
  * El asiento se genera con el detalle de líneas por tributo y NO como
  * "debe total / haber total": un asiento de dos líneas cuadra pero no sirve
@@ -29,13 +38,13 @@ import type { AccountingLineDto } from '../../../accounting/application/dto/crea
 /** Cuentas del PCGE que se usan en una venta. */
 export const CUENTAS_VENTA = {
   porCobrar: { codigo: '12121', nombre: 'Facturas, boletas y otros comprobantes por cobrar, emitidas' },
-  porCobrarRetenido: { codigo: '1212', nombre: 'Efectos y cuentas por cobrar al personal / retención' },
+  porCobrarRetenido: { codigo: '40114', nombre: 'IGV - Retenciones' },
   igv: { codigo: '40111', nombre: 'IGV - Cuenta propia' },
   gravada: { codigo: '70121', nombre: 'Servicios prestados / ventas gravadas' },
   exonerada: { codigo: '70321', nombre: 'Ventas exoneradas del IGV' },
   inafecta: { codigo: '70521', nombre: 'Ventas inafectas del IGV' },
   icbper: { codigo: '74111', nombre: 'Impuesto a las bolsas plásticas por pagar' },
-  detraccion: { codigo: '1212', nombre: 'Cuentas por cobrar - detracción del SpoT' },
+  detraccion: { codigo: '12129', nombre: 'Cuentas por cobrar - detracciones' },
 } as const;
 
 /** Importes de un comprobante necesarios para asentar la venta. */

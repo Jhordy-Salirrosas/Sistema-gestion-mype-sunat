@@ -135,7 +135,11 @@ export class EmitirComprobanteService {
     // SUNAT rechaza con 3034 si el XML no la trae. Se comprueba ANTES de
     // reservar el número, porque un correlativo consumido por un comprobante
     // que SUNAT rechaza queda quemado para siempre.
-    this.validarCuentaDetraccion(dto);
+    //
+    // La cuenta se toma de la EMPRESA, no del formulario: es un dato fiscal
+    // fijo del contribuyente. El formulario solo sobrescribe cuando el usuario
+    // indica expresamente otra cuenta.
+    const cuentaDetraccion = await this.resolverCuentaDetraccion(dto, companyId);
 
     // 5. Recién ahora se consume un número de la serie.
     //
@@ -145,7 +149,15 @@ export class EmitirComprobanteService {
     // falta configurar la serie. Se convierte en 404 (no existe) o 409 (inactiva).
     const correlativo = await this.reservarNumero(dto, companyId);
 
-    const traducido = traducirEmision(dto, emisor, correlativo);
+    // La cuenta resuelta se escribe de vuelta en el DTO de origen: el adaptador
+    // (`traducirEmision`) lee `cuenta_banco_nacion` de ahí para llevarla al
+    // payload UBL. Si se pusiera en el DTO traducido, el XML seguiría saliendo
+    // sin la cuenta y SUNAT rechazaría con 3034.
+    const dtoConCuenta: EmitirComprobanteDto = cuentaDetraccion
+      ? { ...dto, cuenta_banco_nacion: cuentaDetraccion }
+      : dto;
+
+    const traducido = traducirEmision(dtoConCuenta, emisor, correlativo);
 
     await this.persistir(traducido.dto, companyId, traducido.importes);
     const numero = `${traducido.dto.serie}-${String(correlativo).padStart(8, '0')}`;
@@ -361,21 +373,66 @@ export class EmitirComprobanteService {
   }
 
   /**
-   * La detracción exige la cuenta del Banco de la Nación.
+   * Resuelve la cuenta del Banco de la Nación para la detracción.
    *
-   * SUNAT responde 3034 si el XML no la trae, y ese rechazo consume correlativo.
-   * Avisar antes es más barato que descubrirlo en la respuesta.
+   * ORDEN DE PRECEDENCIA: empresa primero, formulario como respaldo.
+   *
+   * La cuenta es un dato fiscal FIJO del contribuyente. Pedirla en cada emisión
+   * obligaba a reescribirla y hacía posible teclearla mal, y SUNAT rechaza con
+   * 3034 consumiendo el correlativo. Por eso vive en `companies`.
+   *
+   * El formulario solo gana cuando el usuario escribe una cuenta distinta a la
+   * configurada: es el caso de una operación puntual con otra cuenta.
+   *
+   * Si no hay ni en la empresa ni en el formulario y la operación lleva
+   * detracción, se rechaza ANTES de reservar el número.
    */
-  private validarCuentaDetraccion(dto: EmitirComprobanteDto): void {
+  private async resolverCuentaDetraccion(
+    dto: EmitirComprobanteDto,
+    companyId: string,
+  ): Promise<string | null> {
     const llevaDetraccion = dto.items.some((item) =>
       Boolean(item.codigoDetraccion?.trim()),
     );
+    if (!llevaDetraccion) return null;
 
-    if (llevaDetraccion && !dto.cuenta_banco_nacion?.trim()) {
-      throw new BadRequestException(
-        'La operación tiene detracción: indique la cuenta del Banco de la ' +
-          'Nación del emisor. SUNAT rechaza el comprobante sin ella (código 3034).',
+    const deEmpresa = await this.cuentaDeEmpresa(companyId);
+    const deFormulario = dto.cuenta_banco_nacion?.trim() || null;
+
+    // El formulario sobrescribe solo si trae algo distinto de lo configurado.
+    if (deFormulario && deFormulario !== deEmpresa) return deFormulario;
+    if (deEmpresa) return deEmpresa;
+
+    throw new BadRequestException(
+      'La operación tiene detracción y no hay cuenta del Banco de la Nación ' +
+        'configurada para la empresa. Regístrela en la configuración de ' +
+        'facturación electrónica o indíquela en el formulario. SUNAT rechaza ' +
+        'el comprobante sin ella (código 3034).',
+    );
+  }
+
+  /**
+   * Cuenta configurada en la empresa.
+   *
+   * La lectura de `detraction_account` va aparte y tolera ausencia: si la
+   * migración aditiva todavía no se aplicó en este entorno, el campo no existe
+   * en el cliente generado y la emisión debe seguir funcionando con el
+   * formulario. Un fallo aquí no debe romper la facturación.
+   */
+  private async cuentaDeEmpresa(companyId: string): Promise<string | null> {
+    try {
+      const fila = (await this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { detraction_account: true },
+      })) as { detraction_account?: string | null } | null;
+
+      return fila?.detraction_account?.trim() || null;
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `No se pudo leer la cuenta de detracción de la empresa ${companyId}: ${mensaje}`,
       );
+      return null;
     }
   }
 

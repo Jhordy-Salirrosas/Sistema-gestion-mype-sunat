@@ -90,14 +90,25 @@ function servicio(fila: unknown = filaComprobante()) {
     () => '<?xml version="1.0"?><Invoice regenerado="true"/>',
   );
 
+  // Firma y guardado del XML regenerado. El fallback de la descarga FIRMA antes
+  // de entregar: un XML reconstruido sin firma no es un comprobante electrónico.
+  const signXml = jest.fn<(xml: string) => { signedXml: string }>((xml) => ({
+    signedXml: `${xml}<!--firmado-->`,
+  }));
+  const guardar = jest.fn<(id: string, xml: string) => Promise<string | null>>(
+    async () => 'hash',
+  );
+
   const descargas = new InvoiceDownloadService(
     { invoice: { findFirst } } as never,
     { generateInvoiceXml } as never,
     new InvoicePdfService(),
     new InvoiceQrService(),
+    { signXml } as never,
+    { guardar } as never,
   );
 
-  return { descargas, findFirst, generateInvoiceXml };
+  return { descargas, findFirst, generateInvoiceXml, signXml, guardar };
 }
 
 // ---------------------------------------------------------------------------

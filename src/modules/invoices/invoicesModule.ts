@@ -35,6 +35,7 @@ import { EmitirComprobanteService } from './application/services/emitirComproban
 import { SignedXmlStorageService } from './application/services/signedXmlStorageService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
 import { SummaryDispatchService } from './application/services/summaryDispatchService';
+import { SummaryEnvioService } from './application/services/summaryEnvioService';
 import { SummaryJobConsumer } from './summaryJobConsumer';
 import { InventoryModule } from '../inventory/inventoryModule';
 import { AccountingModule } from '../accounting/accountingModule';
@@ -111,6 +112,10 @@ import { AccountingModule } from '../accounting/accountingModule';
     InvoiceAccountingBridgeService,
     // TA-67: encolado y sondeo del ticket de resumenes y bajas.
     SummaryDispatchService,
+    // M1: el envío REAL de resumenes diarios (RC) y comunicaciones de baja (RA).
+    // Antes `SummaryDispatchService.encolar()` no tenia ningun llamador, asi que
+    // RC/RA nunca llegaban a SUNAT.
+    SummaryEnvioService,
     SummaryJobConsumer,
     // Docente 31-10: validación de cantidad contra el stock disponible.
     StockValidationService,

@@ -13,6 +13,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -29,6 +31,7 @@ import { InvoiceMetricsService } from '../../application/services/invoiceMetrics
 import { InvoiceAlertService } from '../../application/services/invoiceAlertService';
 import { InvoiceCustomerService } from '../../application/services/invoiceCustomerService';
 import { InvoiceSummaryService } from '../../application/services/invoiceSummaryService';
+import { SummaryEnvioService } from '../../application/services/summaryEnvioService';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -40,6 +43,7 @@ export class InvoiceQueryController {
     private readonly alertasOperativas: InvoiceAlertService,
     private readonly clientes: InvoiceCustomerService,
     private readonly resumenes: InvoiceSummaryService,
+    private readonly envioResumenes: SummaryEnvioService,
   ) {}
 
   /**
@@ -130,6 +134,48 @@ export class InvoiceQueryController {
       companyId,
       this.fechaDe(fecha),
       Number(correlativo ?? 1) || 1,
+    );
+  }
+
+  /**
+   * POST /api/v1/invoices/resumenes/diario/enviar?fecha=YYYY-MM-DD
+   *
+   * ENVÍA de verdad el resumen diario a SUNAT: firma el XML, lo comprime y lo
+   * encola para que el worker lo envíe y sondee el ticket.
+   *
+   * Antes este envío no tenía disparador: `SummaryDispatchService.encolar()`
+   * no lo llamaba nadie, así que un resumen diario nunca llegaba a SUNAT.
+   *
+   * Responde `enviado: false` con su motivo —y no un error— cuando la vista
+   * previa trae reglas incumplidas o no hay nada que informar.
+   */
+  @Post('resumenes/diario/enviar')
+  @HttpCode(HttpStatus.OK)
+  enviarResumen(
+    @CurrentCompany() companyId: string,
+    @Query('fecha') fecha?: string,
+  ) {
+    return this.envioResumenes.enviarResumenDiario(
+      companyId,
+      this.fechaDe(fecha),
+    );
+  }
+
+  /**
+   * POST /api/v1/invoices/resumenes/baja/enviar?fecha=YYYY-MM-DD
+   *
+   * ENVÍA la comunicación de baja (RA): anula ante SUNAT las facturas ya
+   * aceptadas de la fecha.
+   */
+  @Post('resumenes/baja/enviar')
+  @HttpCode(HttpStatus.OK)
+  enviarBaja(
+    @CurrentCompany() companyId: string,
+    @Query('fecha') fecha?: string,
+  ) {
+    return this.envioResumenes.enviarComunicacionBaja(
+      companyId,
+      this.fechaDe(fecha),
     );
   }
 

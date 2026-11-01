@@ -218,14 +218,35 @@ export const validarTiposEnBaja = (
   });
 };
 
-/** Bloque de un comprobante dentro de `SummaryDocuments`. */
+/**
+ * Bloque de un comprobante dentro de `SummaryDocuments`.
+ *
+ * ELEMENTOS EN EL NAMESPACE `sac:` (SunatAggregateComponents-1):
+ * `SummaryDocumentsLine`, `TotalAmount` y `BillingPayment`. Con `cac:` SUNAT
+ * rechaza el archivo entero:
+ *   "found <cac:SummaryDocumentsLine> (in namespace ...CommonAggregateComponents-2),
+ *    but next item should be {...SunatAggregateComponents-1}SummaryDocumentsLine"
+ *
+ * `sac:BillingPayment` SOLO admite `cbc:InstructionID`. Por el tipo
+ * `PaymentType` del esquema no se puede añadir nada después: tanto
+ * `cbc:PaidAmount` como `cbc:Amount` fueron rechazados contra BETA con
+ *   "...found <cbc:Amount> ..., but next item should be end-element"
+ * El importe ya va en `sac:TotalAmount` (total) y en el `TaxTotal` (base e IGV),
+ * así que el pago solo declara su instrucción.
+ */
 const lineaResumen = (c: ComprobanteAgregado): string => {
   const numero = `${c.serie}-${String(c.correlativo).padStart(8, '0')}`;
   const total = r2(c.total);
   const igv = r2(c.igv);
   const base = r2(total - igv);
 
-  return `    <cac:SummaryDocumentsLine>
+  // `sac:SummaryDocumentsLine` — el elemento va en el namespace de SUNAT
+  // (SunatAggregateComponents-1), NO en el de UBL. Con `cac:` el validador de
+  // SUNAT responde, rechazando el archivo completo:
+  //   "found <cac:SummaryDocumentsLine> (in namespace ...CommonAggregateComponents-2),
+  //    but next item should be {...SunatAggregateComponents-1}SummaryDocumentsLine"
+  // Se comprobó enviando de verdad a BETA el 01-11.
+  return `    <sac:SummaryDocumentsLine>
       <cbc:LineID>${esc(c.serie)}</cbc:LineID>
       <cbc:DocumentTypeCode>${esc(c.tipoComprobante)}</cbc:DocumentTypeCode>
       <cbc:ID>${esc(numero)}</cbc:ID>
@@ -239,11 +260,10 @@ const lineaResumen = (c: ComprobanteAgregado): string => {
       <cac:Status>
         <cbc:ConditionCode>1</cbc:ConditionCode>
       </cac:Status>
-      <cac:TotalAmount currencyID="PEN">${total.toFixed(2)}</cac:TotalAmount>
-      <cac:BillingPayment>
+      <sac:TotalAmount currencyID="PEN">${total.toFixed(2)}</sac:TotalAmount>
+      <sac:BillingPayment>
         <cbc:InstructionID>01</cbc:InstructionID>
-        <cbc:PaidAmount currencyID="PEN">${base.toFixed(2)}</cbc:PaidAmount>
-      </cac:BillingPayment>
+      </sac:BillingPayment>
       <cac:TaxTotal>
         <cbc:TaxAmount currencyID="PEN">${igv.toFixed(2)}</cbc:TaxAmount>
         <cac:TaxSubtotal>
@@ -258,7 +278,7 @@ const lineaResumen = (c: ComprobanteAgregado): string => {
           </cac:TaxCategory>
         </cac:TaxSubtotal>
       </cac:TaxTotal>
-    </cac:SummaryDocumentsLine>`;
+    </sac:SummaryDocumentsLine>`;
 };
 
 /**
@@ -298,12 +318,21 @@ export const construirResumenDiario = (
   validarPlazoResumen(incluidos, cabecera.fechaResumen);
 
   const fecha = cabecera.fechaResumen;
-  const identificador = `RC-${fecha.replace(/-/g, '')}-${String(cabecera.correlativo).padStart(3, '0')}`;
+  // REGLA 2346: la fecha del identificador debe ser la de GENERACIÓN del
+  // resumen, no la de referencia. `cbc:ID` y `cbc:IssueDate` tienen que llevar
+  // el mismo día. Con la fecha de referencia (05-11) y hoy (01-11) SUNAT
+  // respondía:
+  //   "2346 - La fecha de generación del resumen debe ser igual a la fecha
+  //    consignada en el nombre del archivo"
+  // La fecha de los comprobantes agrupados va aparte, en `cbc:ReferenceDate`.
+  const fechaGeneracion = cabecera.fechaGeneracion || fecha;
+  const identificador = `RC-${fechaGeneracion.replace(/-/g, '')}-${String(cabecera.correlativo).padStart(3, '0')}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <SummaryDocuments xmlns="urn:sunat:names:specification:ubl:peru:schema:xsd:SummaryDocuments-1"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+  xmlns:sac="urn:sunat:names:specification:ubl:peru:schema:xsd:SunatAggregateComponents-1">
   <cbc:UBLVersionID>2.0</cbc:UBLVersionID>
   <cbc:CustomizationID>1.1</cbc:CustomizationID>
   <cbc:ID>${esc(identificador)}</cbc:ID>
@@ -323,14 +352,19 @@ ${incluidos.map(lineaResumen).join('\n')}
 </SummaryDocuments>`;
 };
 
-/** Bloque de un comprobante dentro de `VoidedDocuments`. */
-const lineaBaja = (c: ComprobanteAgregado): string => `    <cac:VoidedDocumentsLine>
+/**
+ * Bloque de un comprobante dentro de `VoidedDocuments`.
+ *
+ * `sac:VoidedDocumentsLine` — igual que en el resumen diario, el elemento va en
+ * el namespace de SUNAT (SunatAggregateComponents-1) y no en el de UBL.
+ */
+const lineaBaja = (c: ComprobanteAgregado): string => `    <sac:VoidedDocumentsLine>
       <cbc:LineID>${esc(c.serie)}</cbc:LineID>
       <cbc:DocumentTypeCode>${esc(c.tipoComprobante)}</cbc:DocumentTypeCode>
-      <cbc:DocumentSerialID>${esc(c.serie)}</cbc:DocumentSerialID>
-      <cbc:DocumentNumberID>${c.correlativo}</cbc:DocumentNumberID>
-      <cbc:VoidReasonDescription>${esc(c.motivoBaja ?? 'Anulación de la operación')}</cbc:VoidReasonDescription>
-    </cac:VoidedDocumentsLine>`;
+      <sac:DocumentSerialID>${esc(c.serie)}</sac:DocumentSerialID>
+      <sac:DocumentNumberID>${c.correlativo}</sac:DocumentNumberID>
+      <sac:VoidReasonDescription>${esc(c.motivoBaja ?? 'Anulación de la operación')}</sac:VoidReasonDescription>
+    </sac:VoidedDocumentsLine>`;
 
 /**
  * Genera el XML `VoidedDocuments` (comunicación de baja).
@@ -369,12 +403,16 @@ export const construirComunicacionBaja = (
     });
   }
 
-  const identificador = `RA-${cabecera.fechaResumen.replace(/-/g, '')}-${String(cabecera.correlativo).padStart(3, '0')}`;
+  // Misma regla 2346 que en el resumen diario: el identificador lleva la fecha
+  // de GENERACIÓN, que es la que también va en `cbc:IssueDate`.
+  const fechaGenBaja = cabecera.fechaGeneracion || cabecera.fechaResumen;
+  const identificador = `RA-${fechaGenBaja.replace(/-/g, '')}-${String(cabecera.correlativo).padStart(3, '0')}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <VoidedDocuments xmlns="urn:sunat:names:specification:ubl:peru:schema:xsd:VoidedDocuments-1"
   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+  xmlns:sac="urn:sunat:names:specification:ubl:peru:schema:xsd:SunatAggregateComponents-1">
   <cbc:UBLVersionID>2.0</cbc:UBLVersionID>
   <cbc:CustomizationID>1.0</cbc:CustomizationID>
   <cbc:ID>${esc(identificador)}</cbc:ID>

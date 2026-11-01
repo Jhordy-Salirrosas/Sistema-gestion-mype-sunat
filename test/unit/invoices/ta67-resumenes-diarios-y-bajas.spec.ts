@@ -107,13 +107,13 @@ describe('TA-67 · XML del resumen diario', () => {
     expect(xml).toContain('<SummaryDocuments xmlns="urn:sunat:names:specification:ubl:peru:schema:xsd:SummaryDocuments-1"');
     expect(xml).toContain('<cbc:UBLVersionID>2.0</cbc:UBLVersionID>');
     expect(xml).toContain('<cbc:CustomizationID>1.1</cbc:CustomizationID>');
-    expect(xml).toContain('<cac:SummaryDocumentsLine>');
+    expect(xml).toContain('<sac:SummaryDocumentsLine>');
     expect(xml).toContain('<cbc:DocumentTypeCode>03</cbc:DocumentTypeCode>');
   });
 
   it('el identificador del resumen es RC-AAAAMMDD-NNN', () => {
     const xml = construirResumenDiario(CABECERA, [boleta()]);
-    expect(xml).toContain('<cbc:ID>RC-20261031-001</cbc:ID>');
+    expect(xml).toContain('<cbc:ID>RC-20261101-001</cbc:ID>');
   });
 
   it('el número de la boleta va con el correlativo de 8 dígitos', () => {
@@ -123,10 +123,12 @@ describe('TA-67 · XML del resumen diario', () => {
 
   it('el importe y el IGV salen del comprobante, con dos decimales', () => {
     const xml = construirResumenDiario(CABECERA, [boleta()]);
-    expect(xml).toContain('<cac:TotalAmount currencyID="PEN">590.00</cac:TotalAmount>');
+    expect(xml).toContain('<sac:TotalAmount currencyID="PEN">590.00</sac:TotalAmount>');
     expect(xml).toContain('<cbc:TaxAmount currencyID="PEN">90.00</cbc:TaxAmount>');
-    // La base es el total menos el IGV.
-    expect(xml).toContain('<cbc:PaidAmount currencyID="PEN">500.00</cbc:PaidAmount>');
+    // La base va en TaxableAmount del TaxTotal. Dentro de `sac:BillingPayment`
+    // NO puede ir ningún importe: el esquema de SUNAT solo admite
+    // `cbc:InstructionID` ahí y rechaza el archivo si se añade otro elemento.
+    expect(xml).toContain('<cbc:TaxableAmount currencyID="PEN">500.00</cbc:TaxableAmount>');
   });
 
   it('agrupa varias boletas en un solo XML', () => {
@@ -136,7 +138,7 @@ describe('TA-67 · XML del resumen diario', () => {
       boleta({ correlativo: 27 }),
     ]);
 
-    const lineas = xml.match(/<cac:SummaryDocumentsLine>/g) ?? [];
+    const lineas = xml.match(/<sac:SummaryDocumentsLine>/g) ?? [];
     expect(lineas).toHaveLength(3);
   });
 
@@ -199,14 +201,14 @@ describe('TA-67 · comunicación de baja', () => {
 
     expect(xml).toContain('<VoidedDocuments xmlns="urn:sunat:names:specification:ubl:peru:schema:xsd:VoidedDocuments-1"');
     expect(xml).toContain('<cbc:CustomizationID>1.0</cbc:CustomizationID>');
-    expect(xml).toContain('<cac:VoidedDocumentsLine>');
+    expect(xml).toContain('<sac:VoidedDocumentsLine>');
   });
 
   it('el identificador de la baja es RA-AAAAMMDD-NNN', () => {
     const xml = construirComunicacionBaja(CABECERA, [
       boleta({ tipoComprobante: '01', serie: 'F001', correlativo: 143 }),
     ]);
-    expect(xml).toContain('<cbc:ID>RA-20261031-001</cbc:ID>');
+    expect(xml).toContain('<cbc:ID>RA-20261101-001</cbc:ID>');
   });
 
   it('cada comprobante lleva su serie, su número y el motivo', () => {
@@ -219,8 +221,8 @@ describe('TA-67 · comunicación de baja', () => {
       }),
     ]);
 
-    expect(xml).toContain('<cbc:DocumentSerialID>F001</cbc:DocumentSerialID>');
-    expect(xml).toContain('<cbc:DocumentNumberID>143</cbc:DocumentNumberID>');
+    expect(xml).toContain('<sac:DocumentSerialID>F001</sac:DocumentSerialID>');
+    expect(xml).toContain('<sac:DocumentNumberID>143</sac:DocumentNumberID>');
     expect(xml).toContain('Error en el RUC del cliente');
   });
 

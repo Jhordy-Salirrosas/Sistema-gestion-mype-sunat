@@ -13,12 +13,20 @@
  *  - **El XML se regenera solo si no está guardado.** Si el worker ya guardó el
  *    XML firmado, se devuelve ese: volver a generarlo cambiaría la firma y el
  *    comprobante dejaría de coincidir con el que SUNAT validó.
+ *  - **Si hay que regenerarlo, se firma.** Un XML reconstruido sin
+ *    `<ds:Signature>` no es un comprobante electrónico: es un borrador. Un
+ *    comprobante aceptado por SUNAT NO se pudo enviar sin firma, así que
+ *    entregarlo sin firma contradice el propio estado del documento. El
+ *    fallback firma, y si no hay certificado disponible responde 500 con el
+ *    motivo en vez de entregar un archivo que parece válido y no lo es.
  *  - **El CDR se devuelve tal cual llegó.** El XML del CDR es el documento
  *    probatorio; no se reformatea ni se reindenta.
  */
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { UblGeneratorService } from '../../ublGeneratorService';
+import { SignatureService } from '../../../sunat/signature.service';
+import { SignedXmlStorageService } from './signedXmlStorageService';
 import type { InvoicePayload } from '../../invoicePayload';
 import {
   InvoicePdfService,
@@ -60,6 +68,8 @@ export class InvoiceDownloadService {
     private readonly ublGenerator: UblGeneratorService,
     private readonly pdf: InvoicePdfService,
     private readonly qr: InvoiceQrService,
+    private readonly signature: SignatureService,
+    private readonly xmlFirmadoGuardado: SignedXmlStorageService,
   ) {}
 
   /** Devuelve el archivo solicitado o lanza 404 si no corresponde. */
@@ -74,6 +84,77 @@ export class InvoiceDownloadService {
     if (tipo === 'cdr') return this.cdr(fila);
     return this.pdfDelComprobante(fila);
   }
+
+  /**
+   * XML del comprobante, SIEMPRE firmado.
+   *
+   * Dos caminos:
+   *
+   *  1. **Guardado** (`xml_storage_url`): es el que firmó el worker y viajó a
+   *     SUNAT. Se entrega tal cual, sin volver a firmar: una segunda firma
+   *     produciría un documento distinto del aceptado.
+   *  2. **Regenerado**: los comprobantes emitidos ANTES de que existiera el
+   *     guardado no tienen copia. Regenerarlos sin firma entregaba un documento
+   *     que SUNAT no habría aceptado nunca. Aquí se regenera y se firma con el
+   *     mismo `SignatureService` del worker, y el resultado se guarda para que
+   *     la siguiente descarga ya tome el camino 1.
+   *
+   * La firma NO es idéntica a la original (incluye una marca de tiempo en el
+   * `SignatureValue`), pero es criptográficamente válida sobre el mismo
+   * contenido: es un comprobante firmado por el emisor, no una reconstrucción.
+   */
+  private async xml(
+    fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+  ): Promise<ArchivoDescarga> {
+    const guardado = fila.xml_storage_url;
+    const esXml = guardado && guardado.trimStart().startsWith('<?xml');
+
+    let texto: string;
+    if (esXml) {
+      texto = guardado;
+    } else {
+      texto = this.regenerarXmlFirmado(fila);
+      // Se persiste para no volver a firmar en cada descarga. El servicio de
+      // guardado nunca lanza: si la base falla, se entrega el XML firmado
+      // igualmente y solo se pierde la caché.
+      await this.xmlFirmadoGuardado.guardar(fila.id, texto);
+    }
+
+    return {
+      nombre: `${this.nombreBase(fila)}.xml`,
+      contentType: 'application/xml; charset=utf-8',
+      contenido: Buffer.from(texto, 'utf8'),
+    };
+  }
+
+  /**
+   * Regenera el XML desde `payload_ubl` y lo firma.
+   *
+   * SIN FIRMA NO SE ENTREGA. Si el certificado no está disponible, se propaga
+   * el error en vez de devolver un XML sin `<ds:Signature>`: un archivo así
+   * parece válido, se descarga con el nombre correcto y no lo es. Un error
+   * visible es preferible a un documento silenciosamente incompleto.
+   */
+  private regenerarXmlFirmado(
+    fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+  ): string {
+    const payload = fila.payload_ubl as unknown as InvoicePayload | null;
+    if (!payload || typeof payload !== 'object') {
+      throw new NotFoundException(
+        'El comprobante no tiene XML guardado ni payload para regenerarlo.',
+      );
+    }
+
+    const sinFirma = this.ublGenerator.generateInvoiceXml(payload);
+
+    this.logger.warn(
+      `Comprobante ${fila.serie}-${fila.correlativo} sin XML guardado: ` +
+        'se regenera y se firma antes de entregarlo',
+    );
+
+    return this.signature.signXml(sinFirma).signedXml;
+  }
+
 
   /**
    * Fila mínima del comprobante, con sus ítems y su cliente.
@@ -149,55 +230,6 @@ export class InvoiceDownloadService {
   }): string {
     const correlativo = String(fila.correlativo).padStart(8, '0');
     return `${fila.ruc_emisor}-${fila.tipo_comprobante}-${fila.serie}-${correlativo}`;
-  }
-
-  /** XML del comprobante: el guardado si existe, o regenerado desde el payload. */
-  /**
-   * XML del comprobante.
-   *
-   * SE ENTREGA EL FIRMADO, tal como se envió a SUNAT.
-   *
-   * `signedXmlStorageService` lo guarda en `xml_storage_url` en cuanto el worker
-   * lo firma. Antes no se guardaba y aquí se regeneraba desde el payload, así
-   * que el archivo descargado NO tenía `<ds:Signature>`: se llamaba como el
-   * comprobante pero no era el que viajó a SUNAT.
-   *
-   * La regeneración queda solo como último recurso para un comprobante antiguo
-   * que no llegó a pasar por el worker, y se avisa en el log.
-   */
-  private xml(fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>): ArchivoDescarga {
-    const guardado = fila.xml_storage_url;
-    const esXml = guardado && guardado.trimStart().startsWith('<?xml');
-
-    const contenido = esXml
-      ? Buffer.from(guardado, 'utf8')
-      : Buffer.from(this.regenerarXml(fila), 'utf8');
-
-    return {
-      nombre: `${this.nombreBase(fila)}.xml`,
-      contentType: 'application/xml; charset=utf-8',
-      contenido,
-    };
-  }
-
-  /** Regenera el XML desde `payload_ubl`. */
-  private regenerarXml(
-    fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
-  ): string {
-    const payload = fila.payload_ubl as unknown as InvoicePayload | null;
-    if (!payload || typeof payload !== 'object') {
-      throw new NotFoundException(
-        'El comprobante no tiene XML guardado ni payload para regenerarlo.',
-      );
-    }
-
-    // Se avisa en el log porque el XML regenerado NO lleva la firma original:
-    // sirve para consulta, no como respaldo probatorio.
-    this.logger.warn(
-      `Comprobante ${fila.serie}-${fila.correlativo} sin XML guardado: se regenera sin firma`,
-    );
-
-    return this.ublGenerator.generateInvoiceXml(payload);
   }
 
   /**
