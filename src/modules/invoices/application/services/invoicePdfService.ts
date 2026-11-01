@@ -258,10 +258,25 @@ export class InvoicePdfService {
       width: 95,
       align: 'right',
     });
-    doc.y = yTotal + 18;
+    doc.y = yTotal + 20;
 
-    doc.fontSize(8).text(d.montoEnLetras, 40, doc.y, { width: ANCHO_UTIL });
-    doc.moveDown(0.4);
+    // Leyenda 1000: el importe en letras va en recuadro, no como línea suelta.
+    // Un comprobante impreso sin "SON ... CENTAVOS" no parece un comprobante.
+    const yLetras = doc.y;
+    const altoLetras = 26;
+    doc
+      .rect(40, yLetras, ANCHO_UTIL, altoLetras)
+      .lineWidth(0.7)
+      .strokeColor('#666')
+      .stroke();
+    doc
+      .fontSize(8)
+      .fillColor('#333')
+      .text(`SON: ${d.montoEnLetras}`, 48, yLetras + 8, {
+        width: ANCHO_UTIL - 16,
+      });
+    doc.fillColor('#000');
+    doc.y = yLetras + altoLetras + 8;
 
     if (d.detraccion > 0 && d.cuentaBancoNacion) {
       doc.fontSize(8).text(

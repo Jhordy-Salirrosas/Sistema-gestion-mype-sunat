@@ -34,6 +34,7 @@ import {
   type LineaImpresa,
 } from './invoicePdfService';
 import { InvoiceQrService } from './invoiceQrService';
+import { importeEnLetras } from './importeEnLetras';
 
 /** Tipo de archivo solicitado. */
 export type TipoDescarga = 'xml' | 'cdr' | 'pdf';
@@ -339,13 +340,16 @@ export class InvoiceDownloadService {
     const centimos = (n: number): number => Math.round(n * 100) / 100;
     const gravadoR = centimos(gravado);
     const igv = centimos(gravadoR * 0.18);
-    const icbper = centimos(
-      fila.items.reduce((acc, i) => acc + Number(i.igv_amount), 0),
-    );
 
     const payload = (fila.payload_ubl ?? {}) as Record<string, unknown>;
     const detraccion = Number(payload['montoDetraccion'] ?? 0) || 0;
-    const total = centimos(gravadoR + igv + exonerado + inafecto);
+
+    // El ICBPER es el impuesto a las bolsas plásticas, NO el IGV. Antes se
+    // sumaba `igv_amount` de todas las líneas, así que una boleta de S/ 100 sin
+    // bolsas imprimía "ICBPER 18.00" y el total se iba a S/ 136. El importe real
+    // de las bolsas solo existe en el payload cuando se emitieron.
+    const icbper = centimos(Number(payload['icbper'] ?? payload['montoIcbper'] ?? 0) || 0);
+    const total = centimos(gravadoR + igv + exonerado + inafecto + icbper);
 
     const fecha = fila.fecha_emision.toISOString().slice(0, 10);
     const qrBase64 = await this.qr.generarPng({
@@ -383,7 +387,8 @@ export class InvoiceDownloadService {
       icbper,
       detraccion,
       total,
-      montoEnLetras: String(payload['montoEnLetras'] ?? ''),
+      montoEnLetras:
+        String(payload['montoEnLetras'] ?? '') || importeEnLetras(total),
       qrBase64,
     };
   }
