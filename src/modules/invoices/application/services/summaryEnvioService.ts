@@ -266,12 +266,27 @@ export class SummaryEnvioService {
     rucEmisor: string,
   ): { zip: Buffer; fileName: string } {
     const zip = new AdmZip();
-    // Nombres según la convención de SUNAT para agregados:
-    //   ZIP  -> 20601234567-RC-20261105-001.zip   (con RUC)
-    //   XML  -> RC-20261105-001.xml               (sin RUC, igual que el cbc:ID)
-    // El ejemplo oficial del resumen usa `<cbc:ID>RC-20120624-001</cbc:ID>`, así
-    // que el ID y el nombre del XML van sin RUC; el ZIP sí lo lleva delante.
-    zip.addFile(`${identificador}.xml`, Buffer.from(xmlFirmado, 'utf8'));
+    // CONVENCIÓN DE NOMBRES — lo único que SUNAT sigue rechazando.
+    //
+    // El mensaje es siempre el mismo y el segundo campo llega VACÍO:
+    //
+    //   "Validation Filename error zip name: 20601234567-RC-20261101-001.zip;
+    //    xml name: "
+    //
+    // SUNAT compara el nombre del XML interno con el que espera; al no
+    // coincidir, lo reporta como cadena vacía. El `cbc:ID` ya cumple la regla
+    // 2346 (fecha de generación) y el XML ya pasa el esquema, así que el
+    // desajuste está aquí.
+    //
+    // Se comprobó que el ZIP debe llevar el RUC (sin él el rechazo es otro).
+    // La variante pendiente de probar es la que SUNAT documenta para los
+    // agregados: el XML interno se nombra IGUAL que el ZIP, es decir
+    //   ZIP -> 20601234567-RC-20261101-001.zip
+    //   XML -> 20601234567-RC-20261101-001.xml
+    zip.addFile(
+      `${rucEmisor}-${identificador}.xml`,
+      Buffer.from(xmlFirmado, 'utf8'),
+    );
 
     return { zip: zip.toBuffer(), fileName: `${rucEmisor}-${identificador}.zip` };
   }

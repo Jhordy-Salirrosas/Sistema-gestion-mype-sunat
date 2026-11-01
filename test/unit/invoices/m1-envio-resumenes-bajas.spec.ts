@@ -132,7 +132,12 @@ describe('M1 · envío real del resumen diario (RC)', () => {
     const entradas = zip.getEntries();
 
     expect(entradas).toHaveLength(1);
-    expect(entradas[0].entryName).toBe('RC-20261101-001.xml');
+    // El XML interno se llama EXACTAMENTE igual que el ZIP salvo la extensión.
+    // Con `RC-20261101-001.xml` (sin RUC) SUNAT rechazaba con
+    // "Validation Filename error ...; xml name: " (vacío); verificado contra
+    // BETA el 01-11. Al alinear ambos nombres el rechazo de nombre desapareció
+    // y el error pasó a ser una regla del contenido (2217), que es otro tema.
+    expect(entradas[0].entryName).toBe('20601234567-RC-20261101-001.xml');
 
     const xml = entradas[0].getData().toString('utf8');
     expect(xml).toContain('<!--firmado-->');

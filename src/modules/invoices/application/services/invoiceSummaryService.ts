@@ -101,7 +101,16 @@ export class InvoiceSummaryService {
       where: {
         company_id: companyId,
         fecha_emision: { gte: desde, lte: hasta },
-        tipo_comprobante: { in: ['03', '07', '08'] },
+        // Un resumen diario agrupa SOLO boletas (03) y sus notas, que llevan
+        // serie que empieza por B (BC01, BD01...). Antes se traían todas las
+        // notas 07/08, incluidas las de factura (FC01/FD01), y entonces el
+        // generador abortaba con "FC01-3 no pertenece a un resumen diario":
+        // una sola nota de crédito a factura del día impedía enviar el resumen
+        // de las boletas. Las notas con serie F se van por sendBill o por RA.
+        OR: [
+          { tipo_comprobante: '03' },
+          { tipo_comprobante: { in: ['07', '08'] }, serie: { startsWith: 'B' } },
+        ],
       },
       orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }],
     });
