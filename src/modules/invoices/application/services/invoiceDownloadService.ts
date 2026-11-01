@@ -75,7 +75,21 @@ export class InvoiceDownloadService {
     return this.pdfDelComprobante(fila);
   }
 
-  /** Fila mínima del comprobante, con sus ítems y su cliente. */
+  /**
+   * Fila mínima del comprobante, con sus ítems y su cliente.
+   *
+   * Los NOMBRES DE CAMPO son los del modelo `Invoice`, no los del DTO de la API.
+   * Antes se pedían `moneda`, `cdr_codigo`, `cliente_nombre` y
+   * `cliente_documento`, que no existen en la tabla: Prisma lanzaba
+   * `Unknown field 'moneda' for select statement` y las descargas de XML, PDF y
+   * CDR respondían 500 en comprobantes ya aceptados. Se detectó probando la
+   * descarga de una factura ACEPTADA el 31-10; los tests no lo veían porque
+   * usan un Prisma simulado que acepta cualquier campo.
+   *
+   * Correspondencia: moneda -> currency_code, cdr_codigo -> sunat_response_code,
+   * cliente_nombre -> customer_legal_name,
+   * cliente_documento -> customer_identity_number.
+   */
   private async cargar(companyId: string, invoiceId: string) {
     const fila = await this.prisma.invoice.findFirst({
       where: { id: invoiceId, company_id: companyId },
@@ -87,13 +101,14 @@ export class InvoiceDownloadService {
         correlativo: true,
         fecha_emision: true,
         estado: true,
-        moneda: true,
+        currency_code: true,
         payload_ubl: true,
         xml_storage_url: true,
         cdr_storage_url: true,
-        cdr_codigo: true,
-        cliente_nombre: true,
-        cliente_documento: true,
+        cdr_sunat: true,
+        sunat_response_code: true,
+        customer_legal_name: true,
+        customer_identity_number: true,
         items: {
           orderBy: { item_order: 'asc' },
           select: {
@@ -164,9 +179,21 @@ export class InvoiceDownloadService {
     return this.ublGenerator.generateInvoiceXml(payload);
   }
 
-  /** CDR devuelto por SUNAT, tal cual llegó. */
+  /**
+   * CDR devuelto por SUNAT, tal cual llegó.
+   *
+   * SE LEE DE `cdr_sunat`, que es donde el worker lo guarda
+   * (`cdr-persistence.service.ts`). Antes se leía solo de `cdr_storage_url`, un
+   * campo pensado para la URL de un almacenamiento externo que nunca se
+   * implementó: el CDR real viajaba en `cdr_sunat` y la descarga respondía 404
+   * "no tiene el CDR guardado" en comprobantes ACEPTADOS. Se detectó probando
+   * la descarga de una factura aceptada el 31-10.
+   *
+   * Se aceptan las dos fuentes: `cdr_sunat` (el XML en crudo que guarda el
+   * worker) y, si algún día existe, `cdr_storage_url`.
+   */
   private cdr(fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>): ArchivoDescarga {
-    const cdr = fila.cdr_storage_url;
+    const cdr = this.xmlDelCdr(fila);
 
     if (!cdr || !cdr.trimStart().startsWith('<?xml')) {
       // Un comprobante en cola o en error todavía no tiene CDR: es un 404 con
@@ -183,6 +210,27 @@ export class InvoiceDownloadService {
       contentType: 'application/xml; charset=utf-8',
       contenido: Buffer.from(cdr, 'utf8'),
     };
+  }
+
+  /** Extrae el XML del CDR de la columna donde lo haya guardado el worker. */
+  private xmlDelCdr(
+    fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+  ): string | null {
+    const almacenado = fila.cdr_storage_url?.trim();
+    if (almacenado?.startsWith('<?xml')) return almacenado;
+
+    // `cdr_sunat` es un JSON: el worker guarda el CDR parseado con su `rawXml`.
+    const crudo = fila.cdr_sunat as unknown;
+    if (!crudo) return null;
+
+    if (typeof crudo === 'string') return crudo;
+
+    if (typeof crudo === 'object' && crudo !== null) {
+      const candidato = (crudo as Record<string, unknown>)['rawXml'];
+      if (typeof candidato === 'string') return candidato;
+    }
+
+    return null;
   }
 
   /** Representación impresa en PDF. */
@@ -255,8 +303,9 @@ export class InvoiceDownloadService {
       igv,
       total,
       fechaEmision: fecha,
-      tipoDocCliente: String(fila.cliente_documento).length === 11 ? '6' : '1',
-      numDocCliente: fila.cliente_documento,
+      tipoDocCliente:
+        String(fila.customer_identity_number ?? '').length === 11 ? '6' : '1',
+      numDocCliente: fila.customer_identity_number ?? '',
       hashCpe: String(payload['hashCpe'] ?? ''),
     });
 
@@ -268,9 +317,9 @@ export class InvoiceDownloadService {
       serie: fila.serie,
       correlativo: fila.correlativo,
       fechaEmision: fecha,
-      moneda: fila.moneda ?? 'PEN',
-      clienteRazonSocial: fila.cliente_nombre ?? 'CLIENTE',
-      clienteDocumento: fila.cliente_documento,
+      moneda: fila.currency_code ?? 'PEN',
+      clienteRazonSocial: fila.customer_legal_name ?? 'CLIENTE',
+      clienteDocumento: fila.customer_identity_number,
       nombreTipo:
         NOMBRE_TIPO[fila.tipo_comprobante] ?? 'COMPROBANTE ELECTRÓNICO',
       lineas,
