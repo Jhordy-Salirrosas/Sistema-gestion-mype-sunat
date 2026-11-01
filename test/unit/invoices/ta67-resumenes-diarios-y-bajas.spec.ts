@@ -16,8 +16,10 @@ import { BadRequestException } from '@nestjs/common';
 import {
   construirComunicacionBaja,
   construirResumenDiario,
+  diasDesdeEmision,
   esc,
   excluidoDelResumen,
+  vaEnBaja,
   vaEnResumen,
   type CabeceraResumen,
   type ComprobanteAgregado,
@@ -201,7 +203,9 @@ describe('TA-67 · comunicación de baja', () => {
   });
 
   it('el identificador de la baja es RA-AAAAMMDD-NNN', () => {
-    const xml = construirComunicacionBaja(CABECERA, [boleta()]);
+    const xml = construirComunicacionBaja(CABECERA, [
+      boleta({ tipoComprobante: '01', serie: 'F001', correlativo: 143 }),
+    ]);
     expect(xml).toContain('<cbc:ID>RA-20261031-001</cbc:ID>');
   });
 
@@ -222,21 +226,30 @@ describe('TA-67 · comunicación de baja', () => {
 
   it('rechaza dar de baja un comprobante que SUNAT no aceptó', () => {
     expect(() =>
-      construirComunicacionBaja(CABECERA, [boleta({ estado: 'EN_COLA' })]),
+      construirComunicacionBaja(CABECERA, [
+        boleta({ tipoComprobante: '01', serie: 'F001', estado: 'EN_COLA' }),
+      ]),
     ).toThrow(BadRequestException);
   });
 
   it('el mensaje del error dice el estado exacto del comprobante', () => {
     expect(() =>
       construirComunicacionBaja(CABECERA, [
-        boleta({ serie: 'B001', correlativo: 25, estado: 'ERROR_RED' }),
+        boleta({
+          tipoComprobante: '01',
+          serie: 'F001',
+          correlativo: 25,
+          estado: 'ERROR_RED',
+        }),
       ]),
-    ).toThrow(/B001-25.*ERROR_RED/);
+    ).toThrow(/F001-25.*ERROR_RED/);
   });
 
   it('acepta dar de baja un comprobante observado', () => {
     expect(() =>
-      construirComunicacionBaja(CABECERA, [boleta({ estado: 'OBSERVADO' })]),
+      construirComunicacionBaja(CABECERA, [
+        boleta({ tipoComprobante: '01', serie: 'F001', estado: 'OBSERVADO' }),
+      ]),
     ).not.toThrow();
   });
 
@@ -248,7 +261,11 @@ describe('TA-67 · comunicación de baja', () => {
 
   it('escapa los caracteres reservados en el motivo de baja', () => {
     const xml = construirComunicacionBaja(CABECERA, [
-      boleta({ motivoBaja: 'Anulado por <error> & corrección' }),
+      boleta({
+        tipoComprobante: '01',
+        serie: 'F001',
+        motivoBaja: 'Anulado por <error> & corrección',
+      }),
     ]);
 
     expect(xml).toContain('Anulado por &lt;error&gt; &amp; corrección');
@@ -340,5 +357,127 @@ describe('TA-67 · operaciones SOAP del resumen', () => {
     expect(extraerEtiqueta('<ticket>abc</ticket>', 'ticket')).toBe('abc');
     expect(extraerEtiqueta('<ns2:ticket>abc</ns2:ticket>', 'ticket')).toBe('abc');
     expect(extraerEtiqueta('<otra>abc</otra>', 'ticket')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4 · Regla 2957: plazo de 7 días calendario
+// ---------------------------------------------------------------------------
+
+describe('TA-67 · regla 2957 (plazo del resumen)', () => {
+  it('cuenta días calendario entre la emisión y la fecha del resumen', () => {
+    // 31 de octubre -> 7 de noviembre son 7 días, justo en el límite.
+    expect(diasDesdeEmision('2026-10-31', '2026-11-07')).toBe(7);
+    expect(diasDesdeEmision('2026-10-31', '2026-11-08')).toBe(8);
+    expect(diasDesdeEmision('2026-10-31', '2026-10-31')).toBe(0);
+  });
+
+  it('no cuenta horas sueltas: cruzar de día ya es un día', () => {
+    // Un comprobante emitido a las 23:00 y resumido a las 00:30 del día
+    // siguiente cuenta como 1, no como 0 por la diferencia de horas.
+    expect(diasDesdeEmision('2026-10-31', '2026-11-01')).toBe(1);
+  });
+
+  it('devuelve null si la fecha no tiene forma YYYY-MM-DD', () => {
+    expect(diasDesdeEmision('31/10/2026', '2026-11-07')).toBeNull();
+    expect(diasDesdeEmision('2026-10-31', '')).toBeNull();
+  });
+
+  it('acepta un resumen dentro del plazo', () => {
+    expect(() =>
+      construirResumenDiario(CABECERA, [
+        boleta({ fechaEmision: '2026-10-31' }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('acepta el borde exacto de 7 días', () => {
+    expect(() =>
+      construirResumenDiario(
+        { ...CABECERA, fechaResumen: '2026-11-07' },
+        [boleta({ fechaEmision: '2026-10-31' })],
+      ),
+    ).not.toThrow();
+  });
+
+  it('rechaza el resumen el día 8 con el código de la regla', () => {
+    expect(() =>
+      construirResumenDiario(
+        { ...CABECERA, fechaResumen: '2026-11-08' },
+        [boleta({ fechaEmision: '2026-10-31' })],
+      ),
+    ).toThrow(/2957/);
+  });
+
+  it('el mensaje nombra el comprobante vencido y cuántos días pasaron', () => {
+    expect(() =>
+      construirResumenDiario(
+        { ...CABECERA, fechaResumen: '2026-11-10' },
+        [boleta({ fechaEmision: '2026-10-31' })],
+      ),
+    ).toThrow(/B001-25.*2026-10-31.*10 días/);
+  });
+
+  it('cuenta todos los vencidos, no solo el primero', () => {
+    expect(() =>
+      construirResumenDiario(
+        { ...CABECERA, fechaResumen: '2026-11-20' },
+        [boleta({ correlativo: 1 }), boleta({ correlativo: 2 })],
+      ),
+    ).toThrow(/2 comprobantes fuera de plazo/);
+  });
+
+  it('lo anulado no bloquea el resumen por plazo', () => {
+    // Si el único vencido está anulado no va al XML, así que no puede
+    // impedir el envío de los demás.
+    expect(() =>
+      construirResumenDiario(
+        { ...CABECERA, fechaResumen: '2026-11-20' },
+        [boleta({ fechaEmision: '2026-11-19' }), boleta({ estado: 'ANULADO' })],
+      ),
+    ).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5 · Regla 2308: la RA no lleva boletas
+// ---------------------------------------------------------------------------
+
+describe('TA-67 · regla 2308 (boleta en comunicación de baja)', () => {
+  it('una factura sí puede darse de baja por RA', () => {
+    expect(
+      vaEnBaja(boleta({ tipoComprobante: '01', serie: 'F001' })),
+    ).toBe(true);
+  });
+
+  it('una nota de crédito o débito a factura también', () => {
+    expect(vaEnBaja(boleta({ tipoComprobante: '07', serie: 'FC01' }))).toBe(true);
+    expect(vaEnBaja(boleta({ tipoComprobante: '08', serie: 'FD01' }))).toBe(true);
+  });
+
+  it('una boleta NO se da de baja por RA', () => {
+    expect(vaEnBaja(boleta())).toBe(false);
+  });
+
+  it('rechaza la RA con una boleta y dice cómo se anula', () => {
+    expect(() => construirComunicacionBaja(CABECERA, [boleta()])).toThrow(
+      /2308.*resumen diario/s,
+    );
+  });
+
+  it('el mensaje de la boleta nombra el comprobante', () => {
+    expect(() =>
+      construirComunicacionBaja(CABECERA, [
+        boleta({ serie: 'B002', correlativo: 77 }),
+      ]),
+    ).toThrow(/B002-77/);
+  });
+
+  it('el tipo se comprueba antes que el estado', () => {
+    // Una boleta en cola falla por tipo (2308), no por estado: el error de
+    // diseño es más informativo que "todavía no está aceptada".
+    expect(() =>
+      construirComunicacionBaja(CABECERA, [boleta({ estado: 'EN_COLA' })]),
+    ).toThrow(/2308/);
   });
 });

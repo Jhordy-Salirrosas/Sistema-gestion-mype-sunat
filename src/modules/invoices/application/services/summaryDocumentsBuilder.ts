@@ -106,6 +106,118 @@ export const excluidoDelResumen = (c: ComprobanteAgregado): boolean =>
 /** Redondeo a céntimos. */
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
+/**
+ * Plazo máximo, en días calendario, para informar un comprobante (regla 2957).
+ *
+ * SUNAT rechaza el resumen diario cuando la fecha de referencia quedó fuera de
+ * este plazo: "El archivo fue enviado fuera del plazo establecido". El plazo
+ * corre desde la fecha de emisión del comprobante, no desde que el usuario se
+ * acuerda de enviarlo.
+ */
+export const DIAS_MAXIMOS_RESUMEN = 7;
+
+/** Un día en milisegundos. */
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/** Convierte YYYY-MM-DD a UTC a medianoche; `null` si la forma no es válida. */
+const aFechaUtc = (fecha: string): Date | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha ?? '')) return null;
+  const d = new Date(`${fecha}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/**
+ * Días calendario transcurridos entre la emisión y la fecha de referencia.
+ *
+ * Se calcula sobre fechas UTC a medianoche y no sobre instantes: si se restaran
+ * horas, un comprobante emitido a las 23:00 del día 1 y resumido a las 00:30 del
+ * día 2 contaría como "un día" cuando en realidad ya se pasó de fecha, y el
+ * rechazo por plazo llegaría sin aviso.
+ */
+export const diasDesdeEmision = (
+  fechaEmision: string,
+  fechaReferencia: string,
+): number | null => {
+  const emision = aFechaUtc(fechaEmision);
+  const referencia = aFechaUtc(fechaReferencia);
+  if (!emision || !referencia) return null;
+  return Math.round((referencia.getTime() - emision.getTime()) / DIA_MS);
+};
+
+/**
+ * Comprueba la regla 2957 para un conjunto de comprobantes.
+ *
+ * @throws BadRequestException si alguno quedó fuera del plazo, nombrando los
+ *   vencidos: mandar el resumen asumiendo que SUNAT lo acepta solo sirve para
+ *   descubrir el rechazo cuando el ticket ya se gastó.
+ */
+export const validarPlazoResumen = (
+  comprobantes: readonly ComprobanteAgregado[],
+  fechaReferencia: string,
+): void => {
+  const vencidos = comprobantes
+    .filter((c) => !excluidoDelResumen(c))
+    .map((c) => ({ c, dias: diasDesdeEmision(c.fechaEmision, fechaReferencia) }))
+    .filter((x) => x.dias !== null && x.dias > DIAS_MAXIMOS_RESUMEN);
+
+  if (vencidos.length === 0) return;
+
+  const { c, dias } = vencidos[0];
+  const resto =
+    vencidos.length > 1
+      ? ` Hay ${vencidos.length} comprobantes fuera de plazo en total.`
+      : '';
+
+  throw new BadRequestException({
+    code: 'RESUMEN_FUERA_DE_PLAZO',
+    message:
+      `El comprobante ${c.serie}-${c.correlativo} se emitió el ${c.fechaEmision} ` +
+      `y ${dias} días antes de la fecha del resumen: la regla 2957 solo admite ` +
+      `${DIAS_MAXIMOS_RESUMEN} días calendario.${resto}`,
+  });
+};
+
+/**
+ * Regla 2308: una **comunicación de baja (RA) no puede llevar boletas**.
+ *
+ * Las boletas se anulan por el resumen diario (RC), restando su importe en un
+ * resumen posterior; la RA existe solo para facturas y notas. Mandar una boleta
+ * en una RA es rechazo seguro y además no anula nada, porque SUNAT no espera
+ * encontrarla ahí.
+ */
+export const TIPOS_EN_BAJA: readonly string[] = ['01', '07', '08'];
+
+/** ¿El comprobante puede ir en una comunicación de baja? */
+export const vaEnBaja = (c: ComprobanteAgregado): boolean =>
+  TIPOS_EN_BAJA.includes(c.tipoComprobante);
+
+/**
+ * Valida la regla 2308 para un conjunto de bajas.
+ *
+ * @throws BadRequestException si aparece una boleta (03) u otro tipo que no se
+ *   anula por RA.
+ */
+export const validarTiposEnBaja = (
+  comprobantes: readonly ComprobanteAgregado[],
+): void => {
+  const fuera = comprobantes.filter((c) => !vaEnBaja(c));
+  if (fuera.length === 0) return;
+
+  const c = fuera[0];
+  const esBoleta = c.tipoComprobante === '03';
+
+  throw new BadRequestException({
+    code: 'BAJA_TIPO_INVALIDO',
+    message: esBoleta
+      ? `La boleta ${c.serie}-${c.correlativo} no se puede dar de baja con una ` +
+        'comunicación RA (regla 2308): las boletas se anulan en el resumen ' +
+        'diario, restándolas en un resumen posterior.'
+      : `El comprobante ${c.serie}-${c.correlativo} de tipo ${c.tipoComprobante} ` +
+        'no se da de baja por comunicación RA: solo las facturas (01) y sus ' +
+        'notas (07/08).',
+  });
+};
+
 /** Bloque de un comprobante dentro de `SummaryDocuments`. */
 const lineaResumen = (c: ComprobanteAgregado): string => {
   const numero = `${c.serie}-${String(c.correlativo).padStart(8, '0')}`;
@@ -182,6 +294,9 @@ export const construirResumenDiario = (
     });
   }
 
+  // Regla 2957: el plazo se comprueba sobre lo que realmente se va a enviar.
+  validarPlazoResumen(incluidos, cabecera.fechaResumen);
+
   const fecha = cabecera.fechaResumen;
   const identificador = `RC-${fecha.replace(/-/g, '')}-${String(cabecera.correlativo).padStart(3, '0')}`;
 
@@ -234,6 +349,12 @@ export const construirComunicacionBaja = (
       message: 'La comunicación de baja no tiene comprobantes.',
     });
   }
+
+  // Regla 2308: una RA no lleva boletas. Se comprueba antes que el estado
+  // porque el tipo es un error de diseño de la operación, no un problema de
+  // sincronización: esperar a que la boleta esté aceptada para rechazarla solo
+  // retrasa el aviso.
+  validarTiposEnBaja(comprobantes);
 
   const noDables = comprobantes.filter(
     (c) => !ESTADOS_DADOS_DE_BAJA_VALIDOS.includes(c.estado),

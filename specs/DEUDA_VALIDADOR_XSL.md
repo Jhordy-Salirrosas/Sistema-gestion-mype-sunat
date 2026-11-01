@@ -220,7 +220,34 @@ archivo" y pasa a ser "falta el motor adecuado".
 **Mientras tanto:** la compuerta se cierra y, si hay que exponer el sistema, se
 activa `BYPASS_XSL_GATE_DEMO=true` con el aviso correspondiente (apartado 4-ter).
 
-## 8. Archivos relevantes
+## 8. Rendimiento: además de no validar, es demasiado lento
+
+Medido el 31 de octubre de 2026 sobre `dev`, ejecutando la hoja oficial
+`Factura 2.0.1.xsl` (≈500 KB) con `xslt-processor` sobre el fixture
+`fixtures/sunat-invoice/factura-ubl21.xml`:
+
+| Ejecución | Tiempo observado |
+|---|---|
+| Primera (calentamiento del intérprete) | **77 726 ms** |
+| Segunda | **40 756 ms** |
+| Tercera | **5 449 ms** |
+
+El presupuesto fijado para la compuerta es de **2 000 ms**. Ni la ejecución más
+rápida entra en él: la tercera tarda todavía 2,7 veces más.
+
+**Por qué importa aunque la compuerta esté cerrada:** si algún día se activa
+`BYPASS_XSL_GATE_DEMO=false` en un entorno con hojas nuevas, o se conserva
+`xslt-processor` como respaldo tras arreglar el motor, cada comprobante gastaría
+entre 5 y 78 segundos antes de tocar la red. Con `teamSize: 1` y
+`batchSize: 1` en la cola, eso es la misma demora por cada comprobante de la
+fila.
+
+**Consecuencia para quien cierre la deuda:** cambiar el motor no es solo una
+decisión de corrección, es también la del rendimiento. C1 (`saxon-js`, que
+precompila la hoja a SEF) y C2 (`libxslt` en C) resuelven las dos cosas a la
+vez; reimplementar plantillas sobre el motor actual no arreglaría la lentitud.
+
+## 9. Archivos relevantes
 
 - `src/modules/invoices/application/services/sunatXslAdapter.ts` — paso 6
 - `src/modules/invoices/application/services/sunatXslValidatorService.ts`
