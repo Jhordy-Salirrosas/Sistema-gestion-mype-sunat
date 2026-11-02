@@ -40,6 +40,13 @@ const SELECT_LISTADO = {
   customer_identity_number: true,
   customer_legal_name: true,
   sunat_response_code: true,
+  // Montos tributarios: la grilla muestra base e IGV reales, no derivados.
+  taxable_operations: true,
+  total_igv: true,
+  exempt_operations: true,
+  unaffected_operations: true,
+  referenced_series_correlative: true,
+  xml_hash_sha256: true,
 } as const;
 
 /** Proyección del detalle: la del listado más ficha, CDR e historial. */

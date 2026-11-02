@@ -28,6 +28,12 @@ export interface FilaListado {
   customer_identity_number: string | null;
   customer_legal_name: string | null;
   sunat_response_code: string | null;
+  taxable_operations?: { toString(): string } | number;
+  total_igv?: { toString(): string } | number;
+  exempt_operations?: { toString(): string } | number;
+  unaffected_operations?: { toString(): string } | number;
+  referenced_series_correlative?: string | null;
+  xml_hash_sha256?: string | null;
 }
 
 /** Fila del detalle: la del listado más los campos de la ficha. */
@@ -75,6 +81,12 @@ export function aListado(fila: FilaListado): ComprobanteListadoDto {
     cliente_documento: fila.customer_identity_number,
     cliente_nombre: fila.customer_legal_name,
     cdr_codigo: fila.sunat_response_code,
+    base_imponible: numero(fila.taxable_operations ?? 0),
+    total_igv: numero(fila.total_igv ?? 0),
+    exonerada: numero(fila.exempt_operations ?? 0),
+    inafecta: numero(fila.unaffected_operations ?? 0),
+    documento_afectado: fila.referenced_series_correlative ?? null,
+    hash_cpe: fila.xml_hash_sha256 ?? null,
   };
 }
 
