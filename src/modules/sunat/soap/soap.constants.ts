@@ -16,8 +16,14 @@
  *      ESTE es el que va en el <soapenv:Body>.
  */
 
-/** Namespace de los elementos sendBill / sendBillResponse dentro del Body. */
-export const SUNAT_SERVICE_NAMESPACE = 'http://service.sunat.gob.pe';
+/**
+ * Namespace de los elementos sendBill / sendBillResponse dentro del Body.
+ *
+ * OJO: `http://` aquí es parte del identificador XML que exige SUNAT, no una
+ * URL de transporte. Cambiarlo por https rompe el sobre (el namespace debe
+ * coincidir carácter por carácter con el del WSDL).
+ */
+export const SUNAT_SERVICE_NAMESPACE = 'http://service.sunat.gob.pe'; // NOSONAR
 
 /** Envoltura SOAP 1.1. Es la unica que publica beta y la recomendada. */
 export const SOAP_ENVELOPE_NAMESPACE =
