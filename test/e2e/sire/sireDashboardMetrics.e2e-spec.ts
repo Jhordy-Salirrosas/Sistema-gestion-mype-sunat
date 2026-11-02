@@ -18,6 +18,15 @@ import {
 } from '../../../src/modules/sire/infrastructure/controllers/sireDashboardMetricsController';
 import { SireController } from '../../../src/modules/sire/infrastructure/controllers/sireController';
 import { UploadSireReportUseCase } from '../../../src/modules/sire/application/use-cases/uploadSireReportUseCase';
+import { GetSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/getSireProposalUseCase';
+import { ExcludeSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/excludeSireRecordUseCase';
+import { ReplaceSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/replaceSireProposalUseCase';
+import { RegisterSirePreliminaryUseCase } from '../../../src/modules/sire/application/use-cases/registerSirePreliminaryUseCase';
+import { DeleteSirePreliminaryUseCase } from '../../../src/modules/sire/application/use-cases/deleteSirePreliminaryUseCase';
+import { GenerateSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/generateSireRecordUseCase';
+import { SireTicketManagerService } from '../../../src/modules/sire/application/sireTicketManagerService';
+import { AcceptSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/acceptSireProposalUseCase';
+import { RestoreSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/restoreSireRecordUseCase';
 
 const authorization = (token: string) =>
   `${['Be', 'arer'].join('')} ${token}`;
@@ -116,6 +125,15 @@ describe('SIRE dashboard metrics HTTP contract', () => {
         },
         { provide: CloseFiscalPeriodUseCase, useValue: { execute: jest.fn() } },
         { provide: UploadSireReportUseCase, useValue: uploadReportUseCase },
+        { provide: GetSireProposalUseCase, useValue: { execute: jest.fn() } },
+        { provide: ExcludeSireRecordUseCase, useValue: { execute: jest.fn() } },
+        { provide: ReplaceSireProposalUseCase, useValue: { execute: jest.fn() } },
+        { provide: RegisterSirePreliminaryUseCase, useValue: { execute: jest.fn() } },
+        { provide: DeleteSirePreliminaryUseCase, useValue: { execute: jest.fn() } },
+        { provide: GenerateSireRecordUseCase, useValue: { execute: jest.fn() } },
+        { provide: SireTicketManagerService, useValue: { poll: jest.fn() } },
+        { provide: AcceptSireProposalUseCase, useValue: { execute: jest.fn() } },
+        { provide: RestoreSireRecordUseCase, useValue: { execute: jest.fn() } },
         { provide: SireDashboardMetricsService, useValue: service },
         { provide: TOKEN_SERVICE_PORT, useValue: tokenService },
       ],

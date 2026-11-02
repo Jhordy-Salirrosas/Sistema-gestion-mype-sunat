@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Logger, Query, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../auth/infrastructure/decorators/currentCompanyDecorator';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { SireDashboardHistoryQueryDto } from '../../application/dto/sireDashboardHistoryQueryDto';
@@ -7,10 +7,15 @@ import { SireDashboardMetricsService } from '../../application/sireDashboardMetr
 @Controller('api/v1/sire/dashboard')
 @UseGuards(AuthGuard)
 export class SireDashboardMetricsController {
+  private readonly logger = new Logger(SireDashboardMetricsController.name);
+
   constructor(private readonly metrics: SireDashboardMetricsService) {}
 
   @Get('metrics')
   getMetrics(@CurrentCompany() companyId?: string) {
+    this.logger.log(
+      `GET /api/v1/sire/dashboard/metrics recibido (companyId=${companyId ?? 'no definido'})`,
+    );
     return this.metrics.getMetrics(companyId);
   }
 

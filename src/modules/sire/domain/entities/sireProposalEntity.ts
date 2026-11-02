@@ -14,6 +14,7 @@ export interface SireProposalEntity extends SireRecord {
   bookType: 'RVIE' | 'RCE';
   carSunat: string;
   issueDate: Date;
+  origin?: 'SUNAT' | 'USUARIO';
 }
 
 export type DiscrepancyType =

@@ -16,6 +16,65 @@ export interface ReconciliationHistoryRecord {
 }
 
 export interface ISireRepositoryPort {
+  upsertPeriod(
+    companyId: string,
+    period: string,
+    bookType: 'RVIE' | 'RCE',
+  ): Promise<{ id: string; state: string }>;
+  getPeriod(
+    companyId: string,
+    period: string,
+    bookType: 'RVIE' | 'RCE',
+  ): Promise<{
+    id: string;
+    state: string;
+    ticket: string | null;
+    ticketOperation: string | null;
+  } | null>;
+  saveSunatProposal(
+    companyId: string,
+    period: string,
+    bookType: 'RVIE' | 'RCE',
+    proposals: SireProposalEntity[],
+  ): Promise<void>;
+  getProposal(
+    companyId: string,
+    proposalId: string,
+  ): Promise<{
+    id: string;
+    origin: 'SUNAT' | 'USUARIO';
+    periodId: string | null;
+    periodState: string | null;
+  } | null>;
+  excludeSunatProposal(
+    companyId: string,
+    proposalId: string,
+    userId: string,
+  ): Promise<void>;
+  restoreProposal(
+    companyId: string,
+    proposalId: string,
+  ): Promise<void>;
+  getPeriodProposals(
+    companyId: string,
+    period: string,
+    bookType: 'RVIE' | 'RCE',
+  ): Promise<SireProposalEntity[]>;
+  setPeriodTicket(
+    companyId: string,
+    period: string,
+    bookType: 'RVIE' | 'RCE',
+    state: string,
+    ticket: string,
+    operation: string,
+  ): Promise<void>;
+  setPeriodState(
+    companyId: string,
+    period: string,
+    bookType: 'RVIE' | 'RCE',
+    state: string,
+    error?: string,
+  ): Promise<void>;
   hasReportUploadHash(companyId: string, fileHash: string): Promise<boolean>;
   saveReportUpload(input: {
     companyId: string;

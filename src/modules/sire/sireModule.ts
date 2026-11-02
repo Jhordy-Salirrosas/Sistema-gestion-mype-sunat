@@ -23,15 +23,27 @@ import {
 } from './infrastructure/controllers/sireDashboardMetricsController';
 import { UploadSireReportUseCase } from './application/use-cases/uploadSireReportUseCase';
 import { SireReportFileParser } from './infrastructure/parsers/sireReportFileParser';
+import { GetSireProposalUseCase } from './application/use-cases/getSireProposalUseCase';
+import { ExcludeSireRecordUseCase } from './application/use-cases/excludeSireRecordUseCase';
+import { ReplaceSireProposalUseCase } from './application/use-cases/replaceSireProposalUseCase';
+import { RegisterSirePreliminaryUseCase } from './application/use-cases/registerSirePreliminaryUseCase';
+import { DeleteSirePreliminaryUseCase } from './application/use-cases/deleteSirePreliminaryUseCase';
+import { GenerateSireRecordUseCase } from './application/use-cases/generateSireRecordUseCase';
+import { SireTicketManagerService } from './application/sireTicketManagerService';
+import { SIRE_SUNAT_GATEWAY } from './domain/ports/sireSunatGatewayPort';
+import { UnsupportedSireSunatGateway } from './infrastructure/sunat/unsupportedSireSunatGateway';
+import { MockSireSunatGateway } from './infrastructure/sunat/mockSireSunatGateway';
+import { AcceptSireProposalUseCase } from './application/use-cases/acceptSireProposalUseCase';
+import { RestoreSireRecordUseCase } from './application/use-cases/restoreSireRecordUseCase';
 
 @Module({
   imports: [AuthModule, ResilienceStateModule],
   controllers: [
-    SireController,
     SireDashboardMetricsController,
     SireMetricsCompatibilityController,
     SireResilienceMetricsCompatibilityController,
     LegacySireMetricsController,
+    SireController,
   ],
   providers: [
     ReconcileSireUseCase,
@@ -43,15 +55,37 @@ import { SireReportFileParser } from './infrastructure/parsers/sireReportFilePar
     SireDashboardMetricsRepository,
     UploadSireReportUseCase,
     SireReportFileParser,
+    GetSireProposalUseCase,
+    ExcludeSireRecordUseCase,
+    ReplaceSireProposalUseCase,
+    RegisterSirePreliminaryUseCase,
+    DeleteSirePreliminaryUseCase,
+    GenerateSireRecordUseCase,
+    SireTicketManagerService,
+    AcceptSireProposalUseCase,
+    RestoreSireRecordUseCase,
     PrismaSireRepository,
     SireTxtParserAdapter,
     SireTxtWriterAdapter,
+    UnsupportedSireSunatGateway,
     {
       provide: SIRE_REPOSITORY_PORT,
       useClass: PrismaSireRepository,
     },
     { provide: SIRE_PARSER_PORT, useExisting: SireTxtParserAdapter },
     { provide: SIRE_EXPORTER_PORT, useExisting: SireTxtWriterAdapter },
+    MockSireSunatGateway,
+    {
+      provide: SIRE_SUNAT_GATEWAY,
+      inject: [MockSireSunatGateway, UnsupportedSireSunatGateway],
+      useFactory: (
+        mockGateway: MockSireSunatGateway,
+        unsupportedGateway: UnsupportedSireSunatGateway,
+      ) =>
+        process.env['SUNAT_SIRE_ENV']?.toLowerCase() === 'mock'
+          ? mockGateway
+          : unsupportedGateway,
+    },
   ],
   exports: [SIRE_REPOSITORY_PORT, ReconcileSireUseCase],
 })

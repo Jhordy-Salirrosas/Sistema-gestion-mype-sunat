@@ -48,9 +48,10 @@ describe('SIRE dashboard metrics routes', () => {
     expect(
       Reflect.getMetadata(PATH_METADATA, SireMetricsCompatibilityController),
     ).toBe('api/v1/sire');
-    expect(Reflect.getMetadata(PATH_METADATA, SireController)).toBe(
+    expect(Reflect.getMetadata(PATH_METADATA, SireController)).toEqual([
       'api/v1/sire',
-    );
+      'sire',
+    ]);
     expect(
       Reflect.getMetadata(PATH_METADATA, SireController.prototype.history),
     ).toBe('history');
