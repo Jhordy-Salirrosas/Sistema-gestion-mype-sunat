@@ -64,6 +64,7 @@ describe('SIRE mock lifecycle HTTP flow', () => {
     }),
     getProposal: jest.fn(async (_companyId: string, proposalId: string) => proposals.get(proposalId) ?? null),
     excludeSunatProposal: jest.fn().mockResolvedValue(undefined),
+    restoreProposal: jest.fn().mockResolvedValue(undefined),
   } as never;
 
   beforeAll(async () => {
@@ -146,5 +147,50 @@ describe('SIRE mock lifecycle HTTP flow', () => {
       .set('Authorization', authHeader)
       .expect(201)
       .expect(({ body: response }) => expect(response).toMatchObject({ status: 'TERMINADO', state: 'GENERADO' }));
+  });
+
+  it('serves the provisional frontend route aliases', async () => {
+    const query = 'ruc=20123456789&periodo=202612&libro=RCE';
+    await request(app.getHttpServer())
+      .get(`/sire/propuesta?${query}`)
+      .set('Authorization', authHeader)
+      .expect(200)
+      .expect(({ body: response }) =>
+        expect(response).toMatchObject({ state: 'PROPUESTA', count: 3 }),
+      );
+
+    await request(app.getHttpServer())
+      .get(`/sire/preliminar?${query}`)
+      .set('Authorization', authHeader)
+      .expect(200)
+      .expect(({ body: response }) =>
+        expect(response).toMatchObject({ period: '202612', bookType: 'RCE_COMPRAS' }),
+      );
+
+    await request(app.getHttpServer())
+      .get(`/sire/generado?${query}`)
+      .set('Authorization', authHeader)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get(`/sire/status?${query}`)
+      .set('Authorization', authHeader)
+      .expect(200)
+      .expect(({ body: response }) => expect(response).toMatchObject({ status: 'SIN_TICKET' }));
+
+    await request(app.getHttpServer())
+      .post('/sire/aceptar')
+      .set('Authorization', authHeader)
+      .send({ period: '202612', bookType: 'RCE_COMPRAS', confirmed: true })
+      .expect(201)
+      .expect(({ body: response }) =>
+        expect(response).toMatchObject({ state: 'PROCESANDO_PRELIMINAR' }),
+      );
+
+    await request(app.getHttpServer())
+      .post('/sire/restaurar')
+      .set('Authorization', authHeader)
+      .send({ proposalId: 'proposal-1' })
+      .expect(201);
   });
 });
