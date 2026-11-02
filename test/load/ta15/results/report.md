@@ -1,29 +1,29 @@
 # TA-15 · Reporte de carga, caos y MTTR
 
-- **Fecha:** 2026-10-29T17:45:52.077Z
-- **Modo:** smoke
+- **Fecha:** 2026-10-31T05:21:00.135Z
+- **Modo:** completo (20 min de caída)
 - **Tasa objetivo:** 10 req/s
-- **Caída controlada:** 5 s
-- **Calentamiento:** 2 s
-- **Ventana de recuperación:** 35 s
-- **Duración total K6:** 44 s
+- **Caída controlada:** 1200 s
+- **Calentamiento:** 10 s
+- **Ventana de recuperación:** 60 s
+- **Duración total K6:** 1272 s
 
 | Métrica | Valor | Umbral | Estado |
 |---|---:|---:|---|
-| Latencia promedio | 0.57 ms | ≤ 500 ms | ✅ |
-| P95 | 0.79 ms | ≤ 1000 ms | ✅ |
+| Latencia promedio | 0.45 ms | ≤ 500 ms | ✅ |
+| P95 | 0.71 ms | ≤ 1000 ms | ✅ |
 | Throughput | 10.00 ops/s | ≥ 5 ops/s | ✅ |
-| MTTR | 25.48 s | ≤ 60 s | ✅ |
+| MTTR | 1.87 s | ≤ 60 s | ✅ |
 | Recuperación | 100.00% | ≥ 95% | ✅ |
 
 ## Detalle del SUT
 
 - Estado final del circuito: **CLOSED**
-- Encolados durante la caída: **304**
-- Procesados al cierre: **304**
+- Encolados durante la caída: **12018**
+- Procesados al cierre: **12018**
 - Pendientes al cierre: **0**
-- Fallos de envío registrados: **5**
-- Peticiones aceptadas después de recuperar: **116**
+- Fallos de envío registrados: **44**
+- Peticiones aceptadas después de recuperar: **602**
 
 **Resultado global:** ✅ PASS
 
