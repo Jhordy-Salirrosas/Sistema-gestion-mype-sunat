@@ -6,7 +6,7 @@ import type {
 } from '../../domain/ports/sireParserPort';
 import type { ParsedSireProposal } from '../../domain/ports/sireParserPort';
 
-type Column = keyof ParsedSireProposal;
+type Column = Exclude<keyof ParsedSireProposal, 'origin'>;
 
 const aliases: Record<Column, string[]> = {
   emitterRuc: ['ruc', 'rucemisor', 'rucdelproveedor', 'rucemisorproveedor'],

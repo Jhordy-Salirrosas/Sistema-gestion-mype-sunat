@@ -222,6 +222,7 @@ describe('TA-30 - consulta contra el Mock (PRUEBA del backlog)', () => {
   });
 
   afterAll(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 600));
     await fake.stop();
   });
 

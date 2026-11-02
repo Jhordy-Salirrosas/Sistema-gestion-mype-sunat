@@ -20,6 +20,7 @@ lib-cov
 
 # Coverage directory used by tools like istanbul
 coverage
+coverage-*/
 *.lcov
 
 # nyc test coverage
@@ -177,4 +178,3 @@ docs/
 # inicial: sin ella el patrón también captura `assets/sunat-xsl/`, que es justo
 # el que SÍ debe versionarse.
 /sunat-xsl/
-

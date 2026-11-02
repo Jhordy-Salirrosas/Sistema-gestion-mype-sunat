@@ -8,6 +8,15 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ReconcilePeriodDto } from '../../../src/modules/sire/application/dto/reconcilePeriodDto';
 import { UploadSireReportUseCase } from '../../../src/modules/sire/application/use-cases/uploadSireReportUseCase';
+import { GetSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/getSireProposalUseCase';
+import { ExcludeSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/excludeSireRecordUseCase';
+import { ReplaceSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/replaceSireProposalUseCase';
+import { RegisterSirePreliminaryUseCase } from '../../../src/modules/sire/application/use-cases/registerSirePreliminaryUseCase';
+import { DeleteSirePreliminaryUseCase } from '../../../src/modules/sire/application/use-cases/deleteSirePreliminaryUseCase';
+import { GenerateSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/generateSireRecordUseCase';
+import { SireTicketManagerService } from '../../../src/modules/sire/application/sireTicketManagerService';
+import { AcceptSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/acceptSireProposalUseCase';
+import { RestoreSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/restoreSireRecordUseCase';
 
 describe('SireController', () => {
   let controller: SireController;
@@ -27,6 +36,17 @@ describe('SireController', () => {
   const uploadReportUseCase = {
     execute: jest.fn(),
   } as unknown as jest.Mocked<UploadSireReportUseCase>;
+  const lifecycle = {
+    getProposal: { execute: jest.fn() } as unknown as jest.Mocked<GetSireProposalUseCase>,
+    exclude: { execute: jest.fn() } as unknown as jest.Mocked<ExcludeSireRecordUseCase>,
+    replace: { execute: jest.fn() } as unknown as jest.Mocked<ReplaceSireProposalUseCase>,
+    register: { execute: jest.fn() } as unknown as jest.Mocked<RegisterSirePreliminaryUseCase>,
+    remove: { execute: jest.fn() } as unknown as jest.Mocked<DeleteSirePreliminaryUseCase>,
+    generate: { execute: jest.fn() } as unknown as jest.Mocked<GenerateSireRecordUseCase>,
+    tickets: { getPeriod: jest.fn(), getRecords: jest.fn(), poll: jest.fn() } as unknown as jest.Mocked<SireTicketManagerService>,
+    accept: { execute: jest.fn() } as unknown as jest.Mocked<AcceptSireProposalUseCase>,
+    restore: { execute: jest.fn() } as unknown as jest.Mocked<RestoreSireRecordUseCase>,
+  };
 
   beforeEach(() => {
     useCase = {
@@ -40,6 +60,15 @@ describe('SireController', () => {
       historyUseCase,
       closeUseCase,
       uploadReportUseCase,
+      lifecycle.getProposal,
+      lifecycle.exclude,
+      lifecycle.replace,
+      lifecycle.register,
+      lifecycle.remove,
+      lifecycle.generate,
+      lifecycle.tickets,
+      lifecycle.accept,
+      lifecycle.restore,
     );
   });
 
@@ -181,5 +210,40 @@ describe('SireController', () => {
         },
       ),
     ).rejects.toThrow('Falta el archivo CSV/XLSX.');
+  });
+
+  it('debería delegar las operaciones del contrato provisional', async () => {
+    const user = { sub: 'user-1', companyId: 'company-1' } as never;
+    const dto = { period: '202610', bookType: 'RCE_COMPRAS' as const };
+    lifecycle.getProposal.execute.mockResolvedValue({ state: 'PROPUESTA' } as never);
+    lifecycle.exclude.execute.mockResolvedValue({ excluded: true } as never);
+    lifecycle.restore.execute.mockResolvedValue({ restored: true } as never);
+    lifecycle.accept.execute.mockResolvedValue({ state: 'PROCESANDO_PRELIMINAR' } as never);
+    lifecycle.register.execute.mockResolvedValue({ state: 'PROCESANDO_PRELIMINAR' } as never);
+    lifecycle.remove.execute.mockResolvedValue({ state: 'PROCESANDO_ELIMINACION' } as never);
+    lifecycle.replace.execute.mockResolvedValue({ state: 'PROCESANDO_REEMPLAZO' } as never);
+    lifecycle.generate.execute.mockResolvedValue({ state: 'PROCESANDO_GENERACION' } as never);
+    lifecycle.tickets.getPeriod.mockResolvedValue({ state: 'CON_PRELIMINAR' } as never);
+    lifecycle.tickets.getRecords.mockResolvedValue([] as never);
+    lifecycle.tickets.poll.mockResolvedValue({ status: 'PENDIENTE' } as never);
+
+    await controller.getPropuesta({ ruc: '20123456789', periodo: '202610', libro: 'RCE' }, user);
+    await controller.exclude({ proposalId: 'p-1' }, user);
+    await controller.restore({ proposalId: 'p-1' }, user);
+    await controller.accept({ ...dto, confirmed: true }, user);
+    await controller.getPreliminar({ periodo: '202610', libro: 'RCE' }, user);
+    await controller.registerPreliminar(dto, user);
+    await controller.deletePreliminary(dto, user);
+    await controller.reemplazo(dto, { buffer: Buffer.from('txt') } as never, user);
+    await controller.getGenerado({ periodo: '202610', libro: 'RCE' }, user);
+    await controller.status({ periodo: '202610', libro: 'RCE' }, user);
+
+    expect(lifecycle.getProposal.execute).toHaveBeenCalled();
+    expect(lifecycle.accept.execute).toHaveBeenCalledWith(
+      { ...dto, confirmed: true },
+      'company-1',
+      true,
+    );
+    expect(lifecycle.tickets.poll).toHaveBeenCalledWith('company-1', '202610', 'RCE_COMPRAS');
   });
 });

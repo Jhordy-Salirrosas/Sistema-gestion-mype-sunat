@@ -31,6 +31,49 @@ enum SireDuplicateSource {
   AMBOS
 }
 
+enum SirePeriodState {
+  PROPUESTA
+  PROCESANDO_REEMPLAZO
+  PROCESANDO_PRELIMINAR
+  PROCESANDO_ELIMINACION
+  CON_PRELIMINAR
+  PROCESANDO_GENERACION
+  GENERADO
+  ERROR
+}
+
+enum SireRecordOrigin {
+  SUNAT
+  USUARIO
+}
+
+enum SireTicketOperation {
+  REEMPLAZO
+  REGISTRO_PRELIMINAR
+  ELIMINACION_PRELIMINAR
+  GENERACION
+}
+
+model SirePeriod {
+  id              String              @id @default(uuid())
+  company_id      String
+  company         Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period          String
+  book_type       SireBookType
+  state           SirePeriodState     @default(PROPUESTA)
+  ticket          String?
+  ticket_operation SireTicketOperation?
+  last_error      String?
+  created_at      DateTime            @default(now())
+  updated_at      DateTime            @updatedAt
+
+  proposals      SireProposal[]
+
+  @@unique([company_id, period, book_type])
+  @@index([state, ticket])
+  @@map("sire_periods")
+}
+
 model SireReportUpload {
   id            String        @id @default(uuid())
   company_id    String
@@ -68,6 +111,11 @@ model SireProposal {
   imported_at         DateTime      @default(now())
   source_upload_id    String?
   source_upload       SireReportUpload? @relation(fields: [source_upload_id], references: [id], onDelete: SetNull)
+  period_id           String?
+  period_record       SirePeriod?      @relation(fields: [period_id], references: [id], onDelete: SetNull)
+  origin              SireRecordOrigin  @default(SUNAT)
+  excluded_at         DateTime?
+  excluded_by         String?
 
   discrepancies       SireDiscrepancy[]
 
