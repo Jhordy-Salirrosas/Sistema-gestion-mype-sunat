@@ -139,7 +139,14 @@ describe('SireController', () => {
       mimetype: 'text/csv',
       buffer: Buffer.from('content'),
     };
-    const output = { imported: 1, rejected: 0, errors: [] };
+    const output = {
+      imported: 1,
+      rejected: 0,
+      errors: [],
+      fileHash: 'hash-de-prueba',
+      fileName: 'rce.csv',
+      reportType: 'RCE' as const,
+    };
     uploadReportUseCase.execute.mockResolvedValue(output);
 
     await expect(

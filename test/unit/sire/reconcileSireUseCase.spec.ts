@@ -14,6 +14,8 @@ describe('ReconcileSireUseCase', () => {
       getClosedReconciliationHistory: jest.fn(),
       closeFiscalPeriod: jest.fn(),
       saveReconciliationResult: jest.fn(),
+      hasReportUploadHash: jest.fn(),
+      saveReportUpload: jest.fn(),
     };
     useCase = new ReconcileSireUseCase(repository);
   });

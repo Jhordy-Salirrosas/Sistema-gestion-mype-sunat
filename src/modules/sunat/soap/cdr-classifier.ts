@@ -115,9 +115,10 @@ export function classifyResponseCode(
     };
   }
 
-  // >= 4000: observación
+  // >= 4000: observación. El comprobante tiene validez tributaria, pero
+  // no es una aceptación limpia: se distingue en OBSERVADO (TA-28).
   return {
-    status: InvoiceStatus.ACEPTADO,
+    status: InvoiceStatus.OBSERVADO,
     kind: 'OBSERVACION',
     valido: true,
     reintentable: false,

@@ -33,7 +33,7 @@ model Invoice {
   company_id                  String
   company                     Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
   
-  // Datos principales de compatibilidad y emisión
+  // Datos principales de compatibilidad y emisiÃ³n
   ruc_emisor                  String
   serie                       String
   correlativo                 Int
@@ -59,7 +59,7 @@ model Invoice {
   xml_hash_sha256             String?
   cdr_storage_url             String?
   
-  // Referencias para Notas de Crédito / Débito
+  // Referencias para Notas de CrÃ©dito / DÃ©bito
   referenced_invoice_id       String?
   referenced_document_type    String?
   referenced_series_correlative String?
@@ -75,6 +75,16 @@ model Invoice {
   updated_at                  DateTime      @updatedAt
 
   @@unique([company_id, tipo_comprobante, serie, correlativo], map: "uq_invoices_fiscal")
+  // Llave de idempotencia del envío (TA-32). Es ADICIONAL a uq_invoices_fiscal:
+  // defensa en profundidad, no un reemplazo. Un mismo contribuyente puede
+  // emitir la misma serie-correlativo desde dos empresas distintas de la
+  // plataforma (dos tenants distintos), así que ni (company_id, tipo, serie,
+  // correlativo) ni (ruc_emisor, tipo, serie, correlativo) por separado son
+  // llaves fiscales completas: juntas sí.
+  //
+  // Se renombra el argumento `map`; el índice NO se llama como el constraint
+  // porque PostgreSQL crea ya un índice con ese nombre para la UNIQUE.
+  @@unique([company_id, ruc_emisor, tipo_comprobante, serie, correlativo], map: "uq_invoices_idempotencia")
   @@index([company_id, fecha_emision, estado])
   @@map("invoices")
 }

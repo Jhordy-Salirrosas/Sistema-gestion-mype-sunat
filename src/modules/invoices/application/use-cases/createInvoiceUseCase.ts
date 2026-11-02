@@ -18,10 +18,14 @@ export class CreateInvoiceUseCase {
    * @param companyId Tenant emisor, extraido del JWT por @CurrentCompany().
    *   Nunca se toma del cuerpo de la peticion: aceptarlo permitiria que un
    *   cliente emitiera a nombre de otra empresa (IDOR).
+   * @param claveIdempotencia Huella del comprobante (TA-32). Es opcional para
+   *   no romper a los llamadores existentes ni las pruebas que construyen el
+   *   caso de uso con dos argumentos.
    */
   async execute(
     dto: CreateInvoiceDto,
     companyId: string,
+    claveIdempotencia?: string,
   ): Promise<InvoicePersistenceResult> {
     if (!companyId) {
       throw new ForbiddenException(
@@ -38,6 +42,7 @@ export class CreateInvoiceUseCase {
       monto_total: dto.monto_total,
       fecha_emision: new Date(dto.fecha_emision),
       payload_ubl: dto.payload_ubl,
+      clave_idempotencia: claveIdempotencia,
     });
 
     return this.invoiceRepository.saveWithTransactionalOutbox(entity);

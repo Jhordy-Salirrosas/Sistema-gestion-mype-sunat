@@ -74,7 +74,7 @@ describe('TA-33 · InvoiceRetryService + Circuit Breaker', () => {
     );
 
     expect(sendAndProcess).toHaveBeenCalledTimes(1);
-    expect(state.snapshot(0).state).toBe('OPEN');
+    expect(state.snapshot().state).toBe('OPEN');
     expect(resultado.circuitoAbierto).toBe(true);
     expect(resultado.intentos).toBe(1);
     expect(queue.sendToDlq).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ describe('TA-33 · InvoiceRetryService + Circuit Breaker', () => {
     );
 
     expect(sendAndProcess).toHaveBeenCalledTimes(1);
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(resultado.circuitoAbierto).toBe(false);
     expect(resultado.estado).toBe(InvoiceStatus.ACEPTADO);
     expect(queue.sendToDlq).not.toHaveBeenCalled();
@@ -112,7 +112,7 @@ describe('TA-33 · InvoiceRetryService + Circuit Breaker', () => {
     );
 
     expect(sendAndProcess).toHaveBeenCalledTimes(1);
-    expect(state.snapshot(0).state).toBe('OPEN');
+    expect(state.snapshot().state).toBe('OPEN');
     expect(resultado.circuitoAbierto).toBe(true);
     expect(queue.sendToDlq).not.toHaveBeenCalled();
   });
@@ -127,7 +127,7 @@ describe('TA-33 · InvoiceRetryService + Circuit Breaker', () => {
       paramsBase,
     );
 
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(resultado.estado).toBe(InvoiceStatus.RECHAZADO);
     expect(resultado.circuitoAbierto).toBe(false);
   });
@@ -157,7 +157,7 @@ describe('TA-33 · InvoiceRetryService + Circuit Breaker', () => {
     const resultadoPrimera = await primera;
 
     expect(resultadoPrimera.circuitoAbierto).toBe(false);
-    expect(state.snapshot(0).state).toBe('CLOSED');
+    expect(state.snapshot().state).toBe('CLOSED');
     expect(queue.sendToDlq).not.toHaveBeenCalled();
   });
 
@@ -177,6 +177,6 @@ describe('TA-33 · InvoiceRetryService + Circuit Breaker', () => {
 
     expect(resultado.enviadoADlq).toBe(true);
     expect(state.puedeEnviar()).toBe(true);
-    expect(state.snapshot(0).state).toBe('HALF_OPEN');
+    expect(state.snapshot().state).toBe('HALF_OPEN');
   });
 });

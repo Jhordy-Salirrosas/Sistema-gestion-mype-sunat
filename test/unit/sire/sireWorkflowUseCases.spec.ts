@@ -16,6 +16,8 @@ describe('SIRE workflow use cases', () => {
     getClosedReconciliationHistory: jest.fn(),
     closeFiscalPeriod: jest.fn(),
     saveReconciliationResult: jest.fn(),
+      hasReportUploadHash: jest.fn(),
+      saveReportUpload: jest.fn(),
   };
 
   beforeEach(() => jest.clearAllMocks());
