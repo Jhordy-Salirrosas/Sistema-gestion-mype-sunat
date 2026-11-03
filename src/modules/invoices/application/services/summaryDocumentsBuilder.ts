@@ -95,13 +95,52 @@ export const vaEnResumen = (c: ComprobanteAgregado): boolean => {
 };
 
 /**
+ * Estados en los que el comprobante YA tiene una respuesta de SUNAT que lo
+ * tiene por informado.
+ *
+ * `ACEPTADO` es el caso normal. `OBSERVADO` también cuenta: SUNAT devolvió un
+ * CDR con observaciones, es decir, lo RECIBIÓ y lo tiene registrado. Volver a
+ * informarlo por resumen sería un segundo envío del mismo documento.
+ *
+ * `RECHAZADO` NO está aquí: no fue aceptado y su caso se trata aparte.
+ */
+export const ESTADOS_YA_INFORMADOS: readonly string[] = [
+  'ACEPTADO',
+  'OBSERVADO',
+];
+
+/**
  * ¿El comprobante debe excluirse del resumen?
  *
  * Lo rechazado no existe ante SUNAT y lo anulado ya se informó como baja:
  * incluirlo resucitaría un comprobante que el contribuyente quiso retirar.
+ *
+ * D11: tampoco entra lo que SUNAT YA INFORMÓ por otra vía. Una boleta enviada
+ * individualmente (sendBill) y aceptada tiene su propio CDR; meterla además en
+ * el resumen diario la declararía dos veces ante la administración. Se detectó
+ * comprobando la vista previa antes de conectar el botón de envío: proponía
+ * informar `B001-3` y `B001-4`, ambas ya ACEPTADAS.
+ *
+ * Se excluye aquí, en la función ÚNICA que decide, y no en la pantalla: así la
+ * vista previa y el envío real no pueden discrepar, y el usuario ve la línea
+ * con su motivo en lugar de que desaparezca sin explicación.
  */
 export const excluidoDelResumen = (c: ComprobanteAgregado): boolean =>
-  ['RECHAZADO', 'ANULADO'].includes(c.estado);
+  ['RECHAZADO', 'ANULADO'].includes(c.estado) ||
+  ESTADOS_YA_INFORMADOS.includes(c.estado);
+
+/**
+ * Motivo por el que un comprobante ya informado queda fuera del resumen.
+ *
+ * Se devuelve como texto para que la pantalla lo muestre tal cual; sin el
+ * motivo, el usuario emite una boleta, no la ve en el resumen y concluye que el
+ * sistema la perdió.
+ */
+export const motivoYaInformado = (c: ComprobanteAgregado): string =>
+  c.estado === 'OBSERVADO'
+    ? 'SUNAT ya lo recibió con observaciones: volver a informarlo lo duplicaría.'
+    : 'SUNAT ya lo aceptó con su CDR: volver a informarlo lo duplicaría.';
+
 
 /** Redondeo a céntimos. */
 const r2 = (n: number): number => Math.round(n * 100) / 100;

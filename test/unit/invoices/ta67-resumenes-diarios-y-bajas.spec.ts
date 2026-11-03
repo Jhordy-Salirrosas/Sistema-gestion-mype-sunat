@@ -19,6 +19,7 @@ import {
   diasDesdeEmision,
   esc,
   excluidoDelResumen,
+  motivoYaInformado,
   vaEnBaja,
   vaEnResumen,
   type CabeceraResumen,
@@ -40,14 +41,22 @@ const CABECERA: CabeceraResumen = {
   fechaGeneracion: '2026-11-01',
 };
 
-/** Boleta aceptada de S/ 590 (500 de base + 90 de IGV). */
+/**
+ * Boleta PENDIENTE de S/ 590 (500 de base + 90 de IGV).
+ *
+ * Nace en `PENDIENTE` y no en `ACEPTADO`: el resumen diario existe para
+ * informar lo que SUNAT todavía no tiene. Desde D11, una boleta ya ACEPTADA se
+ * excluye del resumen (ya tiene su CDR), así que usarla como caso por defecto
+ * haría que todas estas pruebas describe del XML estuvieran mirando un
+ * comprobante que nunca entra al documento.
+ */
 function boleta(extra: Partial<ComprobanteAgregado> = {}): ComprobanteAgregado {
   return {
     tipoComprobante: '03',
     serie: 'B001',
     correlativo: 25,
     fechaEmision: '2026-10-31',
-    estado: 'ACEPTADO',
+    estado: 'PENDIENTE',
     total: 590,
     igv: 90,
     tipoDocCliente: '1',
@@ -92,7 +101,39 @@ describe('TA-67 · pertenencia al resumen diario', () => {
   it('lo rechazado y lo anulado se excluyen del resumen', () => {
     expect(excluidoDelResumen(boleta({ estado: 'RECHAZADO' }))).toBe(true);
     expect(excluidoDelResumen(boleta({ estado: 'ANULADO' }))).toBe(true);
-    expect(excluidoDelResumen(boleta({ estado: 'ACEPTADO' }))).toBe(false);
+  });
+
+  /**
+   * D11 — ESTA PRUEBA CAMBIÓ DE SENTIDO.
+   *
+   * Antes afirmaba `excluidoDelResumen(ACEPTADO) === false`, es decir, que una
+   * boleta ya aceptada SÍ entraba al resumen. Eso era un defecto, no una
+   * decisión: la vista previa proponía informar `B001-3` y `B001-4`, ambas con
+   * su CDR, y el resumen las habría declarado una segunda vez ante SUNAT.
+   *
+   * Lo que se espera ahora: una boleta que SUNAT ya informó NO entra al
+   * resumen, y `OBSERVADO` tampoco (también tiene CDR: fue recibido).
+   */
+  it('una boleta YA INFORMADA por SUNAT no entra al resumen (D11)', () => {
+    expect(excluidoDelResumen(boleta({ estado: 'ACEPTADO' }))).toBe(true);
+    expect(excluidoDelResumen(boleta({ estado: 'OBSERVADO' }))).toBe(true);
+  });
+
+  it('una boleta PENDIENTE sí entra: todavía no la informó nadie', () => {
+    // El resumen diario existe justamente para esta: la que aún no tiene CDR.
+    for (const estado of ['PENDIENTE', 'EN_COLA', 'ENVIADO', 'ERROR_RED']) {
+      expect(excluidoDelResumen(boleta({ estado }))).toBe(false);
+    }
+  });
+
+  it('el motivo de exclusión dice que ya está informado, no que esté mal', () => {
+    // Sin motivo el usuario creería que el sistema perdió la boleta.
+    expect(motivoYaInformado(boleta({ estado: 'ACEPTADO' }))).toContain(
+      'duplicaría',
+    );
+    expect(motivoYaInformado(boleta({ estado: 'OBSERVADO' }))).toContain(
+      'observaciones',
+    );
   });
 });
 
@@ -194,10 +235,24 @@ describe('TA-67 · XML del resumen diario', () => {
 // ---------------------------------------------------------------------------
 
 describe('TA-67 · comunicación de baja', () => {
+  /**
+   * Factura ACEPTADA, que es el único caso que puede darse de baja.
+   *
+   * No se usa `boleta()` porque desde D11 esa fábrica nace PENDIENTE (lo que
+   * entra al resumen). La baja es el caso opuesto: solo lo que SUNAT ya aceptó
+   * se puede anular, y la función lo comprueba.
+   */
+  const facturaAceptada = (extra: Partial<ComprobanteAgregado> = {}) =>
+    boleta({
+      tipoComprobante: '01',
+      serie: 'F001',
+      correlativo: 143,
+      estado: 'ACEPTADO',
+      ...extra,
+    });
+
   it('genera un VoidedDocuments con la estructura que exige SUNAT', () => {
-    const xml = construirComunicacionBaja(CABECERA, [
-      boleta({ tipoComprobante: '01', serie: 'F001', correlativo: 143 }),
-    ]);
+    const xml = construirComunicacionBaja(CABECERA, [facturaAceptada()]);
 
     expect(xml).toContain('<VoidedDocuments xmlns="urn:sunat:names:specification:ubl:peru:schema:xsd:VoidedDocuments-1"');
     expect(xml).toContain('<cbc:CustomizationID>1.0</cbc:CustomizationID>');
@@ -205,20 +260,13 @@ describe('TA-67 · comunicación de baja', () => {
   });
 
   it('el identificador de la baja es RA-AAAAMMDD-NNN', () => {
-    const xml = construirComunicacionBaja(CABECERA, [
-      boleta({ tipoComprobante: '01', serie: 'F001', correlativo: 143 }),
-    ]);
+    const xml = construirComunicacionBaja(CABECERA, [facturaAceptada()]);
     expect(xml).toContain('<cbc:ID>RA-20261101-001</cbc:ID>');
   });
 
   it('cada comprobante lleva su serie, su número y el motivo', () => {
     const xml = construirComunicacionBaja(CABECERA, [
-      boleta({
-        tipoComprobante: '01',
-        serie: 'F001',
-        correlativo: 143,
-        motivoBaja: 'Error en el RUC del cliente',
-      }),
+      facturaAceptada({ motivoBaja: 'Error en el RUC del cliente' }),
     ]);
 
     expect(xml).toContain('<sac:DocumentSerialID>F001</sac:DocumentSerialID>');
@@ -263,11 +311,7 @@ describe('TA-67 · comunicación de baja', () => {
 
   it('escapa los caracteres reservados en el motivo de baja', () => {
     const xml = construirComunicacionBaja(CABECERA, [
-      boleta({
-        tipoComprobante: '01',
-        serie: 'F001',
-        motivoBaja: 'Anulado por <error> & corrección',
-      }),
+      facturaAceptada({ motivoBaja: 'Anulado por <error> & corrección' }),
     ]);
 
     expect(xml).toContain('Anulado por &lt;error&gt; &amp; corrección');

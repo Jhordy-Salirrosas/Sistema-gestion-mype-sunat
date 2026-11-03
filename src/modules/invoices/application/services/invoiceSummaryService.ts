@@ -29,6 +29,8 @@ import {
   construirResumenDiario,
   diasDesdeEmision,
   DIAS_MAXIMOS_RESUMEN,
+  ESTADOS_YA_INFORMADOS,
+  motivoYaInformado,
   TIPOS_EN_BAJA,
   vaEnResumen,
   type CabeceraResumen,
@@ -251,6 +253,11 @@ export class InvoiceSummaryService {
       motivoExclusion = 'Rechazado por SUNAT: no existe ante la administración.';
     } else if (comprobante.estado === 'ANULADO') {
       motivoExclusion = 'Ya anulado: volver a informarlo lo resucitaría.';
+    } else if (ESTADOS_YA_INFORMADOS.includes(comprobante.estado)) {
+      // D11: ya tiene CDR de SUNAT. La línea SIGUE VISIBLE, marcada como
+      // excluida y con su motivo, para que el usuario entienda por qué no se
+      // informa en vez de notar que «faltan boletas».
+      motivoExclusion = motivoYaInformado(comprobante);
     } else if (dias !== null && dias > DIAS_MAXIMOS_RESUMEN) {
       motivoExclusion = `Fuera del plazo de ${DIAS_MAXIMOS_RESUMEN} días (regla 2957).`;
     }
