@@ -189,6 +189,48 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Trabajos de la DLQ cuyo comprobante YA NO EXISTE en la base.
+   *
+   * POR QUÉ HACE FALTA
+   *
+   * `listDlq` devuelve todos los jobs de la cola de muertos con el
+   * `invoice_id` guardado en el payload, sin comprobar que ese comprobante
+   * siga existiendo. Al borrar comprobantes de prueba (repoblados, documentos
+   * con datos inválidos) los jobs quedaron huérfanos: el Monitor mostraba
+   * "DLQ 3" y la tabla de la DLQ salía vacía, porque la pantalla resuelve el
+   * número fiscal y no lo encontraba.
+   *
+   * Un job huérfano no es trabajo pendiente: reintentarlo lo mueve a la cola
+   * principal, el consumidor intenta cargar el comprobante, falla y vuelve a
+   * caer en la DLQ. Se informa aparte para que el número grande siga siendo el
+   * trabajo real y el operador no persiga fantasmas.
+   */
+  async countDlqHuerfanos(companyId: string): Promise<number> {
+    const jobs = await this.listDlq(companyId);
+    const ids = jobs
+      .map((job) => job.comprobanteSerieNumero)
+      .filter((id): id is string => typeof id === 'string' && id !== 'sin identificar');
+
+    if (ids.length === 0) return 0;
+
+    // Se consulta con SQL directo porque `QueueService` no inyecta Prisma a
+    // propósito: solo habla con pg-boss. Una consulta de existencia no
+    // justifica introducir la dependencia.
+    const vivos = await this.boss.getDb().executeSql(
+      'SELECT id FROM invoices WHERE id = ANY($1::text[])',
+      [ids],
+    );
+
+    const existentes = new Set(
+      (Array.isArray(vivos.rows) ? vivos.rows : []).map((fila) =>
+        String((fila as Record<string, unknown>).id),
+      ),
+    );
+
+    return ids.filter((id) => !existentes.has(id)).length;
+  }
+
+  /**
    * Mueve explícitamente un comprobante a la DLQ.
    *
    * Lo usa `InvoiceRetryService` al agotar los 3 reintentos de HU-04. Se crea

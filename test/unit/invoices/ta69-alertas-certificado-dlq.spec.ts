@@ -78,6 +78,23 @@ describe('TA-69 mensaje de la DLQ', () => {
     expect(texto).toContain('4 comprobante');
     expect(texto).toContain('revisión manual');
   });
+
+  it('no llama pendiente a un trabajo de un comprobante borrado', () => {
+    // El caso real del 3 nov: "DLQ 3" con la tabla de la DLQ vacía y un solo
+    // comprobante sin confirmar en las métricas. Los tres jobs apuntaban a
+    // comprobantes que se habían borrado al repoblar.
+    const texto = mensajeDlq(1, 3);
+    expect(texto).toContain('1 comprobante');
+    expect(texto).toContain('revisión manual');
+    expect(texto).toContain('3 trabajo(s)');
+    expect(texto).toContain('ya borrados');
+  });
+
+  it('sin pendientes reales, dice que no hay nada que revisar', () => {
+    const texto = mensajeDlq(0, 3);
+    expect(texto).toContain('no hay comprobantes pendientes');
+    expect(texto).not.toContain('revisión manual');
+  });
 });
 
 describe('TA-69 InvoiceAlertService', () => {
@@ -97,10 +114,22 @@ describe('TA-69 InvoiceAlertService', () => {
     }),
   });
 
-  const colaFalsa = (pendientes: number, falla = false) => ({
+  /**
+   * `total` es lo que `countDlq` devuelve: TODOS los trabajos de la cola.
+   * `huerfanos` es cuántos de ellos apuntan a comprobantes ya borrados.
+   *
+   * Son trabajos que quedaron colgados al borrar comprobantes de prueba: están
+   * en la cola pero no representan trabajo pendiente, porque reintentarlos
+   * vuelve a fallar (el comprobante no existe).
+   */
+  const colaFalsa = (total: number, falla = false, huerfanos = 0) => ({
     countDlq: jest.fn(async () => {
       if (falla) throw new Error('pg-boss caído');
-      return pendientes;
+      return total;
+    }),
+    countDlqHuerfanos: jest.fn(async () => {
+      if (falla) throw new Error('pg-boss caído');
+      return huerfanos;
     }),
     listDlq: jest.fn(),
   });
@@ -162,5 +191,31 @@ describe('TA-69 InvoiceAlertService', () => {
     expect(estado.dlq.pendientes).toBe(2);
     expect(estado.gravedadGlobal).toBe('CRITICO');
     expect(typeof estado.consultadoEl).toBe('string');
+  });
+
+  it('informa los huérfanos sin contarlos como pendientes', async () => {
+    // 4 trabajos en la cola, 3 de ellos de comprobantes borrados: queda 1 real.
+    const servicio = new InvoiceAlertService(
+      certificadoFalso(100) as never,
+      colaFalsa(4, false, 3) as never,
+    );
+
+    const alerta = await servicio.estadoDlq('emp-1');
+    expect(alerta.pendientes).toBe(1);
+    expect(alerta.huerfanos).toBe(3);
+    expect(alerta.gravedad).toBe('CRITICO');
+  });
+
+  it('no la marca CRÍTICO si solo hay trabajos huérfanos', async () => {
+    // Sin trabajo real no hay nada que intervenir: el color no puede asustar
+    // por jobs colgados de comprobantes que ya no existen.
+    const servicio = new InvoiceAlertService(
+      certificadoFalso(100) as never,
+      colaFalsa(3, false, 3) as never,
+    );
+
+    const alerta = await servicio.estadoDlq('emp-1');
+    expect(alerta.gravedad).toBe('OK');
+    expect(alerta.huerfanos).toBe(3);
   });
 });

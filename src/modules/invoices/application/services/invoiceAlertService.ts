@@ -51,6 +51,17 @@ export interface AlertaDlq {
   pendientes: number;
   gravedad: GravedadAlerta;
   mensaje: string;
+  /**
+   * Trabajos de la DLQ cuyo comprobante YA NO EXISTE en la base.
+   *
+   * Se informa aparte porque no son trabajo pendiente: son restos. Un job de la
+   * cola de muertos apunta a un `invoice_id`; si ese comprobante se borró, el
+   * job queda huérfano y se puede mover a la cola principal cuantas veces se
+   * quiera sin que nunca desaparezca. Contarlos como "necesitan revisión
+   * manual" dejaba el Monitor diciendo "DLQ 3" mientras la tabla de la DLQ
+   * salía vacía y las métricas informaban un solo comprobante sin confirmar.
+   */
+  huerfanos: number;
 }
 
 /** Respuesta de `GET /api/v1/invoices/alertas`. */
@@ -125,11 +136,19 @@ export const mensajeCertificado = (
  * comprobantes que SUNAT nunca recibió y que ninguna tarea automática va a
  * reintentar.
  */
-export const mensajeDlq = (pendientes: number): string => {
+export const mensajeDlq = (pendientes: number, huerfanos = 0): string => {
   if (pendientes === 0) {
-    return 'Sin comprobantes en la cola de muertos.';
+    return huerfanos > 0
+      ? `La cola de muertos tiene ${huerfanos} trabajo(s) de comprobantes ya borrados; no hay comprobantes pendientes de revisión.`
+      : 'Sin comprobantes en la cola de muertos.';
   }
-  return `${pendientes} comprobante(s) agotaron los reintentos y necesitan revisión manual.`;
+
+  const base = `${pendientes} comprobante(s) agotaron los reintentos y necesitan revisión manual.`;
+  // Los huérfanos no se suman: se mencionan aparte para que el número grande
+  // siga siendo el trabajo real.
+  return huerfanos > 0
+    ? `${base} (${huerfanos} trabajo(s) más de la cola apunta(n) a comprobantes ya borrados.)`
+    : base;
 };
 
 @Injectable()
@@ -177,15 +196,30 @@ export class InvoiceAlertService {
     }
   }
 
-  /** Comprobantes propios que quedaron en la DLQ. */
+  /**
+   * Comprobantes propios que quedaron en la DLQ.
+   *
+   * Los trabajos huérfanos —los que apuntan a un comprobante que ya no existe—
+   * NO cuentan como pendientes. Antes sí contaban: el Monitor mostraba "DLQ 3"
+   * porque tres jobs apuntaban a comprobantes borrados en un repoblado, mientras
+   * la tabla de la DLQ salía vacía y las métricas informaban un solo
+   * comprobante sin confirmar. Los tres números eran correctos y hablaban de
+   * cosas distintas, que es peor que uno equivocado: nadie sabe en cuál creer.
+   */
   public async estadoDlq(companyId: string): Promise<AlertaDlq> {    try {
-      const pendientes = await this.cola.countDlq(companyId);
+      const trabajos = await this.cola.countDlq(companyId);
+      const huerfanos = await this.cola.countDlqHuerfanos(companyId);
+      // Lo que se informa como pendiente es lo que un operador puede resolver:
+      // los trabajos cuyo comprobante aún existe. Un job huérfano no se arregla
+      // reintentándolo.
+      const pendientes = Math.max(0, trabajos - huerfanos);
 
       return {
         evaluado: true,
         pendientes,
         gravedad: pendientes > 0 ? 'CRITICO' : 'OK',
-        mensaje: mensajeDlq(pendientes),
+        mensaje: mensajeDlq(pendientes, huerfanos),
+        huerfanos,
       };
     } catch (error: unknown) {
       this.logger.warn(
@@ -198,6 +232,7 @@ export class InvoiceAlertService {
         gravedad: 'SIN_DATOS',
         mensaje:
           'No se pudo consultar la cola de muertos; el número de comprobantes trabados es desconocido.',
+        huerfanos: 0,
       };
     }
   }
