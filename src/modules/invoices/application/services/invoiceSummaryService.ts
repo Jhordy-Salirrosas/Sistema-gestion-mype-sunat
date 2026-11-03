@@ -121,14 +121,14 @@ export class InvoiceSummaryService {
     const incluidos = agregados.filter((l) => l.incluido);
     let xml: string | null = null;
 
-    if (incluidos.length > 0) {
-      const cabecera = await this.cabecera(
-        companyId,
-        fecha,
-        correlativo,
-        'RC',
-      );
+    // La cabecera se construye SIEMPRE, no solo cuando hay algo que informar:
+    // su `fechaGeneracion` es la que da nombre al identificador, y la tarjeta
+    // debe mostrar el mismo que el XML aunque la lista venga vacía. Además
+    // valida que la empresa exista, cosa que conviene saber aquí y no a mitad
+    // de generar el documento.
+    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RC');
 
+    if (incluidos.length > 0) {
       try {
         xml = construirResumenDiario(
           cabecera,
@@ -141,7 +141,17 @@ export class InvoiceSummaryService {
 
     return {
       envio: {
-        identificador: `RC-${fecha.replace(/-/g, '')}-${String(correlativo).padStart(3, '0')}`,
+        // El identificador de la TARJETA debe ser el mismo que el `<cbc:ID>` del
+        // XML. Antes se armaba con la fecha de REFERENCIA (`fecha`, el día de
+        // los comprobantes) mientras el constructor usaba la de GENERACIÓN, así
+        // que la pantalla decía `RC-20261101-001` y el XML del mismo payload
+        // decía `RC-20261102-001`. Dos identificadores para un solo documento:
+        // quien recibiera el ZIP buscaría un archivo que no cuadra con lo que
+        // vio en pantalla.
+        //
+        // Se usa `cabecera.fechaGeneracion` (regla 2346) y la fecha de
+        // referencia viaja aparte en `fechaReferencia`.
+        identificador: `RC-${cabecera.fechaGeneracion.replace(/-/g, '')}-${String(correlativo).padStart(3, '0')}`,
         tipo: 'RESUMEN_DIARIO',
         fechaReferencia: fecha,
         correlativo,
@@ -183,14 +193,12 @@ export class InvoiceSummaryService {
     const incluidos = agregados.filter((l) => l.incluido);
     let xml: string | null = null;
 
-    if (incluidos.length > 0) {
-      const cabecera = await this.cabecera(
-        companyId,
-        fecha,
-        correlativo,
-        'RA',
-      );
+    // La cabecera se construye SIEMPRE, no solo cuando hay algo que informar:
+    // su `fechaGeneracion` es la que da nombre al identificador, y la tarjeta
+    // tiene que mostrar el mismo que el XML aunque la lista venga vacía.
+    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RA');
 
+    if (incluidos.length > 0) {
       try {
         xml = construirComunicacionBaja(
           cabecera,
@@ -203,7 +211,10 @@ export class InvoiceSummaryService {
 
     return {
       envio: {
-        identificador: `RA-${fecha.replace(/-/g, '')}-${String(correlativo).padStart(3, '0')}`,
+        // Misma regla que el resumen diario: el identificador de la tarjeta es
+        // el del XML (fecha de GENERACIÓN, regla 2346), no el de la fecha de
+        // referencia de los comprobantes dados de baja.
+        identificador: `RA-${cabecera.fechaGeneracion.replace(/-/g, '')}-${String(correlativo).padStart(3, '0')}`,
         tipo: 'COMUNICACION_BAJA',
         fechaReferencia: fecha,
         correlativo,
