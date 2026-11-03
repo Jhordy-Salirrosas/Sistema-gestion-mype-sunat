@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { AccountingController } from '../../../src/modules/accounting/infrastructure/controllers/accountingController';
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
@@ -44,7 +45,8 @@ describe('AccountingController', () => {
     generateUseCase.execute.mockResolvedValue(mockEntry);
 
     const dto = {
-      companyId: 'comp-1',
+      // Empresa del cuerpo: debe ignorarse en favor de la del token.
+      companyId: 'empresa-del-cuerpo',
       period: '2026-03',
       entryDate: '2026-03-01T00:00:00.000Z',
       glosa: 'Venta',
@@ -52,10 +54,13 @@ describe('AccountingController', () => {
       lines: [],
     };
 
-    const result = await controller.createEntry(dto);
+    const result = await controller.createEntry(dto, 'comp-1');
 
     expect(result).toBe(mockEntry);
-    expect(generateUseCase.execute).toHaveBeenCalledWith(dto);
+    expect(generateUseCase.execute).toHaveBeenCalledWith({
+      ...dto,
+      companyId: 'comp-1',
+    });
   });
 
   it('debe delegar la exportación PLE al caso de uso', async () => {
@@ -78,10 +83,25 @@ describe('AccountingController', () => {
       bookCode: '050100',
     };
 
-    const result = await controller.exportPle(dto);
+    const result = await controller.exportPle(dto, 'comp-1');
 
     expect(result).toBe(mockExportResult);
     expect(getEntriesUseCase.execute).toHaveBeenCalledWith('comp-1');
     expect(exportPleUseCase.execute).toHaveBeenCalledWith({ ...dto, companyId: 'comp-1' }, []);
+  });
+
+  it('rechaza las peticiones cuando el token no trae empresa', async () => {
+    const dto = {
+      companyId: 'comp-1',
+      period: '2026-03',
+      entryDate: '2026-03-01T00:00:00.000Z',
+      glosa: 'Venta',
+      sourceModule: 'INVOICES',
+      lines: [],
+    };
+
+    await expect(controller.getEntries()).rejects.toThrow(ForbiddenException);
+    await expect(controller.createEntry(dto)).rejects.toThrow(ForbiddenException);
+    await expect(controller.exportPle(dto)).rejects.toThrow(ForbiddenException);
   });
 });
