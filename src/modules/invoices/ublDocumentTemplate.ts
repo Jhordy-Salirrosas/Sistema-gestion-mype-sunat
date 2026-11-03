@@ -48,9 +48,29 @@ export interface PartesDocumento {
   /**
    * `DiscrepancyResponse` + `BillingReference` de las notas de crédito/débito.
    *
-   * No son `cbc:Note`: van después de las partes (tras
-   * `AccountingCustomerParty` y antes de `PaymentMeans`), que es donde el
-   * esquema los sitúa.
+   * DÓNDE VAN Y POR QUÉ NO JUNTO A LAS PARTES
+   *
+   * Antes se emitían justo después de `AccountingCustomerParty`, que parecía el
+   * sitio natural. En `CreditNote`, en cambio, la secuencia del XSD oficial
+   * coloca `cac:PayeeParty`, `cac:Delivery`, `cac:PaymentMeans`,
+   * `cac:TaxTotal` y `cac:LegalMonetaryTotal` ANTES de donde UBL admite estos
+   * nodos, así que SUNAT respondía:
+   *
+   *   "cvc-particle 2.1: found <cac:DiscrepancyResponse>, but next item should
+   *    be {…}LegalMonetaryTotal"
+   *
+   * Es decir: el nodo existía, pero en una posición que el esquema no permite.
+   * Se emitió una NC real contra BETA el 3 nov y el rechazo llegó con ese
+   * mensaje.
+   *
+   * El sitio correcto es ANTES de las partes: en la secuencia de
+   * `CreditNoteType` del XSD oficial, `cac:DiscrepancyResponse` (431) y
+   * `cac:BillingReference` (464) van justo tras `cac:InvoicePeriod` y antes de
+   * `cac:Signature` y `cac:AccountingSupplierParty`. `Invoice`, en cambio, los
+   * sitúa en otro punto: por eso la misma línea no servía para las dos raíces.
+   *
+   * Es un caso donde el orden de nodos es la diferencia entre un XML que SUNAT
+   * procesa y uno que no llega a leer.
    */
   referenciaNota?: string;
 }
@@ -70,8 +90,8 @@ ${p.extensiones}
   <cbc:IssueDate>${p.fecha}</cbc:IssueDate>
   <cbc:IssueTime>${p.hora}</cbc:IssueTime>
   <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>${p.notas}
-  <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>
-${p.emisor}${p.cliente}${p.referenciaNota ? `\n${p.referenciaNota}` : ''}${p.mediosPago ? `\n${p.mediosPago}` : ''}
+  <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.referenciaNota ? `\n${p.referenciaNota}` : ''}
+${p.emisor}${p.cliente}${p.mediosPago ? `\n${p.mediosPago}` : ''}
 ${p.formaPago}${p.retenciones ? `\n${p.retenciones}` : ''}
 ${p.impuestos}
 ${p.totales}
