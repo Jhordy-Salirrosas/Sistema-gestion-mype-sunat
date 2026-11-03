@@ -49,6 +49,14 @@ const SELECT_DETALLE = {
   taxable_operations: true,
   total_igv: true,
   cdr_sunat: true,
+  /**
+   * Payload UBL del que se generó el XML.
+   *
+   * Es el ÚNICO sitio donde vive la forma de pago y el cronograma: `invoices`
+   * no tiene columnas para eso. Sin proyectarlo, el detalle no puede decir si
+   * una factura fue al crédito ni con cuántas cuotas.
+   */
+  payload_ubl: true,
   /** SHA-256 del XML firmado, para verificar la descarga. */
   xml_hash_sha256: true,
   created_at: true,
