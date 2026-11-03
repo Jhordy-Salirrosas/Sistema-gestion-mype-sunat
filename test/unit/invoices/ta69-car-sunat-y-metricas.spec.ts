@@ -24,6 +24,7 @@ import {
 } from '../../../src/modules/sire/application/sireCarService';
 import {
   calcularMetricas,
+  expandirGrupos,
   periodoActual,
   rangoDelPeriodo,
 } from '../../../src/modules/invoices/application/services/invoiceMetricsService';
@@ -240,6 +241,14 @@ describe('TA-69 · métricas de facturación', () => {
     expect(metricas.rechazados).toBe(0);
   });
 
+  /*
+   * CAMBIO DE CRITERIO (3 nov): `ERROR_RED` deja de contarse como emitido.
+   *
+   * Antes este test fijaba `emitidos = 3` contando también el ERROR_RED. Con la
+   * base real eso significaba que una factura que nunca llegó a SUNAT sostenía
+   * la cifra de venta y la tasa de aceptación. Un error de red no es una venta
+   * confirmada ni un rechazo: se informa aparte y su importe NO se factura.
+   */
   it('cuenta los pendientes por separado', () => {
     const metricas = calcularMetricas(
       [
@@ -251,7 +260,11 @@ describe('TA-69 · métricas de facturación', () => {
     );
 
     expect(metricas.pendientes).toBe(2);
-    expect(metricas.emitidos).toBe(3);
+    // EN_COLA + ACEPTADO; el ERROR_RED va en su propio contador.
+    expect(metricas.emitidos).toBe(2);
+    expect(metricas.erroresRed).toBe(1);
+    // El importe del error de red queda fuera de lo facturado.
+    expect(metricas.facturado).toBe(400);
   });
 
   it('la tasa de aceptación es el porcentaje de procesados aceptados', () => {
@@ -299,6 +312,91 @@ describe('TA-69 · métricas de facturación', () => {
 
   it('las métricas devuelven el periodo consultado', () => {
     expect(calcularMetricas([], '2026-09').periodo).toBe('2026-09');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b · Expansión de los grupos de Prisma
+//
+// Estos casos cubren el defecto que las tarjetas de la bandeja mostraron el
+// 1 de noviembre: las métricas decían "3 aceptadas, 1 rechazada, 75 %" con 23
+// comprobantes en la base (18 aceptados, 5 rechazados). La causa no estaba en
+// la aritmética de `calcularMetricas` —probada arriba— sino en que recibía los
+// grupos de `groupBy`, que son una fila por combinación y no por comprobante.
+// ---------------------------------------------------------------------------
+
+describe('TA-69 · expansión de grupos antes de calcular', () => {
+  it('un grupo con 14 comprobantes produce 14 filas, no una', () => {
+    const filas = expandirGrupos([
+      { tipo_comprobante: '01', estado: 'ACEPTADO', _sum: { monto_total: 1400 }, _count: { _all: 14 } },
+    ]);
+
+    expect(filas).toHaveLength(14);
+    // El importe se reparte y la suma se conserva al céntimo.
+    const suma = filas.reduce((acumulado, fila) => acumulado + fila.total, 0);
+    expect(Math.round(suma * 100) / 100).toBe(1400);
+  });
+
+  it('reproduce el caso real del 1 de noviembre y da 18 y 5', () => {
+    // Estos son los cuatro grupos que devolvió PostgreSQL con los datos reales.
+    const filas = expandirGrupos([
+      { tipo_comprobante: '01', estado: 'ACEPTADO', _sum: { monto_total: 9420.62 }, _count: { _all: 14 } },
+      { tipo_comprobante: '01', estado: 'RECHAZADO', _sum: { monto_total: 42.48 }, _count: { _all: 5 } },
+      { tipo_comprobante: '03', estado: 'ACEPTADO', _sum: { monto_total: 177 }, _count: { _all: 2 } },
+      { tipo_comprobante: '07', estado: 'ACEPTADO', _sum: { monto_total: 59 }, _count: { _all: 2 } },
+    ]);
+
+    const metricas = calcularMetricas(filas, '2026-11');
+
+    // Antes: aceptados === 3 y rechazados === 1, que es lo que se veía en pantalla.
+    expect(metricas.aceptados).toBe(18);
+    expect(metricas.rechazados).toBe(5);
+    expect(metricas.emitidos).toBe(18);
+    // 18 aceptados sobre 23 procesados = 78,26 %.
+    expect(metricas.tasaAceptacion).toBe(78.26);
+  });
+
+  it('el importe facturado no cambia al expandir los grupos', () => {
+    const grupos = [
+      { tipo_comprobante: '01', estado: 'ACEPTADO', _sum: { monto_total: 9420.62 }, _count: { _all: 14 } },
+      { tipo_comprobante: '03', estado: 'ACEPTADO', _sum: { monto_total: 177 }, _count: { _all: 2 } },
+      { tipo_comprobante: '07', estado: 'ACEPTADO', _sum: { monto_total: 59 }, _count: { _all: 2 } },
+    ];
+
+    const metricas = calcularMetricas(expandirGrupos(grupos), '2026-11');
+
+    expect(metricas.facturadoBruto).toBe(9597.62);
+    expect(metricas.acreditado).toBe(59);
+    // 9420,62 + 177 − 59 = 9538,62.
+    expect(metricas.facturado).toBe(9538.62);
+  });
+
+  it('un grupo sin conteo se trata como un solo documento', () => {
+    // Si Prisma no devolviera `_count`, colapsar a cero perdería el documento;
+    // colapsar a uno es la lectura conservadora.
+    const filas = expandirGrupos([
+      { tipo_comprobante: '01', estado: 'ACEPTADO', _sum: { monto_total: 500 } },
+    ]);
+
+    expect(filas).toHaveLength(1);
+    expect(filas[0]?.total).toBe(500);
+  });
+
+  it('un grupo con conteo cero se descarta', () => {
+    const filas = expandirGrupos([
+      { tipo_comprobante: '01', estado: 'ACEPTADO', _sum: { monto_total: 0 }, _count: { _all: 0 } },
+    ]);
+
+    expect(filas).toHaveLength(0);
+  });
+
+  it('un monto que no es número no rompe la suma', () => {
+    const filas = expandirGrupos([
+      { tipo_comprobante: '01', estado: 'ACEPTADO', _sum: { monto_total: null }, _count: { _all: 2 } },
+    ]);
+
+    expect(filas).toHaveLength(2);
+    expect(filas.every((fila) => fila.total === 0)).toBe(true);
   });
 });
 
