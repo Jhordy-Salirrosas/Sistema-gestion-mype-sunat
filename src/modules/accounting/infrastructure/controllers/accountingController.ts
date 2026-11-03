@@ -1,13 +1,15 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Post,
-  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
+import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
 import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
@@ -16,6 +18,7 @@ import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAcco
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
+@UseGuards(AuthGuard)
 export class AccountingController {
   constructor(
     private readonly generateEntryUseCase: GenerateAccountingEntryUseCase,
@@ -23,16 +26,29 @@ export class AccountingController {
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
   ) {}
 
+  /**
+   * La empresa sale SIEMPRE del token: aceptar un id del cuerpo o del query
+   * permitiria leer o escribir asientos de otra empresa (IDOR).
+   */
+  private empresaDelToken(currentCompanyId?: string): string {
+    if (!currentCompanyId) {
+      throw new ForbiddenException(
+        'La petición no tiene empresa asociada: falta companyId en el token',
+      );
+    }
+    return currentCompanyId;
+  }
+
   // ==========================================
   // GET: Obtener lista de asientos de la empresa
   // ==========================================
   @Get('entries')
   async getEntries(
     @CurrentCompany() currentCompanyId?: string,
-    @Query('companyId') queryCompanyId?: string,
   ): Promise<AccountingEntryEntity[]> {
-    const companyId = currentCompanyId || queryCompanyId || '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
-    return this.getEntriesUseCase.execute(companyId);
+    return this.getEntriesUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+    );
   }
 
   // ==========================================
@@ -44,8 +60,10 @@ export class AccountingController {
     @Body() dto: CreateAccountingEntryDto,
     @CurrentCompany() currentCompanyId?: string,
   ): Promise<AccountingEntryEntity> {
-    const companyId = currentCompanyId || dto.companyId || '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
-    return this.generateEntryUseCase.execute({ ...dto, companyId });
+    return this.generateEntryUseCase.execute({
+      ...dto,
+      companyId: this.empresaDelToken(currentCompanyId),
+    });
   }
 
   // ==========================================
@@ -57,7 +75,7 @@ export class AccountingController {
     @Body() dto: ExportPleDto,
     @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
-    const companyId = currentCompanyId || dto.companyId || '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
+    const companyId = this.empresaDelToken(currentCompanyId);
     
     // 1. Obtener los asientos contables persistidos de la empresa
     const entries = await this.getEntriesUseCase.execute(companyId);
