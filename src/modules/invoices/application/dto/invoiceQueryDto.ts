@@ -69,6 +69,17 @@ export interface ComprobanteDetalleDto extends ComprobanteListadoDto {
   ruc_emisor: string;
   base_imponible: number;
   total_igv: number;
+  /**
+   * Referencia de una nota (07/08) al documento que modifica.
+   *
+   * Son columnas propias de `invoices` que se persistían desde `cc5572c` pero
+   * que el detalle NO publicaba, así que la pantalla no tenía de dónde leerlas
+   * y una nota aceptada seguía mostrándose sin origen ni motivo. Son `null` en
+   * facturas y boletas, que no afectan a ningún documento.
+   */
+  referenced_document_type: string | null;
+  referenced_series_correlative: string | null;
+  credit_debit_reason_code: string | null;
   /** SHA-256 del XML firmado que se envió; `null` si no se guardó. */
   hash_xml: string | null;
   /**

@@ -458,3 +458,58 @@ describe('TA-29 condiciones de pago del detalle', () => {
     expect(dto.cuotas[0]?.vencimiento).toBe('2026-12-03');
   });
 });
+
+/**
+ * Referencia de las notas en el detalle.
+ *
+ * Las columnas se persistían desde `cc5572c`, pero el detalle no las publicaba:
+ * la nota aceptada seguía viéndose sin origen ni motivo. Un dato guardado y no
+ * expuesto es, para la pantalla, un dato que no existe.
+ */
+describe('TA-29 referencia de la nota al documento afectado', () => {
+  const fila = (extra: Record<string, unknown> = {}) => ({
+    id: 'inv-nc',
+    tipo_comprobante: '07',
+    serie: 'FC01',
+    correlativo: 9,
+    fecha_emision: new Date('2026-11-03T00:00:00Z'),
+    estado: 'ACEPTADO' as never,
+    monto_total: 118,
+    currency_code: 'PEN',
+    customer_identity_number: '20100070970',
+    customer_legal_name: 'FERRETERIA LOS ANDES S.A.C.',
+    sunat_response_code: '0',
+    ruc_emisor: '20601234567',
+    taxable_operations: 100,
+    total_igv: 18,
+    cdr_sunat: null,
+    created_at: new Date('2026-11-03T00:00:00Z'),
+    updated_at: new Date('2026-11-03T00:00:00Z'),
+    history: [],
+    ...extra,
+  });
+
+  it('publica origen y motivo de una nota', () => {
+    const dto = aDetalle(
+      fila({
+        referenced_document_type: '01',
+        referenced_series_correlative: 'F001-00000053',
+        credit_debit_reason_code: '06',
+      }),
+    );
+
+    expect(dto.referenced_document_type).toBe('01');
+    expect(dto.referenced_series_correlative).toBe('F001-00000053');
+    expect(dto.credit_debit_reason_code).toBe('06');
+  });
+
+  it('en una factura los devuelve null, no undefined', () => {
+    // undefined y null significan lo mismo para la pantalla, pero el contrato
+    // promete null: una propiedad ausente se lee igual que un campo olvidado.
+    const dto = aDetalle(fila());
+
+    expect(dto.referenced_document_type).toBeNull();
+    expect(dto.referenced_series_correlative).toBeNull();
+    expect(dto.credit_debit_reason_code).toBeNull();
+  });
+});

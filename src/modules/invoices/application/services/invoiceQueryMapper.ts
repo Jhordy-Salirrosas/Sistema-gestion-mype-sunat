@@ -39,6 +39,10 @@ export interface FilaDetalle extends FilaListado {
   cdr_sunat: unknown;
   /** Payload UBL con el que se generó el XML; de ahí sale el cronograma. */
   payload_ubl?: unknown;
+  /** Referencia de una nota al documento afectado (07/08). */
+  referenced_document_type?: string | null;
+  referenced_series_correlative?: string | null;
+  credit_debit_reason_code?: string | null;
   /** SHA-256 del XML firmado; `null` si aún no se guardó. */
   xml_hash_sha256?: string | null;
   created_at: Date;
@@ -226,6 +230,12 @@ export function aDetalle(fila: FilaDetalle): ComprobanteDetalleDto {  return {
     ruc_emisor: fila.ruc_emisor,
     base_imponible: numero(fila.taxable_operations),
     total_igv: numero(fila.total_igv),
+    // Referencia de las notas. Se publican tal cual: son `null` en facturas y
+    // boletas, que no afectan a ningún documento, y así el front no tiene que
+    // adivinar si la ausencia significa "no aplica" o "no se guardó".
+    referenced_document_type: fila.referenced_document_type ?? null,
+    referenced_series_correlative: fila.referenced_series_correlative ?? null,
+    credit_debit_reason_code: fila.credit_debit_reason_code ?? null,
     ...condicionesDePago(fila.payload_ubl),
     /**
      * SHA-256 del XML FIRMADO que se envió a SUNAT.
