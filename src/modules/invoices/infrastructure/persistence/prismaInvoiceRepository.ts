@@ -42,6 +42,12 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
               customer_identity_type: invoice.customer_identity_type ?? null,
               customer_identity_number: invoice.customer_identity_number ?? null,
               customer_legal_name: invoice.customer_legal_name ?? null,
+              // Referencia del documento afectado (notas 07/08). Misma razón que
+              // el adquirente: la pantalla lee columnas, no el payload.
+              referenced_document_type: invoice.referenced_document_type ?? null,
+              referenced_series_correlative:
+                invoice.referenced_series_correlative ?? null,
+              credit_debit_reason_code: invoice.credit_debit_reason_code ?? null,
             },
             select: {
               id: true,

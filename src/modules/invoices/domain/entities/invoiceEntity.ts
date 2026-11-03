@@ -27,6 +27,16 @@ export interface InvoiceEntityProps {
   customer_identity_type?: string;
   customer_identity_number?: string;
   customer_legal_name?: string;
+  /**
+   * Referencia de la nota de crédito/débito al documento que afecta.
+   *
+   * Son columnas propias de `invoices` y la bandeja las consulta; dejarlas en
+   * NULL hacía que una nota aceptada se mostrara sin origen ni motivo aunque el
+   * XML los contuviera.
+   */
+  referenced_document_type?: string;
+  referenced_series_correlative?: string;
+  credit_debit_reason_code?: string;
 }
 
 export class InvoiceEntity {
@@ -47,6 +57,10 @@ export class InvoiceEntity {
   public readonly customer_identity_type?: string;
   public readonly customer_identity_number?: string;
   public readonly customer_legal_name?: string;
+  /** Referencia al documento afectado (solo notas 07 y 08). */
+  public readonly referenced_document_type?: string;
+  public readonly referenced_series_correlative?: string;
+  public readonly credit_debit_reason_code?: string;
 
   constructor(props: InvoiceEntityProps) {
     this.id = props.id;
@@ -64,5 +78,8 @@ export class InvoiceEntity {
     this.customer_identity_type = props.customer_identity_type;
     this.customer_identity_number = props.customer_identity_number;
     this.customer_legal_name = props.customer_legal_name;
+    this.referenced_document_type = props.referenced_document_type;
+    this.referenced_series_correlative = props.referenced_series_correlative;
+    this.credit_debit_reason_code = props.credit_debit_reason_code;
   }
 }

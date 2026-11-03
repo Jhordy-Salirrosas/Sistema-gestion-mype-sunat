@@ -71,4 +71,23 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   customer_legal_name?: string;
+
+  /**
+   * Referencia a la nota de crédito/débito (columnas de `invoices`).
+   *
+   * Se copian al registrar el comprobante porque la bandeja lee estas columnas
+   * y no el `payload_ubl`: sin ellas la nota aparecía sin documento de origen
+   * aunque el XML sí lo llevara.
+   */
+  @IsOptional()
+  @IsString()
+  referenced_document_type?: string;
+
+  @IsOptional()
+  @IsString()
+  referenced_series_correlative?: string;
+
+  @IsOptional()
+  @IsString()
+  credit_debit_reason_code?: string;
 }

@@ -379,6 +379,19 @@ export const traducirEmision = (
     customer_identity_type: dto.customer_identity_type,
     customer_identity_number: dto.customer_identity_number,
     customer_legal_name: dto.customer_legal_name.trim(),
+    // Referencia para notas de crédito y débito. Se copia a sus columnas porque
+    // la bandeja no lee el `payload_ubl`: con estas columnas en NULL una nota
+    // aceptada aparecía sin documento de origen ni motivo, aunque el XML los
+    // llevara dentro.
+    //
+    // `referenced_document_type` es el tipo del documento AFECTADO, no de la
+    // nota: la serie decide el tipo según el Catálogo 01 y las series de factura
+    // empiezan por F (FA01/FB01/FE01/F001), las de boleta por B.
+    referenced_document_type: dto.documento_afectado
+      ? (dto.documento_afectado.trim().toUpperCase().startsWith('B') ? '03' : '01')
+      : undefined,
+    referenced_series_correlative: dto.documento_afectado?.trim() || undefined,
+    credit_debit_reason_code: dto.codigo_motivo_nota?.trim() || undefined,
   };
 
   return {

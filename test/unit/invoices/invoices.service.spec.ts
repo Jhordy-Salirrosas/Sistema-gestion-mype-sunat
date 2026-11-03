@@ -96,6 +96,11 @@ describe('InvoicesService', () => {
         customer_identity_type: dto.customer_identity_type ?? null,
         customer_identity_number: dto.customer_identity_number ?? null,
         customer_legal_name: dto.customer_legal_name ?? null,
+        // Y la referencia al documento afectado (notas 07/08), por la misma
+        // razón: la bandeja no lee el payload.
+        referenced_document_type: null,
+        referenced_series_correlative: null,
+        credit_debit_reason_code: null,
       },
       select: {
         id: true,

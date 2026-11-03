@@ -492,6 +492,11 @@ export class EmitirComprobanteService {
       customer_identity_type: dto.customer_identity_type,
       customer_identity_number: dto.customer_identity_number,
       customer_legal_name: dto.customer_legal_name,
+      // Referencia de la nota al documento que afecta; la bandeja muestra el
+      // origen y el motivo desde estas columnas, no desde el payload.
+      referenced_document_type: dto.referenced_document_type,
+      referenced_series_correlative: dto.referenced_series_correlative,
+      credit_debit_reason_code: dto.credit_debit_reason_code,
     });
 
     const resultado = await this.repositorio.saveWithTransactionalOutbox(entidad);
