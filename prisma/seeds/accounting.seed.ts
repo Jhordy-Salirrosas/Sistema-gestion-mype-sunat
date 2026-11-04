@@ -19,6 +19,7 @@ const ACCOUNTS: Array<[string, string]> = [
   ['12', 'Cuentas por cobrar comerciales - terceros'],
   ['121', 'Facturas, boletas y otros comprobantes por cobrar'],
   ['1211', 'Facturas, boletas y otros comprobantes por cobrar'],
+  ['121101', 'Facturas por cobrar comerciales - emitidas en cartera'],
   ['13', 'Cuentas por cobrar comerciales - relacionadas'],
   ['131', 'Facturas, boletas y otros comprobantes por cobrar'],
   ['14', 'Cuentas por cobrar al personal, accionistas y directores'],
@@ -51,6 +52,8 @@ const ACCOUNTS: Array<[string, string]> = [
   ['401', 'IGV por pagar'],
   ['4011', 'IGV - cuenta propia'],
   ['40111', 'IGV - cuenta propia'],
+  ['401111', 'IGV - cuenta propia'],
+  ['401119', 'Otros tributos por pagar'],
   ['402', 'IGV por pagar - régimen de retención'],
   ['41', 'Remuneraciones por pagar'],
   ['411', 'Remuneraciones por pagar'],
@@ -82,6 +85,7 @@ const ACCOUNTS: Array<[string, string]> = [
   ['70', 'Ventas'],
   ['701', 'Mercaderías'],
   ['7011', 'Mercaderías'],
+  ['701111', 'Ventas de mercaderías - terceros'],
   ['702', 'Productos terminados'],
   ['703', 'Servicios'],
   ['704', 'Descuentos, rebajas y bonificaciones concedidos'],
@@ -121,6 +125,18 @@ function nature(code: string): string {
   return ['1', '2', '3', '6', '8', '9'].includes(code[0]) ? 'Deudora' : 'Acreedora';
 }
 
+/** Divisionarias que no cuelgan del prefijo inmediato. */
+const PARENT_OVERRIDES: Record<string, string> = {
+  '121101': '1211',
+  '401111': '40111',
+  '401119': '40111',
+  '701111': '7011',
+};
+
+function parentOf(code: string): string | null {
+  return PARENT_OVERRIDES[code] ?? (code.length > 1 ? code.slice(0, -1) : null);
+}
+
 export async function seedAccounting(prisma: PrismaClient): Promise<void> {
   for (const [code, name] of ACCOUNTS) {
     await prisma.accountingAccount.upsert({
@@ -129,7 +145,7 @@ export async function seedAccounting(prisma: PrismaClient): Promise<void> {
         name,
         element: ELEMENTS[code[0]] ?? 'Sin elemento',
         nature: nature(code),
-        parent_code: code.length > 1 ? code.slice(0, -1) : null,
+        parent_code: parentOf(code),
         level: code.length,
         is_active: true,
       },
@@ -138,7 +154,7 @@ export async function seedAccounting(prisma: PrismaClient): Promise<void> {
         name,
         element: ELEMENTS[code[0]] ?? 'Sin elemento',
         nature: nature(code),
-        parent_code: code.length > 1 ? code.slice(0, -1) : null,
+        parent_code: parentOf(code),
         level: code.length,
         is_active: true,
       },
