@@ -319,6 +319,10 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
               tipo_comprobante: '01',
               monto_total: 118,
               fecha_emision: new Date().toISOString(),
+              // TA-60: una factura exige RUC del adquirente.
+              customer_identity_type: '6',
+              customer_identity_number: '20100070970',
+              customer_legal_name: 'CLIENTE PRUEBA OUTBOX',
               payload_ubl: { test: 'ta-13' },
             });
           return { status: respuesta.status, ms: Date.now() - inicio };
