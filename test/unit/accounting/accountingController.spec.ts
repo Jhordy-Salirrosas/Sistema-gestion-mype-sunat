@@ -3,6 +3,10 @@ import { AccountingController } from '../../../src/modules/accounting/infrastruc
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
+import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
+import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
+import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/openAccountingPeriodUseCase';
+import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -10,6 +14,10 @@ describe('AccountingController', () => {
   let generateUseCase: jest.Mocked<GenerateAccountingEntryUseCase>;
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
+  let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
+  let listPeriodsUseCase: jest.Mocked<ListAccountingPeriodsUseCase>;
+  let openPeriodUseCase: jest.Mocked<OpenAccountingPeriodUseCase>;
+  let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
 
   beforeEach(() => {
     generateUseCase = {
@@ -24,10 +32,30 @@ describe('AccountingController', () => {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<GetAccountingEntriesUseCase>;
 
+    listAccountsUseCase = {
+      execute: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<ListAccountingAccountsUseCase>;
+
+    listPeriodsUseCase = {
+      execute: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<ListAccountingPeriodsUseCase>;
+
+    openPeriodUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<OpenAccountingPeriodUseCase>;
+
+    closePeriodUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<CloseAccountingPeriodUseCase>;
+
     controller = new AccountingController(
       generateUseCase,
       exportPleUseCase,
       getEntriesUseCase,
+      listAccountsUseCase,
+      listPeriodsUseCase,
+      openPeriodUseCase,
+      closePeriodUseCase,
     );
   });
 
@@ -110,5 +138,36 @@ describe('AccountingController', () => {
     await expect(controller.getEntries()).rejects.toThrow(ForbiddenException);
     await expect(controller.createEntry(dto)).rejects.toThrow(ForbiddenException);
     await expect(controller.exportPle(pleDto)).rejects.toThrow(ForbiddenException);
+    await expect(controller.getPeriods()).rejects.toThrow(ForbiddenException);
+    await expect(controller.openPeriod({ year: 2026, month: 11 })).rejects.toThrow(ForbiddenException);
+    await expect(controller.closePeriod('2026-11')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('lista el catálogo PCGE', async () => {
+    const accounts = [{ code: '1211', name: 'Cuentas por cobrar', element: 'Activo', nature: 'Deudora' as const, parentCode: '12', level: 4, isActive: true }];
+    listAccountsUseCase.execute.mockResolvedValue(accounts);
+
+    await expect(controller.getAccounts()).resolves.toBe(accounts);
+    expect(listAccountsUseCase.execute).toHaveBeenCalled();
+  });
+
+  it('lista los períodos de la empresa del token', async () => {
+    const periods = [{ companyId: 'comp-1', period: '2026-11', year: 2026, month: 11, status: 'ABIERTO' as const, openedAt: new Date() }];
+    listPeriodsUseCase.execute.mockResolvedValue(periods);
+
+    await expect(controller.getPeriods('comp-1')).resolves.toBe(periods);
+    expect(listPeriodsUseCase.execute).toHaveBeenCalledWith('comp-1');
+  });
+
+  it('abre y cierra un período usando la empresa del token', async () => {
+    const period = { companyId: 'comp-1', period: '2026-11', year: 2026, month: 11, status: 'ABIERTO' as const, openedAt: new Date() };
+    openPeriodUseCase.execute.mockResolvedValue(period);
+    closePeriodUseCase.execute.mockResolvedValue({ ...period, status: 'CERRADO' });
+
+    await expect(controller.openPeriod({ year: 2026, month: 11 }, 'comp-1')).resolves.toBe(period);
+    expect(openPeriodUseCase.execute).toHaveBeenCalledWith('comp-1', 2026, 11);
+
+    await expect(controller.closePeriod('2026-11', 'comp-1')).resolves.toMatchObject({ status: 'CERRADO' });
+    expect(closePeriodUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
   });
 });
