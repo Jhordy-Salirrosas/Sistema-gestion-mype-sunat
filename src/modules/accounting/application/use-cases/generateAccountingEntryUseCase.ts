@@ -19,9 +19,7 @@ export class GenerateAccountingEntryUseCase {
       throw new BadRequestException('El período debe tener formato YYYY-MM');
     }
 
-    // 0. El período debe existir y estar abierto. Si es nuevo, se abre.
-    // Los dobles de prueba antiguos no implementan estos métodos: en ese caso
-    // se omite la comprobación para no romper la suite histórica.
+    // Valida período y cuentas; abre el período si es nuevo.
     const periodState = this.accountingRepository.findPeriod
       ? await this.accountingRepository.findPeriod(companyId, period)
       : null;
@@ -36,7 +34,6 @@ export class GenerateAccountingEntryUseCase {
       );
     }
 
-    // 0.1 Las cuentas deben existir en el catálogo PCGE.
     const accounts = this.accountingRepository.findAccounts
       ? await this.accountingRepository.findAccounts()
       : null;
@@ -51,10 +48,8 @@ export class GenerateAccountingEntryUseCase {
       }
     }
 
-    // 1. Obtener dinámicamente el siguiente número correlativo
     const nextEntryNumber = await this.accountingRepository.getNextEntryNumber(companyId, period);
 
-    // 2. Instanciar la entidad de dominio con el correlativo incremental
     const entry = new AccountingEntryEntity({
       companyId,
       period,
@@ -72,10 +67,8 @@ export class GenerateAccountingEntryUseCase {
       })),
     });
 
-    // 3. Validación estricta del Principio de Partida Doble
     DoubleEntryRule.validate(entry);
 
-    // 4. Persistir a través del puerto del repositorio
     return await this.accountingRepository.saveEntry(entry);
   }
 }

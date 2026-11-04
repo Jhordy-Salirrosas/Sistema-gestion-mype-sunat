@@ -1,13 +1,6 @@
 import type { PrismaClient } from '../../src/generated/client/client';
 
-/**
- * Semilla base del PCGE 2019.
- *
- * No pretende reemplazar el catálogo oficial completo (más de 1.200 cuentas):
- * carga los elementos y las cuentas que usan los asientos de venta, compra,
- * cobro, pago, inventario y estados financieros. El catálogo se puede ampliar
- * con el mismo upsert.
- */
+/** Semilla base del PCGE 2019 (98 cuentas). */
 const ACCOUNTS: Array<[string, string]> = [
   ['1', 'Activo'],
   ['10', 'Efectivo y equivalentes de efectivo'],
@@ -125,7 +118,7 @@ function nature(code: string): string {
   return ['1', '2', '3', '6', '8', '9'].includes(code[0]) ? 'Deudora' : 'Acreedora';
 }
 
-/** Divisionarias que no cuelgan del prefijo inmediato. */
+/** Divisionarias con padre explícito. */
 const PARENT_OVERRIDES: Record<string, string> = {
   '121101': '1211',
   '401111': '40111',

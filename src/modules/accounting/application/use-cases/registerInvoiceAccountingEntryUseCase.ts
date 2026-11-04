@@ -21,18 +21,7 @@ export interface InvoiceAccountingInput {
   total: number;
 }
 
-/**
- * Mapeo PCGE base para una venta gravada.
- *
- * Se usan cuentas de 3 dígitos del Plan Contable General Empresarial:
- *  - 121101: cuentas por cobrar comerciales (activo).
- *  - 701111: ventas de mercaderías (ingreso).
- *  - 401111: IGV cuenta propia (pasivo).
- *
- * El mapeo es deliberadamente simple: cuando exista el maestro de cuentas por
- * producto/servicio, estas constantes se reemplazan por la configuración de la
- * empresa sin cambiar el flujo.
- */
+/** Cuentas PCGE base para una venta gravada. */
 const CUENTAS = {
   porCobrar: { code: '121101', name: 'Cuentas por cobrar comerciales' },
   ventas: { code: '701111', name: 'Ventas de mercaderías' },
@@ -43,13 +32,7 @@ const CUENTAS = {
 const redondear = (valor: number): number =>
   Math.round((valor + Number.EPSILON) * 100) / 100;
 
-/**
- * Genera el asiento contable de una factura o boleta aceptada por SUNAT.
- *
- * Es idempotente por `(companyId, INVOICES, invoiceId)`: si el job se
- * reprocesa, no duplica el asiento. Las notas de crédito/débito quedan fuera
- * por ahora porque requieren revertir o ajustar el asiento original.
- */
+/** Asiento de venta idempotente por comprobante aceptado. */
 @Injectable()
 export class RegisterInvoiceAccountingEntryUseCase {
   private readonly logger = new Logger(RegisterInvoiceAccountingEntryUseCase.name);

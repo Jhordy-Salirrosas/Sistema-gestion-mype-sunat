@@ -117,9 +117,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
 
     const resultado = await this.retry.processWithRetry(aprobado.params);
 
-    // El asiento contable se genera después de que SUNAT acepta el
-    // comprobante. Si contabilidad falla, el comprobante ya está aceptado:
-    // se registra el error y no se pierde la factura.
+    // Asiento después del CDR; un fallo contable no pierde la factura.
     if (
       resultado &&
       (resultado.estado === InvoiceStatus.ACEPTADO ||
@@ -136,12 +134,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     return resultado;
   }
 
-  /**
-   * Genera el asiento de venta a partir de los datos fiscales del comprobante.
-   *
-   * Las notas (07/08) quedan fuera: requieren revertir o ajustar el asiento
-   * original, no crear una venta nueva.
-   */
+  /** Genera el asiento de venta; las notas 07/08 quedan fuera. */
   private async registrarAsiento(invoiceId: string): Promise<void> {
     if (!this.accounting) return;
 
