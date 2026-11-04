@@ -43,6 +43,9 @@ import {
 } from './emitirComprobanteAdapter';
 import { validarAdquirente } from '../../domain/rules/taxpayerIdValidator';
 import { InvoiceNoteService } from './invoiceNoteService';
+// Las notas rechazadas o anuladas no consumen saldo: la lista es la misma que
+// usa `ControlSaldoNotas` para no tener dos definiciones de "nota vigente".
+import { ESTADOS_NOTA_SIN_EFECTO } from './creditNoteBalanceGuard';
 import { InvoiceEntity } from '../../domain/entities/invoiceEntity';
 import {
   type IInvoiceRepositoryPort,
@@ -267,18 +270,39 @@ export class EmitirComprobanteService {
       );
     }
 
+    /**
+     * TA-66: el UUID del origen viaja con la nota.
+     *
+     * Se escribe AQUÍ, sobre el DTO que va a persistirse, y no en la pantalla:
+     * el UUID lo resuelve esta función al buscar el comprobante por su número
+     * fiscal, así que es la única parte del flujo que sabe cuál es la fila real.
+     * El formulario solo conoce `F001-00000053`; aceptar un id del cliente
+     * permitiría apuntar a un comprobante de otra empresa.
+     *
+     * Sin este dato `referenced_invoice_id` queda en NULL y el control de saldo
+     * (`ControlSaldoNotas`, `saldoDevolvible`) no ve las notas anteriores: cada
+     * nota se calcula contra el total de la factura y dos notas parciales pueden
+     * devolver más de lo que la factura vale.
+     */
+    dto.referenced_invoice_id = origen.id;
+
     // Una nota de crédito devuelve dinero: no puede superar lo que queda por
     // devolver del comprobante original.
     if (dto.tipo_comprobante === '07') {
-      const totalNota = this.totalDeclarado(dto);
       const saldo = await this.saldoDevolvible(
         companyId,
         origen.id,
         Number(origen.monto_total),
       );
-      if (totalNota > saldo + 0.01) {
+      // El importe que consume saldo es el TOTAL de la nota (base + IGV), no la
+      // suma de `cantidad × valorUnitario`, que va SIN IGV. Comparar la base
+      // contra un saldo que está en importes brutos dejaba pasar hasta un 18 %
+      // de exceso: una nota de S/ 753,01 sobre una factura con S/ 703 libres se
+      // aceptaba (verificado contra el servidor el 4 nov).
+      const importeNota = this.totalConImpuestos(dto);
+      if (importeNota > saldo + 0.01) {
         throw new BadRequestException(
-          `La nota de crédito (S/ ${totalNota.toFixed(2)}) supera el saldo ` +
+          `La nota de crédito (S/ ${importeNota.toFixed(2)}) supera el saldo ` +
             `disponible de ${referencia} (S/ ${saldo.toFixed(2)}).`,
         );
       }
@@ -286,10 +310,35 @@ export class EmitirComprobanteService {
   }
 
   /**
+   * Total de la nota tal como quedará en `monto_total`, para el control de saldo.
+   *
+   * Se liquida con `traducirEmision`, la MISMA función que produce el documento.
+   * La alternativa era recalcular las bases aquí, y esa duplicidad ya separó en
+   * su día al formulario de la integración: dos fórmulas del mismo importe
+   * acaban discrepando por un céntimo o por el IGV.
+   */
+  private totalConImpuestos(dto: EmitirComprobanteDto): number {
+    const { importes } = traducirEmision(
+      dto,
+      // El RUC solo alimenta la cabecera del UBL, no la liquidación: el total no
+      // depende del emisor, así que aquí va vacío a propósito.
+      { ruc: '', razonSocial: '' },
+      0,
+    );
+    return importes.total;
+  }
+
+  /**
    * Saldo devolvible del comprobante, ya descontadas sus notas previas.
    *
    * `referenced_invoice_id` es la columna real del modelo; se consulta por id y
    * no por número para que dos empresas con la misma serie no se crucen.
+   *
+   * LAS NOTAS RECHAZADAS Y ANULADAS NO CONSUMEN SALDO: una nota que SUNAT no
+   * aceptó no existe fiscalmente, y una anulada deja de deber nada. Sumarlas
+   * hacía que el saldo se cerrara con documentos que no devolvieron dinero, y
+   * el usuario se quedaba sin poder acreditar lo que sí podía. Es el mismo
+   * criterio que ya aplicaba `ControlSaldoNotas`, que esta ruta duplicaba.
    */
   private async saldoDevolvible(
     companyId: string,
@@ -301,6 +350,7 @@ export class EmitirComprobanteService {
         company_id: companyId,
         referenced_invoice_id: origenId,
         tipo_comprobante: '07',
+        estado: { notIn: ESTADOS_NOTA_SIN_EFECTO as never },
       },
       select: { monto_total: true },
     });
@@ -496,6 +546,7 @@ export class EmitirComprobanteService {
       // origen y el motivo desde estas columnas, no desde el payload.
       referenced_document_type: dto.referenced_document_type,
       referenced_series_correlative: dto.referenced_series_correlative,
+      referenced_invoice_id: dto.referenced_invoice_id,
       credit_debit_reason_code: dto.credit_debit_reason_code,
     });
 

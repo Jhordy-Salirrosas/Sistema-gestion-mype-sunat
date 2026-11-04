@@ -391,6 +391,10 @@ export const traducirEmision = (
       ? (dto.documento_afectado.trim().toUpperCase().startsWith('B') ? '03' : '01')
       : undefined,
     referenced_series_correlative: dto.documento_afectado?.trim() || undefined,
+    // TA-66: el UUID del comprobante afectado. Lo pone `verificarDocumentoOrigen`
+    // en el DTO porque es quien busca el origen por número; sin él la columna
+    // queda NULL y el saldo no descuenta las notas anteriores.
+    referenced_invoice_id: dto.referenced_invoice_id,
     credit_debit_reason_code: dto.codigo_motivo_nota?.trim() || undefined,
   };
 

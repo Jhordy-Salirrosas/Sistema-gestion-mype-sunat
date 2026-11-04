@@ -87,6 +87,20 @@ export class CreateInvoiceDto {
   @IsString()
   referenced_series_correlative?: string;
 
+  /**
+   * UUID del comprobante que la nota afecta (TA-66).
+   *
+   * `referenced_series_correlative` es el número que se ve en el mostrador
+   * (`F001-00000053`), pero el control de saldo suma las notas previas por esta
+   * columna. Dejarla en NULL hacía que `ControlSaldoNotas` no viera ninguna nota
+   * anterior (`devuelto: 0`) y una segunda Nota de Crédito podía devolver más de
+   * lo que vale la factura. La resuelve `verificarDocumentoOrigen()`, que ya
+   * busca el origen por número antes de reservar correlativo.
+   */
+  @IsOptional()
+  @IsString()
+  referenced_invoice_id?: string;
+
   @IsOptional()
   @IsString()
   credit_debit_reason_code?: string;

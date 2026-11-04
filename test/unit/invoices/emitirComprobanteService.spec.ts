@@ -71,7 +71,17 @@ const montar = (
     },
     invoice: {
       findFirst: jest.fn(async () => opciones.facturas?.[0] ?? null),
-      findMany: jest.fn(async () => opciones.notasPrevias ?? []),
+      /**
+       * Notas de crédito anteriores, para el saldo (TA-66).
+       *
+       * Se declara el parámetro aunque no se use: sin firma, `toHaveBeenCalledWith`
+       * no acepta argumentos y no se podría comprobar POR QUÉ clave se consulta.
+       * Y esa clave es el defecto: con `referenced_invoice_id` en NULL esta
+       * consulta no devolvía nunca una nota previa.
+       */
+      findMany: jest.fn<(args: unknown) => Promise<unknown>>(
+        async () => opciones.notasPrevias ?? [],
+      ),
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
         creadas.push(data);
         return data;
@@ -405,8 +415,109 @@ describe('EmitirComprobanteService — nota sobre comprobante existente', () => 
     expect(resultado.tipo_comprobante).toBe('07');
   });
 
-  it('una factura normal no consulta el documento de origen', async () => {
-    const { servicio, prisma } = montar();
+  /**
+   * El importe que consume saldo es el TOTAL con IGV, no la base imponible.
+   *
+   * La nota de esta suite es de S/ 50 sin IGV → S/ 59 con IGV. Con el
+   * comprobante en S/ 55 hay base de sobra (50 ≤ 55) pero el documento que se
+   * emite devuelve 59: comparar la base dejaba pasar ese exceso. Se detectó
+   * contra el servidor el 4 nov, con una nota de S/ 753,01 sobre S/ 703 libres.
+   */
+  it('el saldo se compara contra el total con IGV, no contra la base (TA-66)', async () => {
+    const { servicio, series } = montar({
+      facturas: [{ id: 'origen-1', monto_total: 55, estado: 'ACEPTADO' }],
+      notasPrevias: [],
+    });
+
+    await expect(servicio.emitir(nota(), COMPANY_ID)).rejects.toThrow(
+      /supera el saldo/,
+    );
+
+    expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Una nota rechazada no existe ante SUNAT y una anulada no debe nada: ninguna
+   * de las dos consume saldo. Sumarlas cerraba el saldo con documentos que no
+   * devolvieron dinero.
+   */
+  it('las notas rechazadas o anuladas no consumen saldo (TA-66)', async () => {
+    const { servicio, prisma } = montar({
+      facturas: [{ id: 'origen-1', monto_total: 500, estado: 'ACEPTADO' }],
+    });
+
+    await servicio.emitir(nota(), COMPANY_ID);
+
+    expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          estado: { notIn: expect.arrayContaining(['RECHAZADO', 'ANULADO']) },
+        }),
+      }),
+    );
+  });
+
+  /**
+   * TA-66: el UUID del comprobante afectado TIENE que quedar escrito.
+   *
+   * Esta es la prueba del defecto real. `ControlSaldoNotas` suma las notas
+   * anteriores con `WHERE referenced_invoice_id = origen.id`; mientras esa
+   * columna se quedaba en NULL, la consulta no devolvía NUNCA una nota previa,
+   * el saldo era siempre el total de la factura y una segunda Nota de Crédito
+   * podía devolver más de lo que la factura vale. SUNAT no lo impide: acepta
+   * cada nota por separado y el exceso aparece recién en la determinación del
+   * impuesto.
+   */
+  it('persiste el UUID del comprobante afectado en la nota (TA-66)', async () => {
+    const { servicio, repositorio } = montar({
+      facturas: [
+        { id: 'origen-1', monto_total: 500, estado: 'ACEPTADO' },
+      ],
+    });
+
+    await servicio.emitir(nota(), COMPANY_ID);
+
+    // El formulario solo manda el número fiscal; el UUID lo resuelve el propio
+    // servicio al buscar el origen, así que no se acepta desde el cliente.
+    expect(repositorio.saveWithTransactionalOutbox).toHaveBeenCalledWith(
+      expect.objectContaining({ referenced_invoice_id: 'origen-1' }),
+    );
+  });
+
+  it('el saldo se consulta por el UUID del origen, no por el número', async () => {
+    const { servicio, prisma } = montar({
+      facturas: [{ id: 'origen-1', monto_total: 500, estado: 'ACEPTADO' }],
+    });
+
+    await servicio.emitir(nota(), COMPANY_ID);
+
+    // Si la consulta buscara por `referenced_series_correlative` ('F001-00000042')
+    // tampoco encontraría nada: la columna guarda el número, pero la suma de
+    // notas se hace por id.
+    expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ referenced_invoice_id: 'origen-1' }),
+      }),
+    );  });
+
+  it('una nota se emite con el UUID del origen, sin aceptarlo del cliente', async () => {
+    // El usuario no puede colar un id ajeno: se sobrescribe con el que resuelve
+    // la búsqueda por número dentro de SU empresa.
+    const { servicio, repositorio } = montar({
+      facturas: [{ id: 'origen-1', monto_total: 500, estado: 'ACEPTADO' }],
+    });
+
+    await servicio.emitir(
+      nota({ referenced_invoice_id: 'id-de-otra-empresa' }),
+      COMPANY_ID,
+    );
+
+    expect(repositorio.saveWithTransactionalOutbox).toHaveBeenCalledWith(
+      expect.objectContaining({ referenced_invoice_id: 'origen-1' }),
+    );
+  });
+
+  it('una factura normal no consulta el documento de origen', async () => {    const { servicio, prisma } = montar();
 
     await servicio.emitir(factura(), COMPANY_ID);
 

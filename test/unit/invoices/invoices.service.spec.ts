@@ -100,6 +100,7 @@ describe('InvoicesService', () => {
         // razón: la bandeja no lee el payload.
         referenced_document_type: null,
         referenced_series_correlative: null,
+        referenced_invoice_id: null,
         credit_debit_reason_code: null,
       },
       select: {

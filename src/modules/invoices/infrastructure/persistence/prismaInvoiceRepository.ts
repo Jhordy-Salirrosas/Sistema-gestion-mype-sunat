@@ -47,6 +47,11 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
               referenced_document_type: invoice.referenced_document_type ?? null,
               referenced_series_correlative:
                 invoice.referenced_series_correlative ?? null,
+              // UUID del comprobante afectado (TA-66). No basta el número: el
+              // control de saldo suma las notas anteriores `WHERE
+              // referenced_invoice_id = origen.id`, así que con esta columna en
+              // NULL una segunda Nota de Crédito no veía a la primera.
+              referenced_invoice_id: invoice.referenced_invoice_id ?? null,
               credit_debit_reason_code: invoice.credit_debit_reason_code ?? null,
             },
             select: {

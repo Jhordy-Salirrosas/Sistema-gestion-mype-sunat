@@ -36,6 +36,14 @@ export interface InvoiceEntityProps {
    */
   referenced_document_type?: string;
   referenced_series_correlative?: string;
+  /**
+   * UUID del comprobante afectado (TA-66).
+   *
+   * Es la clave por la que se suman las notas anteriores para calcular el saldo
+   * devolvible; el número (`referenced_series_correlative`) es lo que se muestra
+   * y lo que viaja en el XML, pero no identifica una fila.
+   */
+  referenced_invoice_id?: string;
   credit_debit_reason_code?: string;
 }
 
@@ -60,6 +68,8 @@ export class InvoiceEntity {
   /** Referencia al documento afectado (solo notas 07 y 08). */
   public readonly referenced_document_type?: string;
   public readonly referenced_series_correlative?: string;
+  /** UUID del comprobante afectado: clave del control de saldo (TA-66). */
+  public readonly referenced_invoice_id?: string;
   public readonly credit_debit_reason_code?: string;
 
   constructor(props: InvoiceEntityProps) {
@@ -80,6 +90,7 @@ export class InvoiceEntity {
     this.customer_legal_name = props.customer_legal_name;
     this.referenced_document_type = props.referenced_document_type;
     this.referenced_series_correlative = props.referenced_series_correlative;
+    this.referenced_invoice_id = props.referenced_invoice_id;
     this.credit_debit_reason_code = props.credit_debit_reason_code;
   }
 }

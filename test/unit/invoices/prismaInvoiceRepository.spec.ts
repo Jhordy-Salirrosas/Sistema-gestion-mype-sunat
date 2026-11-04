@@ -90,6 +90,9 @@ describe('PrismaInvoiceRepository', () => {
         referenced_document_type: invoiceEntity.referenced_document_type ?? null,
         referenced_series_correlative:
           invoiceEntity.referenced_series_correlative ?? null,
+        // UUID del comprobante afectado (TA-66): es la clave con la que el
+        // control de saldo suma las notas anteriores.
+        referenced_invoice_id: invoiceEntity.referenced_invoice_id ?? null,
         credit_debit_reason_code:
           invoiceEntity.credit_debit_reason_code ?? null,
       },

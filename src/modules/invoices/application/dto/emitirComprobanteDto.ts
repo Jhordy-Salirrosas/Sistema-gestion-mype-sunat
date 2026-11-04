@@ -204,6 +204,19 @@ export class EmitirComprobanteDto {
   descripcion_motivo_nota?: string;
 
   /**
+   * UUID del comprobante que la nota modifica (TA-66). NO lo manda el cliente.
+   *
+   * Lo escribe `verificarDocumentoOrigen()` sobre el DTO, porque es la única
+   * parte del flujo que resuelve la fila real a partir del número fiscal. Si se
+   * aceptara del formulario, un usuario podría apuntar a un comprobante de otra
+   * empresa y falsear el saldo. Termina en la columna `referenced_invoice_id`,
+   * que es la clave con la que `ControlSaldoNotas` suma las notas anteriores.
+   */
+  @IsOptional()
+  @IsString()
+  referenced_invoice_id?: string;
+
+  /**
    * Cuenta del Banco de la Nación del EMISOR para depositar la detracción.
    *
    * Obligatoria cuando alguna línea lleva código del Catálogo 54: SUNAT rechaza

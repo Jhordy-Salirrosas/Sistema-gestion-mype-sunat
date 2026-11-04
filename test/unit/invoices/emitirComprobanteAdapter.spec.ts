@@ -355,6 +355,41 @@ describe('traducirEmision — datos del adquirente y del comprobante', () => {
     expect(payload.codigoMotivoNota).toBe('01');
   });
 
+  /**
+   * TA-66: el UUID del origen tiene que sobrevivir a la traducción.
+   *
+   * El adaptador es una función pura y no resuelve el UUID (eso lo hace el
+   * servicio, que es quien consulta la base); lo que se comprueba aquí es que no
+   * se caiga por el camino. Si se perdiera en este punto, la columna volvería a
+   * quedar en NULL aunque el servicio la hubiera resuelto bien.
+   */
+  it('transporta el UUID del comprobante afectado (TA-66)', () => {
+    const { dto } = traducirEmision(
+      formulario({
+        tipo_comprobante: '07',
+        documento_afectado: 'F001-00000042',
+        codigo_motivo_nota: '01',
+        referenced_invoice_id: 'origen-1',
+      }),
+      emisor,
+      1,
+    );
+
+    expect(dto.referenced_invoice_id).toBe('origen-1');
+    // El número fiscal se sigue guardando: es lo que se muestra y lo que va al XML.
+    expect(dto.referenced_series_correlative).toBe('F001-00000042');
+  });
+
+  it('sin origen resuelto no inventa un UUID', () => {
+    const { dto } = traducirEmision(
+      formulario({ tipo_comprobante: '07', documento_afectado: 'F001-00000042' }),
+      emisor,
+      1,
+    );
+
+    expect(dto.referenced_invoice_id).toBeUndefined();
+  });
+
   it('sin documento de cliente no inventa un bloque de cliente', () => {
     const payload = payloadDe(
       formulario({
