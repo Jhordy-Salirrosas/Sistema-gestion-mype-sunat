@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -45,9 +46,11 @@ export class AccountingController {
   @Get('entries')
   async getEntries(
     @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
   ): Promise<AccountingEntryEntity[]> {
     return this.getEntriesUseCase.execute(
       this.empresaDelToken(currentCompanyId),
+      period,
     );
   }
 
@@ -76,9 +79,10 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
     const companyId = this.empresaDelToken(currentCompanyId);
-    
-    // 1. Obtener los asientos contables persistidos de la empresa
-    const entries = await this.getEntriesUseCase.execute(companyId);
+    const period = `${dto.year}-${String(dto.month).padStart(2, '0')}`;
+
+    // 1. Obtener los asientos contables persistidos del periodo solicitado
+    const entries = await this.getEntriesUseCase.execute(companyId, period);
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);

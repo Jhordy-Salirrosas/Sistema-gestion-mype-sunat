@@ -8,13 +8,30 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
   async getNextEntryNumber(companyId: string, period: string): Promise<number> {
-    const count = await this.prisma.accountingEntry.count({
+    const ultimo = await this.prisma.accountingEntry.findFirst({
       where: {
         company_id: companyId,
         period: period,
       },
+      orderBy: { entry_number: 'desc' },
+      select: { entry_number: true },
     });
-    return count + 1;
+    return (ultimo?.entry_number ?? 0) + 1;
+  }
+
+  async existsBySourceReference(
+    companyId: string,
+    sourceModule: string,
+    sourceReferenceId: string,
+  ): Promise<boolean> {
+    const count = await this.prisma.accountingEntry.count({
+      where: {
+        company_id: companyId,
+        source_module: sourceModule,
+        source_reference_id: sourceReferenceId,
+      },
+    });
+    return count > 0;
   }
 
   async saveEntry(entry: AccountingEntryEntity): Promise<AccountingEntryEntity> {

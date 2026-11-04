@@ -86,7 +86,7 @@ describe('AccountingController', () => {
     const result = await controller.exportPle(dto, 'comp-1');
 
     expect(result).toBe(mockExportResult);
-    expect(getEntriesUseCase.execute).toHaveBeenCalledWith('comp-1');
+    expect(getEntriesUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-03');
     expect(exportPleUseCase.execute).toHaveBeenCalledWith({ ...dto, companyId: 'comp-1' }, []);
   });
 
@@ -99,9 +99,16 @@ describe('AccountingController', () => {
       sourceModule: 'INVOICES',
       lines: [],
     };
+    const pleDto = {
+      companyId: 'comp-1',
+      companyRuc: '20100070970',
+      year: 2026,
+      month: 3,
+      bookCode: '050100',
+    };
 
     await expect(controller.getEntries()).rejects.toThrow(ForbiddenException);
     await expect(controller.createEntry(dto)).rejects.toThrow(ForbiddenException);
-    await expect(controller.exportPle(dto)).rejects.toThrow(ForbiddenException);
+    await expect(controller.exportPle(pleDto)).rejects.toThrow(ForbiddenException);
   });
 });

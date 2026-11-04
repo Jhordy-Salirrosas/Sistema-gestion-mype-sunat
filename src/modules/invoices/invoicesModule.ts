@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
 import { AuthModule } from '../auth/authModule';
+import { AccountingModule } from '../accounting/accountingModule';
 import { ResilienceModule } from '../resilience/resilienceModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
@@ -19,7 +20,7 @@ import { SunatXslValidatorService } from './application/services/sunatXslValidat
 @Module({
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas
   // provee InvoiceRetryService, que el InvoiceJobConsumer de TA-28 necesita.
-  imports: [PrismaModule, AuthModule, ResilienceModule, SunatModule],
+  imports: [PrismaModule, AuthModule, AccountingModule, ResilienceModule, SunatModule],
   // TA-29: el controlador de consulta va aparte del de emisión; comparten
   // prefijo y guard, pero no responsabilidades.
   controllers: [InvoicesController, InvoiceQueryController],

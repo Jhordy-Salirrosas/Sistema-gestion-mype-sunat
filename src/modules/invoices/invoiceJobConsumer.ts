@@ -21,11 +21,12 @@
  *    Invoice en `ERROR_RED`; el worker de facturacion no debe reimplementar esa
  *   secuencia."  (specs/m2_resilience.spec.md, TA-57)
  */
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import AdmZip from 'adm-zip';
 import { PrismaService } from '../../database/prismaService';
 import { InvoiceStatus } from '../../generated/client/enums';
+import { RegisterInvoiceAccountingEntryUseCase } from '../accounting/application/use-cases/registerInvoiceAccountingEntryUseCase';
 import {
   InvoiceRetryService,
   RetryInvoiceResult,
@@ -72,6 +73,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
     private readonly ublGenerator: UblGeneratorService,
     private readonly xsdValidator: XsdValidatorService,
     private readonly signature: SignatureService,
+    @Optional()
+    private readonly accounting?: RegisterInvoiceAccountingEntryUseCase,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -112,7 +115,95 @@ export class InvoiceJobConsumer implements OnModuleInit {
       return null;
     }
 
-    return this.retry.processWithRetry(aprobado.params);
+    const resultado = await this.retry.processWithRetry(aprobado.params);
+
+    // El asiento contable se genera después de que SUNAT acepta el
+    // comprobante. Si contabilidad falla, el comprobante ya está aceptado:
+    // se registra el error y no se pierde la factura.
+    if (
+      resultado &&
+      (resultado.estado === InvoiceStatus.ACEPTADO ||
+        resultado.estado === InvoiceStatus.OBSERVADO)
+    ) {
+      await this.registrarAsiento(invoiceId).catch((error: unknown) => {
+        const mensaje = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `[INVOICES] ${invoiceId} aceptado, pero no se pudo generar su asiento: ${mensaje}`,
+        );
+      });
+    }
+
+    return resultado;
+  }
+
+  /**
+   * Genera el asiento de venta a partir de los datos fiscales del comprobante.
+   *
+   * Las notas (07/08) quedan fuera: requieren revertir o ajustar el asiento
+   * original, no crear una venta nueva.
+   */
+  private async registrarAsiento(invoiceId: string): Promise<void> {
+    if (!this.accounting) return;
+
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        id: true,
+        company_id: true,
+        tipo_comprobante: true,
+        serie: true,
+        correlativo: true,
+        fecha_emision: true,
+        customer_legal_name: true,
+        monto_total: true,
+        total_igv: true,
+        taxable_operations: true,
+        payload_ubl: true,
+      },
+    });
+    if (!invoice) return;
+    if (invoice.tipo_comprobante !== '01' && invoice.tipo_comprobante !== '03') {
+      return;
+    }
+
+    const payload = (invoice.payload_ubl ?? {}) as Record<string, unknown>;
+    const total = Number(invoice.monto_total);
+    const numero = (valor: unknown): number | undefined => {
+      const n = Number(valor);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    // El payload UBL es la fuente primaria: distingue una operación gravada
+    // (IGV > 0) de una exonerada (IGV = 0). Los campos de la fila son el
+    // respaldo para comprobantes antiguos que no los traían.
+    const payloadIgv = numero(payload.montoIgv);
+    const payloadBase = numero(payload.montoGravado);
+    const totalIgv = numero(invoice.total_igv);
+    const taxable = numero(invoice.taxable_operations);
+    const igv =
+      payloadIgv ??
+      (totalIgv && totalIgv > 0
+        ? totalIgv
+        : Math.round((total - total / 1.18) * 100) / 100);
+    const base =
+      payloadBase && payloadBase > 0
+        ? payloadBase
+        : taxable && taxable > 0
+          ? taxable
+          : Math.round((total - igv) * 100) / 100;
+
+    await this.accounting.execute({
+      companyId: invoice.company_id,
+      invoiceId: invoice.id,
+      tipoComprobante: invoice.tipo_comprobante,
+      serie: invoice.serie,
+      correlativo: invoice.correlativo,
+      fechaEmision: invoice.fecha_emision.toISOString().slice(0, 10),
+      cliente: invoice.customer_legal_name ?? 'CLIENTE',
+      base,
+      igv,
+      total,
+    });
   }
 
   /** Traduce `{ invoice_id }` a los datos completos del envio. */
