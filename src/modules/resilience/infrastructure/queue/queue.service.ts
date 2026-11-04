@@ -51,6 +51,17 @@ export interface InvoiceJobData {
 export class QueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private readonly boss: PgBoss;
+  /**
+   * Sin base de colas. Se activa cuando `boss.start()` falla y el servicio
+   * decide seguir para desarrollo.
+   *
+   * SIN ESTO EL PROCESO MUERE: los consumidores
+   * (`SummaryJobConsumer`, `InvoiceJobConsumer`) se inicializan DESPUÉS que
+   * este servicio y llaman a `register*Worker`. Con pg-boss ya detenido, esa
+   * llamada lanzaba "Workers are disabled. pg-boss is stopped" en mitad del
+   * arranque y Node terminaba el proceso.
+   */
+  private bypass = false;
 
   constructor() {
     const databaseUrl = process.env.PG_BOSS_URL || process.env.DATABASE_URL;
@@ -63,6 +74,23 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
+    /**
+     * Sin este listener, un fallo de conexión posterior TUMBA EL PROCESO.
+     *
+     * pg-boss emite `error` de forma asíncrona cuando su worker pierde la
+     * conexión. En modo bypass el `catch` de abajo se traga el fallo del
+     * `start()`, pero los workers ya registrados siguen vivos y, al agotar su
+     * timeout, emiten un `error` que nadie escucha: Node lo convierte en
+     * excepción no capturada y el backend muere con ERR_UNHANDLED_ERROR.
+     *
+     * Comprobado el 4 nov: `node dist/main.js` arrancaba, respondía `/health`
+     * durante unos segundos y se caía solo. Ese error se ve en el log como
+     * "Connection terminated due to connection timeout (Queue: sunat-invoice-queue)".
+     */
+    this.boss.on('error', (error: Error) => {
+      this.logger.error(`PgBoss emitió un error de conexión: ${error.message}`);
+    });
+
     try {
       await this.boss.start();
 
@@ -92,6 +120,13 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `No se pudo conectar con PgBoss (${(error as Error).message}). El backend iniciará en modo bypass para desarrollo.`,
       );
+
+      // Se apaga lo que haya quedado a medio conectar. Sin esto, el cliente
+      // sigue intentando reconectar en segundo plano y su worker emite un
+      // `error` más tarde; aunque ya hay listener, el modo bypass debe ser un
+      // bypass de verdad y no un cliente zombi.
+      await this.boss.stop({ graceful: false }).catch(() => undefined);
+      this.bypass = true;
     }
   }
 
@@ -276,6 +311,10 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   async registerInvoiceWorker(
     handler: (job: InvoiceJobData) => Promise<unknown>,
   ): Promise<string> {
+    // En modo bypass no hay base de colas: se devuelve un identificador vacío
+    // en lugar de dejar que pg-boss lance "Workers are disabled".
+    if (this.bypass) return '';
+
     this.logger.log(
       `Registrando worker de comprobantes en la cola ${INVOICE_QUEUE}`,
     );
@@ -346,6 +385,8 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   async registerSummaryWorker(
     handler: (job: SummaryJobData) => Promise<unknown>,
   ): Promise<string> {
+    if (this.bypass) return '';
+
     this.logger.log(
       `Registrando worker de resumenes en la cola ${SUMMARY_QUEUE}`,
     );
