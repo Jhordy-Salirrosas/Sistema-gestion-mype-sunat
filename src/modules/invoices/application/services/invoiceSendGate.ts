@@ -40,6 +40,46 @@ export class ErrorValidacionBloqueada extends Error {
   }
 }
 
+/** Resultado de la compuerta: se envía, o no, y por qué. */
+export interface DecisionCompuerta {
+  /** `null` = se puede enviar; si no, el resultado con el que termina el pipeline. */
+  bloqueo: ProcessCdrResult | null;
+  /**
+   * true solo si la compuerta se omitió por la bandera de demostración.
+   *
+   * Existe como campo y no como efecto secundario del log porque quien llama
+   * debe poder dejarlo escrito en la auditoría del comprobante: una omisión que
+   * solo aparece en la consola se pierde cuando el proceso se reinicia.
+   */
+  omitidaPorDemo: boolean;
+}
+
+/**
+ * Nombre de la bandera que omite la compuerta en la demostración.
+ *
+ * Se exige activarla a mano y con el valor explícito `true`. No hay ningún
+ * valor por defecto permisivo: sin la variable, o con cualquier otro valor, la
+ * compuerta se aplica con normalidad.
+ */
+export const BANDERA_DEMO = 'BYPASS_XSL_GATE_DEMO';
+
+/** Mensaje único del aviso, para que consola y auditoría digan lo mismo. */
+export const AVISO_DEMO =
+  'Compuerta XSL omitida por bandera explícita de demostración ' +
+  `(${BANDERA_DEMO}=true; limitación de xslt-processor con xsl:call-template ` +
+  'documentada en specs/DEUDA_VALIDADOR_XSL.md)';
+
+/**
+ * ¿Está activa la bandera de demostración?
+ *
+ * Se lee en cada llamada y no en el constructor: así el valor puede cambiarse
+ * entre pruebas y un despliegue que arranca sin la variable no queda con una
+ * decisión congelada.
+ */
+export function bypassDemoActivo(): boolean {
+  return (process.env[BANDERA_DEMO] ?? '').trim().toLowerCase() === 'true';
+}
+
 /**
  * Ejecuta la validación XSL antes del primer envío.
  *
@@ -53,6 +93,38 @@ export async function validarAntesDeEnviar(
   validator: SunatXslValidatorService,
   persistence: CdrPersistenceService,
 ): Promise<ProcessCdrResult | null> {
+  const decision = await decidirEnvio(params, xml, validator, persistence);
+  return decision.bloqueo;
+}
+
+/**
+ * Compuerta con su decisión completa, incluida la omisión por demostración.
+ *
+ * Es la que usa el consumidor de la cola, porque necesita saber si hubo
+ * omisión para dejarla escrita en la auditoría del comprobante.
+ *
+ * ORDEN DE LAS COMPROBACIONES, y por qué:
+ *
+ *  1. La bandera se mira ANTES de invocar al validador. Si se validara primero
+ *     y se omitiera después, cada comprobante gastaría el tiempo de ejecutar
+ *     una hoja de 500 KB para descartar el resultado.
+ *  2. La omisión se registra en la auditoría con `persistFailure` reutilizado,
+ *     que es la tabla que ya existe para dejar rastro de cada decisión del
+ *     pipeline. Se escribe con el estado actual del comprobante (no se toca) y
+ *     sin código de error: la omisión no es un rechazo, es una advertencia.
+ *     Inventar un estado nuevo habría exigido una migración del enumerado.
+ */
+export async function decidirEnvio(
+  params: SendInvoiceParams,
+  xml: string,
+  validator: SunatXslValidatorService,
+  persistence: CdrPersistenceService,
+): Promise<DecisionCompuerta> {
+  if (bypassDemoActivo()) {
+    await registrarOmisionDemo(params, persistence);
+    return { bloqueo: null, omitidaPorDemo: true };
+  }
+
   const resultado = await validator.validar(xml, params.tipoComprobante);
 
   if (resultado.bloqueado) {
@@ -62,7 +134,7 @@ export async function validarAntesDeEnviar(
     );
   }
 
-  if (resultado.valido) return null;
+  if (resultado.valido) return { bloqueo: null, omitidaPorDemo: false };
 
   const detalle = resultado.errores
     .map((error) => `${error.codigo}: ${error.mensaje}`)
@@ -82,20 +154,50 @@ export async function validarAntesDeEnviar(
   });
 
   return {
-    invoiceId: params.invoiceId,
-    responseCode: resultado.errores[0]?.codigo ?? '',
-    estado: InvoiceStatus.RECHAZADO,
-    valido: false,
-    // false = no alimenta el backoff ni la DLQ: el XML está mal, no la red.
-    reintentable: false,
-    clasificacion: {
-      status: InvoiceStatus.RECHAZADO,
-      kind: 'RECHAZADO',
+    bloqueo: {
+      invoiceId: params.invoiceId,
+      responseCode: resultado.errores[0]?.codigo ?? '',
+      estado: InvoiceStatus.RECHAZADO,
       valido: false,
+      // false = no alimenta el backoff ni la DLQ: el XML está mal, no la red.
       reintentable: false,
+      clasificacion: {
+        status: InvoiceStatus.RECHAZADO,
+        kind: 'RECHAZADO',
+        valido: false,
+        reintentable: false,
+      },
+      cdr: null,
+      tiempoRespuestaMs: null,
+      error: `Validación XSL local: ${detalle}`,
     },
-    cdr: null,
-    tiempoRespuestaMs: null,
-    error: `Validación XSL local: ${detalle}`,
+    omitidaPorDemo: false,
   };
+}
+
+/**
+ * Deja constancia de que la compuerta se omitió.
+ *
+ * Nunca propaga el error: si la auditoría falla, el envío ya está autorizado
+ * por la bandera y detenerlo aquí dejaría el comprobante en un estado peor
+ * (en cola, sin motivo visible) que enviarlo con el aviso solo en consola.
+ */
+async function registrarOmisionDemo(
+  params: SendInvoiceParams,
+  persistence: CdrPersistenceService,
+): Promise<void> {
+  try {
+    await persistence.persistFailure({
+      invoiceId: params.invoiceId,
+      // El estado NO cambia: la omisión no es un rechazo ni un envío.
+      estadoNuevo: params.estadoActual ?? InvoiceStatus.EN_COLA,
+      estadoAnterior: params.estadoActual ?? null,
+      intento: params.intento ?? 1,
+      codigoError: null,
+      mensajeError: `[DEMO] ${AVISO_DEMO}`,
+      tiempoRespuestaMs: null,
+    });
+  } catch {
+    // Silencio deliberado: ver el comentario de la función.
+  }
 }

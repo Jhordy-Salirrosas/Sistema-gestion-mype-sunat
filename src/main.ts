@@ -29,6 +29,17 @@ async function bootstrap() {
       'Accept',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    /**
+     * `Content-Disposition` tiene que ser LEGIBLE desde el navegador.
+     *
+     * Por defecto CORS solo deja ver unas pocas cabeceras, y esta no está entre
+     * ellas: el front no podía leer el nombre del archivo que mandaba el backend
+     * y guardaba las descargas como "comprobante.xml", "comprobante.pdf" y
+     * "comprobante.cdr.xml". El backend sí enviaba el nombre correcto
+     * (20601234567-01-F001-32.xml); lo que faltaba era exponerlo.
+     * Se detectó probando la descarga en el navegador el 31-10.
+     */
+    exposedHeaders: ['Content-Disposition'],
   });
 
   app.useGlobalFilters(new HttpExceptionFilter());

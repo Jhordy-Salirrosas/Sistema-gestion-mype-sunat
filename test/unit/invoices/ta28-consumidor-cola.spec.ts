@@ -74,6 +74,14 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     errors: [],
   }));
 
+  const registrar = jest.fn<(factura: unknown) => Promise<unknown>>(async () => ({
+    movimientosRegistrados: 0,
+    movimientosOmitidos: 0,
+    asientoOmitido: false,
+    errores: [],
+    completo: true,
+  }));
+
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker } as never,
     { processWithRetry } as never,
@@ -81,6 +89,23 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
     { signXml } as never,
+    // TA-58: el consumidor ahora aplica la compuerta XSL antes de enviar.
+    // Aqui se devuelve "valido" para que estas pruebas sigan midiendo lo suyo
+    // (recarga del payload, firma y empaquetado) y no la compuerta.
+    {
+      validar: jest.fn<() => Promise<unknown>>(async () => ({
+        valido: true,
+        errores: [],
+        codigosDesconocidos: [],
+        bloqueado: false,
+        motivoBloqueo: null,
+      })),
+    } as never,
+    { persistFailure: jest.fn() } as never,
+    // TA-68: puente contable. En esta suite es un doble que no hace nada.
+    { registrar } as never,
+    // Guarda el XML firmado para que la descarga entregue el documento real.
+    { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );
 
   return {
@@ -141,7 +166,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const AdmZip = (await import('adm-zip')).default;
     const nombres = new AdmZip(params.zip).getEntries().map((e) => e.entryName);
 
-    expect(nombres).toEqual(['20601012341-01-F001-1.xml']);
+    expect(nombres).toEqual(['20601012341-01-F001-00000001.xml']);
   });
 
   it('firma el XML cuando hay certificado configurado', async () => {

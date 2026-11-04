@@ -16,6 +16,18 @@ describe('ReconcileSireUseCase', () => {
       saveReconciliationResult: jest.fn(),
       hasReportUploadHash: jest.fn(),
       saveReportUpload: jest.fn(),
+      // Métodos del ciclo de vida del periodo (import/export de SIRE y
+      // consulta a SUNAT). No los usa este caso de uso, pero el puerto los
+      // declara y sin ellos el mock no satisface ISireRepositoryPort.
+      upsertPeriod: jest.fn(),
+      getPeriod: jest.fn(),
+      saveSunatProposal: jest.fn(),
+      getProposal: jest.fn(),
+      excludeSunatProposal: jest.fn(),
+      restoreProposal: jest.fn(),
+      getPeriodProposals: jest.fn(),
+      setPeriodTicket: jest.fn(),
+      setPeriodState: jest.fn(),
     };
     useCase = new ReconcileSireUseCase(repository);
   });

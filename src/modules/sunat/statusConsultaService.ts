@@ -26,6 +26,47 @@ import {
 import { SUNAT_CODE_NO_ENCONTRADO } from './soap/sunatStatusCdrOperation';
 import type { ProcessCdrResult } from './soap/sunatBillTypes';
 
+/**
+ * Códigos con los que SUNAT confirma que NO tiene el comprobante (TA-58).
+ *
+ *  - `0127`: "El comprobante no existe en los registros de SUNAT".
+ *  - `0011`: "No existe el comprobante informado" en el billConsultService.
+ *
+ * Ambos son igual de concluyentes para el pipeline: si SUNAT no lo tiene,
+ * reenviarlo no puede producir un duplicado, que es lo que TA-32 evita.
+ * Tratarlos como cualquier otro código dejaba el comprobante en INCIERTO para
+ * siempre y bloqueaba el reintento legítimo.
+ */
+export const CODIGOS_NO_ENCONTRADO: readonly string[] = [
+  SUNAT_CODE_NO_ENCONTRADO,
+  '0011',
+];
+
+/**
+ * ¿SUNAT dice que el comprobante no existe?
+ *
+ * Se normaliza el código porque llega como texto desde el CDR y SUNAT lo
+ * publica sin ceros de relleno en algunas versiones (`127` por `0127`).
+ */
+function esNoEncontrado(codigo: string | null): boolean {
+  if (!codigo) return false;
+  const normalizado = codigo.trim().padStart(4, '0');
+  return CODIGOS_NO_ENCONTRADO.includes(normalizado);
+}
+
+/**
+ * ¿El comprobante se puede recuperar con `billConsultService`? (TA-58)
+ *
+ * El billConsultService resuelve Facturas y sus notas (series F...). Las
+ * Boletas viven en el resumen diario, así que preguntar por una serie B
+ * devuelve el error `0010` y deja el comprobante en un estado indeterminado
+ * inútil: la respuesta no dice nada sobre si existe. Por eso solo se consulta
+ * a partir de la serie y, para el resto, se informa INCIERTO con el motivo.
+ */
+function consultablePorSerie(serie: string): boolean {
+  return typeof serie === 'string' && serie.trim().toUpperCase().startsWith('F');
+}
+
 /** Datos mínimos para preguntar por un comprobante. */
 export interface ConsultaEstadoRequest {
   invoiceId: string;
@@ -64,6 +105,20 @@ export class SunatStatusConsultaService {
   async consultar(
     request: ConsultaEstadoRequest,
   ): Promise<DesenlaceConsulta> {
+    // TA-58: solo las series F se pueden preguntar al billConsultService.
+    // Consultar una Boleta devuelve 0010 y no informa nada real, asi que se
+    // responde INCIERTO sin gastar la llamada. INCIERTO no autoriza a
+    // reenviar, que es justo lo que hace falta aqui: una Boleta va por el
+    // resumen diario, no por sendBill.
+    if (!consultablePorSerie(request.serie)) {
+      const motivo =
+        `La serie '${request.serie}' no se consulta en billConsultService: ` +
+        'solo las series F (Facturas y sus notas) se resuelven por esa via; ' +
+        'las Boletas se informan en el resumen diario. Estado sin determinar.';
+      this.logger.warn(`[TA-58] ${request.invoiceId}: ${motivo}`);
+      return { tipo: 'INCIERTO', motivo };
+    }
+
     const cliente = this.client ?? new SunatSoapClient();
 
     try {
@@ -75,9 +130,9 @@ export class SunatStatusConsultaService {
         credentials: this.credenciales(request.rucEmisor),
       });
 
-      if (respuesta.responseCode === SUNAT_CODE_NO_ENCONTRADO) {
+      if (esNoEncontrado(respuesta.responseCode)) {
         this.logger.warn(
-          `[TA-30] SUNAT no tiene el comprobante ${request.invoiceId} (0127): se puede reenviar`,
+          `[TA-30] SUNAT no tiene el comprobante ${request.invoiceId} (${respuesta.responseCode}): se puede reenviar`,
         );
         return { tipo: 'NO_ENCONTRADO' };
       }

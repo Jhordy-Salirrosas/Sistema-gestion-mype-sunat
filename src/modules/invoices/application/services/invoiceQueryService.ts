@@ -56,6 +56,26 @@ const SELECT_DETALLE = {
   taxable_operations: true,
   total_igv: true,
   cdr_sunat: true,
+  /**
+   * Payload UBL del que se generó el XML.
+   *
+   * Es el ÚNICO sitio donde vive la forma de pago y el cronograma: `invoices`
+   * no tiene columnas para eso. Sin proyectarlo, el detalle no puede decir si
+   * una factura fue al crédito ni con cuántas cuotas.
+   */
+  payload_ubl: true,
+  /**
+   * Referencia de una nota al documento que afecta.
+   *
+   * Se guardaban desde `cc5572c` pero no se proyectaban, así que el detalle no
+   * las devolvía y la pantalla seguía mostrando una nota aceptada sin origen ni
+   * motivo aunque las columnas estuvieran bien rellenas.
+   */
+  referenced_document_type: true,
+  referenced_series_correlative: true,
+  credit_debit_reason_code: true,
+  /** SHA-256 del XML firmado, para verificar la descarga. */
+  xml_hash_sha256: true,
   created_at: true,
   updated_at: true,
   history: {

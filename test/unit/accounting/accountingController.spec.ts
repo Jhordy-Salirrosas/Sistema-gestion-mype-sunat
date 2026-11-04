@@ -86,7 +86,10 @@ describe('AccountingController', () => {
     const result = await controller.exportPle(dto, 'comp-1');
 
     expect(result).toBe(mockExportResult);
-    expect(getEntriesUseCase.execute).toHaveBeenCalledWith('comp-1');
+    // El periodo sale del cuerpo de la peticion: antes se llamaba sin el y el
+    // caso de uso caia en su valor por defecto (2026-10), asi que el libro se
+    // generaba con los asientos de otro mes.
+    expect(getEntriesUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-03');
     expect(exportPleUseCase.execute).toHaveBeenCalledWith({ ...dto, companyId: 'comp-1' }, []);
   });
 
@@ -102,6 +105,18 @@ describe('AccountingController', () => {
 
     await expect(controller.getEntries()).rejects.toThrow(ForbiddenException);
     await expect(controller.createEntry(dto)).rejects.toThrow(ForbiddenException);
-    await expect(controller.exportPle(dto)).rejects.toThrow(ForbiddenException);
+
+    // El PLE usa su propio DTO (ExportPleDto), no el del asiento: el periodo
+    // viaja como year/month. Se comprueba que el guard corta ANTES de mirar
+    // el cuerpo, que es lo que evita el IDOR.
+    await expect(
+      controller.exportPle({
+        companyId: 'comp-1',
+        companyRuc: '20100070970',
+        year: 2026,
+        month: 3,
+        bookCode: '050100',
+      }),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

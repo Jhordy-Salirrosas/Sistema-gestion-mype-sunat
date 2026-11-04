@@ -75,6 +75,30 @@ export class CdrPersistenceService {
         data: {
           estado: classification.status,
           cdr_sunat: cdrSunat,
+          /**
+           * El código va TAMBIÉN a su columna, no solo dentro del JSON.
+           *
+           * El listado y el modal lo leen de `sunat_response_code`; al dejarlo
+           * solo en `cdr_sunat` el campo quedaba en NULL y la pantalla mostraba
+           * "Código PENDIENTE — Sin respuesta de SUNAT todavía" en facturas ya
+           * ACEPTADAS, contradiciendo el badge de la propia fila.
+           */
+          sunat_response_code: cdr.responseCode,
+          /**
+           * El XML del CDR va TAMBIÉN a `cdr_storage_url`.
+           *
+           * Esa columna existe en el esquema para guardar la constancia y
+           * llevaba NULL en TODOS los comprobantes: el CDR solo se guardaba
+           * dentro de `cdr_sunat.rawXml`. La descarga funcionaba porque leía de
+           * ahí, pero cualquier consulta que mirase `cdr_storage_url` —o una
+           * integración externa esperando un almacenamiento— encontraba vacío
+           * un comprobante aceptado.
+           *
+           * Se guarda el XML en crudo, igual que `xml_storage_url` guarda el
+           * XML firmado: el proyecto no tiene un almacenamiento externo y el
+           * documento probatorio debe estar en la propia base.
+           */
+          cdr_storage_url: cdr.rawXml,
         },
         select: { id: true, estado: true, updated_at: true, company_id: true },
       });

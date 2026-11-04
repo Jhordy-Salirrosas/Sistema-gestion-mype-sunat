@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -16,6 +17,12 @@ import { GenerateAccountingEntryUseCase } from '../../application/use-cases/gene
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
+
+/** Periodo `YYYY-MM` del mes en curso en Lima (UTC-5). */
+const periodoLima = (): string => {
+  const lima = new Date(Date.now() - 5 * 60 * 60 * 1000);
+  return `${lima.getUTCFullYear()}-${String(lima.getUTCMonth() + 1).padStart(2, '0')}`;
+};
 
 @Controller('api/v1/accounting')
 @UseGuards(AuthGuard)
@@ -42,12 +49,23 @@ export class AccountingController {
   // ==========================================
   // GET: Obtener lista de asientos de la empresa
   // ==========================================
+  /**
+   * @param period Periodo `YYYY-MM`. Si no llega se usa el mes en curso en Lima.
+   *
+   * Antes se llamaba al caso de uso SIN periodo, así que caía siempre en su
+   * valor por defecto (`2026-10`) y el Libro Diario mostraba los asientos de
+   * octubre aunque la empresa ya facturara en noviembre. El `AccountingEntry`
+   * que genera el módulo de facturación se asienta en el mes del comprobante,
+   * así que el filtro tiene que venir de la petición.
+   */
   @Get('entries')
   async getEntries(
     @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
   ): Promise<AccountingEntryEntity[]> {
     return this.getEntriesUseCase.execute(
       this.empresaDelToken(currentCompanyId),
+      period || periodoLima(),
     );
   }
 
@@ -76,9 +94,15 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
     const companyId = this.empresaDelToken(currentCompanyId);
-    
-    // 1. Obtener los asientos contables persistidos de la empresa
-    const entries = await this.getEntriesUseCase.execute(companyId);
+
+    // El periodo se toma del cuerpo de la petición (year/month). Antes se usaba
+    // el valor por defecto del caso de uso, que está fijo en 2026-10: el libro
+    // se generaba con los asientos de octubre aunque se pidiera otro mes, así
+    // que las ventas del mes pedido no aparecían en la trama.
+    const period = `${dto.year}-${String(dto.month).padStart(2, '0')}`;
+
+    // 1. Obtener los asientos contables persistidos de la empresa y del periodo
+    const entries = await this.getEntriesUseCase.execute(companyId, period);
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);

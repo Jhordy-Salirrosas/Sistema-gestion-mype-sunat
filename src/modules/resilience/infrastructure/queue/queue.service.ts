@@ -9,6 +9,28 @@ import { PgBoss, fromPrisma } from 'pg-boss';
 
 export const INVOICE_QUEUE = 'sunat-invoice-queue';
 export const INVOICE_DLQ = 'sunat-invoice-dlq';
+/**
+ * TA-67: cola de resúmenes diarios y comunicaciones de baja.
+ *
+ * Es una cola aparte de la de comprobantes a propósito. Un resumen no espera
+ * CDR de inmediato sino un ticket que hay que sondear, y su payload no es
+ * `{ invoice_id }`. Compartir cola obligaría al consumidor de facturas a
+ * distinguir dos flujos en cada job.
+ */
+export const SUMMARY_QUEUE = 'sunat-summary-queue';
+/** Cola de muertos propia: un resumen atascado no debe mezclarse con facturas. */
+export const SUMMARY_DLQ = 'sunat-summary-dlq';
+
+/** Payload que viaja en la cola de resúmenes. */
+export interface SummaryJobData {
+  tipo: 'RESUMEN_DIARIO' | 'COMUNICACION_BAJA';
+  identificador: string;
+  zipBase64: string;
+  fileName: string;
+  companyId: string;
+  maxConsultas?: number;
+  esperaMs?: number;
+}
 
 export interface TxClient {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
@@ -52,6 +74,17 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       await this.boss.createQueue(INVOICE_QUEUE, {
         retryLimit: 0,
         deadLetter: INVOICE_DLQ,
+      });
+
+      // TA-67: la cola de resúmenes se declara con su propia DLQ. Aquí SÍ se
+      // deja un `retryLimit` > 0, al contrario que en la cola de comprobantes:
+      // un fallo de red al enviar un resumen no tiene un orquestador propio con
+      // backoff (no hay `InvoiceRetryService` para resúmenes), y perder un
+      // resumen diario deja el día sin informar a SUNAT.
+      await this.boss.createQueue(SUMMARY_DLQ);
+      await this.boss.createQueue(SUMMARY_QUEUE, {
+        retryLimit: 3,
+        deadLetter: SUMMARY_DLQ,
       });
 
       this.logger.log('Servicio de colas PgBoss iniciado correctamente');
@@ -142,6 +175,62 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Cuántos trabajos de la empresa están esperando en la cola de muertos.
+   *
+   * Lo consume la barra de métricas del M1 (TA-69): `pendientes` cuenta los
+   * comprobantes con error de red, pero un comprobante que agotó los reintentos
+   * y está en la DLQ figura igual como pendiente y el operador no se entera de
+   * que necesita intervención manual. Se reutiliza `listDlq` en vez de contar
+   * en la tabla de pg-boss para no duplicar el filtro por `company_id`.
+   */
+  async countDlq(companyId: string): Promise<number> {
+    const jobs = await this.listDlq(companyId);
+    return jobs.length;
+  }
+
+  /**
+   * Trabajos de la DLQ cuyo comprobante YA NO EXISTE en la base.
+   *
+   * POR QUÉ HACE FALTA
+   *
+   * `listDlq` devuelve todos los jobs de la cola de muertos con el
+   * `invoice_id` guardado en el payload, sin comprobar que ese comprobante
+   * siga existiendo. Al borrar comprobantes de prueba (repoblados, documentos
+   * con datos inválidos) los jobs quedaron huérfanos: el Monitor mostraba
+   * "DLQ 3" y la tabla de la DLQ salía vacía, porque la pantalla resuelve el
+   * número fiscal y no lo encontraba.
+   *
+   * Un job huérfano no es trabajo pendiente: reintentarlo lo mueve a la cola
+   * principal, el consumidor intenta cargar el comprobante, falla y vuelve a
+   * caer en la DLQ. Se informa aparte para que el número grande siga siendo el
+   * trabajo real y el operador no persiga fantasmas.
+   */
+  async countDlqHuerfanos(companyId: string): Promise<number> {
+    const jobs = await this.listDlq(companyId);
+    const ids = jobs
+      .map((job) => job.comprobanteSerieNumero)
+      .filter((id): id is string => typeof id === 'string' && id !== 'sin identificar');
+
+    if (ids.length === 0) return 0;
+
+    // Se consulta con SQL directo porque `QueueService` no inyecta Prisma a
+    // propósito: solo habla con pg-boss. Una consulta de existencia no
+    // justifica introducir la dependencia.
+    const vivos = await this.boss.getDb().executeSql(
+      'SELECT id FROM invoices WHERE id = ANY($1::text[])',
+      [ids],
+    );
+
+    const existentes = new Set(
+      (Array.isArray(vivos.rows) ? vivos.rows : []).map((fila) =>
+        String((fila as Record<string, unknown>).id),
+      ),
+    );
+
+    return ids.filter((id) => !existentes.has(id)).length;
+  }
+
+  /**
    * Mueve explícitamente un comprobante a la DLQ.
    *
    * Lo usa `InvoiceRetryService` al agotar los 3 reintentos de HU-04. Se crea
@@ -225,5 +314,70 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         }`,
       );
     }
+  }
+
+  /**
+   * TA-67: encola el envío de un resumen diario o de una comunicación de baja.
+   *
+   * Devuelve el id del job (o `null` si pg-boss no está disponible) para que
+   * quien llama pueda informarlo; no se espera el resultado dentro de la misma
+   * petición HTTP porque el CDR de un resumen puede tardar.
+   */
+  async encolarResumen(job: SummaryJobData): Promise<string | null> {
+    try {
+      return await this.boss.send(SUMMARY_QUEUE, job);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo encolar el ${job.tipo} ${job.identificador}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * TA-67: registra el consumidor de resúmenes.
+   *
+   * Igual que en la cola de comprobantes, `batchSize: 1`: el resumen de un día
+   * se procesa de uno en uno para que el sondeo del ticket no compita con otra
+   * operación del mismo periodo.
+   */
+  async registerSummaryWorker(
+    handler: (job: SummaryJobData) => Promise<unknown>,
+  ): Promise<string> {
+    this.logger.log(
+      `Registrando worker de resumenes en la cola ${SUMMARY_QUEUE}`,
+    );
+
+    return this.boss.work<SummaryJobData>(
+      SUMMARY_QUEUE,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+
+        this.logger.log(
+          `[Job resumen recibido] ${job.data.tipo} ${job.data.identificador}`,
+        );
+        await handler(job.data);
+      },
+    );
+  }
+
+  /** TA-67: trabajos de resumen que quedaron sin procesar en la DLQ. */
+  async listSummaryDlq(companyId: string): Promise<Array<Record<string, unknown>>> {
+    const jobs = await this.boss.findJobs<SummaryJobData>(SUMMARY_DLQ, {
+      queued: true,
+    });
+
+    return jobs
+      .filter((job) => job.data?.companyId === companyId)
+      .map((job) => ({
+        id: job.id,
+        identificador: job.data?.identificador ?? 'sin identificar',
+        tipo: job.data?.tipo ?? 'RESUMEN_DIARIO',
+        intentosFallidos: job.retryCount ?? 0,
+      }));
   }
 }

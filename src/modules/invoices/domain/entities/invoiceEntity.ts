@@ -16,6 +16,27 @@ export interface InvoiceEntityProps {
    * qué petición provocó un choque con `uq_invoices_idempotencia`.
    */
   clave_idempotencia?: string;
+  /**
+   * Datos del adquirente.
+   *
+   * La tabla `invoices` tiene columnas propias para ellos y la pantalla las lee
+   * de ahí: sin ellas la bandeja mostraba "CLIENTE SIN NOMBRE" en comprobantes
+   * que sí llevaban el cliente dentro del `payload_ubl`. Se detectó revisando
+   * la grilla en el navegador el 31-10.
+   */
+  customer_identity_type?: string;
+  customer_identity_number?: string;
+  customer_legal_name?: string;
+  /**
+   * Referencia de la nota de crédito/débito al documento que afecta.
+   *
+   * Son columnas propias de `invoices` y la bandeja las consulta; dejarlas en
+   * NULL hacía que una nota aceptada se mostrara sin origen ni motivo aunque el
+   * XML los contuviera.
+   */
+  referenced_document_type?: string;
+  referenced_series_correlative?: string;
+  credit_debit_reason_code?: string;
 }
 
 export class InvoiceEntity {
@@ -32,6 +53,14 @@ export class InvoiceEntity {
   public readonly created_at?: Date;
   /** Huella del comprobante para reconocer un reenvío (TA-32). */
   public readonly clave_idempotencia?: string;
+  /** Datos del adquirente, para la bandeja y el PDF. */
+  public readonly customer_identity_type?: string;
+  public readonly customer_identity_number?: string;
+  public readonly customer_legal_name?: string;
+  /** Referencia al documento afectado (solo notas 07 y 08). */
+  public readonly referenced_document_type?: string;
+  public readonly referenced_series_correlative?: string;
+  public readonly credit_debit_reason_code?: string;
 
   constructor(props: InvoiceEntityProps) {
     this.id = props.id;
@@ -46,5 +75,11 @@ export class InvoiceEntity {
     this.estado = props.estado ?? 'PENDIENTE_ENVIO';
     this.created_at = props.created_at;
     this.clave_idempotencia = props.clave_idempotencia;
+    this.customer_identity_type = props.customer_identity_type;
+    this.customer_identity_number = props.customer_identity_number;
+    this.customer_legal_name = props.customer_legal_name;
+    this.referenced_document_type = props.referenced_document_type;
+    this.referenced_series_correlative = props.referenced_series_correlative;
+    this.credit_debit_reason_code = props.credit_debit_reason_code;
   }
 }

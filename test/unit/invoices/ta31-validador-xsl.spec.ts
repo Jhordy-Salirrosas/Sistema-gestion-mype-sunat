@@ -1,15 +1,19 @@
 /**
  * TA-31 — Validador local con las XSL oficiales.
  *
- * Cubre:
- *   1. Ejecución de la hoja sobre el XML firmado (criterio 1).
- *   2. Mapeo de tipo de comprobante a hoja (criterio 2).
- *   3. Traducción de códigos a mensajes legibles (criterio 3).
- *   4. Bloqueo del envío sin consumir intentos del backoff (criterio 4).
+ * IMPORTANTE (TA-62): este spec se ejecuta contra
+ * `test/fixtures/xsl/2.0.1.xsl`, una hoja FALSA que imita el contrato de salida
+ * de una hoja SUNAT. Ese contrato ("los errores aparecen como códigos de 4
+ * dígitos en el texto") NO es el de las hojas reales: las oficiales delegan la
+ * validación en `commons/error/validate_utils.xsl`, que SUNAT no publica.
  *
- * La XSL usada es la de `test/fixtures/xsl/2.0.1.xsl`, que imita el contrato
- * de salida de la hoja oficial. La oficial no se versiona (es material de
- * SUNAT y pesa cientos de KB).
+ * Por eso, con la hoja oficial el validador responde `bloqueado: true` con
+ * `validadoDeVerdad: false` en lugar de afirmar que el XML es válido. Los
+ * casos de abajo comprueban ESA conducta: el validador ya no puede aprobar
+ * nada. Los criterios originales (detectar 2100, 2022, 2800) quedan cubiertos
+ * solo por el doble educativo, y así se documenta.
+ *
+ * El diagnóstico completo está en `specs/DEUDA_VALIDADOR_XSL.md`.
  */
 import { join } from 'node:path';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
@@ -22,6 +26,7 @@ import {
   reglaPorCodigo,
 } from '../../../src/modules/invoices/application/services/sunatValidationCatalog';
 import { SunatXslValidatorService } from '../../../src/modules/invoices/application/services/sunatXslValidatorService';
+import { validaDeVerdad } from '../../../src/modules/invoices/application/services/sunatXslAdapter';
 import type { SendInvoiceParams } from '../../../src/modules/sunat/soap/sunatBillTypes';
 
 const DIRECTORIO_XSL = join(__dirname, '../../fixtures/xsl');
@@ -75,56 +80,46 @@ describe('TA-31 - ejecución de la hoja XSL', () => {
     delete process.env.SUNAT_XSL_DIR;
   });
 
-  it('acepta un XML cuyos montos cuadran', async () => {
+  it('NO afirma que un XML sea válido: la hoja no puede validar (TA-62)', async () => {
     const resultado = await validador.validar(xmlFactura(), '01');
 
-    expect(resultado.bloqueado).toBe(false);
-    expect(resultado.valido).toBe(true);
-    expect(resultado.errores).toHaveLength(0);
-  });
-
-  it('detecta un error de cálculo de IGV (criterio de la PRUEBA del backlog)', async () => {
-    const resultado = await validador.validar(
-      xmlFactura({ total: 500 }),
-      '01',
-    );
-
+    // Antes este caso esperaba `valido: true`. Era una mentira: la hoja no
+    // tenía con qué validar. Ahora el validador lo declara.
     expect(resultado.valido).toBe(false);
-    expect(resultado.errores.map((e) => e.codigo)).toContain('2100');
+    expect(resultado.bloqueado).toBe(true);
+    expect(resultado.validadoDeVerdad).toBe(false);
+    expect(resultado.motivoBloqueo).toMatch(/validate_utils/);
   });
 
-  it('detecta que el adquirente es el propio emisor', async () => {
-    const resultado = await validador.validar(
-      xmlFactura({ emisor: '20601012341', cliente: '20601012341' }),
-      '01',
-    );
+  it('no inventa códigos de error a partir de los números del propio XML', async () => {
+    // Con la hoja mutilada, el interpretador anterior leía el RUC del emisor,
+    // la base y el total como si fueran códigos SUNAT. Ese falso positivo ya
+    // no puede ocurrir: sin validación no hay errores que reportar.
+    const resultado = await validador.validar(xmlFactura(), '01');
 
-    expect(resultado.errores.map((e) => e.codigo)).toContain('2022');
+    expect(resultado.errores).toEqual([]);
   });
 
-  it('detecta un monto total no positivo', async () => {
-    const resultado = await validador.validar(
-      xmlFactura({ base: 0, igv: 0, total: 0 }),
-      '01',
-    );
-
-    expect(resultado.errores.map((e) => e.codigo)).toContain('2800');
+  it('la bandera validaDeVerdad() documenta el estado del validador', () => {
+    // Si algún día se resuelve la dependencia, este test debe cambiar a true.
+    // Que falle es la señal de que hay algo nuevo que revisar.
+    expect(validaDeVerdad()).toBe(false);
   });
 
-  it('traduce cada código a un mensaje legible (criterio 3)', async () => {
-    const resultado = await validador.validar(
-      xmlFactura({ total: 500 }),
-      '01',
-    );
-
-    const error = resultado.errores.find((e) => e.codigo === '2100');
-    expect(error?.mensaje).toMatch(/no coincide con la suma de los ítems/);
+  it('traduce cada código a un mensaje legible (criterio 3)', () => {
+    // El catálogo de mensajes sigue siendo correcto y útil: es lo que el
+    // comprobante mostrará cuando la hoja vuelva a poder validar.
+    expect(mensajeLegible('2100')).toMatch(/no coincide con la suma de los ítems/);
+    expect(reglaPorCodigo('2100')).not.toBeNull();
   });
 
   it('mapea los cuatro tipos del criterio 2 a la hoja 2.0.1', async () => {
     for (const tipo of ['01', '03', '07', '08']) {
       const resultado = await validador.validar(xmlFactura(), tipo);
-      expect(resultado.bloqueado).toBe(false);
+      // No se bloquea por falta de hoja: la hoja correcta se carga y se
+      // ejecuta. Lo que no puede es concluir, y lo dice.
+      expect(resultado.motivoBloqueo).toMatch(/validate_utils/);
+      expect(resultado.validadoDeVerdad).toBe(false);
     }
   });
 
@@ -169,29 +164,63 @@ describe('TA-31 - bloqueo del envío (criterio 4)', () => {
     delete process.env.SUNAT_XSL_DIR;
   });
 
-  it('deja enviar cuando el XML es válido', async () => {
+  it('con la hoja oficial NO deja pasar el envío: no puede afirmar que es válido', async () => {
     const validador = new SunatXslValidatorService();
     const db = persistencia();
+
+    // Con la hoja real (que no puede validar) la compuerta se cierra con
+    // ErrorValidacionBloqueada: es un problema de infraestructura, así que el
+    // job vuelve a la cola sin consumir intento. NO se marca RECHAZADO, porque
+    // el XML podría estar perfecto.
+    await expect(
+      validarAntesDeEnviar(PARAMS, xmlFactura(), validador, db as never),
+    ).rejects.toThrow(ErrorValidacionBloqueada);
+
+    expect(db.persistFailure).not.toHaveBeenCalled();
+  });
+
+  it('con la hoja DOBLE (contrato falso) sí deja pasar un XML válido', async () => {
+    // Este caso documenta el contrato que se asumió: una hoja que escribe los
+    // códigos de error como texto en la salida. Es lo que hace la hoja de
+    // `test/fixtures/xsl`, no las oficiales. Se conserva como contraste.
+    const dobleQueValida = {
+      validar: async () => ({
+        valido: true,
+        errores: [],
+        codigosDesconocidos: [],
+        bloqueado: false,
+        motivoBloqueo: null,
+        validadoDeVerdad: true,
+      }),
+    };
 
     const bloqueo = await validarAntesDeEnviar(
       PARAMS,
       xmlFactura(),
-      validador,
-      db as never,
+      dobleQueValida as never,
+      persistencia() as never,
     );
 
     expect(bloqueo).toBeNull();
-    expect(db.persistFailure).not.toHaveBeenCalled();
   });
 
-  it('no envía y marca RECHAZADO con un XML inválido, sin alimentar el backoff', async () => {
-    const validador = new SunatXslValidatorService();
+  it('marca RECHAZADO cuando la hoja reporta errores reales', async () => {
+    const dobleConErrores = {
+      validar: async () => ({
+        valido: false,
+        errores: [{ codigo: '2100', mensaje: 'IGV no coincide', regla: null }],
+        codigosDesconocidos: [],
+        bloqueado: false,
+        motivoBloqueo: null,
+        validadoDeVerdad: true,
+      }),
+    };
     const db = persistencia();
 
     const resultado = await validarAntesDeEnviar(
       PARAMS,
       xmlFactura({ total: 500 }),
-      validador,
+      dobleConErrores as never,
       db as never,
     );
 
