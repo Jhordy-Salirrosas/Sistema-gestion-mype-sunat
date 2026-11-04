@@ -74,6 +74,17 @@ export class LoginUseCase {
       }
     }
 
+    const company = await this.userRepository.findCompanyById(user.companyId);
+    const companies = company
+      ? [
+          {
+            tenantId: company.id,
+            ruc: company.ruc,
+            razonSocial: company.legalName,
+          },
+        ]
+      : undefined;
+
     return {
       accessToken,
       tokenType: 'Bearer',
@@ -85,7 +96,10 @@ export class LoginUseCase {
         fullName: user.fullName,
         role: user.role,
         companyId: user.companyId,
+        companyRuc: company?.ruc,
+        companyLegalName: company?.legalName,
       },
+      companies,
     };
   }
 }
