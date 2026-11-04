@@ -147,6 +147,16 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
     });
     companyId = company.id;
 
+    // TA-60: el endpoint reserva el correlativo en invoice_series.
+    await prisma.invoiceSeries.create({
+      data: {
+        company_id: companyId,
+        document_type: '01',
+        series: SERIE_ENDPOINT,
+        current_correlative: 0,
+      },
+    });
+
     // Token real firmado con el adaptador de la aplicacion.
     // Se construye con un ConfigService que expone el mismo JWT_SECRET que leera
     // AppModule; con un ConfigService vacio el adaptador caeria en su secreto de
@@ -174,6 +184,7 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
     // Limpieza: primero los comprobantes (FK), despues la empresa.
     if (companyId) {
       await prisma.invoice.deleteMany({ where: { company_id: companyId } });
+      await prisma.invoiceSeries.deleteMany({ where: { company_id: companyId } });
       await prisma.company
         .delete({ where: { id: companyId } })
         .catch(() => undefined);
@@ -319,6 +330,10 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
               tipo_comprobante: '01',
               monto_total: 118,
               fecha_emision: new Date().toISOString(),
+              // TA-60: una factura exige RUC del adquirente.
+              customer_identity_type: '6',
+              customer_identity_number: '20100070970',
+              customer_legal_name: 'CLIENTE PRUEBA OUTBOX',
               payload_ubl: { test: 'ta-13' },
             });
           return { status: respuesta.status, ms: Date.now() - inicio };
