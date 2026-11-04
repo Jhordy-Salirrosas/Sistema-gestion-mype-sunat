@@ -115,4 +115,28 @@ describe('LoginUseCase', () => {
       useCase.execute({ email: 'contador@mype.pe', password: 'WrongPassword!' }),
     ).rejects.toThrow(UnauthorizedException);
   });
+
+  it('devuelve la empresa del usuario para que el frontend active el tenant', async () => {
+    mockUserRepo.findByEmail.mockResolvedValue({
+      user: activeUser,
+      passwordHash: 'hashed_password',
+    });
+    mockHasher.compare.mockResolvedValue(true);
+    mockUserRepo.findCompanyById.mockResolvedValue({
+      id: 'comp-456',
+      ruc: '20601012341',
+      legalName: 'MYPE CONFECCIONES S.A.C.',
+    } as any);
+
+    const result = await useCase.execute({
+      email: 'contador@mype.pe',
+      password: 'Password123!',
+    });
+
+    expect(result.companies).toEqual([
+      { tenantId: 'comp-456', ruc: '20601012341', razonSocial: 'MYPE CONFECCIONES S.A.C.' },
+    ]);
+    expect(result.user.companyRuc).toBe('20601012341');
+    expect(result.user.companyLegalName).toBe('MYPE CONFECCIONES S.A.C.');
+  });
 });
