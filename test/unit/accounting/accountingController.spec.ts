@@ -114,6 +114,9 @@ describe('AccountingController', () => {
     const result = await controller.exportPle(dto, 'comp-1');
 
     expect(result).toBe(mockExportResult);
+    // El periodo sale del cuerpo de la peticion: antes se llamaba sin el y el
+    // caso de uso caia en su valor por defecto (2026-10), asi que el libro se
+    // generaba con los asientos de otro mes.
     expect(getEntriesUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-03');
     expect(exportPleUseCase.execute).toHaveBeenCalledWith({ ...dto, companyId: 'comp-1' }, []);
   });

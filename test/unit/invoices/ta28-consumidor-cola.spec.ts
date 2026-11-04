@@ -74,6 +74,14 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     errors: [],
   }));
 
+  const registrar = jest.fn<(factura: unknown) => Promise<unknown>>(async () => ({
+    movimientosRegistrados: 0,
+    movimientosOmitidos: 0,
+    asientoOmitido: false,
+    errores: [],
+    completo: true,
+  }));
+
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker } as never,
     { processWithRetry } as never,
@@ -81,6 +89,23 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
     { signXml } as never,
+    // TA-58: el consumidor ahora aplica la compuerta XSL antes de enviar.
+    // Aqui se devuelve "valido" para que estas pruebas sigan midiendo lo suyo
+    // (recarga del payload, firma y empaquetado) y no la compuerta.
+    {
+      validar: jest.fn<() => Promise<unknown>>(async () => ({
+        valido: true,
+        errores: [],
+        codigosDesconocidos: [],
+        bloqueado: false,
+        motivoBloqueo: null,
+      })),
+    } as never,
+    { persistFailure: jest.fn() } as never,
+    // TA-68: puente contable. En esta suite es un doble que no hace nada.
+    { registrar } as never,
+    // Guarda el XML firmado para que la descarga entregue el documento real.
+    { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );
 
   return {
@@ -141,7 +166,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const AdmZip = (await import('adm-zip')).default;
     const nombres = new AdmZip(params.zip).getEntries().map((e) => e.entryName);
 
-    expect(nombres).toEqual(['20601012341-01-F001-1.xml']);
+    expect(nombres).toEqual(['20601012341-01-F001-00000001.xml']);
   });
 
   it('firma el XML cuando hay certificado configurado', async () => {
@@ -201,26 +226,56 @@ describe('TA-28 InvoiceJobConsumer', () => {
   });
 
   it('genera el asiento contable cuando el CDR queda aceptado', async () => {
-    const accounting = { execute: jest.fn().mockResolvedValue(null) };
+    const accounting = {
+      execute: jest.fn<(args: unknown) => Promise<unknown>>(async () => null),
+    };
+    const FILA_CONTABLE = {
+      ...COMPROBANTE,
+      company_id: 'company-1',
+      fecha_emision: new Date('2026-03-15T00:00:00.000Z'),
+      customer_legal_name: 'CLIENTE S.A.C.',
+      monto_total: 118,
+      total_igv: 18,
+      taxable_operations: 100,
+    };
+    // Tres lecturas en este flujo: `preparar` (envío), el puente de TA-68 y el
+    // caso de uso de contabilidad. Se devuelve la fila contable en las tres.
     const findUnique = jest
-      .fn()
+      .fn<() => Promise<unknown>>()
       .mockResolvedValueOnce(COMPROBANTE)
-      .mockResolvedValueOnce({
-        ...COMPROBANTE,
-        company_id: 'company-1',
-        fecha_emision: new Date('2026-03-15T00:00:00.000Z'),
-        customer_legal_name: 'CLIENTE S.A.C.',
-        monto_total: 118,
-        total_igv: 18,
-        taxable_operations: 100,
-      });
+      .mockResolvedValueOnce(FILA_CONTABLE)
+      .mockResolvedValueOnce(FILA_CONTABLE);
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
-      { processWithRetry: jest.fn().mockResolvedValue(RESULTADO) } as never,
+      { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
       { invoice: { findUnique, update: jest.fn() } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      // TA-58: compuerta XSL, aquí siempre "válido".
+      {
+        validar: jest.fn(async () => ({
+          valido: true,
+          errores: [],
+          codigosDesconocidos: [],
+          bloqueado: false,
+          motivoBloqueo: null,
+        })),
+      } as never,
+      { persistFailure: jest.fn() } as never,
+      // TA-68: el puente no deja asiento (`asientoId: undefined`), que es la
+      // condición para que contabilidad tome el relevo con el suyo.
+      {
+        registrar: jest.fn(async () => ({
+          movimientosRegistrados: 0,
+          movimientosOmitidos: 0,
+          asientoOmitido: false,
+          asientoId: undefined,
+          errores: [],
+          completo: true,
+        })),
+      } as never,
+      { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
       accounting as never,
     );
 

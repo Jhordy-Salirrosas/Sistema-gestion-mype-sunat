@@ -53,6 +53,15 @@ export class AccountingController {
   // ==========================================
   // GET: Obtener lista de asientos de la empresa
   // ==========================================
+  /**
+   * @param period Periodo `YYYY-MM`. Si no llega se usa el mes en curso en Lima.
+   *
+   * Antes se llamaba al caso de uso SIN periodo, así que caía siempre en su
+   * valor por defecto (`2026-10`) y el Libro Diario mostraba los asientos de
+   * octubre aunque la empresa ya facturara en noviembre. El `AccountingEntry`
+   * que genera el módulo de facturación se asienta en el mes del comprobante,
+   * así que el filtro tiene que venir de la petición.
+   */
   @Get('entries')
   async getEntries(
     @CurrentCompany() currentCompanyId?: string,
@@ -60,6 +69,7 @@ export class AccountingController {
   ): Promise<AccountingEntryEntity[]> {
     return this.getEntriesUseCase.execute(
       this.empresaDelToken(currentCompanyId),
+      // Si no llega, el caso de uso usa el mes en curso (`periodoActual()`).
       period,
     );
   }

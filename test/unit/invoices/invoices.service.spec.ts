@@ -26,6 +26,10 @@ describe('InvoicesService', () => {
     payload_ubl: {
       comprobante: 'prueba',
     },
+    // El repositorio copia estos tres a sus columnas propias.
+    customer_identity_type: '6',
+    customer_identity_number: '20100070970',
+    customer_legal_name: 'CLIENTE DE PRUEBA S.A.C.',
   };
 
   const tx = {
@@ -87,6 +91,17 @@ describe('InvoicesService', () => {
         monto_total: dto.monto_total,
         fecha_emision: new Date(dto.fecha_emision),
         payload_ubl: dto.payload_ubl,
+        // El repositorio copia también los datos del adquirente a sus columnas:
+        // la bandeja y el PDF los leen de ahí, no del payload.
+        customer_identity_type: dto.customer_identity_type ?? null,
+        customer_identity_number: dto.customer_identity_number ?? null,
+        customer_legal_name: dto.customer_legal_name ?? null,
+        // Y la referencia al documento afectado (notas 07/08), por la misma
+        // razón: la bandeja no lee el payload.
+        referenced_document_type: null,
+        referenced_series_correlative: null,
+        referenced_invoice_id: null,
+        credit_debit_reason_code: null,
       },
       select: {
         id: true,

@@ -19,6 +19,12 @@ model Company {
   cert_pass_encrypted   String?
   sire_client_id_enc    String?
   sire_client_secret_enc String?
+  // Cuenta del Banco de la Nación del emisor para depositar detracciones.
+  // Vive en la empresa y no en el formulario: es un dato fiscal fijo del
+  // contribuyente, no algo que se escriba en cada emisión. El formulario queda
+  // como respaldo para una cuenta distinta. SUNAT rechaza con 3034 si el XML
+  // no la trae.
+  detraction_account    String?
   is_active             Boolean       @default(true)
   created_at            DateTime      @default(now())
   updated_at            DateTime      @updatedAt

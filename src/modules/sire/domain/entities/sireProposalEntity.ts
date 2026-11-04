@@ -37,4 +37,10 @@ export interface DiscrepancyResult {
   igvDifference?: number;
   deviationPercentage?: number;
   duplicateSource?: 'LOCAL' | 'SIRE' | 'AMBOS';
+  /**
+   * CAR de recaudación de 27 dígitos, cuando el comprobante se cobró por una
+   * entidad recaudadora (HU-12 / TA-69). Vacío si no aplica: las facturas no
+   * llevan CAR y las boletas solo cuando hay depósito por recaudador.
+   */
+  carSunat?: string;
 }

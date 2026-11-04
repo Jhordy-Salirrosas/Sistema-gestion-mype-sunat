@@ -17,6 +17,10 @@ export class SireTxtWriterAdapter implements ISireExporterPort {
       'TOTAL_LOCAL',
       'TOTAL_SIRE',
       'DIFERENCIA',
+      // HU-12 / TA-69: el RVIE pide el CAR de recaudación en su propia columna.
+      // `SireProposalEntity` lo calculaba desde `sireCarService` pero el archivo
+      // plano no lo escribía, así que el dato se perdía al exportar.
+      'CAR_SUNAT',
     ];
     const rows = input.discrepancies.map((item) => [
       item.emitterRuc,
@@ -27,6 +31,10 @@ export class SireTxtWriterAdapter implements ISireExporterPort {
       this.formatAmount(item.localTotalAmount),
       this.formatAmount(item.sireTotalAmount),
       this.formatAmount(item.amountDifference),
+      // Vacío cuando el comprobante no se cobró por entidad recaudadora (las
+      // facturas, por ejemplo): un CAR inventado atribuiría el registro a un
+      // depósito que no existe.
+      item.carSunat ?? '',
     ]);
     const content = [header, ...rows]
       .map((row) => row.map((cell) => this.safeCell(cell)).join('|'))

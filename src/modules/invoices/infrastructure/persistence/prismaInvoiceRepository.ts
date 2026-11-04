@@ -36,6 +36,23 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
               monto_total: invoice.monto_total,
               fecha_emision: invoice.fecha_emision,
               payload_ubl: invoice.payload_ubl as Prisma.InputJsonValue,
+              // Datos del adquirente: la bandeja y el PDF los leen de estas
+              // columnas. Sin ellos la fila mostraba "CLIENTE SIN NOMBRE"
+              // aunque el cliente viajara dentro del payload.
+              customer_identity_type: invoice.customer_identity_type ?? null,
+              customer_identity_number: invoice.customer_identity_number ?? null,
+              customer_legal_name: invoice.customer_legal_name ?? null,
+              // Referencia del documento afectado (notas 07/08). Misma razón que
+              // el adquirente: la pantalla lee columnas, no el payload.
+              referenced_document_type: invoice.referenced_document_type ?? null,
+              referenced_series_correlative:
+                invoice.referenced_series_correlative ?? null,
+              // UUID del comprobante afectado (TA-66). No basta el número: el
+              // control de saldo suma las notas anteriores `WHERE
+              // referenced_invoice_id = origen.id`, así que con esta columna en
+              // NULL una segunda Nota de Crédito no veía a la primera.
+              referenced_invoice_id: invoice.referenced_invoice_id ?? null,
+              credit_debit_reason_code: invoice.credit_debit_reason_code ?? null,
             },
             select: {
               id: true,

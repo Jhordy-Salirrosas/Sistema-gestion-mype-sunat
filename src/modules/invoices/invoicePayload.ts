@@ -33,6 +33,19 @@ export interface InvoicePayload extends DatosTributarios {
   tipoOperacion?: string;
   formaPago?: 'Contado' | 'Credito';
   cuotas?: CuotaXml[];
+  /**
+   * Detracción SPOT (TA-63): código del Catálogo 54, por ejemplo '012'.
+   * Activa la Leyenda 2006 y el `cac:PaymentMeans` de detracción.
+   */
+  codigoDetraccion?: string;
+  /**
+   * Importe en letras para la Leyenda 2006, obligatoria cuando hay detracción
+   * (regla 4265). Lo genera quien arma el payload; el generador no convierte
+   * números a palabras.
+   */
+  montoEnLetras?: string;
+  /** Cuenta del Banco de la Nación para el depósito de la detracción. */
+  cuentaBancoNacion?: string;
   observaciones?: string;
   ordenCompra?: string;
   cliente?: PartyCliente;

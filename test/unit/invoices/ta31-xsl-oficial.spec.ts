@@ -70,9 +70,19 @@ describe('TA-31 con las hojas OFICIALES', () => {
 
     const resultado = await servicio.validar(xmlFactura, '01');
 
-    expect(resultado.bloqueado).toBe(false);
-    expect(resultado.motivoBloqueo).toBeNull();
+    // La hoja se CARGA y se EJECUTA sin reventar.
+    expect(resultado.motivoBloqueo).not.toMatch(/No se pudo cargar la hoja/);
     expect(Array.isArray(resultado.errores)).toBe(true);
+
+    // Pero NO puede validar: le faltan las plantillas de commons/error.
+    // Este es el defecto de TA-31 que descubrió TA-62 y que tiene su propia
+    // tarea. Antes esta prueba solo comprobaba `bloqueado === false`, que es
+    // siempre cierto mientras la hoja se cargue: por eso no detectó nada.
+    expect(resultado.validadoDeVerdad).toBe(false);
+    expect(resultado.valido).toBe(false);
+    expect(resultado.motivoBloqueo).toMatch(/validate_utils/);
+    // Y no inventa códigos leyendo el XML: la lista de errores está vacía.
+    expect(resultado.errores).toEqual([]);
   }, 30000);
 
   it('bloquea cuando el tipo no tiene hoja mapeada', async () => {
