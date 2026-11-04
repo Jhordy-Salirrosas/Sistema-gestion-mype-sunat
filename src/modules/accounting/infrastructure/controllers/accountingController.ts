@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -12,10 +13,15 @@ import {
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
+import { OpenAccountingPeriodDto } from '../../application/dto/openAccountingPeriodDto';
 import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
+import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
+import { ListAccountingPeriodsUseCase } from '../../application/use-cases/listAccountingPeriodsUseCase';
+import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAccountingPeriodUseCase';
+import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
@@ -25,6 +31,10 @@ export class AccountingController {
     private readonly generateEntryUseCase: GenerateAccountingEntryUseCase,
     private readonly exportPleUseCase: ExportPleTxtUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
+    private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
+    private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
+    private readonly openPeriodUseCase: OpenAccountingPeriodUseCase,
+    private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
   ) {}
 
   /**
@@ -67,6 +77,44 @@ export class AccountingController {
       ...dto,
       companyId: this.empresaDelToken(currentCompanyId),
     });
+  }
+
+  // ==========================================
+  // GET: Catálogo PCGE y períodos de la empresa
+  // ==========================================
+  @Get('accounts')
+  async getAccounts() {
+    return this.listAccountsUseCase.execute();
+  }
+
+  @Get('periods')
+  async getPeriods(@CurrentCompany() currentCompanyId?: string) {
+    return this.listPeriodsUseCase.execute(this.empresaDelToken(currentCompanyId));
+  }
+
+  @Post('periods')
+  @HttpCode(HttpStatus.CREATED)
+  async openPeriod(
+    @Body() dto: OpenAccountingPeriodDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.openPeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      dto.year,
+      dto.month,
+    );
+  }
+
+  @Post('periods/:period/close')
+  @HttpCode(HttpStatus.OK)
+  async closePeriod(
+    @Param('period') period: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.closePeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+    );
   }
 
   // ==========================================

@@ -100,4 +100,83 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
         }),
     );
   }
+
+  async findAccounts() {
+    const rows = await this.prisma.accountingAccount.findMany({
+      where: { is_active: true },
+      orderBy: { code: 'asc' },
+    });
+    return rows.map((row) => ({
+      code: row.code,
+      name: row.name,
+      element: row.element,
+      nature: row.nature as 'Deudora' | 'Acreedora',
+      parentCode: row.parent_code,
+      level: row.level,
+      isActive: row.is_active,
+    }));
+  }
+
+  async findPeriods(companyId: string) {
+    const rows = await this.prisma.accountingPeriod.findMany({
+      where: { company_id: companyId },
+      orderBy: [{ year: 'desc' }, { month: 'desc' }],
+    });
+    return rows.map((row) => this.mapPeriod(row));
+  }
+
+  async findPeriod(companyId: string, period: string) {
+    const row = await this.prisma.accountingPeriod.findUnique({
+      where: { company_id_period: { company_id: companyId, period } },
+    });
+    return row ? this.mapPeriod(row) : null;
+  }
+
+  async openPeriod(companyId: string, year: number, month: number) {
+    const period = `${year}-${String(month).padStart(2, '0')}`;
+    const row = await this.prisma.accountingPeriod.upsert({
+      where: { company_id_period: { company_id: companyId, period } },
+      update: { status: 'ABIERTO', closed_at: null },
+      create: { company_id: companyId, period, year, month, status: 'ABIERTO' },
+    });
+    return this.mapPeriod(row);
+  }
+
+  async closePeriod(companyId: string, period: string) {
+    const year = Number(period.slice(0, 4));
+    const month = Number(period.slice(5, 7));
+    const row = await this.prisma.accountingPeriod.upsert({
+      where: { company_id_period: { company_id: companyId, period } },
+      update: { status: 'CERRADO', closed_at: new Date() },
+      create: {
+        company_id: companyId,
+        period,
+        year,
+        month,
+        status: 'CERRADO',
+        closed_at: new Date(),
+      },
+    });
+    return this.mapPeriod(row);
+  }
+
+  private mapPeriod(row: {
+    company_id: string;
+    period: string;
+    year: number;
+    month: number;
+    status: string;
+    opened_at: Date;
+    closed_at: Date | null;
+  }) {
+    return {
+      companyId: row.company_id,
+      period: row.period,
+      year: row.year,
+      month: row.month,
+      status: row.status as 'ABIERTO' | 'CERRADO',
+      openedAt: row.opened_at,
+      closedAt: row.closed_at,
+    };
+  }
 }
