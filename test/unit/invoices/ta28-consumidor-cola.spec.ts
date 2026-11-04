@@ -225,6 +225,74 @@ describe('TA-28 InvoiceJobConsumer', () => {
     expect(d.processWithRetry).not.toHaveBeenCalled();
   });
 
+  it('genera el asiento contable cuando el CDR queda aceptado', async () => {
+    const accounting = {
+      execute: jest.fn<(args: unknown) => Promise<unknown>>(async () => null),
+    };
+    const FILA_CONTABLE = {
+      ...COMPROBANTE,
+      company_id: 'company-1',
+      fecha_emision: new Date('2026-03-15T00:00:00.000Z'),
+      customer_legal_name: 'CLIENTE S.A.C.',
+      monto_total: 118,
+      total_igv: 18,
+      taxable_operations: 100,
+    };
+    // Tres lecturas en este flujo: `preparar` (envío), el puente de TA-68 y el
+    // caso de uso de contabilidad. Se devuelve la fila contable en las tres.
+    const findUnique = jest
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValueOnce(COMPROBANTE)
+      .mockResolvedValueOnce(FILA_CONTABLE)
+      .mockResolvedValueOnce(FILA_CONTABLE);
+    const consumer = new InvoiceJobConsumer(
+      { registerInvoiceWorker: jest.fn() } as never,
+      { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
+      { invoice: { findUnique, update: jest.fn() } } as never,
+      { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
+      { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
+      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      // TA-58: compuerta XSL, aquí siempre "válido".
+      {
+        validar: jest.fn(async () => ({
+          valido: true,
+          errores: [],
+          codigosDesconocidos: [],
+          bloqueado: false,
+          motivoBloqueo: null,
+        })),
+      } as never,
+      { persistFailure: jest.fn() } as never,
+      // TA-68: el puente no deja asiento (`asientoId: undefined`), que es la
+      // condición para que contabilidad tome el relevo con el suyo.
+      {
+        registrar: jest.fn(async () => ({
+          movimientosRegistrados: 0,
+          movimientosOmitidos: 0,
+          asientoOmitido: false,
+          asientoId: undefined,
+          errores: [],
+          completo: true,
+        })),
+      } as never,
+      { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
+      accounting as never,
+    );
+
+    await consumer.procesar({ invoice_id: 'inv-1' });
+
+    expect(accounting.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: 'company-1',
+        invoiceId: 'inv-1',
+        tipoComprobante: '01',
+        base: 100,
+        igv: 18,
+        total: 118,
+      }),
+    );
+  });
+
   it('calcula el hash SHA-256 del XML enviado', () => {
     const d = crearDobles();
     expect(d.consumidor.hashDelXml('abc')).toHaveLength(64);

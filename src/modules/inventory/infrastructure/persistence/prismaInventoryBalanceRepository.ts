@@ -68,15 +68,15 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
         product: true,
         warehouse: true,
       },
-      orderBy: { product: { sku: 'asc' } },
+      orderBy: { updated_at: 'desc' },
     });
 
     return rows.map((r) => {
       const entity = this.toDomain(r);
       return Object.assign(entity, {
-        sku: r.product.sku,
-        productDescription: r.product.description,
-        warehouseCode: r.warehouse.warehouse_code,
+        sku: r.product?.sku ?? 'SIN-SKU',
+        productDescription: r.product?.description ?? 'Producto sin descripción',
+        warehouseCode: r.warehouse?.warehouse_code ?? 'ALM-01',
       });
     });
   }
@@ -105,4 +105,3 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
     });
   }
 }
-

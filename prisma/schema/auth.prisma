@@ -46,6 +46,7 @@ model Company {
   sire_periods          SirePeriod[]
   sire_reconciliations  SireReconciliation[]
   accounting_entries    AccountingEntry[]
+  accounting_periods    AccountingPeriod[]
   ple_books             PleBook[]
   audit_logs            AuditLog[]
 

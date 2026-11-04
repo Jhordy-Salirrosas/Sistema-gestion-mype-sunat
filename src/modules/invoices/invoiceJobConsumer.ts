@@ -22,11 +22,12 @@
  *    Invoice en `ERROR_RED`; el worker de facturacion no debe reimplementar esa
  *   secuencia."  (specs/m2_resilience.spec.md, TA-57)
  */
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import AdmZip from 'adm-zip';
 import { PrismaService } from '../../database/prismaService';
 import { InvoiceStatus } from '../../generated/client/enums';
+import { RegisterInvoiceAccountingEntryUseCase } from '../accounting/application/use-cases/registerInvoiceAccountingEntryUseCase';
 import {
   InvoiceRetryService,
   RetryInvoiceResult,
@@ -108,7 +109,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     private readonly xslValidator: SunatXslValidatorService,
     private readonly cdrPersistence: CdrPersistenceService,
     // TA-68: puente facturacion -> Kardex + Contabilidad, solo tras ACEPTADO
-    // u OBSERVADO.
+    // u OBSERVADO. Es el dueño del asiento de venta.
     private readonly puenteContable: InvoiceAccountingBridgeService,
     /**
      * Guarda el XML firmado que se envía.
@@ -118,6 +119,17 @@ export class InvoiceJobConsumer implements OnModuleInit {
      * pero no era el que viajó a SUNAT.
      */
     private readonly xmlFirmado: SignedXmlStorageService,
+    /**
+     * Asiento de venta de contabilidad (P0 de Oliver).
+     *
+     * Convive con el puente porque son idempotentes por REFERENCIAS DISTINTAS:
+     * el puente busca por el número del comprobante (`F001-00000053`) y este
+     * caso de uso por el UUID. Si se llamaran los dos sin más, la misma venta
+     * quedaría asentada dos veces. Por eso solo actúa cuando el puente no dejó
+     * asiento —ver `registrarEnContabilidad`—, y queda como respaldo.
+     */
+    @Optional()
+    private readonly accounting?: RegisterInvoiceAccountingEntryUseCase,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -203,25 +215,38 @@ export class InvoiceJobConsumer implements OnModuleInit {
     invoiceId: string,
     estado: InvoiceStatus,
   ): Promise<void> {
+    let asientoDelPuente: string | undefined;
     try {
       const factura = await this.cargarParaPuente(invoiceId, estado);
-      if (!factura) return;
 
-      const resultado = await this.puenteContable.registrar(factura);
+      if (factura) {
+        const resultado = await this.puenteContable.registrar(factura);
+        asientoDelPuente = resultado.asientoId;
 
-      if (!resultado.completo) {
-        this.logger.warn(
-          `[TA-68] ${invoiceId}: puente incompleto (${resultado.errores.join(' | ')})`,
-        );
-      } else {
-        this.logger.log(
-          `[TA-68] ${invoiceId}: ${resultado.movimientosRegistrados} movimiento(s) de Kardex` +
-            `${resultado.asientoOmitido ? ', asiento ya existente' : `, asiento ${resultado.asientoId ?? 'creado'}`}`,
-        );
+        if (!resultado.completo) {
+          this.logger.warn(
+            `[TA-68] ${invoiceId}: puente incompleto (${resultado.errores.join(' | ')})`,
+          );
+        } else {
+          this.logger.log(
+            `[TA-68] ${invoiceId}: ${resultado.movimientosRegistrados} movimiento(s) de Kardex` +
+              `${resultado.asientoOmitido ? ', asiento ya existente' : `, asiento ${resultado.asientoId ?? 'creado'}`}`,
+          );
+        }
       }
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : String(error);
       this.logger.warn(`[TA-68] ${invoiceId}: no se pudo contabilizar: ${mensaje}`);
+    }
+
+    // RESPALDO: si el puente no dejó asiento, contabilidad emite el suyo.
+    // Va FUERA del try para que un fallo del puente no impida asentar la venta:
+    // son dos escritores con referencias distintas y solo uno debe actuar.
+    try {
+      await this.registrarAsiento(invoiceId, asientoDelPuente);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[CONTABILIDAD] ${invoiceId}: no se pudo asentar: ${mensaje}`);
     }
   }
 
@@ -263,7 +288,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
     if (!fila) return null;
 
     const payload = (fila.payload_ubl ?? {}) as unknown as InvoicePayload;
-    const importes = this.liquidarParaPuente(fila.items, payload);
+    const items = fila.items ?? [];
+    const importes = this.liquidarParaPuente(items, payload);
 
     return {
       id: fila.id,
@@ -273,7 +299,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       correlativo: fila.correlativo,
       fechaEmision: fila.fecha_emision.toISOString().slice(0, 10),
       cliente: { razonSocial: payload.cliente?.razonSocial },
-      items: fila.items.map((item) => ({
+      items: items.map((item) => ({
         itemCode: item.item_code ?? undefined,
         descripcion: item.description,
         unidad: item.unit_code,
@@ -432,6 +458,83 @@ export class InvoiceJobConsumer implements OnModuleInit {
       `[TA-58] ${invoiceId} no se puede validar (${error.motivo}): el job vuelve a la cola sin consumir intento`,
     );
     throw error;
+  }
+
+  /**
+   * Genera el asiento de venta con el caso de uso de contabilidad (P0).
+   *
+   * RESPALDO, no la vía principal: el puente de TA-68 es quien asienta las
+   * ventas aceptadas. Esta ruta solo existe para el caso en que el puente no
+   * haya dejado asiento —por ejemplo, cuando un SKU no está en el inventario y
+   * el puente omite la partida—, y su idempotencia va por el UUID del
+   * comprobante, distinta de la del puente (número de documento).
+   */
+  private async registrarAsiento(
+    invoiceId: string,
+    idAsientoDelPuente?: string,
+  ): Promise<void> {
+    if (!this.accounting) return;
+    if (idAsientoDelPuente) return;
+
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        id: true,
+        company_id: true,
+        tipo_comprobante: true,
+        serie: true,
+        correlativo: true,
+        fecha_emision: true,
+        customer_legal_name: true,
+        monto_total: true,
+        total_igv: true,
+        taxable_operations: true,
+        payload_ubl: true,
+      },
+    });
+    if (!invoice) return;
+    if (invoice.tipo_comprobante !== '01' && invoice.tipo_comprobante !== '03') {
+      return;
+    }
+
+    const payload = (invoice.payload_ubl ?? {}) as Record<string, unknown>;
+    const total = Number(invoice.monto_total);
+    const numero = (valor: unknown): number | undefined => {
+      const n = Number(valor);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    // El payload UBL es la fuente primaria: distingue una operación gravada
+    // (IGV > 0) de una exonerada (IGV = 0). Los campos de la fila son el
+    // respaldo para comprobantes antiguos que no los traían.
+    const payloadIgv = numero(payload.montoIgv);
+    const payloadBase = numero(payload.montoGravado);
+    const totalIgv = numero(invoice.total_igv);
+    const taxable = numero(invoice.taxable_operations);
+    const igv =
+      payloadIgv ??
+      (totalIgv && totalIgv > 0
+        ? totalIgv
+        : Math.round((total - total / 1.18) * 100) / 100);
+    const base =
+      payloadBase && payloadBase > 0
+        ? payloadBase
+        : taxable && taxable > 0
+          ? taxable
+          : Math.round((total - igv) * 100) / 100;
+
+    await this.accounting.execute({
+      companyId: invoice.company_id,
+      invoiceId: invoice.id,
+      tipoComprobante: invoice.tipo_comprobante,
+      serie: invoice.serie,
+      correlativo: invoice.correlativo,
+      fechaEmision: invoice.fecha_emision.toISOString().slice(0, 10),
+      cliente: invoice.customer_legal_name ?? 'CLIENTE',
+      base,
+      igv,
+      total,
+    });
   }
 
   /** Traduce `{ invoice_id }` a los datos completos del envio. */

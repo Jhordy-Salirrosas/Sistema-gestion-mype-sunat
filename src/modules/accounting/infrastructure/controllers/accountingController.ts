@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -12,17 +13,16 @@ import {
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
+import { OpenAccountingPeriodDto } from '../../application/dto/openAccountingPeriodDto';
 import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
+import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
+import { ListAccountingPeriodsUseCase } from '../../application/use-cases/listAccountingPeriodsUseCase';
+import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAccountingPeriodUseCase';
+import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
-
-/** Periodo `YYYY-MM` del mes en curso en Lima (UTC-5). */
-const periodoLima = (): string => {
-  const lima = new Date(Date.now() - 5 * 60 * 60 * 1000);
-  return `${lima.getUTCFullYear()}-${String(lima.getUTCMonth() + 1).padStart(2, '0')}`;
-};
 
 @Controller('api/v1/accounting')
 @UseGuards(AuthGuard)
@@ -31,6 +31,10 @@ export class AccountingController {
     private readonly generateEntryUseCase: GenerateAccountingEntryUseCase,
     private readonly exportPleUseCase: ExportPleTxtUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
+    private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
+    private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
+    private readonly openPeriodUseCase: OpenAccountingPeriodUseCase,
+    private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
   ) {}
 
   /**
@@ -65,7 +69,8 @@ export class AccountingController {
   ): Promise<AccountingEntryEntity[]> {
     return this.getEntriesUseCase.execute(
       this.empresaDelToken(currentCompanyId),
-      period || periodoLima(),
+      // Si no llega, el caso de uso usa el mes en curso (`periodoActual()`).
+      period,
     );
   }
 
@@ -85,6 +90,44 @@ export class AccountingController {
   }
 
   // ==========================================
+  // GET: Catálogo PCGE y períodos de la empresa
+  // ==========================================
+  @Get('accounts')
+  async getAccounts() {
+    return this.listAccountsUseCase.execute();
+  }
+
+  @Get('periods')
+  async getPeriods(@CurrentCompany() currentCompanyId?: string) {
+    return this.listPeriodsUseCase.execute(this.empresaDelToken(currentCompanyId));
+  }
+
+  @Post('periods')
+  @HttpCode(HttpStatus.CREATED)
+  async openPeriod(
+    @Body() dto: OpenAccountingPeriodDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.openPeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      dto.year,
+      dto.month,
+    );
+  }
+
+  @Post('periods/:period/close')
+  @HttpCode(HttpStatus.OK)
+  async closePeriod(
+    @Param('period') period: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.closePeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+    );
+  }
+
+  // ==========================================
   // POST: Generar la trama oficial PLE para SUNAT
   // ==========================================
   @Post('ple/export')
@@ -94,14 +137,9 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ): Promise<PleExportResult> {
     const companyId = this.empresaDelToken(currentCompanyId);
-
-    // El periodo se toma del cuerpo de la petición (year/month). Antes se usaba
-    // el valor por defecto del caso de uso, que está fijo en 2026-10: el libro
-    // se generaba con los asientos de octubre aunque se pidiera otro mes, así
-    // que las ventas del mes pedido no aparecían en la trama.
     const period = `${dto.year}-${String(dto.month).padStart(2, '0')}`;
 
-    // 1. Obtener los asientos contables persistidos de la empresa y del periodo
+    // 1. Obtener los asientos contables persistidos del periodo solicitado
     const entries = await this.getEntriesUseCase.execute(companyId, period);
 
     // 2. Generar la trama PLE con los datos reales

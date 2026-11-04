@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
 import { AuthModule } from '../auth/authModule';
+import { AccountingModule } from '../accounting/accountingModule';
 import { ResilienceModule } from '../resilience/resilienceModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
@@ -38,7 +39,6 @@ import { SummaryDispatchService } from './application/services/summaryDispatchSe
 import { SummaryEnvioService } from './application/services/summaryEnvioService';
 import { SummaryJobConsumer } from './summaryJobConsumer';
 import { InventoryModule } from '../inventory/inventoryModule';
-import { AccountingModule } from '../accounting/accountingModule';
 
 @Module({
   // ResilienceModule reexporta QueueModule (aportando QueueService) y ademas

@@ -1,0 +1,157 @@
+import type { PrismaClient } from '../../src/generated/client/client';
+
+/** Semilla base del PCGE 2019 (98 cuentas). */
+const ACCOUNTS: Array<[string, string]> = [
+  ['1', 'Activo'],
+  ['10', 'Efectivo y equivalentes de efectivo'],
+  ['101', 'Caja'],
+  ['1011', 'Caja principal'],
+  ['102', 'Fondos fijos'],
+  ['104', 'Cuentas corrientes en instituciones financieras'],
+  ['1041', 'Cuentas corrientes operativas'],
+  ['12', 'Cuentas por cobrar comerciales - terceros'],
+  ['121', 'Facturas, boletas y otros comprobantes por cobrar'],
+  ['1211', 'Facturas, boletas y otros comprobantes por cobrar'],
+  ['121101', 'Facturas por cobrar comerciales - emitidas en cartera'],
+  ['13', 'Cuentas por cobrar comerciales - relacionadas'],
+  ['131', 'Facturas, boletas y otros comprobantes por cobrar'],
+  ['14', 'Cuentas por cobrar al personal, accionistas y directores'],
+  ['16', 'Cuentas por cobrar diversas - terceros'],
+  ['17', 'Tributos por acreditar'],
+  ['171', 'IGV por acreditar'],
+  ['18', 'Servicios y otros contratados por anticipado'],
+  ['19', 'Estimación de cuentas de cobranza dudosa'],
+  ['2', 'Activo realizable'],
+  ['20', 'Mercaderías'],
+  ['201', 'Mercaderías'],
+  ['21', 'Productos terminados'],
+  ['211', 'Productos terminados'],
+  ['24', 'Materias primas'],
+  ['241', 'Materias primas'],
+  ['25', 'Materiales auxiliares, suministros y repuestos'],
+  ['251', 'Materiales auxiliares'],
+  ['26', 'Envases y embalajes'],
+  ['28', 'Existencias por recibir'],
+  ['3', 'Activo inmovilizado'],
+  ['33', 'Inmuebles, maquinaria y equipo'],
+  ['331', 'Terrenos'],
+  ['332', 'Edificaciones'],
+  ['333', 'Maquinaria y equipo'],
+  ['334', 'Equipos de transporte'],
+  ['39', 'Depreciación, amortización y agotamiento acumulados'],
+  ['391', 'Depreciación acumulada'],
+  ['4', 'Pasivo'],
+  ['40', 'Tributos por pagar'],
+  ['401', 'IGV por pagar'],
+  ['4011', 'IGV - cuenta propia'],
+  ['40111', 'IGV - cuenta propia'],
+  ['401111', 'IGV - cuenta propia'],
+  ['401119', 'Otros tributos por pagar'],
+  ['402', 'IGV por pagar - régimen de retención'],
+  ['41', 'Remuneraciones por pagar'],
+  ['411', 'Remuneraciones por pagar'],
+  ['42', 'Cuentas por pagar comerciales - terceros'],
+  ['421', 'Facturas, boletas y otros comprobantes por pagar'],
+  ['43', 'Cuentas por pagar comerciales - relacionadas'],
+  ['431', 'Facturas, boletas y otros comprobantes por pagar'],
+  ['44', 'Cuentas por pagar a los accionistas y directores'],
+  ['45', 'Obligaciones financieras'],
+  ['46', 'Cuentas por pagar diversas - terceros'],
+  ['5', 'Patrimonio'],
+  ['50', 'Capital'],
+  ['501', 'Capital social'],
+  ['58', 'Reservas'],
+  ['59', 'Resultados acumulados'],
+  ['6', 'Gastos'],
+  ['60', 'Compras'],
+  ['601', 'Mercaderías'],
+  ['61', 'Variación de existencias'],
+  ['62', 'Gastos de personal, directores y gerentes'],
+  ['63', 'Servicios prestados por terceros'],
+  ['64', 'Gastos por tributos'],
+  ['65', 'Otros gastos de gestión'],
+  ['68', 'Valuación y deterioro de activos y provisiones'],
+  ['69', 'Costo de ventas'],
+  ['691', 'Mercaderías'],
+  ['692', 'Productos terminados'],
+  ['7', 'Ingresos'],
+  ['70', 'Ventas'],
+  ['701', 'Mercaderías'],
+  ['7011', 'Mercaderías'],
+  ['701111', 'Ventas de mercaderías - terceros'],
+  ['702', 'Productos terminados'],
+  ['703', 'Servicios'],
+  ['704', 'Descuentos, rebajas y bonificaciones concedidos'],
+  ['8', 'Saldos intermediarios de gestión'],
+  ['80', 'Margen comercial'],
+  ['81', 'Producción del ejercicio'],
+  ['82', 'Valor agregado'],
+  ['83', 'Resultado de explotación'],
+  ['84', 'Resultado antes de participaciones'],
+  ['85', 'Resultado antes de impuestos'],
+  ['86', 'Resultado del ejercicio'],
+  ['87', 'Resultado del ejercicio'],
+  ['9', 'Contabilidad analítica de explotación'],
+  ['90', 'Costos de producción'],
+  ['91', 'Gastos de producción'],
+  ['92', 'Gastos de administración'],
+  ['93', 'Gastos de ventas'],
+  ['94', 'Gastos financieros'],
+  ['95', 'Gastos por tributos'],
+  ['96', 'Gastos por provisiones'],
+  ['97', 'Gastos por deterioro'],
+];
+
+const ELEMENTS: Record<string, string> = {
+  '1': 'Activo',
+  '2': 'Activo realizable',
+  '3': 'Activo inmovilizado',
+  '4': 'Pasivo',
+  '5': 'Patrimonio',
+  '6': 'Gastos',
+  '7': 'Ingresos',
+  '8': 'Saldos intermediarios',
+  '9': 'Contabilidad analítica',
+};
+
+function nature(code: string): string {
+  return ['1', '2', '3', '6', '8', '9'].includes(code[0]) ? 'Deudora' : 'Acreedora';
+}
+
+/** Divisionarias con padre explícito. */
+const PARENT_OVERRIDES: Record<string, string> = {
+  '121101': '1211',
+  '401111': '40111',
+  '401119': '40111',
+  '701111': '7011',
+};
+
+function parentOf(code: string): string | null {
+  return PARENT_OVERRIDES[code] ?? (code.length > 1 ? code.slice(0, -1) : null);
+}
+
+export async function seedAccounting(prisma: PrismaClient): Promise<void> {
+  for (const [code, name] of ACCOUNTS) {
+    await prisma.accountingAccount.upsert({
+      where: { code },
+      update: {
+        name,
+        element: ELEMENTS[code[0]] ?? 'Sin elemento',
+        nature: nature(code),
+        parent_code: parentOf(code),
+        level: code.length,
+        is_active: true,
+      },
+      create: {
+        code,
+        name,
+        element: ELEMENTS[code[0]] ?? 'Sin elemento',
+        nature: nature(code),
+        parent_code: parentOf(code),
+        level: code.length,
+        is_active: true,
+      },
+    });
+  }
+  console.log(`PCGE: ${ACCOUNTS.length} cuentas aseguradas.`);
+}

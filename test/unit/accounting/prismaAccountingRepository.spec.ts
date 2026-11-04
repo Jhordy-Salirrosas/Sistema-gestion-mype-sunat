@@ -21,21 +21,23 @@ describe('PrismaAccountingRepository', () => {
 
   describe('getNextEntryNumber', () => {
     it('debe retornar 1 si no existen asientos previos para el periodo', async () => {
-      prismaMock.accountingEntry.count.mockResolvedValue(0);
+      prismaMock.accountingEntry.findFirst.mockResolvedValue(null);
 
       const result = await repository.getNextEntryNumber('company-1', '2026-03');
 
       expect(result).toBe(1);
-      expect(prismaMock.accountingEntry.count).toHaveBeenCalledWith({
+      expect(prismaMock.accountingEntry.findFirst).toHaveBeenCalledWith({
         where: {
           company_id: 'company-1',
           period: '2026-03',
         },
+        orderBy: { entry_number: 'desc' },
+        select: { entry_number: true },
       });
     });
 
     it('debe retornar el correlativo siguiente si ya existen asientos', async () => {
-      prismaMock.accountingEntry.count.mockResolvedValue(15);
+      prismaMock.accountingEntry.findFirst.mockResolvedValue({ entry_number: 15 });
 
       const result = await repository.getNextEntryNumber('company-1', '2026-03');
 
