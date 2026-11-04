@@ -6,6 +6,44 @@ enum EntryStatus {
   ANULADO
 }
 
+enum AccountingPeriodStatus {
+  ABIERTO
+  CERRADO
+}
+
+/// Catálogo PCGE 2019. Es global: no depende de la empresa.
+model AccountingAccount {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  element     String
+  nature      String
+  parent_code String?
+  level       Int
+  is_active   Boolean  @default(true)
+
+  @@index([parent_code])
+  @@index([element])
+  @@map("accounting_accounts")
+}
+
+/// Período contable por empresa. El asiento solo se permite si está ABIERTO.
+model AccountingPeriod {
+  id         String                 @id @default(uuid())
+  company_id String
+  company    Company                @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  period     String
+  year       Int
+  month      Int
+  status     AccountingPeriodStatus @default(ABIERTO)
+  opened_at  DateTime               @default(now())
+  closed_at  DateTime?
+
+  @@unique([company_id, period])
+  @@index([company_id, year, month])
+  @@map("accounting_periods")
+}
+
 model AccountingEntry {
   id                    String            @id @default(uuid())
   company_id            String
