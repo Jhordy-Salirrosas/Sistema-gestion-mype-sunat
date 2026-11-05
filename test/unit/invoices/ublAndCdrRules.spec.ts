@@ -198,7 +198,7 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
       montoTotal: 1180,
     });
     // 12% de 1180 = 141.6 -> redondeado al entero
-    expect(alto.detraccion).toBe(142);
+    expect(alto.detraccion).toBe(141.6);
   });
 
   it('redondea la retención del IGV al entero superior', () => {

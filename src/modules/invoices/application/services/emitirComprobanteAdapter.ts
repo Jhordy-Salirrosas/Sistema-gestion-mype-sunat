@@ -203,7 +203,7 @@ const repartirBases = (liquidadas: readonly LineaLiquidada[]) => {
  * Base sujeta a detracción: solo las líneas con código del Catálogo 54.
  *
  * El umbral de S/ 700 se evalúa sobre el IMPORTE TOTAL de la operación, como
- * pide SUNAT, pero el porcentaje se aplica únicamente sobre la base de las
+ * pide SUNAT, pero el porcentaje se aplica únicamente sobre el importe con tributos de las
  * líneas sujetas. Si un flete está sujeto y el cemento no, se detrae el flete.
  */
 const calcularDetraccion = (
@@ -217,7 +217,7 @@ const calcularDetraccion = (
     const codigo = dto.items[i]?.codigoDetraccion?.trim();
     if (!codigo) continue;
     if (porcentajeDetraccion(codigo) === null) continue;
-    baseSujeta += liquidadas[i].valorVenta;
+    baseSujeta += liquidadas[i].valorVenta + liquidadas[i].igv + liquidadas[i].icbper;
   }
 
   if (baseSujeta <= 0) return 0;
@@ -229,8 +229,8 @@ const calcularDetraccion = (
   const porcentaje = codigo ? porcentajeDetraccion(codigo.trim()) : null;
   if (porcentaje === null) return 0;
 
-  // Redondeo al entero: SUNAT no admite céntimos en la detracción.
-  return Math.round(baseSujeta * porcentaje);
+  // Preservar los céntimos del importe sujeto.
+  return centimos(baseSujeta * porcentaje);
 };
 
 /**

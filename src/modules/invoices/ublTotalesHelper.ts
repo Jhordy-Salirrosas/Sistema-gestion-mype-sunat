@@ -136,7 +136,7 @@ function repartirBases(lineas: LineaTributaria[]): {
  *
  * La detracción solo se aplica si la operación declara un código del Catálogo
  * 54, la moneda es soles y el importe supera el umbral de S/ 700 (SPOT). El
- * monto se redondea al entero, como exige SUNAT.
+ * monto se expresa con dos decimales.
  */
 export const calcularTotales = (
   payload: DatosTributarios,
@@ -169,7 +169,7 @@ export const calcularTotales = (
   const detraccion =
     payload.montoDetraccion ??
     (porcentaje !== null && moneda === 'PEN' && superaUmbralDetraccion(totalBase)
-      ? Math.round(totalBase * porcentaje)
+      ? centimos((totalBase + bases.icbper) * porcentaje)
       : 0);
 
   const retencion = payload.montoRetencion ?? 0;
