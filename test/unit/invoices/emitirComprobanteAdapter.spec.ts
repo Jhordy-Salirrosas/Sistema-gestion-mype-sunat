@@ -245,9 +245,15 @@ describe('traducirEmision — detracción por línea', () => {
       1,
     );
 
-    // El 12 % se aplica sobre los 800 del flete, no sobre los 1800.
-    expect(importes.detraccion).toBe(96);
-    expect(importes.importePagar).toBe(1800 + 324 - 96);
+    // El 12 % se aplica al flete con su IGV, no al cemento.
+    expect(importes.detraccion).toBe(113.28);
+    expect(importes.importePagar).toBe(2010.72);
+  });
+
+  it('calcula 4 % sobre S/ 1,180 con IGV', () => {
+    const { importes } = traducirEmision(formulario({ items: [linea({ valorUnitario: 1000, codigoDetraccion: '027' })] }), emisor, 1);
+    expect(importes.detraccion).toBe(47.2);
+    expect(importes.importePagar).toBe(1132.8);
   });
 
   it('no detrae si el importe total no supera los S/ 700', () => {

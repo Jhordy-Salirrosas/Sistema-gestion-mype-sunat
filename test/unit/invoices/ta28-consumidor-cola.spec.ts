@@ -293,6 +293,49 @@ describe('TA-28 InvoiceJobConsumer', () => {
     );
   });
 
+  it.each(['01', '03'] as const)('bloquea asiento y respaldo para descuento %s', async (codigo) => {
+    const accounting = { execute: jest.fn<() => Promise<unknown>>(async () => null) };
+    const registrar = jest.fn<(factura: unknown) => Promise<unknown>>(async () => ({ movimientosRegistrados: 1, movimientosOmitidos: 0, asientoOmitido: true, errores: ['Revisión contable'], completo: false }));
+    const payload = { ...COMPROBANTE.payload_ubl, lineas: [{ id: 1, descripcion: 'Servicio', cantidad: 1, valorUnitario: 100, afectacion: '10', totalLinea: 118, igvLinea: 18, descuentos: codigo === '01' ? [{ codigo: '01', monto: 10 }] : [] }], descuentoGlobal: codigo === '03' ? { codigo: '03', monto: 10 } : null };
+    const fila = { ...COMPROBANTE, payload_ubl: payload, company_id: 'company-1', fecha_emision: new Date('2026-03-15T00:00:00.000Z'), items: [] };
+    const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValueOnce(COMPROBANTE).mockResolvedValueOnce(fila);
+    const consumer = new InvoiceJobConsumer(
+      { registerInvoiceWorker: jest.fn() } as never,
+      { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
+      { invoice: { findUnique, update: jest.fn() } } as never,
+      { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
+      { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
+      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null })) } as never,
+      { persistFailure: jest.fn() } as never, { registrar } as never,
+      { guardar: jest.fn(async () => 'hash') } as never, accounting as never,
+    );
+    await consumer.procesar({ invoice_id: 'inv-1' });
+    expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: expect.stringContaining('01/03') }));
+    expect(accounting.execute).not.toHaveBeenCalled();
+  });
+
+  it('el puente recibe la base e IGV netos del descuento global 02', async () => {
+    const registrar = jest.fn<(factura: unknown) => Promise<unknown>>(async () => ({ movimientosRegistrados: 0, movimientosOmitidos: 0, asientoOmitido: false, asientoId: 'asiento-1', errores: [], completo: true }));
+    const payload = { ...COMPROBANTE.payload_ubl, descuentoGlobal: { codigo: '02', monto: 10 }, lineasTributarias: [{ afectacion: '10', valorVenta: 100, igv: 18 }] };
+    const fila = { ...COMPROBANTE, payload_ubl: payload, company_id: 'company-1', fecha_emision: new Date('2026-03-15T00:00:00.000Z'), items: [] };
+    const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValueOnce(COMPROBANTE).mockResolvedValueOnce(fila);
+    const consumer = new InvoiceJobConsumer(
+      { registerInvoiceWorker: jest.fn() } as never,
+      { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
+      { invoice: { findUnique, update: jest.fn() } } as never,
+      { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
+      { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
+      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null })) } as never,
+      { persistFailure: jest.fn() } as never, { registrar } as never,
+      { guardar: jest.fn(async () => 'hash') } as never,
+      { execute: jest.fn() } as never,
+    );
+    await consumer.procesar({ invoice_id: 'inv-1' });
+    expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: null, importes: expect.objectContaining({ gravado: 90, igv: 16.2, total: 106.2 }) }));
+  });
+
   it('calcula el hash SHA-256 del XML enviado', () => {
     const d = crearDobles();
     expect(d.consumidor.hashDelXml('abc')).toHaveLength(64);
