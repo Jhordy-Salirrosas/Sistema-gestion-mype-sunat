@@ -296,6 +296,15 @@ describe('EmitirComprobanteService — emisión de factura', () => {
   });
 });
 
+describe('EmitirComprobanteService — descuento global', () => {
+  it('no reserva correlativo si el descuento global excede la base', async () => {
+    const { servicio, series, creadas } = montar();
+    await expect(servicio.emitir(factura({ descuento_global: { codigo: '02', monto: 101 } }), COMPANY_ID)).rejects.toThrow(/excede su base/);
+    expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(creadas).toHaveLength(0);
+  });
+});
+
 describe('EmitirComprobanteService — stock antes que correlativo', () => {
   // El orden importa: un número reservado por una venta que no se puede emitir
   // queda quemado para siempre en la serie.

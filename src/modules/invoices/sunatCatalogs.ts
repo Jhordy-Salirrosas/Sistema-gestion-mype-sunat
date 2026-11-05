@@ -164,16 +164,13 @@ export const UNIDADES_FERRETERIA: readonly string[] = Object.keys(
   CATALOGO_03_UNIDADES,
 );
 
-/**
- * Catálogo 53: tipo de descuento o cargo global. (TA-62)
- *
- * El descuento por ÍTEM no usa este catálogo: va dentro de la línea con un
- * `cac:AllowanceCharge` y `ChargeIndicator = false`. Aquí solo viven los
- * ajustes GLOBALES, que se reflejan en el `LegalMonetaryTotal`.
- */
-export const CATALOGO_53_DESCUENTO_GLOBAL = {
-  '00': 'Fleteros / Ley 29256',
-  '02': 'Descuento global que afecta la base imponible',
+/** Descuentos del Catálogo 53; el nivel evita usar códigos globales en una línea. */
+export const CATALOGO_53_DESCUENTOS = {
+  '00': { descripcion: 'Descuentos que afectan la base imponible del IGV/IVAP', nivel: 'ITEM' },
+  '01': { descripcion: 'Descuentos que no afectan la base imponible del IGV/IVAP', nivel: 'ITEM' },
+  '02': { descripcion: 'Descuentos globales que afectan la base imponible del IGV/IVAP', nivel: 'GLOBAL' },
+  '03': { descripcion: 'Descuentos globales que no afectan la base imponible del IGV/IVAP', nivel: 'GLOBAL' },
+  '04': { descripcion: 'Descuentos globales por anticipos gravados que afectan la base imponible del IGV/IVAP', nivel: 'GLOBAL' },
 } as const;
 
 /** Catálogo 54: código de bien o servicio sujeto a detracción (SPOT). */
