@@ -22,6 +22,8 @@ import { ListAccountingAccountsUseCase } from '../../application/use-cases/listA
 import { ListAccountingPeriodsUseCase } from '../../application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAccountingPeriodUseCase';
 import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
+import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
+import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
@@ -35,6 +37,8 @@ export class AccountingController {
     private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
     private readonly openPeriodUseCase: OpenAccountingPeriodUseCase,
     private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
+    private readonly getLedgerUseCase: GetLedgerUseCase,
+    private readonly getTrialBalanceUseCase: GetTrialBalanceUseCase,
   ) {}
 
   /**
@@ -125,6 +129,37 @@ export class AccountingController {
       this.empresaDelToken(currentCompanyId),
       period,
     );
+  }
+
+  // ==========================================
+  // GET: Libro Mayor y Balance de Comprobación
+  // ==========================================
+  @Get('ledger')
+  async getLedger(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+    @Query('accountCode') accountCode?: string,
+  ) {
+    return this.getLedgerUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period ?? this.periodoActual(),
+      accountCode ?? '',
+    );
+  }
+
+  @Get('trial-balance')
+  async getTrialBalance(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+  ) {
+    return this.getTrialBalanceUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period ?? this.periodoActual(),
+    );
+  }
+
+  private periodoActual(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }).slice(0, 7);
   }
 
   // ==========================================

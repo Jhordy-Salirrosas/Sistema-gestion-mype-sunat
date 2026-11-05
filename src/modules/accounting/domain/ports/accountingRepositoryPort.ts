@@ -1,6 +1,7 @@
 import { AccountingEntryEntity } from '../entities/accountingEntryEntity';
 import type { AccountingAccountEntity } from '../entities/accountingAccountEntity';
 import type { AccountingPeriodEntity } from '../entities/accountingPeriodEntity';
+import type { LedgerMovement, TrialBalanceRow } from '../entities/accountingReportEntity';
 
 export interface IAccountingRepositoryPort {
   saveEntry(entry: AccountingEntryEntity): Promise<AccountingEntryEntity>;
@@ -19,6 +20,10 @@ export interface IAccountingRepositoryPort {
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;
   openPeriod(companyId: string, year: number, month: number): Promise<AccountingPeriodEntity>;
   closePeriod(companyId: string, period: string): Promise<AccountingPeriodEntity>;
+  /** Movimientos de una cuenta en un período. */
+  findLedgerMovements(companyId: string, period: string, accountCode: string): Promise<LedgerMovement[]>;
+  /** Saldos por cuenta de todo el período. */
+  findTrialBalanceRows(companyId: string, period: string): Promise<TrialBalanceRow[]>;
 }
 
 // Token de inyección de dependencias para NestJS
