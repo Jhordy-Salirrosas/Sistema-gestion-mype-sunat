@@ -79,6 +79,8 @@ export interface FacturaParaPuente {
   motivoBloqueoAsiento?: string | null;
   /** Código de almacén de origen del stock; por defecto usa el del sistema. */
   almacen?: string;
+  /** Motivo Catálogo 09 SUNAT si es Nota de Crédito. */
+  motivoNota?: string;
 }
 
 @Injectable()
@@ -136,6 +138,7 @@ export class InvoiceAccountingBridgeService {
       correlativo: factura.correlativo,
       fechaEmision: factura.fechaEmision,
       almacen: factura.almacen,
+      motivoNota: factura.motivoNota,
     });
 
     let registrados = 0;

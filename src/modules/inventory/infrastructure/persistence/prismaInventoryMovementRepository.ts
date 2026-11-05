@@ -64,7 +64,7 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
     companyId: string,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<InventoryMovementEntity[]> {
+  ): Promise<(InventoryMovementEntity & { warehouseCode?: string })[]> {
     const dateFilter: any = {};
     if (startDate) dateFilter.gte = startDate;
     if (endDate) dateFilter.lte = endDate;
@@ -73,12 +73,20 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
       where: {
         company_id: companyId,
         product_id: productId,
+        archived_at: null,
         ...(startDate || endDate ? { movement_date: dateFilter } : {}),
+      },
+      include: {
+        warehouse: true,
       },
       orderBy: [{ movement_date: 'asc' }, { created_at: 'asc' }],
     });
 
-    return rows.map((r) => this.toDomain(r));
+    return rows.map((r) => {
+      const entity = this.toDomain(r) as any;
+      entity.warehouseCode = r.warehouse?.warehouse_code ?? 'ALM-01';
+      return entity;
+    });
   }
 
   async findAllByCompany(
@@ -99,6 +107,7 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
     const rows = await this.prisma.inventoryMovement.findMany({
       where: {
         company_id: companyId,
+        archived_at: null,
         ...(startDate || endDate ? { movement_date: dateFilter } : {}),
       },
       include: {

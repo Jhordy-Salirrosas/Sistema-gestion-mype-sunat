@@ -16,6 +16,9 @@ import type { RegisterManualMovementDto } from '../../../inventory/application/d
 /** Tabla 12 de SUNAT: la operación es una venta nacional. */
 export const OPERACION_VENTA = '01';
 
+/** Tabla 12 de SUNAT: devolución de mercaderías (por Nota de Crédito). */
+export const OPERACION_DEVOLUCION_VENTA = '05';
+
 /** Línea de comprobante con lo necesario para un movimiento de almacén. */
 export interface LineaParaKardex {
   /** Código del producto; se cruza con el SKU del inventario. */
@@ -29,7 +32,7 @@ export interface LineaParaKardex {
   afectacion: string;
 }
 
-/** Datos de la factura que acompañan al movimiento. */
+/** Datos de la factura o nota que acompañan al movimiento. */
 export interface DocumentoKardex {
   tipoComprobante: string;
   serie: string;
@@ -37,6 +40,8 @@ export interface DocumentoKardex {
   fechaEmision: string;
   /** Código del almacén; si falta se usa el por defecto (ALM-01). */
   almacen?: string;
+  /** Código de motivo SUNAT Catálogo 09 para Notas de Crédito. */
+  motivoNota?: string;
 }
 
 /**
@@ -60,19 +65,48 @@ export const generaMovimiento = (linea: LineaParaKardex): boolean => {
 };
 
 /**
- * Convierte las líneas de la factura en movimientos de Kardex pendientes.
+ * Convierte las líneas del comprobante (Factura, Boleta o Nota de Crédito) en
+ * movimientos de Kardex pendientes.
  *
- * El `document_number` es el número de comprobante completo (serie-correlativo)
- * porque es lo que la tabla 12 exige para trazar la operación, y su combinación
- * con el SKU y el código de operación es la llave única que impide duplicar el
- * movimiento si la factura se reprocesa.
+ * Conforme al Plan Maestro § 9.2:
+ *  - Factura / Boleta (01, 03): SALIDA de almacén (Operación 01 - Venta).
+ *  - Nota de Crédito (07) con motivos 01 (Anulación), 06 (Devolución total) o
+ *    07 (Devolución por ítem): ENTRADA a almacén (Operación 05 - Devolución).
+ *  - Nota de Crédito con motivos de ajuste/descuento (03, 04, 05, 09, 13):
+ *    no mueve existencias físicas, solo ajuste contable.
  */
 export const movimientosDeFactura = (
   lineas: readonly LineaParaKardex[],
   documento: DocumentoKardex,
 ): readonly RegisterManualMovementDto[] => {
   const numeroDocumento = `${documento.serie}-${String(documento.correlativo).padStart(8, '0')}`;
+  const esNotaCredito = documento.tipoComprobante === '07';
 
+  // Si es Nota de Crédito, evaluar el motivo del Catálogo 09
+  if (esNotaCredito) {
+    const motivosDevolucion = ['01', '06', '07'];
+    if (!documento.motivoNota || !motivosDevolucion.includes(documento.motivoNota)) {
+      // Motivos puramente económicos (descuento, corrección) no mueven mercadería física
+      return [];
+    }
+
+    return lineas.filter(generaMovimiento).map((linea) => ({
+      warehouse_code: documento.almacen,
+      sku: linea.itemCode!.trim(),
+      direction: 'ENTRADA' as const,
+      operation_type_code: OPERACION_DEVOLUCION_VENTA,
+      quantity: linea.cantidad,
+      unit_cost: linea.valorUnitario,
+      document_type_code: documento.tipoComprobante,
+      document_serial: documento.serie,
+      document_number: numeroDocumento,
+      movement_date: documento.fechaEmision,
+      source_reference_id: numeroDocumento,
+      notes: `Devolución según Nota de Crédito ${numeroDocumento} (Motivo ${documento.motivoNota}) - ${linea.descripcion}`,
+    }));
+  }
+
+  // Factura o Boleta estándar: Venta nacional (Salida)
   return lineas.filter(generaMovimiento).map((linea) => ({
     warehouse_code: documento.almacen,
     sku: linea.itemCode!.trim(),
@@ -84,7 +118,6 @@ export const movimientosDeFactura = (
     document_serial: documento.serie,
     document_number: numeroDocumento,
     movement_date: documento.fechaEmision,
-    // TA-68: llave de idempotencia del movimiento.
     source_reference_id: numeroDocumento,
     notes: `Venta según ${numeroDocumento} - ${linea.descripcion}`,
   }));
