@@ -188,7 +188,15 @@ export class InvoiceSummaryService {
       orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }],
     });
 
-    const agregados = filas.map((f) => this.aAgregado(f, fecha));
+    const agregados = filas.map((f) => {
+      const linea = this.aAgregado(f, fecha);
+      const admiteBaja = f.estado === 'ACEPTADO' || f.estado === 'OBSERVADO';
+      return {
+        ...linea,
+        incluido: admiteBaja,
+        motivoExclusion: admiteBaja ? '' : `Estado ${f.estado}: solo comprobantes aceptados u observados admiten baja.`,
+      };
+    });
 
     // Regla 2308: una boleta no se anula por RA, se resta en un resumen.
     const errores: string[] = [];
