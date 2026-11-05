@@ -321,6 +321,7 @@ export const traducirEmision = (
     montoGravado: bases.gravado,
     montoIgv: bases.igv,
     montoTotal: total,
+    montoTotalIncluyeIcbper: true,
     lineasTributarias: liquidadas.map(({ linea, valorVenta, igv, icbper }) => ({
       afectacion: linea.afectacion,
       valorVenta,

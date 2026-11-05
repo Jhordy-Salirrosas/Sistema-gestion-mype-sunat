@@ -19,6 +19,16 @@ describe('descuentos de línea', () => {
     expect(xml).toContain(`<cbc:LineExtensionAmount currencyID="PEN">${base.toFixed(2)}</cbc:LineExtensionAmount>`);
     expect(xml).toContain(`<cbc:PayableAmount currencyID="PEN">${total.toFixed(2)}</cbc:PayableAmount>`);
   });
+  it('con descuento y bolsa no duplica el ICBPER al validar el pago', () => {
+    const datos = dto('01');
+    datos.items[0].icbper = 0.5;
+    datos.forma_pago = 'Credito';
+    datos.fecha_emision = '2026-11-01';
+    datos.cuotas = [{ monto: 108.5, vencimiento: '2026-12-01' }];
+    const resultado = traducirEmision(datos, emisor, 1);
+    expect(resultado.importes.total).toBe(108.5);
+    expect(() => new UblGeneratorService().generateInvoiceXml(resultado.dto.payload_ubl as never)).not.toThrow();
+  });
   it('rechaza un descuento mayor al valor', () => {
     const datos = dto('00');
     datos.items[0].descuento!.monto = 101;

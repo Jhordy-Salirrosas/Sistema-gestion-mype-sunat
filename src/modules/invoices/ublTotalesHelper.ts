@@ -60,6 +60,8 @@ export interface DatosTributarios {
   montoGravado: number;
   montoIgv: number;
   montoTotal: number;
+  /** El monto total ya incorpora el ICBPER de las líneas. */
+  montoTotalIncluyeIcbper?: boolean;
   codigoDetraccion?: string;
   montoDetraccion?: number;
   montoRetencion?: number;
@@ -164,6 +166,8 @@ export const calcularTotales = (
 
   const totalBase = payload.montoTotal ?? bases.gravado + bases.igv;
 
+  const icbperAdicional = payload.montoTotalIncluyeIcbper ? 0 : bases.icbper;
+
   const porcentaje = payload.codigoDetraccion
     ? porcentajeDetraccion(payload.codigoDetraccion)
     : null;
@@ -171,12 +175,12 @@ export const calcularTotales = (
   const detraccion =
     payload.montoDetraccion ??
     (porcentaje !== null && moneda === 'PEN' && superaUmbralDetraccion(totalBase)
-      ? centimos((totalBase + bases.icbper) * porcentaje)
+      ? centimos((totalBase + icbperAdicional) * porcentaje)
       : 0);
 
   const retencion = payload.montoRetencion ?? 0;
 
-  const total = centimos(totalBase + bases.icbper);
+  const total = centimos(totalBase + icbperAdicional);
   const importePagar = centimos(total - detraccion - retencion);
 
   return {
