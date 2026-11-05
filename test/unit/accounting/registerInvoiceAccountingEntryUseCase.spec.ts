@@ -44,7 +44,7 @@ describe('RegisterInvoiceAccountingEntryUseCase', () => {
     expect(entry?.getTotalCredit()).toBe(118);
 
     const cuentas = entry?.lines.map((linea) => linea.accountCode);
-    expect(cuentas).toEqual(['121101', '701111', '401111']);
+    expect(cuentas).toEqual(['12121', '70121', '40111']);
   });
 
   it('no duplica el asiento si la factura ya fue contabilizada', async () => {
@@ -86,8 +86,8 @@ describe('RegisterInvoiceAccountingEntryUseCase', () => {
     });
 
     expect(entry?.lines.map((linea) => linea.accountCode)).toEqual([
-      '121101',
-      '701111',
+      '12121',
+      '70121',
     ]);
     expect(entry?.getTotalDebit()).toBe(118);
     expect(entry?.getTotalCredit()).toBe(118);

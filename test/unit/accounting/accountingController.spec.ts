@@ -7,6 +7,8 @@ import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/a
 import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/openAccountingPeriodUseCase';
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
+import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
+import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -18,6 +20,8 @@ describe('AccountingController', () => {
   let listPeriodsUseCase: jest.Mocked<ListAccountingPeriodsUseCase>;
   let openPeriodUseCase: jest.Mocked<OpenAccountingPeriodUseCase>;
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
+  let getLedgerUseCase: jest.Mocked<GetLedgerUseCase>;
+  let getTrialBalanceUseCase: jest.Mocked<GetTrialBalanceUseCase>;
 
   beforeEach(() => {
     generateUseCase = {
@@ -48,6 +52,9 @@ describe('AccountingController', () => {
       execute: jest.fn(),
     } as unknown as jest.Mocked<CloseAccountingPeriodUseCase>;
 
+    getLedgerUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetLedgerUseCase>;
+    getTrialBalanceUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetTrialBalanceUseCase>;
+
     controller = new AccountingController(
       generateUseCase,
       exportPleUseCase,
@@ -56,6 +63,8 @@ describe('AccountingController', () => {
       listPeriodsUseCase,
       openPeriodUseCase,
       closePeriodUseCase,
+      getLedgerUseCase,
+      getTrialBalanceUseCase,
     );
   });
 
@@ -172,5 +181,18 @@ describe('AccountingController', () => {
 
     await expect(controller.closePeriod('2026-11', 'comp-1')).resolves.toMatchObject({ status: 'CERRADO' });
     expect(closePeriodUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
+  });
+
+  it('delega el libro mayor y el balance de comprobación', async () => {
+    const ledger = { period: '2026-11', accountCode: '1211', accountName: 'CxC', nature: 'Deudora', openingBalance: 0, movements: [], totalDebit: 0, totalCredit: 0, closingBalance: 0 };
+    const balance = { period: '2026-11', rows: [], totalDebit: 0, totalCredit: 0 };
+    getLedgerUseCase.execute.mockResolvedValue(ledger);
+    getTrialBalanceUseCase.execute.mockResolvedValue(balance);
+
+    await expect(controller.getLedger('comp-1', '2026-11', '1211')).resolves.toBe(ledger);
+    expect(getLedgerUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', '1211');
+
+    await expect(controller.getTrialBalance('comp-1', '2026-11')).resolves.toBe(balance);
+    expect(getTrialBalanceUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
   });
 });
