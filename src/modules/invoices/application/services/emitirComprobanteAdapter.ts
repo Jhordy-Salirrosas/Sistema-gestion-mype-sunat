@@ -26,6 +26,7 @@
  *    textualmente: "los productos son con detracción, no la factura". Solo las
  *    líneas con código del Catálogo 54 aportan a la base detraída.
  */
+import { BadRequestException } from '@nestjs/common';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import type { EmitirComprobanteDto, LineaEmisionDto } from '../dto/emitirComprobanteDto';
 import type { InvoicePayload } from '../../invoicePayload';
@@ -34,6 +35,7 @@ import { calcularRetencion, TASA_IGV } from '../../ublTotalesHelper';
 import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalogsQuery';
 import { importeEnLetras } from './importeEnLetras';
 import { numeroDeCuota } from './paymentTermsAndSpotValidator';
+import { aplicarDescuentoGlobal } from './descuentoGlobal';
 
 /** Datos del emisor que vienen de la empresa autenticada, no del formulario. */
 export interface DatosEmisor {
@@ -99,6 +101,7 @@ interface LineaLiquidada {
   valorVenta: number;
   igv: number;
   icbper: number;
+  descuentoNoAfecto: number;
 }
 
 /**
@@ -118,7 +121,11 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   // Regla 3278: una gratuita lleva LineExtensionAmount en 0 y su precio
   // unitario en cero. Declarar importe en una transferencia gratuita haría
   // creer a SUNAT que hubo una venta.
-  const valorVenta = gratuita ? 0 : valorVentaBruto;
+  const descuento = item.descuento;
+  if (descuento && (gratuita || !Number.isFinite(descuento.monto) || descuento.monto <= 0 || descuento.monto > valorVentaBruto || !['00', '01'].includes(descuento.codigo))) {
+    throw new BadRequestException(`Descuento inválido en la línea ${indice + 1}`);
+  }
+  const valorVenta = gratuita ? 0 : centimos(valorVentaBruto - (descuento?.codigo === '00' ? descuento.monto : 0));
   const igv = !gratuita && tributoDe(afectacion) === '1000'
     ? centimos(valorVenta * TASA_IGV)
     : 0;
@@ -146,6 +153,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     afectacion,
     totalLinea: centimos(valorVenta + igv),
     igvLinea: igv,
+    descuentos: descuento ? [{ codigo: descuento.codigo, monto: descuento.monto }] : undefined,
     icbperLinea: item.icbper && item.icbper > 0 ? centimos(item.icbper) : undefined,
   };
 
@@ -154,6 +162,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     valorVenta,
     igv,
     icbper: linea.icbperLinea ?? 0,
+    descuentoNoAfecto: descuento?.codigo === '01' ? descuento.monto : 0,
   };
 };
 
@@ -203,13 +212,15 @@ const repartirBases = (liquidadas: readonly LineaLiquidada[]) => {
  * Base sujeta a detracción: solo las líneas con código del Catálogo 54.
  *
  * El umbral de S/ 700 se evalúa sobre el IMPORTE TOTAL de la operación, como
- * pide SUNAT, pero el porcentaje se aplica únicamente sobre la base de las
+ * pide SUNAT, pero el porcentaje se aplica únicamente sobre el importe con tributos de las
  * líneas sujetas. Si un flete está sujeto y el cemento no, se detrae el flete.
  */
 const calcularDetraccion = (
   liquidadas: readonly LineaLiquidada[],
   dto: EmitirComprobanteDto,
   totalComprobante: number,
+  baseGravadaOriginal: number,
+  totalAntesGlobal: number,
 ): number => {
   let baseSujeta = 0;
 
@@ -217,9 +228,16 @@ const calcularDetraccion = (
     const codigo = dto.items[i]?.codigoDetraccion?.trim();
     if (!codigo) continue;
     if (porcentajeDetraccion(codigo) === null) continue;
-    baseSujeta += liquidadas[i].valorVenta;
+    baseSujeta += liquidadas[i].valorVenta + liquidadas[i].igv + liquidadas[i].icbper - liquidadas[i].descuentoNoAfecto;
   }
 
+  const global = dto.descuento_global;
+  if (global?.codigo === '02' && baseGravadaOriginal > 0) {
+    const gravadaSujeta = liquidadas.reduce((suma, l, i) => suma + (dto.items[i]?.codigoDetraccion && porcentajeDetraccion(dto.items[i].codigoDetraccion!.trim()) !== null && tributoDe(l.linea.afectacion) === '1000' ? l.valorVenta : 0), 0);
+    baseSujeta -= centimos(global.monto * (gravadaSujeta / baseGravadaOriginal) * (1 + TASA_IGV));
+  } else if (global?.codigo === '03' && totalAntesGlobal > 0) {
+    baseSujeta -= centimos(global.monto * baseSujeta / totalAntesGlobal);
+  }
   if (baseSujeta <= 0) return 0;
   if (!superaUmbralDetraccion(totalComprobante)) return 0;
 
@@ -229,8 +247,8 @@ const calcularDetraccion = (
   const porcentaje = codigo ? porcentajeDetraccion(codigo.trim()) : null;
   if (porcentaje === null) return 0;
 
-  // Redondeo al entero: SUNAT no admite céntimos en la detracción.
-  return Math.round(baseSujeta * porcentaje);
+  // Preservar los céntimos del importe sujeto.
+  return centimos(baseSujeta * porcentaje);
 };
 
 /**
@@ -247,18 +265,14 @@ export const traducirEmision = (
 ): ComprobanteTraducido => {
   const avisos: string[] = [];
   const liquidadas = dto.items.map(liquidarLinea);
-  const bases = repartirBases(liquidadas);
+  const originales = repartirBases(liquidadas);
+  const descuentoLineaNoAfecto = liquidadas.reduce((suma, l) => suma + l.descuentoNoAfecto, 0);
+  const antesGlobal = aplicarDescuentoGlobal(originales, null, descuentoLineaNoAfecto);
+  const global = aplicarDescuentoGlobal(originales, dto.descuento_global, descuentoLineaNoAfecto);
+  const bases = global.bases;
+  const total = global.total;
 
-  const total = centimos(
-    bases.gravado +
-      bases.igv +
-      bases.exonerado +
-      bases.inafecto +
-      bases.exportado +
-      bases.icbper,
-  );
-
-  const detraccion = calcularDetraccion(liquidadas, dto, total);
+  const detraccion = calcularDetraccion(liquidadas, dto, total, originales.gravado, antesGlobal.total);
   const retencion = dto.agente_retencion ? calcularRetencion(total) : 0;
   const importePagar = centimos(total - detraccion - retencion);
 
@@ -312,6 +326,9 @@ export const traducirEmision = (
     montoGravado: bases.gravado,
     montoIgv: bases.igv,
     montoTotal: total,
+    montoTotalIncluyeIcbper: true,
+    descuentoGlobal: dto.descuento_global ?? null,
+    baseDescuentoGlobal: global.baseDescuento,
     lineasTributarias: liquidadas.map(({ linea, valorVenta, igv, icbper }) => ({
       afectacion: linea.afectacion,
       valorVenta,

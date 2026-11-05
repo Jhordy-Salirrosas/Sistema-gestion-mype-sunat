@@ -75,6 +75,8 @@ export interface FacturaParaPuente {
     retencion: number;
     total: number;
   };
+  /** Motivo para no generar asiento automático; el Kardex sigue su curso. */
+  motivoBloqueoAsiento?: string | null;
   /** Código de almacén de origen del stock; por defecto usa el del sistema. */
   almacen?: string;
 }
@@ -101,7 +103,9 @@ export class InvoiceAccountingBridgeService {
       `${factura.serie}-${String(factura.correlativo).padStart(8, '0')}`;
 
     const kardex = await this.registrarKardex(factura, numero, errores);
-    const contabilidad = await this.registrarAsiento(factura, numero, errores);
+    const contabilidad = factura.motivoBloqueoAsiento
+      ? (errores.push(factura.motivoBloqueoAsiento), { asientoOmitido: true })
+      : await this.registrarAsiento(factura, numero, errores);
 
     const completo = errores.length === 0;
 

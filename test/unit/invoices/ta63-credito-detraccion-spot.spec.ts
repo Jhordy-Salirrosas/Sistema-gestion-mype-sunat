@@ -591,23 +591,22 @@ describe('TA-63 · XML de la detracción SPOT', () => {
   });
 
   it('al crédito con detracción las cuotas suman el importe a pagar y no el total', () => {
-    // Total 1180. La detracción del 12 % son 142 enteros (regla 3208), que el
-    // cliente deposita en el Banco de la Nación. El saldo al crédito es 1038.
+    // Total 1180. El 12 % es 141.60; el saldo al crédito es 1038.40.
     const xml = generador.generateInvoiceXml(
       facturaConDetraccion({
         formaPago: 'Credito',
         cuotas: [
-          { numero: 'Cuota001', monto: 519, vencimiento: '2026-11-30' },
-          { numero: 'Cuota002', monto: 519, vencimiento: '2026-12-31' },
+          { numero: 'Cuota001', monto: 519.20, vencimiento: '2026-11-30' },
+          { numero: 'Cuota002', monto: 519.20, vencimiento: '2026-12-31' },
         ],
       }),
     );
 
     // La cabecera declara el neto pendiente, no el total del comprobante.
     expect(xml).toContain('<cbc:PaymentMeansID>Credito</cbc:PaymentMeansID>\n' +
-      '    <cbc:Amount currencyID="PEN">1038.00</cbc:Amount>');
+      '    <cbc:Amount currencyID="PEN">1038.40</cbc:Amount>');
     // Y las cuotas también suman el neto.
-    expect(xml).toContain('<cbc:Amount currencyID="PEN">519.00</cbc:Amount>');
+    expect(xml).toContain('<cbc:Amount currencyID="PEN">519.20</cbc:Amount>');
   });
 
   it('un cronograma que suma el total y no el neto se rechaza', () => {
@@ -618,7 +617,7 @@ describe('TA-63 · XML de la detracción SPOT', () => {
           cuotas: [{ numero: 'Cuota001', monto: 1180, vencimiento: '2026-11-30' }],
         }),
       ),
-    ).toThrow(/neto pendiente es 1038\.00/);
+    ).toThrow(/neto pendiente es 1038\.40/);
   });
 
   it('la detracción con código dado de baja se rechaza antes de generar', () => {

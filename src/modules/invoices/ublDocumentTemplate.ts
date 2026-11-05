@@ -24,6 +24,7 @@ export interface PartesDocumento {
    * tipos de operación 100x.
    */
   mediosPago?: string;
+  descuentoGlobal?: string;
   impuestos: string;
   totales: string;
   /**
@@ -92,7 +93,7 @@ ${p.extensiones}
   <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>${p.notas}
   <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.referenciaNota ? `\n${p.referenciaNota}` : ''}
 ${p.emisor}${p.cliente}${p.mediosPago ? `\n${p.mediosPago}` : ''}
-${p.formaPago}${p.retenciones ? `\n${p.retenciones}` : ''}
+${p.formaPago}${p.retenciones ? `\n${p.retenciones}` : ''}${p.descuentoGlobal ? `\n${p.descuentoGlobal}` : ''}
 ${p.impuestos}
 ${p.totales}
 ${p.lineas}

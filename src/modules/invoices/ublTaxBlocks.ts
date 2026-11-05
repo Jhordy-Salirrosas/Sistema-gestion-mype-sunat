@@ -215,9 +215,9 @@ export const bloqueTotales = (
     <cbc:LineExtensionAmount currencyID="${moneda}">${dinero(base)}</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="${moneda}">${dinero(base)}</cbc:TaxExclusiveAmount>
     <cbc:TaxInclusiveAmount currencyID="${moneda}">${dinero(totalConIgv)}</cbc:TaxInclusiveAmount>
-    <cbc:AllowanceTotalAmount currencyID="${moneda}">0.00</cbc:AllowanceTotalAmount>
+    <cbc:AllowanceTotalAmount currencyID="${moneda}">${dinero(t.otrosDescuentos ?? 0)}</cbc:AllowanceTotalAmount>
     <cbc:ChargeTotalAmount currencyID="${moneda}">0.00</cbc:ChargeTotalAmount>
     <cbc:PrepaidAmount currencyID="${moneda}">0.00</cbc:PrepaidAmount>
-    <cbc:PayableAmount currencyID="${moneda}">${dinero(totalConIgv)}</cbc:PayableAmount>
+    <cbc:PayableAmount currencyID="${moneda}">${dinero(totalConIgv - (t.otrosDescuentos ?? 0))}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>`;
 };
