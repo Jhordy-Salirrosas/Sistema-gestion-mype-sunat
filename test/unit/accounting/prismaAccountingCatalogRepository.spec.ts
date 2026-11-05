@@ -13,6 +13,7 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
         findUnique: jest.fn(),
         upsert: jest.fn(),
       },
+      accountingEntry: { findMany: jest.fn() },
     };
     repository = new PrismaAccountingRepository(prismaMock as unknown as PrismaService);
   });
@@ -146,5 +147,40 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
         closed_at: expect.any(Date),
       },
     });
+  });
+
+  it('arma los movimientos del libro mayor y las filas del balance', async () => {
+    prismaMock.accountingEntry.findMany.mockResolvedValue([
+      {
+        id: 'e1',
+        entry_number: 1,
+        entry_date: new Date('2026-11-01'),
+        glosa: 'Venta',
+        source_module: 'M1_INVOICES',
+        lines: [
+          { account_code: '1211', account_name: 'CxC', debit_amount: 118, credit_amount: 0 },
+          { account_code: '7011', account_name: 'Ventas', debit_amount: 0, credit_amount: 118 },
+        ],
+      },
+    ]);
+
+    await expect(repository.findLedgerMovements('c1', '2026-11', '1211')).resolves.toEqual([
+      {
+        entryId: 'e1',
+        entryNumber: 1,
+        entryDate: new Date('2026-11-01'),
+        glosa: 'Venta',
+        sourceModule: 'M1_INVOICES',
+        accountCode: '1211',
+        accountName: 'CxC',
+        debit: 118,
+        credit: 0,
+      },
+    ]);
+
+    await expect(repository.findTrialBalanceRows('c1', '2026-11')).resolves.toEqual([
+      { accountCode: '1211', accountName: 'CxC', debit: 118, credit: 0 },
+      { accountCode: '7011', accountName: 'Ventas', debit: 0, credit: 118 },
+    ]);
   });
 });
