@@ -12,6 +12,8 @@ const ACCOUNTS: Array<[string, string]> = [
   ['12', 'Cuentas por cobrar comerciales - terceros'],
   ['121', 'Facturas, boletas y otros comprobantes por cobrar'],
   ['1211', 'Facturas, boletas y otros comprobantes por cobrar'],
+  ['1212', 'Cuentas por cobrar - detracción del SpoT'],
+  ['12121', 'Facturas, boletas y otros comprobantes por cobrar, emitidas'],
   ['121101', 'Facturas por cobrar comerciales - emitidas en cartera'],
   ['13', 'Cuentas por cobrar comerciales - relacionadas'],
   ['131', 'Facturas, boletas y otros comprobantes por cobrar'],
@@ -78,6 +80,7 @@ const ACCOUNTS: Array<[string, string]> = [
   ['70', 'Ventas'],
   ['701', 'Mercaderías'],
   ['7011', 'Mercaderías'],
+  ['70121', 'Servicios prestados / ventas gravadas'],
   ['701111', 'Ventas de mercaderías - terceros'],
   ['702', 'Productos terminados'],
   ['703', 'Servicios'],
@@ -121,9 +124,12 @@ function nature(code: string): string {
 /** Divisionarias con padre explícito. */
 const PARENT_OVERRIDES: Record<string, string> = {
   '121101': '1211',
+  '1212': '121',
+  '12121': '121',
   '401111': '40111',
   '401119': '40111',
   '701111': '7011',
+  '70121': '701',
 };
 
 function parentOf(code: string): string | null {
