@@ -24,6 +24,7 @@ import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAcc
 import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
+import { GetIncomeStatementUseCase } from '../../application/use-cases/getIncomeStatementUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
@@ -39,6 +40,7 @@ export class AccountingController {
     private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
     private readonly getLedgerUseCase: GetLedgerUseCase,
     private readonly getTrialBalanceUseCase: GetTrialBalanceUseCase,
+    private readonly getIncomeStatementUseCase: GetIncomeStatementUseCase,
   ) {}
 
   /**
@@ -153,6 +155,17 @@ export class AccountingController {
     @Query('period') period?: string,
   ) {
     return this.getTrialBalanceUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period ?? this.periodoActual(),
+    );
+  }
+
+  @Get('income-statement')
+  async getIncomeStatement(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+  ) {
+    return this.getIncomeStatementUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period ?? this.periodoActual(),
     );
