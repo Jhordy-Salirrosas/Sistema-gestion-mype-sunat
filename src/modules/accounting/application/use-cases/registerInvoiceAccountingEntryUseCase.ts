@@ -23,9 +23,9 @@ export interface InvoiceAccountingInput {
 
 /** Cuentas PCGE base para una venta gravada. */
 const CUENTAS = {
-  porCobrar: { code: '121101', name: 'Cuentas por cobrar comerciales' },
-  ventas: { code: '701111', name: 'Ventas de mercaderías' },
-  igv: { code: '401111', name: 'IGV - Cuenta propia' },
+  porCobrar: { code: '12121', name: 'Facturas por cobrar emitidas' },
+  ventas: { code: '70121', name: 'Ventas gravadas' },
+  igv: { code: '40111', name: 'IGV - Cuenta propia' },
   otrosTributos: { code: '401119', name: 'Otros tributos por pagar' },
 } as const;
 

@@ -44,4 +44,17 @@ describe('Reportes contables', () => {
   it('rechaza un período inválido', async () => {
     await expect(new GetTrialBalanceUseCase(repository).execute('c1', '202611')).rejects.toThrow(BadRequestException);
   });
+
+  it('muestra el saldo positivo en una cuenta acreedora', async () => {
+    repository.findAccounts.mockResolvedValue([
+      { code: '70121', name: 'Ventas', element: 'Ingresos', nature: 'Acreedora', parentCode: '701', level: 5, isActive: true },
+    ]);
+    repository.findLedgerMovements.mockResolvedValue([
+      { entryId: 'e1', entryNumber: 1, entryDate: new Date('2026-11-01'), glosa: 'Venta', sourceModule: 'M1_INVOICES', accountCode: '70121', accountName: 'Ventas', debit: 0, credit: 887 },
+    ]);
+
+    const result = await new GetLedgerUseCase(repository).execute('c1', '2026-11', '70121');
+    expect(result.movements[0].saldo).toBe(887);
+    expect(result.closingBalance).toBe(887);
+  });
 });
