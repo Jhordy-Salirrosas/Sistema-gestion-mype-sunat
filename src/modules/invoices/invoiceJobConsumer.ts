@@ -47,6 +47,7 @@ import {
 } from './application/services/invoiceSendGate';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
 import type { InvoicePayload } from './invoicePayload';
+import { aplicarDescuentoGlobal } from './application/services/descuentoGlobal';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
@@ -216,10 +217,12 @@ export class InvoiceJobConsumer implements OnModuleInit {
     estado: InvoiceStatus,
   ): Promise<void> {
     let asientoDelPuente: string | undefined;
+    let bloquearRespaldo = true;
     try {
       const factura = await this.cargarParaPuente(invoiceId, estado);
 
       if (factura) {
+        bloquearRespaldo = Boolean(factura.motivoBloqueoAsiento);
         const resultado = await this.puenteContable.registrar(factura);
         asientoDelPuente = resultado.asientoId;
 
@@ -242,6 +245,10 @@ export class InvoiceJobConsumer implements OnModuleInit {
     // RESPALDO: si el puente no dejó asiento, contabilidad emite el suyo.
     // Va FUERA del try para que un fallo del puente no impida asentar la venta:
     // son dos escritores con referencias distintas y solo uno debe actuar.
+    if (bloquearRespaldo) {
+      this.logger.warn(`[CONTABILIDAD] ${invoiceId}: asiento automático omitido; requiere revisión contable o no se pudo leer el comprobante.`);
+      return;
+    }
     try {
       await this.registrarAsiento(invoiceId, asientoDelPuente);
     } catch (error) {
@@ -308,6 +315,10 @@ export class InvoiceJobConsumer implements OnModuleInit {
         afectacion: item.igv_affectation_type,
       })),
       importes,
+      motivoBloqueoAsiento: payload.descuentoGlobal?.codigo === '03' ||
+        (payload.lineas ?? (payload.linea ? [payload.linea] : [])).some((l) => l.descuentos?.some((d) => d.codigo === '01'))
+        ? 'Contabilidad: asiento automático bloqueado por descuento 01/03; requiere revisión contable.'
+        : null,
     };
   }
 
@@ -378,11 +389,16 @@ export class InvoiceJobConsumer implements OnModuleInit {
         igv += Number(linea.igv ?? 0) || 0;
       }
 
-      const gravadoR = centimos(gravado);
-      const igvR = centimos(igv);
+      let gravadoR = centimos(gravado);
+      let igvR = centimos(igv);
       const exoneradoR = centimos(exonerado);
       const inafectoR = centimos(inafecto);
       const icbperR = centimos(icbper);
+      if (payload.descuentoGlobal?.codigo === '02') {
+        const global = aplicarDescuentoGlobal({ gravado: gravadoR, igv: igvR, exonerado: exoneradoR, inafecto: inafectoR, exportado: 0, icbper: icbperR }, payload.descuentoGlobal);
+        gravadoR = global.bases.gravado;
+        igvR = global.bases.igv;
+      }
 
       const detraccion = Number(payload.montoDetraccion ?? 0);
       const retencion = Number(payload.montoRetencion ?? 0);

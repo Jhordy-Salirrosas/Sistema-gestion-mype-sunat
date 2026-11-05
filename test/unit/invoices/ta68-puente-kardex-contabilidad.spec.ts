@@ -504,6 +504,16 @@ describe('TA-68 · servicio puente', () => {
     expect(asientoCreado).toHaveBeenCalledTimes(1);
   });
 
+  it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
+    const { puente, movimientoCreado, asientoCreado } = dobles();
+    const resultado = await puente.registrar({ ...facturaPrueba(), motivoBloqueoAsiento: 'Contabilidad: asiento automático bloqueado por descuento 01/03; requiere revisión contable.' });
+    expect(movimientoCreado).toHaveBeenCalledTimes(1);
+    expect(asientoCreado).not.toHaveBeenCalled();
+    expect(resultado.asientoOmitido).toBe(true);
+    expect(resultado.completo).toBe(false);
+    expect(resultado.errores).toContain('Contabilidad: asiento automático bloqueado por descuento 01/03; requiere revisión contable.');
+  });
+
   it('el asiento recibe el módulo de origen y la referencia del comprobante', async () => {
     const { puente, asientoCreado } = dobles();
 
