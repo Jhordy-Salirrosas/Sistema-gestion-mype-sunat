@@ -219,4 +219,99 @@ describe('ImportOrderService (Fase 3 - Órdenes de Importación, Documentos y Fl
       }),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('debe listar órdenes con filtros opcionales de status y búsqueda', async () => {
+    mockPrisma.importOrder.findMany.mockResolvedValue([
+      {
+        id: 'ord-1',
+        order_number: 'OC-2026-0001',
+        supplier_name: 'Tech Co',
+        items: [],
+        stages: [],
+        documents: [],
+      },
+    ]);
+
+    const res = await service.listOrders(companyId, { status: 'APROBADA', search: 'Tech' });
+    expect(res.total).toBe(1);
+    expect(res.items[0].orderNumber).toBe('OC-2026-0001');
+  });
+
+  it('debe obtener orden por ID o lanzar NotFoundException si no existe', async () => {
+    mockPrisma.importOrder.findFirst.mockResolvedValueOnce(null);
+    await expect(service.getOrderById(companyId, 'non-existent')).rejects.toThrow();
+
+    mockPrisma.importOrder.findFirst.mockResolvedValueOnce({
+      id: 'ord-1',
+      order_number: 'OC-2026-0001',
+      supplier_name: 'Tech Co',
+      items: [],
+      stages: [],
+      documents: [],
+    });
+    const ord = await service.getOrderById(companyId, 'ord-1');
+    expect(ord.orderNumber).toBe('OC-2026-0001');
+  });
+
+  it('debe generar expediente aduanero si la orden no tiene uno vinculado', async () => {
+    mockPrisma.importOrder.findFirst.mockResolvedValueOnce({
+      id: 'ord-1',
+      order_number: 'OC-2026-0001',
+      shipment_id: 'ship-existing',
+      shipment: { id: 'ship-existing' },
+    });
+    const existing = await service.generateShipment(companyId, 'ord-1');
+    expect(existing.id).toBe('ship-existing');
+
+    mockPrisma.importOrder.findFirst.mockResolvedValueOnce({
+      id: 'ord-2',
+      order_number: 'OC-2026-0002',
+      shipment_id: null,
+      current_stage_index: 3,
+      incoterm: 'FOB',
+      currency_code: 'USD',
+      transport_mode: 'MARITIMO',
+      supplier_country: 'CN',
+    });
+    mockPrisma.customsShipment.count.mockResolvedValue(5);
+    mockPrisma.customsShipment.create.mockResolvedValue({ id: 'ship-new' });
+
+    const created = await service.generateShipment(companyId, 'ord-2', {
+      customsBrokerId: 'broker-1',
+      originCountryCode: 'CN',
+    });
+    expect(created.id).toBe('ship-new');
+    expect(mockPrisma.importOrder.update).toHaveBeenCalledWith({
+      where: { id: 'ord-2' },
+      data: { shipment_id: 'ship-new' },
+    });
+  });
+
+  it('debe listar documentos de una orden o arrojar error si la orden no existe', async () => {
+    mockPrisma.importOrder.findFirst.mockResolvedValueOnce(null);
+    await expect(service.listDocuments(companyId, 'ord-none')).rejects.toThrow();
+
+    mockPrisma.importOrder.findFirst.mockResolvedValueOnce({
+      id: 'ord-1',
+      documents: [
+        {
+          id: 'doc-1',
+          order_id: 'ord-1',
+          stage_index: 1,
+          stage_name: 'Aprobación',
+          document_type: 'FACTURA_COMERCIAL',
+          document_number: 'INV-123',
+          file_name: 'inv.pdf',
+          storage_url: 'https://url',
+          is_mandatory: true,
+          is_verified: true,
+          created_at: new Date(),
+        },
+      ],
+    });
+
+    const docs = await service.listDocuments(companyId, 'ord-1');
+    expect(docs.length).toBe(1);
+    expect(docs[0].documentType).toBe('FACTURA_COMERCIAL');
+  });
 });

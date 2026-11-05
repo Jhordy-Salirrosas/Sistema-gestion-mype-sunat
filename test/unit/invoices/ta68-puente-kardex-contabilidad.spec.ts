@@ -412,6 +412,56 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
     expect(movimiento.notes).toMatch(/F001-00000143/);
     expect(movimiento.notes).toMatch(/Cemento Portland/);
   });
+
+  it('procesa Nota de Crédito de devolución generando movimiento de ENTRADA', () => {
+    const movimientos = movimientosDeFactura(
+      [
+        {
+          itemCode: 'CEM-001',
+          descripcion: 'Cemento Portland',
+          unidad: 'BG',
+          cantidad: 2,
+          valorUnitario: 25,
+          afectacion: '10',
+        },
+      ],
+      {
+        tipoComprobante: '07',
+        serie: 'FC01',
+        correlativo: 10,
+        fechaEmision: '2026-11-01',
+        motivoNota: '07',
+      },
+    );
+
+    expect(movimientos.length).toBe(1);
+    expect(movimientos[0].direction).toBe('ENTRADA');
+    expect(movimientos[0].operation_type_code).toBe('05');
+  });
+
+  it('omite movimientos si la Nota de Crédito es por motivo económico / descuento', () => {
+    const movimientos = movimientosDeFactura(
+      [
+        {
+          itemCode: 'CEM-001',
+          descripcion: 'Cemento Portland',
+          unidad: 'BG',
+          cantidad: 2,
+          valorUnitario: 25,
+          afectacion: '10',
+        },
+      ],
+      {
+        tipoComprobante: '07',
+        serie: 'FC01',
+        correlativo: 11,
+        fechaEmision: '2026-11-01',
+        motivoNota: '04', // Descuento global
+      },
+    );
+
+    expect(movimientos).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
