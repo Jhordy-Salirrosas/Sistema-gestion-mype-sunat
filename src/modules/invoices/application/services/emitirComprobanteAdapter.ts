@@ -264,7 +264,7 @@ export const traducirEmision = (
   correlativo: number,
 ): ComprobanteTraducido => {
   const avisos: string[] = [];
-  const liquidadas = dto.items.map(liquidarLinea);
+  const liquidadas = dto.items.map((item, indice) => liquidarLinea(item, indice));
   const originales = repartirBases(liquidadas);
   const descuentoLineaNoAfecto = liquidadas.reduce((suma, l) => suma + l.descuentoNoAfecto, 0);
   const antesGlobal = aplicarDescuentoGlobal(originales, null, descuentoLineaNoAfecto);
