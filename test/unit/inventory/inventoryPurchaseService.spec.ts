@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { InventoryPurchaseService } from '../../../src/modules/inventory/application/services/inventoryPurchaseService';
 
 describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => {

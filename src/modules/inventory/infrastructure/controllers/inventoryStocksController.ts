@@ -23,7 +23,6 @@ import {
   INVENTORY_PRODUCT_REPOSITORY_PORT,
   type IInventoryProductRepositoryPort,
 } from '../../domain/ports/IInventoryProductRepositoryPort';
-import { InventoryProductEntity } from '../../domain/entities/inventoryProductEntity';
 import { PrismaService } from '../../../../database/prismaService';
 
 @Controller('api/v1/inventory/stocks')

@@ -62,6 +62,7 @@ describe('Remaining Inventory Coverage', () => {
     let productRepoMock: any;
     let movementRepoMock: any;
     let balanceRepoMock: any;
+    let prismaMock: any;
 
     beforeEach(() => {
       productRepoMock = {
@@ -92,11 +93,24 @@ describe('Remaining Inventory Coverage', () => {
         ]),
       };
       balanceRepoMock = {};
+      prismaMock = {
+        inventoryBalance: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              current_stock: 100,
+              total_inventory_value: 200000,
+              average_unit_cost: 2000,
+              warehouse: { warehouse_code: 'ALM-01', description: 'Almacén Principal' },
+            },
+          ]),
+        },
+      };
 
       useCase = new GetProductKardexLedgerUseCase(
         productRepoMock,
         movementRepoMock,
         balanceRepoMock,
+        prismaMock,
       );
     });
 
@@ -225,12 +239,38 @@ describe('Remaining Inventory Coverage', () => {
         company: {
           findUnique: jest.fn().mockResolvedValue({ ruc: '20601012341' }),
         },
+        inventoryProduct: {
+          create: jest.fn().mockImplementation((args: any) =>
+            Promise.resolve({
+              id: 'p-new',
+              company_id: args.data.company_id,
+              sku: args.data.sku,
+              description: args.data.description,
+              sunat_type_code: args.data.sunat_type_code,
+              sunat_unit_code: args.data.sunat_unit_code,
+              min_stock_alert: args.data.min_stock_alert,
+            }),
+          ),
+          findFirst: jest.fn().mockResolvedValue(null),
+          update: jest.fn().mockResolvedValue({}),
+          delete: jest.fn().mockResolvedValue({}),
+        },
+        inventoryWarehouse: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        inventoryMovement: {
+          count: jest.fn().mockResolvedValue(0),
+        },
+        inventoryBalance: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
       };
 
       stocksController = new InventoryStocksController(
         listStockMock,
         getKardexMock,
         productRepoMock,
+        prismaMock,
       );
 
       movementsController = new InventoryMovementsController(
