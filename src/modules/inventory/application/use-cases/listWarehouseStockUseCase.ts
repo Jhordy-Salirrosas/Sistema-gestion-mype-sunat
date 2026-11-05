@@ -24,7 +24,7 @@ export class ListWarehouseStockUseCase {
     return {
       totalValuationPen: Number(totalStockValuation.toFixed(2)),
       totalItemsCount: balances.length,
-      balances: balances.map((b) => ({
+      balances: balances.map((b: any) => ({
         id: b.id,
         warehouseCode: b.warehouseCode,
         sku: b.sku,
@@ -33,6 +33,16 @@ export class ListWarehouseStockUseCase {
         averageUnitCost: b.averageUnitCost,
         totalInventoryValue: b.totalInventoryValue,
         lastMovementAt: b.lastMovementAt,
+        brand: b.brand,
+        model: b.model,
+        category: b.category,
+        barcode: b.barcode,
+        hsCode: b.hsCode,
+        weightKg: b.weightKg,
+        volumeM3: b.volumeM3,
+        sunatTypeCode: b.sunatTypeCode,
+        sunatUnitCode: b.sunatUnitCode,
+        minStockAlert: b.minStockAlert,
       })),
     };
   }

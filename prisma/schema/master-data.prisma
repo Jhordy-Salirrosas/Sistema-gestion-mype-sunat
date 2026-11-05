@@ -1,0 +1,164 @@
+// prisma/schema/master-data.prisma
+//
+// Maestros compartidos por Importaciones, Inventario y Kardex.
+// Este archivo es aditivo: no reemplaza los modelos existentes.
+
+/// Moneda ISO 4217. Es global, no depende de la empresa.
+model Currency {
+  code       String   @id
+  name       String
+  symbol     String
+  decimals   Int      @default(2)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("currencies")
+}
+
+/// Tipo de cambio por fecha y par de monedas.
+model ExchangeRate {
+  id             String   @id @default(uuid())
+  base_currency  String
+  quote_currency String
+  rate           Decimal  @db.Decimal(14, 6)
+  date           DateTime
+  source         String   @default("MANUAL") // MANUAL, SUNAT, SBS
+  created_at     DateTime @default(now())
+
+  @@unique([base_currency, quote_currency, date])
+  @@index([date])
+  @@map("exchange_rates")
+}
+
+/// Incoterms 2020. El código es el estándar (FOB, CIF, EXW...).
+model Incoterm {
+  code                  String   @id
+  name                  String
+  version               String   @default("2020")
+  named_place_required  Boolean  @default(true)
+  cost_rules_json       Json?
+  is_active             Boolean  @default(true)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@map("incoterms")
+}
+
+/// Cliente, proveedor, importador, agente o transportista.
+/// Los roles se guardan como texto para no crear un enum adicional en esta fase.
+model BusinessPartner {
+  id              String   @id @default(uuid())
+  company_id      String
+  company         Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+
+  doc_type        String   // 6 RUC, 1 DNI, 4 CE, 0 OTRO
+  doc_number      String
+  legal_name      String
+  trade_name      String?
+  country_code    String   @default("PE")
+  address         String?
+  email           String?
+  phone           String?
+  website         String?
+  roles           String[] @default([])
+  payment_terms   String?  // CONTADO, 30_DIAS, 60_DIAS, CARTA_CREDITO
+  credit_limit    Decimal? @db.Decimal(14, 2)
+  currency_code   String?  @default("PEN")
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  addresses       PartnerAddress[]
+  contacts        PartnerContact[]
+  bank_accounts   PartnerBankAccount[]
+  products        InventoryProduct[] @relation("ProductDefaultSupplier")
+  national_purchases NationalPurchase[]
+
+  @@unique([company_id, doc_type, doc_number])
+  @@index([company_id, legal_name])
+  @@index([company_id, is_active])
+  @@map("business_partners")
+}
+
+model PartnerAddress {
+  id           String          @id @default(uuid())
+  partner_id   String
+  partner      BusinessPartner @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  label        String          @default("PRINCIPAL")
+  address      String
+  city         String?
+  state        String?
+  country_code String          @default("PE")
+  postal_code  String?
+  is_default   Boolean         @default(false)
+  created_at   DateTime        @default(now())
+
+  @@index([partner_id])
+  @@map("partner_addresses")
+}
+
+model PartnerContact {
+  id          String          @id @default(uuid())
+  partner_id  String
+  partner     BusinessPartner @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  name        String
+  position    String?
+  email       String?
+  phone       String?
+  is_primary  Boolean         @default(false)
+  created_at  DateTime        @default(now())
+
+  @@index([partner_id])
+  @@map("partner_contacts")
+}
+
+model PartnerBankAccount {
+  id             String          @id @default(uuid())
+  partner_id     String
+  partner        BusinessPartner @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  bank_name      String
+  bank_country   String          @default("PE")
+  account_number String
+  cci            String?
+  swift          String?
+  iban           String?
+  beneficiary    String?
+  currency_code  String          @default("PEN")
+  is_default     Boolean         @default(false)
+  created_at     DateTime        @default(now())
+
+  @@index([partner_id])
+  @@map("partner_bank_accounts")
+}
+
+/// Catálogo de documentos de importación y checklist por etapa.
+model DocumentType {
+  code             String   @id
+  name             String
+  stage            String   @default("GENERAL") // SOLICITUD, EMBARQUE, ADUANA, RECEPCION...
+  is_required      Boolean  @default(false)
+  allowed_formats  String[] @default([])
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@map("document_types")
+}
+
+/// Mapa de cuentas contables por empresa, proceso y rol.
+model AccountingMapping {
+  id           String   @id @default(uuid())
+  company_id   String
+  company      Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  process_code String   // VENTA, COMPRA, IMPORTACION, TRANSFERENCIA, AJUSTE, NOTA_CREDITO...
+  role_code    String   // CXC, IGV, INGRESO, INVENTARIO, COSTO_VENTA, CXP...
+  account_code String
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([company_id, process_code, role_code])
+  @@index([company_id, process_code])
+  @@map("accounting_mappings")
+}

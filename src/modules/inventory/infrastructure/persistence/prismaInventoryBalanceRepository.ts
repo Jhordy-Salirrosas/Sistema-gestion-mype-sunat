@@ -63,7 +63,11 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
     })[]
   > {
     const rows = await this.prisma.inventoryBalance.findMany({
-      where: { company_id: companyId },
+      where: {
+        company_id: companyId,
+        // Los servicios no forman parte del inventario comercial.
+        product: { is: { is_inventory: true } },
+      },
       include: {
         product: true,
         warehouse: true,
@@ -77,6 +81,16 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
         sku: r.product?.sku ?? 'SIN-SKU',
         productDescription: r.product?.description ?? 'Producto sin descripción',
         warehouseCode: r.warehouse?.warehouse_code ?? 'ALM-01',
+        brand: r.product?.brand ?? null,
+        model: r.product?.model ?? null,
+        category: r.product?.category ?? null,
+        barcode: r.product?.barcode ?? null,
+        hsCode: r.product?.hs_code ?? null,
+        weightKg: r.product?.weight_kg ? Number(r.product.weight_kg) : null,
+        volumeM3: r.product?.volume_m3 ? Number(r.product.volume_m3) : null,
+        sunatTypeCode: r.product?.sunat_type_code ?? '01',
+        sunatUnitCode: r.product?.sunat_unit_code ?? 'NIU',
+        minStockAlert: r.product?.min_stock_alert ? Number(r.product.min_stock_alert) : 0,
       });
     });
   }
