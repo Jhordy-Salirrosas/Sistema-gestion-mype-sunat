@@ -88,7 +88,7 @@ const bloqueDescuentoLinea = (
       <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
       <cbc:AllowanceChargeReasonCode>${esc(d.codigo ?? '00')}</cbc:AllowanceChargeReasonCode>
       <cbc:Amount currencyID="${moneda}">${dinero(d.monto)}</cbc:Amount>
-      <cac:BaseAmount currencyID="${moneda}">${dinero(base)}</cac:BaseAmount>
+      <cbc:BaseAmount currencyID="${moneda}">${dinero(base)}</cbc:BaseAmount>
     </cac:AllowanceCharge>`;
 
 /**
@@ -210,7 +210,8 @@ export const bloqueLinea = (
   //
   // Secuencia verificada en el XSD oficial (InvoiceLineType, UBL 2.1):
   //   cbc:ID, cbc:InvoicedQuantity, cbc:LineExtensionAmount,
-  //   cac:PricingReference, cac:TaxTotal*, cac:Item, cac:Price
+  //   Invoice: PricingReference, AllowanceCharge, TaxTotal, Item, Price.
+  //   CreditNote/DebitNote: PricingReference, TaxTotal, AllowanceCharge, Item, Price.
   //
   // `cac:Item` va ANTES de `cac:Price`. Los tests comparaban fragmentos sueltos
   // y ninguno miraba el orden, así que pasaban con el XML inválido; solo se vio
@@ -219,13 +220,13 @@ export const bloqueLinea = (
     <cbc:ID>${l.id}</cbc:ID>
     <cbc:${etiquetaCantidad(raiz)} unitCode="${esc(unidad)}">${l.cantidad}</cbc:${etiquetaCantidad(raiz)}>
     <cbc:LineExtensionAmount currencyID="${moneda}">${dinero(neto)}</cbc:LineExtensionAmount>
-${descuentosXml ? `${descuentosXml}\n` : ''}    <cac:PricingReference>
+    <cac:PricingReference>
       <cac:AlternativeConditionPrice>
         <cbc:PriceAmount currencyID="${moneda}">${dinero(precioXml)}</cbc:PriceAmount>
         <cbc:PriceTypeCode>${tipoPrecio}</cbc:PriceTypeCode>
       </cac:AlternativeConditionPrice>
     </cac:PricingReference>
-    <cac:TaxTotal>
+${raiz === 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}    <cac:TaxTotal>
       <cbc:TaxAmount currencyID="${moneda}">${totalImpuestosLinea}</cbc:TaxAmount>
       <cac:TaxSubtotal>
         <cbc:TaxableAmount currencyID="${moneda}">${dinero(neto)}</cbc:TaxableAmount>
@@ -233,7 +234,7 @@ ${descuentosXml ? `${descuentosXml}\n` : ''}    <cac:PricingReference>
 ${categoriaLinea(l.afectacion, tributo)}
       </cac:TaxSubtotal>${icbperXml}
     </cac:TaxTotal>
-${item}
+${raiz !== 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}${item}
     <cac:Price>
       <cbc:PriceAmount currencyID="${moneda}">${dinero(gratuita ? 0 : l.valorUnitario)}</cbc:PriceAmount>
     </cac:Price>
