@@ -35,6 +35,7 @@ import { calcularRetencion, TASA_IGV } from '../../ublTotalesHelper';
 import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalogsQuery';
 import { importeEnLetras } from './importeEnLetras';
 import { numeroDeCuota } from './paymentTermsAndSpotValidator';
+import { aplicarDescuentoGlobal } from './descuentoGlobal';
 
 /** Datos del emisor que vienen de la empresa autenticada, no del formulario. */
 export interface DatosEmisor {
@@ -218,6 +219,8 @@ const calcularDetraccion = (
   liquidadas: readonly LineaLiquidada[],
   dto: EmitirComprobanteDto,
   totalComprobante: number,
+  baseGravadaOriginal: number,
+  totalAntesGlobal: number,
 ): number => {
   let baseSujeta = 0;
 
@@ -228,6 +231,13 @@ const calcularDetraccion = (
     baseSujeta += liquidadas[i].valorVenta + liquidadas[i].igv + liquidadas[i].icbper - liquidadas[i].descuentoNoAfecto;
   }
 
+  const global = dto.descuento_global;
+  if (global?.codigo === '02' && baseGravadaOriginal > 0) {
+    const gravadaSujeta = liquidadas.reduce((suma, l, i) => suma + (dto.items[i]?.codigoDetraccion && porcentajeDetraccion(dto.items[i].codigoDetraccion!.trim()) !== null && tributoDe(l.linea.afectacion) === '1000' ? l.valorVenta : 0), 0);
+    baseSujeta -= centimos(global.monto * (gravadaSujeta / baseGravadaOriginal) * (1 + TASA_IGV));
+  } else if (global?.codigo === '03' && totalAntesGlobal > 0) {
+    baseSujeta -= centimos(global.monto * baseSujeta / totalAntesGlobal);
+  }
   if (baseSujeta <= 0) return 0;
   if (!superaUmbralDetraccion(totalComprobante)) return 0;
 
@@ -255,19 +265,14 @@ export const traducirEmision = (
 ): ComprobanteTraducido => {
   const avisos: string[] = [];
   const liquidadas = dto.items.map(liquidarLinea);
-  const bases = repartirBases(liquidadas);
+  const originales = repartirBases(liquidadas);
+  const descuentoLineaNoAfecto = liquidadas.reduce((suma, l) => suma + l.descuentoNoAfecto, 0);
+  const antesGlobal = aplicarDescuentoGlobal(originales, null, descuentoLineaNoAfecto);
+  const global = aplicarDescuentoGlobal(originales, dto.descuento_global, descuentoLineaNoAfecto);
+  const bases = global.bases;
+  const total = global.total;
 
-  const total = centimos(
-    bases.gravado +
-      bases.igv +
-      bases.exonerado +
-      bases.inafecto +
-      bases.exportado +
-      bases.icbper -
-      liquidadas.reduce((suma, l) => suma + l.descuentoNoAfecto, 0),
-  );
-
-  const detraccion = calcularDetraccion(liquidadas, dto, total);
+  const detraccion = calcularDetraccion(liquidadas, dto, total, originales.gravado, antesGlobal.total);
   const retencion = dto.agente_retencion ? calcularRetencion(total) : 0;
   const importePagar = centimos(total - detraccion - retencion);
 
@@ -322,6 +327,8 @@ export const traducirEmision = (
     montoIgv: bases.igv,
     montoTotal: total,
     montoTotalIncluyeIcbper: true,
+    descuentoGlobal: dto.descuento_global ?? null,
+    baseDescuentoGlobal: global.baseDescuento,
     lineasTributarias: liquidadas.map(({ linea, valorVenta, igv, icbper }) => ({
       afectacion: linea.afectacion,
       valorVenta,

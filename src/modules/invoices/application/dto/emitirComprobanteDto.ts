@@ -76,6 +76,16 @@ export class DescuentoLineaEmisionDto {
   monto: number;
 }
 
+/** Descuento de cabecera; 04 no es operativo sin registro de anticipos. */
+export class DescuentoGlobalEmisionDto {
+  @IsIn(['02', '03'])
+  codigo: '02' | '03';
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  monto: number;
+}
+
 /** Una línea de la grilla de emisión. */
 export class LineaEmisionDto {
   @IsString()
@@ -192,6 +202,11 @@ export class EmitirComprobanteDto {
   @ValidateNested({ each: true })
   @Type(() => CuotaEmisionDto)
   cuotas?: CuotaEmisionDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DescuentoGlobalEmisionDto)
+  descuento_global?: DescuentoGlobalEmisionDto | null;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'El comprobante necesita al menos una línea' })

@@ -9,6 +9,7 @@
  * el desglose sale de las LÍNEAS cuando están presentes, porque cada una puede
  * tener una afectación distinta y el comprobante debe declararlas separadas.
  */
+import { aplicarDescuentoGlobal, type DescuentoGlobal } from './application/services/descuentoGlobal';
 import {
   MONTO_ICBPER_POR_BOLSA,
   TASA_IGV,
@@ -37,6 +38,7 @@ export interface TotalesCalculados {
   total: number;
   importePagar: number;
   otrosDescuentos?: number;
+  baseDescuentoGlobal?: number;
 }
 
 /**
@@ -67,6 +69,8 @@ export interface DatosTributarios {
   montoRetencion?: number;
   bolsasIcBper?: number;
   otrosDescuentos?: number;
+  descuentoGlobal?: DescuentoGlobal | null;
+  baseDescuentoGlobal?: number;
   /**
    * Detalle tributario por línea; si falta se usa el agregado de los montos.
    *
@@ -150,7 +154,7 @@ export const calcularTotales = (
 
   const conDetalle =
     payload.lineasTributarias && payload.lineasTributarias.length > 0;
-  const bases = conDetalle
+  const originales = conDetalle
     ? repartirBases(payload.lineasTributarias!)
     : {
         // Sin detalle se respeta el comportamiento anterior: todo es gravado.
@@ -164,9 +168,11 @@ export const calcularTotales = (
           : 0,
       };
 
-  const totalBase = payload.montoTotal ?? bases.gravado + bases.igv;
+  const resultadoGlobal = aplicarDescuentoGlobal(originales, payload.descuentoGlobal, payload.otrosDescuentos ?? 0);
+  const bases = resultadoGlobal.bases;
+  const totalBase = payload.descuentoGlobal ? resultadoGlobal.total : (payload.montoTotal ?? bases.gravado + bases.igv);
 
-  const icbperAdicional = payload.montoTotalIncluyeIcbper ? 0 : bases.icbper;
+  const icbperAdicional = payload.descuentoGlobal || payload.montoTotalIncluyeIcbper ? 0 : bases.icbper;
 
   const porcentaje = payload.codigoDetraccion
     ? porcentajeDetraccion(payload.codigoDetraccion)
@@ -194,7 +200,8 @@ export const calcularTotales = (
     icbper: bases.icbper,
     total,
     importePagar,
-    otrosDescuentos: payload.otrosDescuentos ?? 0,
+    otrosDescuentos: resultadoGlobal.otrosDescuentos,
+    baseDescuentoGlobal: resultadoGlobal.baseDescuento,
   };
 };
 

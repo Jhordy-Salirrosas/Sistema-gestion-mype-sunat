@@ -205,6 +205,15 @@ export class UblGeneratorService {
         moneda,
         payload.codigoDetraccion,
       ).join('\n'),
+      descuentoGlobal: payload.descuentoGlobal ? [
+        '  <cac:AllowanceCharge>',
+        '    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>',
+        `    <cbc:AllowanceChargeReasonCode listAgencyName="PE:SUNAT" listName="Cargo/descuento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo53">${esc(payload.descuentoGlobal.codigo)}</cbc:AllowanceChargeReasonCode>`,
+        `    <cbc:MultiplierFactorNumeric>${(payload.descuentoGlobal.monto / (totales.baseDescuentoGlobal ?? 1)).toFixed(5)}</cbc:MultiplierFactorNumeric>`,
+        `    <cbc:Amount currencyID="${moneda}">${payload.descuentoGlobal.monto.toFixed(2)}</cbc:Amount>`,
+        `    <cbc:BaseAmount currencyID="${moneda}">${(totales.baseDescuentoGlobal ?? 0).toFixed(2)}</cbc:BaseAmount>`,
+        '  </cac:AllowanceCharge>',
+      ].join('\n') : '',
       impuestos,
       totales: bloqueTotales(totales, moneda),
       /**

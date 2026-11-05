@@ -116,6 +116,9 @@ export class EmitirComprobanteService {
 
     const emisor = await this.datosDelEmisor(companyId);
 
+    // Valida el descuento global antes de reservar correlativo.
+    const calculoPrevio = traducirEmision(dto, emisor, 0);
+
     // 1. El documento del adquirente, antes de tocar nada.
     validarAdquirente(
       dto.customer_identity_number
@@ -125,7 +128,7 @@ export class EmitirComprobanteService {
             razonSocial: dto.customer_legal_name,
           }
         : null,
-      { tipoComprobante: dto.tipo_comprobante, importeTotal: this.totalDeclarado(dto) },
+      { tipoComprobante: dto.tipo_comprobante, importeTotal: calculoPrevio.importes.total },
     );
 
     // Validar descuentos antes de reservar un correlativo.
@@ -195,20 +198,6 @@ export class EmitirComprobanteService {
         total: linea.totalLinea,
       })),
     };
-  }
-
-  /**
-   * Total aproximado solo para la regla del umbral de la boleta.
-   *
-   * Se calcula sin IGV porque lo único que decide `validarAdquirente` es si la
-   * boleta pasa de S/ 700; hacer la liquidación completa aquí duplicaría el
-   * trabajo que hace el adaptador dos líneas después.
-   */
-  private totalDeclarado(dto: EmitirComprobanteDto): number {
-    return dto.items.reduce(
-      (suma, item) => suma + item.cantidad * item.valorUnitario,
-      0,
-    );
   }
 
   /** Datos fiscales del emisor desde la base, jamás desde el formulario. */
