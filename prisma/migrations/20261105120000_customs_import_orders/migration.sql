@@ -58,7 +58,9 @@ DO $$ BEGIN
         ADD CONSTRAINT "import_orders_supplier_id_fkey"
         FOREIGN KEY ("supplier_id") REFERENCES "foreign_suppliers"("id")
         ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+    WHEN undefined_table THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -66,7 +68,9 @@ DO $$ BEGIN
         ADD CONSTRAINT "import_orders_shipment_id_fkey"
         FOREIGN KEY ("shipment_id") REFERENCES "customs_shipments"("id")
         ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+    WHEN undefined_table THEN NULL;
 END $$;
 
 CREATE TABLE IF NOT EXISTS "import_order_items" (
