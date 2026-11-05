@@ -26,6 +26,7 @@
  *    textualmente: "los productos son con detracción, no la factura". Solo las
  *    líneas con código del Catálogo 54 aportan a la base detraída.
  */
+import { BadRequestException } from '@nestjs/common';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import type { EmitirComprobanteDto, LineaEmisionDto } from '../dto/emitirComprobanteDto';
 import type { InvoicePayload } from '../../invoicePayload';
@@ -99,6 +100,7 @@ interface LineaLiquidada {
   valorVenta: number;
   igv: number;
   icbper: number;
+  descuentoNoAfecto: number;
 }
 
 /**
@@ -118,7 +120,11 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   // Regla 3278: una gratuita lleva LineExtensionAmount en 0 y su precio
   // unitario en cero. Declarar importe en una transferencia gratuita haría
   // creer a SUNAT que hubo una venta.
-  const valorVenta = gratuita ? 0 : valorVentaBruto;
+  const descuento = item.descuento;
+  if (descuento && (gratuita || !Number.isFinite(descuento.monto) || descuento.monto <= 0 || descuento.monto > valorVentaBruto || !['00', '01'].includes(descuento.codigo))) {
+    throw new BadRequestException(`Descuento inválido en la línea ${indice + 1}`);
+  }
+  const valorVenta = gratuita ? 0 : centimos(valorVentaBruto - (descuento?.codigo === '00' ? descuento.monto : 0));
   const igv = !gratuita && tributoDe(afectacion) === '1000'
     ? centimos(valorVenta * TASA_IGV)
     : 0;
@@ -146,6 +152,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     afectacion,
     totalLinea: centimos(valorVenta + igv),
     igvLinea: igv,
+    descuentos: descuento ? [{ codigo: descuento.codigo, monto: descuento.monto }] : undefined,
     icbperLinea: item.icbper && item.icbper > 0 ? centimos(item.icbper) : undefined,
   };
 
@@ -154,6 +161,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     valorVenta,
     igv,
     icbper: linea.icbperLinea ?? 0,
+    descuentoNoAfecto: descuento?.codigo === '01' ? descuento.monto : 0,
   };
 };
 
@@ -217,7 +225,7 @@ const calcularDetraccion = (
     const codigo = dto.items[i]?.codigoDetraccion?.trim();
     if (!codigo) continue;
     if (porcentajeDetraccion(codigo) === null) continue;
-    baseSujeta += liquidadas[i].valorVenta + liquidadas[i].igv + liquidadas[i].icbper;
+    baseSujeta += liquidadas[i].valorVenta + liquidadas[i].igv + liquidadas[i].icbper - liquidadas[i].descuentoNoAfecto;
   }
 
   if (baseSujeta <= 0) return 0;
@@ -255,7 +263,8 @@ export const traducirEmision = (
       bases.exonerado +
       bases.inafecto +
       bases.exportado +
-      bases.icbper,
+      bases.icbper -
+      liquidadas.reduce((suma, l) => suma + l.descuentoNoAfecto, 0),
   );
 
   const detraccion = calcularDetraccion(liquidadas, dto, total);

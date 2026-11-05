@@ -259,6 +259,7 @@ export class UblGeneratorService {
 
     return {
       ...payload,
+      otrosDescuentos: crudas.flatMap((l) => l.descuentos ?? []).filter((d) => d.codigo === '01').reduce((suma, d) => suma + d.monto, 0),
       montoTotal: payload.montoTotal > 0 ? payload.montoTotal : totalLineas,
       lineasTributarias: lineas,
     };

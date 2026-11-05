@@ -36,6 +36,7 @@ export interface TotalesCalculados {
   icbper: number;
   total: number;
   importePagar: number;
+  otrosDescuentos?: number;
 }
 
 /**
@@ -63,6 +64,7 @@ export interface DatosTributarios {
   montoDetraccion?: number;
   montoRetencion?: number;
   bolsasIcBper?: number;
+  otrosDescuentos?: number;
   /**
    * Detalle tributario por línea; si falta se usa el agregado de los montos.
    *
@@ -188,6 +190,7 @@ export const calcularTotales = (
     icbper: bases.icbper,
     total,
     importePagar,
+    otrosDescuentos: payload.otrosDescuentos ?? 0,
   };
 };
 

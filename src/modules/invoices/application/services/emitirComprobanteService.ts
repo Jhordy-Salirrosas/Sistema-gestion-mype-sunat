@@ -128,6 +128,14 @@ export class EmitirComprobanteService {
       { tipoComprobante: dto.tipo_comprobante, importeTotal: this.totalDeclarado(dto) },
     );
 
+    // Validar descuentos antes de reservar un correlativo.
+    dto.items.forEach((item, i) => {
+      const d = item.descuento;
+      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * item.valorUnitario || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
+        throw new BadRequestException(`Descuento inválido en la línea ${i + 1}`);
+      }
+    });
+
     // 2. La nota necesita un comprobante que exista de verdad.
     await this.verificarDocumentoOrigen(dto, companyId);
 

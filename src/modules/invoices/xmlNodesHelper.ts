@@ -160,9 +160,8 @@ export const bloqueLinea = (
 
   // Base de la línea sin IGV, ya con los descuentos aplicados.
   const descuentos = l.descuentos ?? [];
-  const totalDescuentos = descuentos.reduce((suma, d) => suma + d.monto, 0);
-  const baseBruta = l.totalLinea - l.igvLinea;
-  const neto = gratuita ? 0 : baseBruta - totalDescuentos;
+  const baseBruta = Math.round(l.cantidad * l.valorUnitario * 100) / 100;
+  const neto = gratuita ? 0 : l.totalLinea - l.igvLinea;
 
   // Regla 3278: la gratuita se declara a precio cero con tipo '02'.
   const precioXml = gratuita ? 0 : precio;
