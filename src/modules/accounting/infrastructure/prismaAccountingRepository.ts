@@ -160,6 +160,51 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return this.mapPeriod(row);
   }
 
+  async findLedgerMovements(companyId: string, period: string, accountCode: string) {
+    const entries = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period },
+      include: { lines: true },
+      orderBy: [{ entry_date: 'asc' }, { entry_number: 'asc' }],
+    });
+    return entries.flatMap((entry) =>
+      entry.lines
+        .filter((line) => line.account_code === accountCode)
+        .map((line) => ({
+          entryId: entry.id,
+          entryNumber: entry.entry_number,
+          entryDate: entry.entry_date,
+          glosa: entry.glosa,
+          sourceModule: entry.source_module,
+          accountCode: line.account_code,
+          accountName: line.account_name,
+          debit: Number(line.debit_amount),
+          credit: Number(line.credit_amount),
+        })),
+    );
+  }
+
+  async findTrialBalanceRows(companyId: string, period: string) {
+    const entries = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period },
+      include: { lines: true },
+    });
+    const rows = new Map<string, { accountCode: string; accountName: string; debit: number; credit: number }>();
+    for (const entry of entries) {
+      for (const line of entry.lines) {
+        const actual = rows.get(line.account_code) ?? {
+          accountCode: line.account_code,
+          accountName: line.account_name,
+          debit: 0,
+          credit: 0,
+        };
+        actual.debit += Number(line.debit_amount);
+        actual.credit += Number(line.credit_amount);
+        rows.set(line.account_code, actual);
+      }
+    }
+    return [...rows.values()].sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+  }
+
   private mapPeriod(row: {
     company_id: string;
     period: string;
