@@ -23,6 +23,7 @@ describe('PrismaInvoiceRepository', () => {
     invoice: {
       create: jest.fn(),
     },
+    transactionHistory: { create: jest.fn() },
   };
 
   const prismaMock = {
@@ -104,6 +105,13 @@ describe('PrismaInvoiceRepository', () => {
       'invoice-test-001',
     );
     expect(result.id).toBe('invoice-test-001');
+  });
+
+  it('persiste el origen de retención en la misma transacción que la cola', async () => {
+    const entidad = new InvoiceEntity({ ...invoiceEntity, auditoria_retencion: 'Retención por corrección manual' });
+    await repository.saveWithTransactionalOutbox(entidad);
+    expect(tx.transactionHistory.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ company_id: 'company-test-001', invoice_id: 'invoice-test-001', codigo_error: 'RETENCION_ORIGEN', mensaje_error: 'Retención por corrección manual' }) }));
+    expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledWith(tx, 'invoice-test-001');
   });
 
   it('lanza InternalServerErrorException si la transacción o el encolado fallan', async () => {

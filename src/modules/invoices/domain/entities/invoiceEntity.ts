@@ -1,4 +1,5 @@
 export interface InvoiceEntityProps {
+  auditoria_retencion?: string;
   id?: string;
   company_id: string;
   ruc_emisor: string;
@@ -48,6 +49,7 @@ export interface InvoiceEntityProps {
 }
 
 export class InvoiceEntity {
+  public readonly auditoria_retencion?: string;
   public readonly id?: string;
   public readonly company_id: string;
   public readonly ruc_emisor: string;
@@ -73,6 +75,7 @@ export class InvoiceEntity {
   public readonly credit_debit_reason_code?: string;
 
   constructor(props: InvoiceEntityProps) {
+    this.auditoria_retencion = props.auditoria_retencion;
     this.id = props.id;
     this.company_id = props.company_id;
     this.ruc_emisor = props.ruc_emisor;

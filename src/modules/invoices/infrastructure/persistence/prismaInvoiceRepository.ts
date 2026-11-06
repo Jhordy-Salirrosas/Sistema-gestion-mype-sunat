@@ -61,6 +61,13 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
             },
           });
 
+          if (invoice.auditoria_retencion) {
+            await tx.transactionHistory.create({ data: {
+              company_id: invoice.company_id, invoice_id: created.id, intento: 0, estado_anterior: created.estado,
+              estado_nuevo: created.estado, codigo_error: 'RETENCION_ORIGEN',
+              mensaje_error: invoice.auditoria_retencion, tiempo_respuesta_ms: 0,
+            } });
+          }
           // Encolar el trabajo utilizando el cliente transaccional.
           await this.queueService.enqueueInvoiceInTx(tx, created.id);
 
