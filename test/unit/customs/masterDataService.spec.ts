@@ -50,6 +50,12 @@ describe('MasterDataService', () => {
         findMany: jest.fn(),
         upsert: jest.fn(),
       },
+      partnerTaxStatus: {
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+        create: jest.fn(),
+      },
+      $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
     };
 
     service = new MasterDataService(mockPrisma);
@@ -201,6 +207,35 @@ describe('MasterDataService', () => {
           accountCode: '6011',
         }),
       ).toEqual({ id: 'map-1' });
+    });
+  });
+
+  describe('PartnerTaxStatus', () => {
+    it('consulta y registra un indicador con vigencia', async () => {
+      mockPrisma.businessPartner.findFirst.mockResolvedValue({ id: 'p-1' });
+      mockPrisma.partnerTaxStatus.findMany.mockResolvedValue([
+        { indicator: 'RETENCION', value: true },
+      ]);
+      mockPrisma.partnerTaxStatus.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.partnerTaxStatus.create.mockResolvedValue({ id: 'ts-1' });
+
+      const actual = await service.getPartnerTaxStatus('c-1', 'p-1');
+      expect(actual[0].indicator).toBe('RETENCION');
+
+      await service.upsertPartnerTaxStatus('c-1', 'p-1', {
+        indicator: 'RETENCION',
+        value: true,
+        validFrom: '2026-11-06',
+        source: 'SUNAT',
+      });
+      expect(mockPrisma.partnerTaxStatus.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          partner_id: 'p-1',
+          indicator: 'RETENCION',
+          value: true,
+          source: 'SUNAT',
+        }),
+      });
     });
   });
 });
