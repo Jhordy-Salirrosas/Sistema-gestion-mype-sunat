@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
+import { GetBalanceSheetUseCase } from '../../../src/modules/accounting/application/use-cases/getBalanceSheetUseCase';
 import type { IAccountingRepositoryPort } from '../../../src/modules/accounting/domain/ports/accountingRepositoryPort';
 
 describe('Reportes contables', () => {
@@ -78,5 +79,20 @@ describe('Reportes contables', () => {
     await expect(
       new GetIncomeStatementUseCase(repository).execute('c1', '2026-13'),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('cuadra activo contra pasivo, patrimonio y resultado', async () => {
+    repository.findTrialBalanceRows.mockResolvedValue([
+      { accountCode: '12121', accountName: 'CxC', debit: 14726.4, credit: 0 },
+      { accountCode: '40111', accountName: 'IGV', debit: 0, credit: 2246.4 },
+      { accountCode: '70121', accountName: 'Ventas', debit: 0, credit: 12480 },
+    ]);
+
+    const result = await new GetBalanceSheetUseCase(repository).execute('c1', '2026-11');
+    expect(result.totalActivo).toBe(14726.4);
+    expect(result.pasivo.total).toBe(2246.4);
+    expect(result.resultadoEjercicio).toBe(12480);
+    expect(result.totalPasivoPatrimonio).toBe(14726.4);
+    expect(result.cuadra).toBe(true);
   });
 });

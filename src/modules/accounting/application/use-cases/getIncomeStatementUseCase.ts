@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   ACCOUNTING_REPOSITORY_PORT,
   type IAccountingRepositoryPort,
@@ -6,6 +6,7 @@ import {
 import type {
   IncomeStatementGroup,
 } from '../../domain/entities/incomeStatementEntity';
+import { agruparSaldos, resultadoDelEjercicio, validarPeriodo } from '../utils/accountingReportUtils';
 
 const GRUPOS = [
   { key: 'ingresos' as const, label: 'Ingresos', prefijos: ['70'], signo: -1 },
@@ -26,36 +27,13 @@ export class GetIncomeStatementUseCase {
   ) {}
 
   async execute(companyId: string, period: string) {
-    const normalizado = /^\d{4}-\d{1,2}$/.test(period)
-      ? `${period.slice(0, 4)}-${period.slice(5).padStart(2, '0')}`
-      : period;
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(normalizado)) {
-      throw new BadRequestException('El período debe tener formato YYYY-MM');
-    }
-
+    const normalizado = validarPeriodo(period);
     const rows = await this.repository.findTrialBalanceRows(companyId, normalizado);
-    const groups: IncomeStatementGroup[] = GRUPOS.map((grupo) => {
-      const lines = rows
-        .filter((row) => grupo.prefijos.some((prefijo) => row.accountCode.startsWith(prefijo)))
-        .map((row) => ({
-          accountCode: row.accountCode,
-          accountName: row.accountName,
-          amount: Math.round(grupo.signo * (row.debit - row.credit) * 100) / 100,
-        }))
-        .filter((line) => line.amount !== 0);
-      return {
-        key: grupo.key,
-        label: grupo.label,
-        lines,
-        total: Math.round(lines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100,
-      };
-    });
-
+    const groups = agruparSaldos(rows, GRUPOS) as IncomeStatementGroup[];
+    const resultado = resultadoDelEjercicio(rows);
     const ingresos = groups.find((g) => g.key === 'ingresos')?.total ?? 0;
     const costoVentas = groups.find((g) => g.key === 'costoVentas')?.total ?? 0;
     const gastosOperativos = groups.find((g) => g.key === 'gastosOperativos')?.total ?? 0;
-    const resultadoBruto = Math.round((ingresos - costoVentas) * 100) / 100;
-    const resultadoOperativo = Math.round((resultadoBruto - gastosOperativos) * 100) / 100;
 
     return {
       period: normalizado,
@@ -63,8 +41,8 @@ export class GetIncomeStatementUseCase {
       ingresos,
       costoVentas,
       gastosOperativos,
-      resultadoBruto,
-      resultadoOperativo,
+      resultadoBruto: Math.round((ingresos - costoVentas) * 100) / 100,
+      resultadoOperativo: resultado,
     };
   }
 }
