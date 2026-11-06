@@ -32,7 +32,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { XmlParser, Xslt } from 'xslt-processor';
-import { XMLValidator } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import {
   CATALOGO_REGLAS_SUNAT,
   type ReglaSunat,
@@ -236,8 +236,15 @@ export class SunatXslValidatorService {
         this.logger.error(`Hoja XSL mal formada en ${ruta}: ${hojaBienFormada.err.msg}`);
         return null;
       }
-      const sinComentarios = original.replace(/<!--[\s\S]*?-->/g, '');
-      const requiereUtils = /<xsl:include\b[^>]*\bhref\s*=\s*["'][^"']*commons\/error\/validate_utils\.xsl["'][^>]*\/?\s*>/i.test(sinComentarios);
+      const documento = new XMLParser({ ignoreAttributes: false }).parse(original) as {
+        'xsl:stylesheet'?: { 'xsl:include'?: { '@_href'?: string } | { '@_href'?: string }[] };
+      };
+      const declaracion = documento['xsl:stylesheet']?.['xsl:include'];
+      const includes = declaracion ? (Array.isArray(declaracion) ? declaracion : [declaracion]) : [];
+      const requiereUtils = includes.some((item) =>
+        typeof item['@_href'] === 'string' &&
+        item['@_href'].toLowerCase().endsWith('commons/error/validate_utils.xsl'),
+      );
       if (requiereUtils && !existsSync(join(this.directorio(), 'commons', 'error', 'validate_utils.xsl'))) {
         this.dependenciasAusentes.add(ruta);
       }
