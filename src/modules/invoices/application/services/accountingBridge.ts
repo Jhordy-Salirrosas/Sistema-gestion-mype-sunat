@@ -45,6 +45,7 @@ export const CUENTAS_VENTA = {
   inafecta: { codigo: '70521', nombre: 'Ventas inafectas del IGV' },
   icbper: { codigo: '74111', nombre: 'Impuesto a las bolsas plásticas por pagar' },
   detraccion: { codigo: '12129', nombre: 'Cuentas por cobrar - detracciones' },
+  descuentos: { codigo: '74', nombre: 'Descuentos, rebajas y bonificaciones concedidos' },
 } as const;
 
 /** Importes de un comprobante necesarios para asentar la venta. */
@@ -62,6 +63,8 @@ export interface DatosAsientoVenta {
   retencion: number;
   /** Total del comprobante (base + IGV + ICBPER). */
   total: number;
+  /** Descuentos 01/03 que no reducen la base del IGV. */
+  descuentoNoAfecto?: number;
 }
 
 /** Redondea a céntimos sin arrastrar error de coma flotante. */
@@ -100,12 +103,16 @@ export const lineasAsientoVenta = (
   const detraccion = r2(datos.detraccion);
   const retencion = r2(datos.retencion);
   const icbper = r2(datos.icbper);
+  const descuento = r2(datos.descuentoNoAfecto ?? 0);
 
   // Cobro efectivo: lo que el cliente paga al proveedor.
   const porCobrar = r2(total - detraccion - retencion);
 
   if (porCobrar > 0) {
     lineas.push(linea(CUENTAS_VENTA.porCobrar, porCobrar, 0));
+  }
+  if (descuento > 0) {
+    lineas.push(linea(CUENTAS_VENTA.descuentos, descuento, 0));
   }
   // La detracción la deposita el cliente en el Banco de la Nación: sigue siendo
   // una cuenta por cobrar del proveedor, pero por otra vía.
