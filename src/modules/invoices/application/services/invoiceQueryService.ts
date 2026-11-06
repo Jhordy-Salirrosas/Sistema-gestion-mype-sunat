@@ -10,6 +10,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
+import type { InvoiceStatus } from '../../../../generated/client/enums';
 import type {
   ComprobanteDetalleDto,
   FiltrosComprobantes,
@@ -162,7 +163,7 @@ export class InvoiceQueryService {
   ): Promise<ReintentoCdrDto> {
     const fila = await this.prisma.invoice.findFirst({
       where: { id, company_id: companyId },
-      select: { id: true, estado: true },
+      select: { id: true, estado: true, serie: true, correlativo: true },
     });
 
     if (!fila) {
@@ -170,6 +171,34 @@ export class InvoiceQueryService {
         code: 'INVOICE_NOT_FOUND',
         message: 'El comprobante no existe o no pertenece a la empresa',
       });
+    }
+
+    if (fila.estado === 'EN_COLA' || fila.estado === 'PENDIENTE') {
+      let estadoActual: InvoiceStatus = fila.estado;
+      const resultado = await this.queue.reenqueueInvoiceIfIdle(fila.id, companyId, async () => {
+        const actual = await this.prisma.invoice.findFirst({
+          where: { id: fila.id, company_id: companyId },
+          select: { estado: true },
+        });
+        if (!actual) return false;
+        estadoActual = actual.estado;
+        return actual.estado === 'EN_COLA' || actual.estado === 'PENDIENTE';
+      });
+      const numero = `${fila.serie}-${String(fila.correlativo).padStart(8, '0')}`;
+      const explicacion = {
+        ENCOLADO: 'Comprobante reencolado manualmente.',
+        YA_EN_COLA: 'Ya existe un trabajo en cola; no se duplicó.',
+        EN_DLQ: 'El comprobante está en la cola de muertos y requiere revisión manual.',
+        ESTADO_NO_PERMITIDO: 'El estado ya no permite reencolar el comprobante.',
+      }[resultado.estado];
+      await this.prisma.transactionHistory.create({
+        data: { company_id: companyId, invoice_id: fila.id, intento: 1,
+          estado_anterior: estadoActual, estado_nuevo: estadoActual,
+          codigo_error: null, mensaje_error: `Rescate manual ${numero}: ${resultado.estado}. ${explicacion}`,
+          tiempo_respuesta_ms: null },
+      });
+      return { id: fila.id, estado: estadoActual, encolado: resultado.estado === 'ENCOLADO',
+        mensaje: explicacion, resultadoCola: resultado.estado };
     }
 
     // Se rechaza el reintento de un comprobante que ya está resuelto: reencolar

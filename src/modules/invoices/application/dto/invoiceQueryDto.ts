@@ -135,6 +135,7 @@ export interface ReintentoCdrDto {
   estado: EstadoComprobante;
   encolado: boolean;
   mensaje: string;
+  resultadoCola?: 'ENCOLADO' | 'YA_EN_COLA' | 'EN_DLQ' | 'ESTADO_NO_PERMITIDO';
 }
 
 /** Filtros aceptados por el listado. */
