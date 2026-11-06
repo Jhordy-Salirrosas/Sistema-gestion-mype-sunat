@@ -181,3 +181,25 @@ describe('M1 · asiento de Nota de Crédito', () => {
     expect(balanceAsiento(lineas).cuadra).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6 · Descuento 01/03
+// ---------------------------------------------------------------------------
+
+describe('M1 · asiento con descuento 01/03', () => {
+  it('usa la cuenta 74 y sigue cuadrado', () => {
+    const lineas = lineasAsientoVenta({
+      gravado: 1000,
+      igv: 180,
+      exonerado: 0,
+      inafecto: 0,
+      icbper: 0,
+      detraccion: 0,
+      retencion: 0,
+      total: 1080,
+      descuento: 100,
+    });
+    expect(lineas.find((l) => l.accountCode === '74')?.debitAmount).toBe(100);
+    expect(balanceAsiento(lineas)).toEqual({ debe: 1180, haber: 1180, cuadra: true });
+  });
+});

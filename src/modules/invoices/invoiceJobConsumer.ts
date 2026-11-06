@@ -315,10 +315,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
         afectacion: item.igv_affectation_type,
       })),
       importes,
-      motivoBloqueoAsiento: payload.descuentoGlobal?.codigo === '03' ||
-        (payload.lineas ?? (payload.linea ? [payload.linea] : [])).some((l) => l.descuentos?.some((d) => d.codigo === '01'))
-        ? 'Contabilidad: asiento automático bloqueado por descuento 01/03; requiere revisión contable.'
-        : null,
+      motivoBloqueoAsiento: null,
     };
   }
 

@@ -293,7 +293,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     );
   });
 
-  it.each(['01', '03'] as const)('bloquea asiento y respaldo para descuento %s', async (codigo) => {
+  it.each(['01', '03'] as const)('asienta descuento %s sin bloquear el comprobante', async (codigo) => {
     const accounting = { execute: jest.fn<() => Promise<unknown>>(async () => null) };
     const registrar = jest.fn<(factura: unknown) => Promise<unknown>>(async () => ({ movimientosRegistrados: 1, movimientosOmitidos: 0, asientoOmitido: true, errores: ['Revisión contable'], completo: false }));
     const payload = { ...COMPROBANTE.payload_ubl, lineas: [{ id: 1, descripcion: 'Servicio', cantidad: 1, valorUnitario: 100, afectacion: '10', totalLinea: 118, igvLinea: 18, descuentos: codigo === '01' ? [{ codigo: '01', monto: 10 }] : [] }], descuentoGlobal: codigo === '03' ? { codigo: '03', monto: 10 } : null };
@@ -311,7 +311,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
       { guardar: jest.fn(async () => 'hash') } as never, accounting as never,
     );
     await consumer.procesar({ invoice_id: 'inv-1' });
-    expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: expect.stringContaining('01/03') }));
+    expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: null }));
     expect(accounting.execute).not.toHaveBeenCalled();
   });
 
