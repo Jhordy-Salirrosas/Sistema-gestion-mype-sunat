@@ -25,6 +25,13 @@ describe('asiento de descuentos 01 y 03', () => {
     expect(balanceAsiento(lineas)).toEqual({ debe: 106.2, haber: 106.2, cuadra: true });
   });
 
+  it('usa el descuento validado de M1 cuando también se recibe el campo de dev', () => {
+    const lineas = lineasAsientoVenta({ ...importes, descuento: 80 });
+    expect(lineas.find((linea) => linea.accountCode === '74')?.debitAmount).toBe(100);
+    expect(lineas.filter((linea) => linea.accountCode === '74')).toHaveLength(1);
+    expect(balanceAsiento(lineas)).toEqual({ debe: 1180, haber: 1180, cuadra: true });
+  });
+
   it('el generador contable real acepta la cuenta 74 activa y recibe partida doble', async () => {
     const saveEntry = jest.fn(async (entry: unknown) => entry);
     const repo = { findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),

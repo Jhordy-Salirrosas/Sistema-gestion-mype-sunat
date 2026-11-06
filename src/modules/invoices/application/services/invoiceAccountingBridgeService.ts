@@ -208,9 +208,14 @@ export class InvoiceAccountingBridgeService {
       return { asientoId: existente.id, asientoOmitido: true };
     }
 
+    const i = factura.importes;
+    const descuento = Math.round(
+      (i.gravado + i.igv + i.exonerado + i.inafecto + i.icbper - i.total) * 100,
+    ) / 100;
+    const datos = { ...i, descuento: descuento > 0 ? descuento : 0 };
     const lineas = factura.tipoComprobante === '07'
-      ? lineasAsientoNotaCredito(factura.importes)
-      : lineasAsientoVenta(factura.importes);
+      ? lineasAsientoNotaCredito(datos)
+      : lineasAsientoVenta(datos);
     const balance = balanceAsiento(lineas);
 
     if (!balance.cuadra) {

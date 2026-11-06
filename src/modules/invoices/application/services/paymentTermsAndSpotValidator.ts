@@ -154,6 +154,9 @@ export function validarPago(datos: DatosPago): void {
         `La cuota ${cuota.numero} tiene un monto inválido (${cuota.monto}).`,
       );
     }
+    if (Math.abs(cuota.monto * 100 - Math.round(cuota.monto * 100)) > 1e-7) {
+      throw new BadRequestException(`La cuota ${cuota.numero} no puede tener fracciones de céntimo.`);
+    }
   }
 
   // Regla 3319: suma exacta, sin tolerancia. Se compara en céntimos enteros
@@ -248,7 +251,7 @@ export function montoDetraccion(
 /** Convierte una fecha a un número comparable; lanza si no es válida. */
 function fechaIso(valor: string, contexto: string): number {
   const fecha = new Date(`${valor}T00:00:00Z`);
-  if (Number.isNaN(fecha.getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor) || Number.isNaN(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== valor) {
     throw new BadRequestException(
       `La fecha de ${contexto} no es válida: "${valor}". Use el formato AAAA-MM-DD.`,
     );
