@@ -48,7 +48,7 @@ export class UblGeneratorService {
     return calcularTotales(payload);
   }
 
-  /** Importe de la retención del IGV redondeado al entero superior. */
+  /** Importe de la retención del IGV redondeado a céntimos. */
   public calcularRetencion(importe: number): number {
     return calcularRetencion(importe);
   }
@@ -103,6 +103,7 @@ export class UblGeneratorService {
       fechaEmision: payload.fechaEmision ?? '',
       cuotas: payload.cuotas ?? [],
       detraccion: totales.detraccion,
+      retencion: totales.retencion,
       tipoOperacion,
     });
 
@@ -121,6 +122,7 @@ export class UblGeneratorService {
         ? montoNetoPendiente({
             montoTotal: totales.total,
             detraccion: totales.detraccion,
+            retencion: totales.retencion,
           })
         : undefined;
 

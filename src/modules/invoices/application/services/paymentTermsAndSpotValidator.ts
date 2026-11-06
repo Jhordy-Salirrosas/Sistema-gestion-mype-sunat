@@ -53,6 +53,8 @@ export interface DatosPago {
   cuotas?: Cuota[];
   /** Monto que se descuenta por detracción, si la hay. */
   detraccion?: number;
+  /** Retención del cliente, informada en el comprobante. */
+  retencion?: number;
   /** Tipo de operación del Catálogo 51: 0101, 1001... */
   tipoOperacion?: string;
 }
@@ -85,10 +87,11 @@ export function esOperacionConDetraccion(tipoOperacion?: string): boolean {
 export function montoNetoPendiente(datos: {
   montoTotal: number;
   detraccion?: number;
+  retencion?: number;
 }): number {
   const total = datos.montoTotal ?? 0;
   const detraccion = datos.detraccion ?? 0;
-  const neto = centimos(total - detraccion);
+  const neto = centimos(total - detraccion - (datos.retencion ?? 0));
   // Una detracción mayor que el total no puede dejar un neto negativo: sería
   // un error de captura, y el cronograma no podría cuadrar nunca.
   return neto > 0 ? neto : 0;

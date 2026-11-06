@@ -55,9 +55,17 @@ function dependencies() {
 describe('SIRE lifecycle use cases', () => {
   it('gets and persists a SUNAT proposal', async () => {
     const { repository, sunat } = dependencies();
+    repository.getPeriodProposals.mockResolvedValue([{ ...proposal, id: 'proposal-1' }]);
     const result = await new GetSireProposalUseCase(repository as never, sunat as never).execute(dto, 'company-a');
-    expect(result).toEqual({ period: '202611', bookType: 'RCE_COMPRAS', state: 'PROPUESTA', count: 1 });
+    expect(result).toEqual({
+      period: '202611',
+      bookType: 'RCE_COMPRAS',
+      state: 'PROPUESTA',
+      count: 1,
+      proposals: [{ ...proposal, id: 'proposal-1' }],
+    });
     expect(repository.saveSunatProposal).toHaveBeenCalledWith('company-a', '202611', 'RCE', [proposal]);
+    expect(repository.getPeriodProposals).toHaveBeenCalledWith('company-a', '202611', 'RCE');
   });
 
   it('excludes and restores records, rejecting missing or generated periods', async () => {

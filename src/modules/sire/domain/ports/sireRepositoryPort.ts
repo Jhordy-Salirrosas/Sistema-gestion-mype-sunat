@@ -3,6 +3,10 @@ import type { SireProposalEntity } from '../entities/sireProposalEntity';
 
 export const SIRE_REPOSITORY_PORT = Symbol('SIRE_REPOSITORY_PORT');
 
+export interface SireProposalRecord extends SireProposalEntity {
+  id: string;
+}
+
 export interface ReconciliationHistoryRecord {
   id: string;
   period: string;
@@ -59,7 +63,7 @@ export interface ISireRepositoryPort {
     companyId: string,
     period: string,
     bookType: 'RVIE' | 'RCE',
-  ): Promise<SireProposalEntity[]>;
+  ): Promise<SireProposalRecord[]>;
   setPeriodTicket(
     companyId: string,
     period: string,

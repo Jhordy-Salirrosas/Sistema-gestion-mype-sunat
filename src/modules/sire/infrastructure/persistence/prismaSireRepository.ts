@@ -170,6 +170,7 @@ export class PrismaSireRepository implements ISireRepositoryPort {
       },
     });
     return rows.map((proposal) => ({
+      id: proposal.id,
       companyId: proposal.company_id,
       period: proposal.period,
       bookType,
@@ -182,6 +183,7 @@ export class PrismaSireRepository implements ISireRepositoryPort {
       taxableBase: proposal.taxable_base.toNumber(),
       igvAmount: proposal.igv_amount.toNumber(),
       totalAmount: proposal.total_amount.toNumber(),
+      origin: proposal.origin,
     }));
   }
 

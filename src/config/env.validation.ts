@@ -20,6 +20,12 @@ export enum SunatEnvironment {
   Produccion = 'produccion',
 }
 
+export enum SireEnvironment {
+  Mock = 'mock',
+  Beta = 'beta',
+  Produccion = 'produccion',
+}
+
 class EnvironmentVariables {
   @IsEnum(Environment)
   @IsOptional()
@@ -68,6 +74,10 @@ class EnvironmentVariables {
   @IsEnum(SunatEnvironment)
   @IsOptional()
   SUNAT_ENV: SunatEnvironment = SunatEnvironment.Beta;
+
+  @IsEnum(SireEnvironment)
+  @IsOptional()
+  SUNAT_SIRE_ENV: SireEnvironment = SireEnvironment.Beta;
 
   @IsString()
   @IsOptional()

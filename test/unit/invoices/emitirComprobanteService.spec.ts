@@ -186,14 +186,15 @@ describe('EmitirComprobanteService — emisión de factura', () => {
   });
 
   it.each([
-    [true, false, false, 4, 'maestro'],
+    [true, false, false, 35.4, 'maestro'],
     [false, true, false, 0, 'maestro'],
     [true, false, true, 0, 'corrección manual'],
   ])('aplica decisión de retención y conserva su auditoría', async (maestro, enviado, correccion, monto, origen) => {
     const { servicio, prisma, creadas } = montar();
     prisma.businessPartner.findFirst.mockResolvedValue({ id: 'cliente' });
     prisma.partnerTaxStatus.findFirst.mockResolvedValue({ value: maestro });
-    const resultado = await servicio.emitir(factura({ agente_retencion: enviado, correccion_retencion: correccion }), COMPANY_ID);
+    const resultado = await servicio.emitir(factura({ agente_retencion: enviado, correccion_retencion: correccion,
+      items: [{ descripcion: 'Servicio', cantidad: 1, valorUnitario: 1000, afectacion: '10' }] }), COMPANY_ID);
     expect(resultado.importes.retencion).toBe(monto);
     expect(String(creadas[0].auditoria_retencion).toLowerCase()).toContain(origen);
   });

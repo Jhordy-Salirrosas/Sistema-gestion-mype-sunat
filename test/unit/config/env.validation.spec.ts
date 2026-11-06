@@ -52,12 +52,41 @@ describe('Validación de Variables de Entorno (TT-10)', () => {
         });
 
         expect(result.SUNAT_ENV).toBe('beta');
+        expect(result.SUNAT_SIRE_ENV).toBe('beta');
         expect(result.SUNAT_BILL_SERVICE_URL_BETA).toBe(
             'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',
         );
         expect(result.SUNAT_BILL_SERVICE_URL_PRODUCCION).toBe(
             'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
         );
+    });
+
+    it('acepta explícitamente el modo mock SIRE para desarrollo local', () => {
+        const result = validate({
+            DATABASE_URL: 'postgres://valid-database',
+            API_KEY: 'clave-falsa',
+            JWT_SECRET: 'jwt-secreto-seguro-de-prueba',
+            RUC_EMISOR: '20000000001',
+            CERT_PASSWORD: '123',
+            CERT_BASE64: 'base64',
+            SUNAT_SIRE_ENV: 'mock',
+        });
+
+        expect(result.SUNAT_SIRE_ENV).toBe('mock');
+    });
+
+    it('rechaza valores no soportados para SUNAT_SIRE_ENV', () => {
+        expect(() =>
+            validate({
+                DATABASE_URL: 'postgres://valid-database',
+                API_KEY: 'clave-falsa',
+                JWT_SECRET: 'jwt-secreto-seguro-de-prueba',
+                RUC_EMISOR: '20000000001',
+                CERT_PASSWORD: '123',
+                CERT_BASE64: 'base64',
+                SUNAT_SIRE_ENV: 'unknown',
+            }),
+        ).toThrow(/SUNAT_SIRE_ENV/);
     });
 
     it('debe rechazar endpoints de Beta que no sean HTTPS', () => {
