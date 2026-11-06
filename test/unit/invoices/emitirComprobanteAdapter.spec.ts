@@ -291,8 +291,8 @@ describe('traducirEmision — retención del cliente', () => {
       1,
     );
 
-    // 3 % del total (1180) redondeado al entero superior.
-    expect(importes.retencion).toBe(Math.ceil(1180 * 0.03));
+    // 3 % del total (1180), en céntimos.
+    expect(importes.retencion).toBe(35.4);
     expect(importes.importePagar).toBe(1180 - importes.retencion);
   });
 
