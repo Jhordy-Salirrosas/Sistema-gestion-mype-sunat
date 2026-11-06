@@ -13,7 +13,10 @@ function servicioCon(estado: string) {
   };
   const queue = {
     enqueueInvoiceInTx: jest.fn(),
-    reenqueueInvoiceIfIdle: jest.fn().mockResolvedValue({ estado, jobId: 'job-2' }),
+    reenqueueInvoiceIfIdle: jest.fn(async (_id: string, _company: string, cb: () => Promise<boolean>) => {
+      await cb();
+      return { estado, jobId: 'job-2' };
+    }),
   };
   return { servicio: new InvoiceQueryService(prisma as never, queue as never), queue };
 }
