@@ -17,10 +17,9 @@
  *    `test/unit/invoices/ta31-xsl-oficial.spec.ts`.
  *    `SUNAT_XSL_DIR` sigue existiendo para apuntar a otra copia.
  *
- *  - Si la hoja no se puede cargar, el envío se BLOQUEA. El criterio 4 del
- *    backlog es explícito, y dejar pasar un comprobante sin validar porque
- *    faltaba un archivo es peor que detenerlo: el error silencioso aparecería
- *    recién cuando SUNAT lo rechace, con los intentos del backoff ya gastados.
+ *  - Si falta la hoja o aparece un error inesperado, el envío se BLOQUEA.
+ *    Solo la dependencia validate_utils ausente se declara no concluyente;
+ *    el consumidor debe comprobar estructura y negocio y auditarlo.
  *
  *  - Las hojas oficiales no son XSLT estándar (usan funciones de IBM
  *    DataPower). La conversión vive en `sunatXslAdapter.ts`, para que este
@@ -33,6 +32,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { XmlParser, Xslt } from 'xslt-processor';
+import { XMLValidator } from 'fast-xml-parser';
 import {
   CATALOGO_REGLAS_SUNAT,
   type ReglaSunat,
@@ -50,17 +50,17 @@ export interface ResultadoValidacionXsl {
   codigosDesconocidos: string[];
   /** true si la validación no pudo ejecutarse y el envío debe bloquearse. */
   bloqueado: boolean;
-  /** Motivo del bloqueo, para la auditoría. */
+  /** Motivo del bloqueo o de la imposibilidad de concluir, para diagnóstico. */
   motivoBloqueo: string | null;
   /**
    * ¿La hoja ejecutada era capaz de validar? (TA-62)
    *
    * `false` significa que la hoja corrió pero no tiene sus plantillas de
    * validación, así que NO se puede afirmar nada sobre el comprobante. En ese
-   * caso `valido` es `false` y `motivoBloqueo` explica por qué: es la única
-   * forma honesta de no aprobar a ciegas.
+   * caso `valido` es `false`; nunca se presenta como aprobado por XSL.
    */
   validadoDeVerdad: boolean;
+  causaNoConcluyente?: 'DEPENDENCIA_VALIDATE_UTILS_AUSENTE';
 }
 
 export interface ErrorValidacionXsl {
@@ -99,6 +99,7 @@ export class SunatXslValidatorService {
   private readonly logger = new Logger(SunatXslValidatorService.name);
   private readonly parser = new XmlParser();
   private readonly hojas = new Map<string, string>();
+  private readonly dependenciasAusentes = new Set<string>();
 
   /**
    * Valida el XML firmado con la hoja oficial de su tipo.
@@ -123,6 +124,19 @@ export class SunatXslValidatorService {
         `No se pudo cargar la hoja oficial '${archivo}' desde ${this.directorio()}. ` +
           'El envío se bloquea: no se valida a ciegas un comprobante tributario',
       );
+    }
+
+    // La excepción no debe ocultar XML mal formado, incluso al evitar XSLT.
+    const xmlBienFormado = XMLValidator.validate(xml);
+    if (xmlBienFormado !== true) {
+      return this.bloqueo(`XML mal formado: ${xmlBienFormado.err.msg}`);
+    }
+    if (this.dependenciasAusentes.has(join(this.directorio(), archivo))) {
+      return {
+        valido: false, errores: [], codigosDesconocidos: [], bloqueado: false,
+        motivoBloqueo: 'Validación XSL no concluyente: falta commons/error/validate_utils.xsl', validadoDeVerdad: false,
+        causaNoConcluyente: 'DEPENDENCIA_VALIDATE_UTILS_AUSENTE',
+      };
     }
 
     const inicio = Date.now();
@@ -205,18 +219,30 @@ export class SunatXslValidatorService {
   }
 
   /** Lee, normaliza y cachea la hoja; `null` si el archivo no está. */
-  private cargarHoja(archivo: string): string | null {    const cacheada = this.hojas.get(archivo);
+  private cargarHoja(archivo: string): string | null {
+    const ruta = join(this.directorio(), archivo);
+    const cacheada = this.hojas.get(ruta);
     if (cacheada !== undefined) return cacheada;
 
-    const ruta = join(this.directorio(), archivo);
     if (!existsSync(ruta)) {
       this.logger.error(`No existe la hoja XSL oficial en ${ruta}`);
       return null;
     }
 
     try {
-      const contenido = normalizarHojaSunat(readFileSync(ruta, 'utf8'));
-      this.hojas.set(archivo, contenido);
+      const original = readFileSync(ruta, 'utf8');
+      const hojaBienFormada = XMLValidator.validate(original);
+      if (hojaBienFormada !== true) {
+        this.logger.error(`Hoja XSL mal formada en ${ruta}: ${hojaBienFormada.err.msg}`);
+        return null;
+      }
+      const sinComentarios = original.replace(/<!--[\s\S]*?-->/g, '');
+      const requiereUtils = /<xsl:include\b[^>]*\bhref\s*=\s*["'][^"']*commons\/error\/validate_utils\.xsl["'][^>]*\/?\s*>/i.test(sinComentarios);
+      if (requiereUtils && !existsSync(join(this.directorio(), 'commons', 'error', 'validate_utils.xsl'))) {
+        this.dependenciasAusentes.add(ruta);
+      }
+      const contenido = normalizarHojaSunat(original);
+      this.hojas.set(ruta, contenido);
       return contenido;
     } catch (error) {
       this.logger.error(
@@ -248,10 +274,7 @@ export class SunatXslValidatorService {
         errores: [],
         codigosDesconocidos: [],
         bloqueado: true,
-        motivoBloqueo:
-          'La hoja XSL oficial se ejecutó pero NO puede validar: le faltan las ' +
-          'plantillas de `commons/error/validate_utils.xsl`, que SUNAT no publica. ' +
-          'No se afirma que el comprobante sea válido.',
+        motivoBloqueo: 'El motor XSL no puede acreditar la validación; no se identificó la ausencia de commons/error/validate_utils.xsl como causa',
         validadoDeVerdad: false,
       };
     }
