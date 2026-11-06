@@ -175,12 +175,13 @@ export const CATALOGO_53_DESCUENTOS = {
 
 /** Catálogo 54: código de bien o servicio sujeto a detracción (SPOT). */
 export const CATALOGO_54_DETRACCION = {
-  '012': { descripcion: 'Demás servicios gravados con el IGV', porcentaje: 0.12 },
-  '019': { descripcion: 'Servicio de naturaleza intangible', porcentaje: 0.12 },
-  '022': { descripcion: 'Otros servicios empresariales', porcentaje: 0.1 },
+  '012': { descripcion: 'Intermediación laboral y tercerización', porcentaje: 0.12 },
+  '019': { descripcion: 'Arrendamiento de bienes', porcentaje: 0.1 },
+  '022': { descripcion: 'Otros servicios empresariales', porcentaje: 0.12 },
   '027': { descripcion: 'Flete terrestre', porcentaje: 0.04 },
-  '035': { descripcion: 'Intermediación laboral', porcentaje: 0.12 },
-  '039': { descripcion: 'Arrendamiento de bienes muebles', porcentaje: 0.1 },
+  '035': { descripcion: 'Bienes exonerados del IGV', porcentaje: 0.015 },
+  '037': { descripcion: 'Demás servicios gravados con el IGV', porcentaje: 0.12 },
+  '039': { descripcion: 'Minerales no metálicos', porcentaje: 0.1 },
 } as const;
 
 /**
