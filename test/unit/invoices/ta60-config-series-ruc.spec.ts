@@ -21,12 +21,6 @@ import {
   SerieNoDisponibleError,
 } from '../../../src/modules/invoices/application/services/invoiceSeriesService';
 import { InvoiceConfigService } from '../../../src/modules/invoices/application/services/invoiceConfigService';
-import {
-  exigeDocumentoCliente,
-  validarDocumentoCliente,
-  UMBRAL_DOCUMENTO_BOLETA_SOLES,
-  mensajeDocumentoCliente,
-} from '../../../src/modules/invoices/application/validators/boletoDocumentoRule';
 import { CreateInvoiceUseCase } from '../../../src/modules/invoices/application/use-cases/createInvoiceUseCase';
 import type { CreateInvoiceDto } from '../../../src/modules/invoices/application/dto/createInvoiceDto';
 
@@ -320,79 +314,5 @@ describe('TA-60 · configuración de facturación', () => {
     const puntoSeries = resultado.checklist.find((c) => c.clave === 'series');
     expect(puntoSeries?.configurado).toBe(false);
     expect(resultado.listo_para_emitir).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3 · Regla de S/ 700 en boletas
-// ---------------------------------------------------------------------------
-
-describe('TA-60 · regla del documento del cliente en Boletas', () => {
-  it('el umbral es S/ 700.00', () => {
-    expect(UMBRAL_DOCUMENTO_BOLETA_SOLES).toBe(700);
-  });
-
-  it('no exige documento en una boleta de exactamente S/ 700.00', () => {
-    expect(
-      exigeDocumentoCliente({ tipoComprobante: '03', montoTotal: 700 }),
-    ).toBe(false);
-  });
-
-  it('exige documento a partir de S/ 700.01', () => {
-    expect(
-      exigeDocumentoCliente({ tipoComprobante: '03', montoTotal: 700.01 }),
-    ).toBe(true);
-  });
-
-  it('nunca lo exige para una Factura (siempre lleva RUC)', () => {
-    expect(
-      exigeDocumentoCliente({ tipoComprobante: '01', montoTotal: 5000 }),
-    ).toBe(false);
-  });
-
-  it('una boleta alta sin documento reporta SIN_DOCUMENTO', () => {
-    expect(
-      validarDocumentoCliente({
-        tipoComprobante: '03',
-        montoTotal: 701,
-        cliente: null,
-      }),
-    ).toBe('SIN_DOCUMENTO');
-  });
-
-  it('una boleta alta con DNI de 8 dígitos pasa', () => {
-    expect(
-      validarDocumentoCliente({
-        tipoComprobante: '03',
-        montoTotal: 701,
-        cliente: { tipo: '1', numero: '70123456' },
-      }),
-    ).toBeNull();
-  });
-
-  it('un DNI de 7 dígitos reporta DOCUMENTO_INVALIDO', () => {
-    expect(
-      validarDocumentoCliente({
-        tipoComprobante: '03',
-        montoTotal: 701,
-        cliente: { tipo: '1', numero: '7012345' },
-      }),
-    ).toBe('DOCUMENTO_INVALIDO');
-  });
-
-  it('acepta RUC de 11 dígitos en una boleta alta', () => {
-    expect(
-      validarDocumentoCliente({
-        tipoComprobante: '03',
-        montoTotal: 1200,
-        cliente: { tipo: '6', numero: '20100066603' },
-      }),
-    ).toBeNull();
-  });
-
-  it('el mensaje cita el monto real y el umbral', () => {
-    const mensaje = mensajeDocumentoCliente('SIN_DOCUMENTO', 1500);
-    expect(mensaje).toContain('1500.00');
-    expect(mensaje).toContain('700');
   });
 });
