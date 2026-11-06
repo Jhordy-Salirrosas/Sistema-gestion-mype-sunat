@@ -213,6 +213,7 @@ describe('TA-29 - servicio (criterios 2, 3 y 4)', () => {
     const prisma = {
       invoice: {
         findFirst: jest.fn().mockResolvedValue(filaDetalle),
+        findUnique: jest.fn().mockResolvedValue({ estado: InvoiceStatus.ERROR_RED }),
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
       },
@@ -511,5 +512,30 @@ describe('TA-29 referencia de la nota al documento afectado', () => {
     expect(dto.referenced_document_type).toBeNull();
     expect(dto.referenced_series_correlative).toBeNull();
     expect(dto.credit_debit_reason_code).toBeNull();
+  });
+
+  it('usa la operación atómica de M2 cuando está disponible', async () => {
+    const prisma = {
+      invoice: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'inv-1', estado: InvoiceStatus.ERROR_RED }),
+        findUnique: jest.fn().mockResolvedValue({ estado: InvoiceStatus.ERROR_RED }),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const queue = {
+      enqueueInvoiceInTx: jest.fn(),
+      reenqueueInvoiceIfIdle: jest.fn().mockResolvedValue({ estado: 'ENCOLADO', jobId: 'job-2' }),
+    };
+    const servicio = new InvoiceQueryService(prisma as never, queue as never);
+
+    const resultado = await servicio.reintentarCdr(EMPRESA, 'inv-1');
+
+    expect(resultado.encolado).toBe(true);
+    expect(queue.reenqueueInvoiceIfIdle).toHaveBeenCalledWith(
+      'inv-1',
+      EMPRESA,
+      expect.any(Function),
+    );
+    expect(queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
   });
 });
