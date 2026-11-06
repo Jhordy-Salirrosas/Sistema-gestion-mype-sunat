@@ -2,11 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { MovingWeightedAverageEngine } from '../../domain/rules/MovingWeightedAverageEngine';
 import { CreateNationalPurchaseDto } from '../dto/nationalPurchaseDto';
+import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
@@ -21,7 +24,13 @@ const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
  */
 @Injectable()
 export class InventoryPurchaseService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(InventoryPurchaseService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly accounting?: GenerateAccountingEntryUseCase,
+  ) {}
 
   async listPurchases(companyId: string) {
     return this.prisma.nationalPurchase.findMany({
@@ -66,7 +75,7 @@ export class InventoryPurchaseService {
       throw new BadRequestException('No se puede repetir el mismo producto/SKU en la factura de compra.');
     }
 
-    return this.prisma.$transaction(async (tx: any) => {
+    const result = await this.prisma.$transaction(async (tx: any) => {
       // 1. Validar almacén
       const warehouse = await tx.inventoryWarehouse.findFirst({
         where: { company_id: companyId, warehouse_code: warehouseCode },
@@ -295,6 +304,67 @@ export class InventoryPurchaseService {
         })),
       };
     });
+
+    await this.registrarAsientoCompra(companyId, result, issueDate);
+    return result;
+  }
+
+  /** Asiento de compra: inventario + IGV crédito fiscal contra CxP. */
+  private async registrarAsientoCompra(
+    companyId: string,
+    purchase: any,
+    issueDate: Date,
+  ): Promise<void> {
+    if (!this.accounting) return;
+
+    const existente = await this.prisma.accountingEntry.findFirst({
+      where: {
+        company_id: companyId,
+        source_module: 'PURCHASES',
+        source_reference_id: purchase.purchaseNumber,
+      },
+      select: { id: true },
+    });
+    if (existente) return;
+
+    const periodo = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}`;
+    try {
+      await this.accounting.execute({
+        companyId,
+        period: periodo,
+        entryDate: issueDate.toISOString(),
+        glosa: `Compra ${purchase.documentSerial}-${purchase.documentNumber} · ${purchase.supplierName}`,
+        sourceModule: 'PURCHASES',
+        sourceReferenceId: purchase.purchaseNumber,
+        lines: [
+          {
+            lineOrder: 1,
+            accountCode: '601',
+            accountName: 'Mercaderías',
+            debitAmount: purchase.netAmount,
+            creditAmount: 0,
+          },
+          {
+            lineOrder: 2,
+            accountCode: '40111',
+            accountName: 'IGV - Cuenta propia',
+            debitAmount: purchase.igvAmount,
+            creditAmount: 0,
+          },
+          {
+            lineOrder: 3,
+            accountCode: '421',
+            accountName: 'Facturas por pagar',
+            debitAmount: 0,
+            creditAmount: purchase.totalAmount,
+          },
+        ],
+      });
+    } catch (error) {
+      this.logger.error(
+        `Compra ${purchase.purchaseNumber} registrada sin asiento: ${(error as Error).message}`,
+      );
+    }
   }
 }
 

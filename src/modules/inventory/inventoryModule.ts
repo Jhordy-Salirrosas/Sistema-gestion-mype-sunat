@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/authModule';
 import { CustomsModule } from '../customs/customsModule';
+import { AccountingModule } from '../accounting/accountingModule';
 import { InventoryStocksController } from './infrastructure/controllers/inventoryStocksController';
 import { InventoryMovementsController } from './infrastructure/controllers/inventoryMovementsController';
 import { InventoryPleController } from './infrastructure/controllers/inventoryPleController';
@@ -46,7 +47,7 @@ import { Ple12_1FlatFileWriterAdapter } from './infrastructure/adapters/ple12_1F
 import { Ple13_1FlatFileWriterAdapter } from './infrastructure/adapters/ple13_1FlatFileWriterAdapter';
 
 @Module({
-  imports: [AuthModule, CustomsModule],
+  imports: [AuthModule, CustomsModule, AccountingModule],
   controllers: [
     InventoryStocksController,
     InventoryMovementsController,
