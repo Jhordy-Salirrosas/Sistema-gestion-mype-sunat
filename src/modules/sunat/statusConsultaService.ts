@@ -1,3 +1,4 @@
+import { IssuerConfigResolver } from './issuerConfigResolver';
 /**
  * Recuperación de un envío que quedó en timeout (TA-30).
  *
@@ -19,10 +20,7 @@ import { CdrPersistenceService } from './cdr-persistence.service';
 import { parseCdr } from './soap/cdr.parser';
 import { classifyCdr } from './soap/cdr.classifier';
 import { buildSolUsername } from './soap/sunatBillTypes';
-import {
-  SunatSoapClient,
-  SunatTransportError,
-} from './soap/sunat-soap.client';
+import { SunatSoapClient, SunatTransportError } from './soap/sunat-soap.client';
 import { SUNAT_CODE_NO_ENCONTRADO } from './soap/sunatStatusCdrOperation';
 import type { ProcessCdrResult } from './soap/sunatBillTypes';
 
@@ -64,11 +62,14 @@ function esNoEncontrado(codigo: string | null): boolean {
  * a partir de la serie y, para el resto, se informa INCIERTO con el motivo.
  */
 function consultablePorSerie(serie: string): boolean {
-  return typeof serie === 'string' && serie.trim().toUpperCase().startsWith('F');
+  return (
+    typeof serie === 'string' && serie.trim().toUpperCase().startsWith('F')
+  );
 }
 
 /** Datos mínimos para preguntar por un comprobante. */
 export interface ConsultaEstadoRequest {
+  companyId?: string;
   invoiceId: string;
   rucEmisor: string;
   tipoComprobante: string;
@@ -93,7 +94,18 @@ export class SunatStatusConsultaService {
     private readonly persistence: CdrPersistenceService,
     private readonly prisma: PrismaService,
     @Optional() private readonly client?: SunatSoapClient,
+    @Optional() private readonly resolver?: IssuerConfigResolver,
   ) {}
+
+  /** Adapter for the existing resilience port; company is recovered from the invoice. */
+  async consultarEstado(
+    request: ConsultaEstadoRequest,
+  ): Promise<ProcessCdrResult | null> {
+    const result = await this.consultar(request);
+    if (result.tipo === 'RECUPERADO') return result.resultado;
+    if (result.tipo === 'NO_ENCONTRADO') return null;
+    throw new Error('ISSUER_STATUS_UNCERTAIN');
+  }
 
   /**
    * Pregunta a SUNAT por el estado de un comprobante.
@@ -102,9 +114,7 @@ export class SunatStatusConsultaService {
    * el pipeline "no pude consultar" es una respuesta legítima y distinta de
    * "no existe".
    */
-  async consultar(
-    request: ConsultaEstadoRequest,
-  ): Promise<DesenlaceConsulta> {
+  async consultar(request: ConsultaEstadoRequest): Promise<DesenlaceConsulta> {
     // TA-58: solo las series F se pueden preguntar al billConsultService.
     // Consultar una Boleta devuelve 0010 y no informa nada real, asi que se
     // responde INCIERTO sin gastar la llamada. INCIERTO no autoriza a
@@ -119,16 +129,44 @@ export class SunatStatusConsultaService {
       return { tipo: 'INCIERTO', motivo };
     }
 
-    const cliente = this.client ?? new SunatSoapClient();
+    const invoice = this.resolver
+      ? await this.prisma.invoice.findUnique({
+          where: { id: request.invoiceId },
+          select: { company_id: true },
+        })
+      : null;
+    const companyId = request.companyId ?? invoice?.company_id;
+    if (
+      this.resolver &&
+      (!companyId || (invoice && invoice.company_id !== companyId))
+    )
+      throw new Error('ISSUER_COMPANY_REQUIRED');
+    const context =
+      this.resolver && companyId
+        ? await this.resolver.resolve(companyId)
+        : undefined;
+    if (context && context.ruc !== request.rucEmisor)
+      throw new Error('ISSUER_IDENTITY_MISMATCH');
+    const cliente =
+      this.client ??
+      new SunatSoapClient({
+        endpoint: context?.endpoint,
+        timeoutMs: context?.timeoutMs,
+      });
 
     try {
-      const respuesta = await cliente.getStatusCdr({
-        rucEmisor: request.rucEmisor,
-        tipoComprobante: request.tipoComprobante,
-        serie: request.serie,
-        correlativo: request.correlativo,
-        credentials: this.credenciales(request.rucEmisor),
-      });
+      const respuesta = await cliente.getStatusCdr(
+        {
+          rucEmisor: request.rucEmisor,
+          tipoComprobante: request.tipoComprobante,
+          serie: request.serie,
+          correlativo: request.correlativo,
+          credentials: context
+            ? context.sol
+            : this.credenciales(request.rucEmisor),
+        },
+        context ? { endpoint: context.consultEndpoint } : undefined,
+      );
 
       if (esNoEncontrado(respuesta.responseCode)) {
         this.logger.warn(
@@ -215,9 +253,7 @@ export class SunatStatusConsultaService {
   }
 
   /** Estado actual del comprobante, para la trazabilidad del historial. */
-  private async estadoActual(
-    invoiceId: string,
-  ): Promise<InvoiceStatus | null> {
+  private async estadoActual(invoiceId: string): Promise<InvoiceStatus | null> {
     const fila = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
       select: { estado: true },

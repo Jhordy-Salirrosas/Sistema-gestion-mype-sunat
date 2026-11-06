@@ -1,3 +1,7 @@
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../sunat/issuerConfigResolver';
 /**
  * TA-28 - Consumidor de la cola de facturas y recarga del job.
  *
@@ -61,6 +65,7 @@ export interface InvoiceJobPayload {
 
 /** Fila minima de Invoice que necesita el consumidor. */
 interface InvoiceRow {
+  company_id: string;
   id: string;
   ruc_emisor: string;
   tipo_comprobante: string;
@@ -131,6 +136,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
      */
     @Optional()
     private readonly accounting?: RegisterInvoiceAccountingEntryUseCase,
+    @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -222,7 +228,10 @@ export class InvoiceJobConsumer implements OnModuleInit {
       const factura = await this.cargarParaPuente(invoiceId, estado);
 
       if (factura) {
-        bloquearRespaldo = Boolean(factura.motivoBloqueoAsiento || (factura.importes.descuentoNoAfecto ?? 0) > 0);
+        bloquearRespaldo = Boolean(
+          factura.motivoBloqueoAsiento ||
+          (factura.importes.descuentoNoAfecto ?? 0) > 0,
+        );
         const resultado = await this.puenteContable.registrar(factura);
         asientoDelPuente = resultado.asientoId;
 
@@ -239,21 +248,28 @@ export class InvoiceJobConsumer implements OnModuleInit {
       }
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[TA-68] ${invoiceId}: no se pudo contabilizar: ${mensaje}`);
+      this.logger.warn(
+        `[TA-68] ${invoiceId}: no se pudo contabilizar: ${mensaje}`,
+      );
     }
 
     // RESPALDO: si el puente no dejó asiento, contabilidad emite el suyo.
     // Va FUERA del try para que un fallo del puente no impida asentar la venta:
     // son dos escritores con referencias distintas y solo uno debe actuar.
     if (bloquearRespaldo) {
-      if (!asientoDelPuente) this.logger.warn(`[CONTABILIDAD] ${invoiceId}: asiento automático omitido; requiere revisión contable o no se pudo leer el comprobante.`);
+      if (!asientoDelPuente)
+        this.logger.warn(
+          `[CONTABILIDAD] ${invoiceId}: asiento automático omitido; requiere revisión contable o no se pudo leer el comprobante.`,
+        );
       return;
     }
     try {
       await this.registrarAsiento(invoiceId, asientoDelPuente);
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`[CONTABILIDAD] ${invoiceId}: no se pudo asentar: ${mensaje}`);
+      this.logger.warn(
+        `[CONTABILIDAD] ${invoiceId}: no se pudo asentar: ${mensaje}`,
+      );
     }
   }
 
@@ -339,30 +355,62 @@ export class InvoiceJobConsumer implements OnModuleInit {
     payload: InvoicePayload,
   ): FacturaParaPuente['importes'] {
     const gratuitas = new Set([
-      '11', '12', '13', '14', '15', '16',
-      '21', '31', '32', '33', '34', '35', '36',
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '16',
+      '21',
+      '31',
+      '32',
+      '33',
+      '34',
+      '35',
+      '36',
     ]);
 
     const centimos = (n: number): number => Math.round(n * 100) / 100;
     const lineasXml = payload.lineas ?? (payload.linea ? [payload.linea] : []);
-    const descuentos = lineasXml.flatMap((linea) => linea.descuentos ?? [])
+    const descuentos = lineasXml
+      .flatMap((linea) => linea.descuentos ?? [])
       .filter((descuento) => descuento.codigo === '01')
       .map((descuento) => descuento.monto);
-    if (payload.descuentoGlobal?.codigo === '03') descuentos.push(payload.descuentoGlobal.monto);
-    if (descuentos.some((monto) => typeof monto !== 'number' || !Number.isFinite(monto) || monto <= 0)) {
+    if (payload.descuentoGlobal?.codigo === '03')
+      descuentos.push(payload.descuentoGlobal.monto);
+    if (
+      descuentos.some(
+        (monto) =>
+          typeof monto !== 'number' || !Number.isFinite(monto) || monto <= 0,
+      )
+    ) {
       throw new Error('Descuento 01/03 inválido: requiere revisión contable.');
     }
-    const descuentoNoAfecto = centimos(descuentos.reduce((suma, monto) => suma + monto, 0));
-    if (payload.otrosDescuentos !== undefined &&
-        (typeof payload.otrosDescuentos !== 'number' || !Number.isFinite(payload.otrosDescuentos) ||
-          centimos(payload.otrosDescuentos) !== descuentoNoAfecto)) {
-      throw new Error('Los descuentos declarados no concuerdan con su detalle; requiere revisión contable.');
+    const descuentoNoAfecto = centimos(
+      descuentos.reduce((suma, monto) => suma + monto, 0),
+    );
+    if (
+      payload.otrosDescuentos !== undefined &&
+      (typeof payload.otrosDescuentos !== 'number' ||
+        !Number.isFinite(payload.otrosDescuentos) ||
+        centimos(payload.otrosDescuentos) !== descuentoNoAfecto)
+    ) {
+      throw new Error(
+        'Los descuentos declarados no concuerdan con su detalle; requiere revisión contable.',
+      );
     }
     const totalConDescuento = (bruto: number): number => {
       const total = centimos(bruto - descuentoNoAfecto);
-      if (descuentoNoAfecto > 0 && (total < 0 ||
-        (typeof payload.montoTotal === 'number' && Number.isFinite(payload.montoTotal) && centimos(payload.montoTotal) !== total))) {
-        throw new Error('El total del comprobante no concuerda con el descuento 01/03; requiere revisión contable.');
+      if (
+        descuentoNoAfecto > 0 &&
+        (total < 0 ||
+          (typeof payload.montoTotal === 'number' &&
+            Number.isFinite(payload.montoTotal) &&
+            centimos(payload.montoTotal) !== total))
+      ) {
+        throw new Error(
+          'El total del comprobante no concuerda con el descuento 01/03; requiere revisión contable.',
+        );
       }
       return total;
     };
@@ -414,7 +462,17 @@ export class InvoiceJobConsumer implements OnModuleInit {
       const inafectoR = centimos(inafecto);
       const icbperR = centimos(icbper);
       if (payload.descuentoGlobal?.codigo === '02') {
-        const global = aplicarDescuentoGlobal({ gravado: gravadoR, igv: igvR, exonerado: exoneradoR, inafecto: inafectoR, exportado: 0, icbper: icbperR }, payload.descuentoGlobal);
+        const global = aplicarDescuentoGlobal(
+          {
+            gravado: gravadoR,
+            igv: igvR,
+            exonerado: exoneradoR,
+            inafecto: inafectoR,
+            exportado: 0,
+            icbper: icbperR,
+          },
+          payload.descuentoGlobal,
+        );
         gravadoR = global.bases.gravado;
         igvR = global.bases.igv;
       }
@@ -430,7 +488,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
         icbper: icbperR,
         detraccion: Number.isFinite(detraccion) ? detraccion : 0,
         retencion: Number.isFinite(retencion) ? retencion : 0,
-        total: totalConDescuento(gravadoR + igvR + exoneradoR + inafectoR + icbperR),
+        total: totalConDescuento(
+          gravadoR + igvR + exoneradoR + inafectoR + icbperR,
+        ),
         descuentoNoAfecto,
       };
     }
@@ -530,7 +590,10 @@ export class InvoiceJobConsumer implements OnModuleInit {
       },
     });
     if (!invoice) return;
-    if (invoice.tipo_comprobante !== '01' && invoice.tipo_comprobante !== '03') {
+    if (
+      invoice.tipo_comprobante !== '01' &&
+      invoice.tipo_comprobante !== '03'
+    ) {
       return;
     }
 
@@ -578,7 +641,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
   async preparar(invoiceId: string): Promise<JobAprobado> {
     const invoice = await this.cargar(invoiceId);
     const xmlSinFirma = this.xmlDelComprobante(invoice);
-    const xml = this.firmar(invoice, xmlSinFirma);
+    const context = await this.issuerConfig?.resolve(invoice.company_id);
+    const xml = this.firmar(invoice, xmlSinFirma, context);
     const zip = this.comprimir(invoice, xml);
 
     // SE GUARDA EL XML FIRMADO, el que se envía.
@@ -598,6 +662,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
     }
 
     const params: SendInvoiceParams = {
+      companyId: invoice.company_id,
+      context,
       invoiceId: invoice.id,
       rucEmisor: invoice.ruc_emisor,
       tipoComprobante: invoice.tipo_comprobante,
@@ -628,7 +694,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
       // no ejecuta los esquemas XSD oficiales completos.
       const comprobacion = this.xsdValidator.validateInvoiceUbl21(xml);
       if (!comprobacion.isValid) {
-        throw new Error(`XML invalido contra comprobaciones UBL: ${(comprobacion.errors ?? []).join(' | ')}`);
+        throw new Error(
+          `XML invalido contra comprobaciones UBL: ${(comprobacion.errors ?? []).join(' | ')}`,
+        );
       }
       await this.cdrPersistence.persistFailure({
         invoiceId: invoice.id,
@@ -636,7 +704,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
         estadoAnterior: invoice.estado,
         intento: params.intento ?? 1,
         codigoError: null,
-        mensajeError: 'Validación XSL no concluyente: falta commons/error/validate_utils.xsl; el despacho se apoya en comprobaciones estructurales UBL y reglas internas, no en una validación XSD oficial completa.',
+        mensajeError:
+          'Validación XSL no concluyente: falta commons/error/validate_utils.xsl; el despacho se apoya en comprobaciones estructurales UBL y reglas internas, no en una validación XSD oficial completa.',
         tiempoRespuestaMs: null,
       });
     }
@@ -660,6 +729,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       where: { id: invoiceId },
       select: {
         id: true,
+        company_id: true,
         ruc_emisor: true,
         tipo_comprobante: true,
         serie: true,
@@ -716,15 +786,19 @@ export class InvoiceJobConsumer implements OnModuleInit {
   }
 
   /** Firma XMLDSig X.509. Sin certificado configurado el XML viaja sin firmar. */
-  private firmar(invoice: InvoiceRow, xml: string): string {
+  private firmar(
+    invoice: InvoiceRow,
+    xml: string,
+    context?: IssuerContext,
+  ): string {
     if (xml.includes('<ds:Signature')) return xml;
-    if (!process.env.CERT_BASE64) {
+    if (context ? !context.certificate : !process.env.CERT_BASE64) {
       this.logger.warn(
         `[TA-28] ${invoice.id} viaja SIN firma: CERT_BASE64 no esta configurado`,
       );
       return xml;
     }
-    return this.signature.signXml(xml).signedXml;
+    return this.signature.signXml(xml, context).signedXml;
   }
 
   /** Empaqueta en el ZIP con la convencion de nombre que espera SUNAT. */
@@ -749,7 +823,10 @@ export class InvoiceJobConsumer implements OnModuleInit {
     return createHash('sha256').update(xml, 'utf8').digest('hex');
   }
 
-  private async marcar(invoiceId: string, estado: InvoiceStatus): Promise<void> {
+  private async marcar(
+    invoiceId: string,
+    estado: InvoiceStatus,
+  ): Promise<void> {
     await this.prisma.invoice
       .update({ where: { id: invoiceId }, data: { estado } })
       .catch(() => null);

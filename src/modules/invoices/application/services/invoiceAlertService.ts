@@ -1,3 +1,8 @@
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../../../sunat/issuerConfigResolver';
+import { Optional } from '@nestjs/common';
 /**
  * Alertas operativas del módulo de facturación (TA-69, criterio de certificado
  * y DLQ).
@@ -94,7 +99,8 @@ export const gravedadMaxima = (
   gravedades: readonly GravedadAlerta[],
 ): GravedadAlerta =>
   gravedades.reduce<GravedadAlerta>(
-    (max, g) => (ORDEN_GRAVEDAD.indexOf(g) > ORDEN_GRAVEDAD.indexOf(max) ? g : max),
+    (max, g) =>
+      ORDEN_GRAVEDAD.indexOf(g) > ORDEN_GRAVEDAD.indexOf(max) ? g : max,
     'OK',
   );
 
@@ -158,6 +164,7 @@ export class InvoiceAlertService {
   constructor(
     private readonly certificado: CertificateService,
     private readonly cola: QueueService,
+    @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
   /**
@@ -167,9 +174,9 @@ export class InvoiceAlertService {
    * incorrecta, se devuelve `evaluado: false` con el motivo, porque la pantalla
    * de métricas debe seguir funcionando.
    */
-  public estadoCertificado(): AlertaCertificado {
+  public estadoCertificado(context?: IssuerContext): AlertaCertificado {
     try {
-      const cert = this.certificado.getCertificate();
+      const cert = this.certificado.getCertificate(context);
       const gravedad = gravedadCertificado(cert.daysRemaining);
 
       return {
@@ -206,7 +213,8 @@ export class InvoiceAlertService {
    * comprobante sin confirmar. Los tres números eran correctos y hablaban de
    * cosas distintas, que es peor que uno equivocado: nadie sabe en cuál creer.
    */
-  public async estadoDlq(companyId: string): Promise<AlertaDlq> {    try {
+  public async estadoDlq(companyId: string): Promise<AlertaDlq> {
+    try {
       const trabajos = await this.cola.countDlq(companyId);
       const huerfanos = await this.cola.countDlqHuerfanos(companyId);
       // Lo que se informa como pendiente es lo que un operador puede resolver:
@@ -246,7 +254,9 @@ export class InvoiceAlertService {
    */
   public async estado(companyId: string): Promise<AlertasOperativas> {
     const [certificado, dlq] = await Promise.all([
-      Promise.resolve(this.estadoCertificado()),
+      Promise.resolve(
+        this.estadoCertificado(await this.issuerConfig?.resolve(companyId)),
+      ),
       this.estadoDlq(companyId),
     ]);
 

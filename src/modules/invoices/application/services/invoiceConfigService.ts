@@ -1,25 +1,9 @@
-/**
- * Configuración de Facturación Electrónica (TA-60, HU-09).
- *
- * Qué expone y qué NO expone, porque la distinción es de seguridad:
- *
- *  - SE EXPONE el entorno (MOCK/BETA/PRODUCCION), si hay usuario SOL
- *    configurado y la vigencia del certificado X.509. Son datos que el
- *    administrador necesita ver para saber si el sistema puede emitir.
- *  - NO SE EXPONE la clave SOL ni el certificado en Base64. Se publica
- *    únicamente si están presentes y hasta cuándo valen. Devolver la clave en
- *    un GET la deja en el historial del navegador, en los logs del proxy y en
- *    cualquier captura de pantalla de la demo.
- *
- * El endpoint es de LECTURA de estado, no un formulario de escritura: los
- * secretos viven en las variables de entorno del despliegue (Render), no en la
- * base de datos. Guardarlos en una tabla los pondría al alcance de cualquier
- * volcado de respaldo, y rotarlas exigiría una migración.
- *
- * Lo que SÍ se persiste es lo que cambia por empresa y no es secreto: las
- * series (`InvoiceSeries`), que son las que gobiernan el correlativo.
- */
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../../../sunat/issuerConfigResolver';
+import { IssuerConfigWriter } from './issuerConfigWriter';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   CertificateService,
   type ValidatedCertificate,
@@ -41,6 +25,12 @@ export interface EstadoConfiguracion {
 
 /** Respuesta de GET /api/v1/invoices/config. */
 export interface ConfiguracionFiscal {
+  origen_efectivo?: string;
+  origen_sol?: string;
+  origen_certificado?: string;
+  sol_password_configurada?: boolean;
+  cert_password_configurada?: boolean;
+  ruc?: string;
   entorno: EntornoFiscal;
   endpoint_bill_service: string;
   endpoint_consult_service: string;
@@ -57,6 +47,8 @@ export class InvoiceConfigService {
   constructor(
     private readonly series: InvoiceSeriesService,
     private readonly certificado: CertificateService,
+    @Optional() private readonly resolver?: IssuerConfigResolver,
+    @Optional() private readonly writer?: IssuerConfigWriter,
   ) {}
 
   /**
@@ -66,22 +58,36 @@ export class InvoiceConfigService {
    * (Anti-IDOR), aunque esta ruta no acepte el id por query.
    */
   async obtener(companyId: string): Promise<ConfiguracionFiscal> {
-    const entorno = this.entorno();
+    const context = await this.resolver?.resolve(companyId);
+    const entorno = context?.environment ?? this.entorno();
     const listado = await this.series.listar(companyId);
 
     const checklist: EstadoConfiguracion[] = [
       this.chequeoEntorno(entorno),
-      this.chequeoUsuarioSol(),
-      this.chequeoCertificado(),
+      this.chequeoUsuarioSol(context),
+      this.chequeoCertificado(context),
       this.chequeoSeries(listado),
     ];
 
     return {
+      origen_efectivo: context?.source ?? 'deployment',
+      origen_sol: context?.solSource ?? 'deployment',
+      origen_certificado: context?.certificateSource ?? 'deployment',
+      sol_password_configurada: context
+        ? Boolean(context.sol)
+        : Boolean(process.env.SUNAT_SOL_PASSWORD),
+      cert_password_configurada: context
+        ? Boolean(context.certificate)
+        : Boolean(process.env.CERT_PASSWORD),
+      ruc: context?.ruc,
       entorno,
-      endpoint_bill_service: this.endpoint('SUNAT_BILL_SERVICE_URL', '/billService'),
-      endpoint_consult_service: this.endpoint(
-        'SUNAT_CONSULT_SERVICE_URL',
-        '/billConsultService',
+      endpoint_bill_service: this.publicEndpoint(
+        context?.endpoint ??
+          this.endpoint('SUNAT_BILL_SERVICE_URL', '/billService'),
+      ),
+      endpoint_consult_service: this.publicEndpoint(
+        context?.consultEndpoint ??
+          this.endpoint('SUNAT_CONSULT_SERVICE_URL', '/billConsultService'),
       ),
       checklist,
       listo_para_emitir: checklist
@@ -92,11 +98,33 @@ export class InvoiceConfigService {
   }
 
   /** Entorno declarado; MOCK por defecto para no apuntar a producción por error. */
+  async actualizar(
+    companyId: string,
+    body: unknown,
+  ): Promise<ConfiguracionFiscal> {
+    if (!this.writer) throw new Error('ISSUER_CONFIG_WRITER_UNAVAILABLE');
+    await this.writer.save(companyId, body);
+    return this.obtener(companyId);
+  }
+
   private entorno(): EntornoFiscal {
     const valor = (process.env.SUNAT_ENV ?? '').trim().toUpperCase();
     if (valor === 'PRODUCCION' || valor === 'PRODUCTION') return 'PRODUCCION';
     if (valor === 'BETA') return 'BETA';
     return 'MOCK';
+  }
+
+  private publicEndpoint(value: string): string {
+    try {
+      const url = new URL(value);
+      url.username = '';
+      url.password = '';
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    } catch {
+      return '(sin configurar)';
+    }
   }
 
   /** Endpoint efectivo, sin secretos: la URL es pública. */
@@ -124,9 +152,13 @@ export class InvoiceConfigService {
   }
 
   /** Usuario SOL: se informa su presencia, NUNCA su valor ni el de la clave. */
-  private chequeoUsuarioSol(): EstadoConfiguracion {
-    const usuario = (process.env.SUNAT_SOL_USER ?? '').trim();
-    const clave = (process.env.SUNAT_SOL_PASSWORD ?? '').trim();
+  private chequeoUsuarioSol(context?: IssuerContext): EstadoConfiguracion {
+    const usuario = context
+      ? (context.sol?.username ?? '')
+      : (process.env.SUNAT_SOL_USER ?? '').trim();
+    const clave = context
+      ? (context.sol?.password ?? '')
+      : (process.env.SUNAT_SOL_PASSWORD ?? '').trim();
 
     return {
       clave: 'usuario_sol',
@@ -153,7 +185,7 @@ export class InvoiceConfigService {
    * cuando el certificado no es vigente; ese mismo error se convierte aquí en
    * el motivo legible del punto del checklist.
    */
-  private chequeoCertificado(): EstadoConfiguracion {
+  private chequeoCertificado(context?: IssuerContext): EstadoConfiguracion {
     const base = {
       clave: 'certificado_x509',
       descripcion: 'Certificado digital para firmar el XML',
@@ -162,9 +194,9 @@ export class InvoiceConfigService {
 
     let leido: ValidatedCertificate;
     try {
-      leido = this.certificado.getCertificate();
+      leido = this.certificado.getCertificate(context);
     } catch (error) {
-      const mensaje = error instanceof Error ? error.message : String(error);
+      const mensaje = 'Certificado no utilizable';
       this.logger.warn(`[TA-60] Certificado no utilizable: ${mensaje}`);
       return { ...base, configurado: false, detalle: mensaje };
     }

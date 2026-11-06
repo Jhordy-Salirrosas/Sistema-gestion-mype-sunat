@@ -182,10 +182,12 @@ describe('TA-60 · reserva atómica del correlativo', () => {
     const servicio = new InvoiceSeriesService(prisma as never);
     const guardado: { correlativo?: number } = {};
     const repositorio = {
-      saveWithTransactionalOutbox: jest.fn(async (entidad: { correlativo: number }) => {
-        guardado.correlativo = entidad.correlativo;
-        return { id: 'inv-1', estado: 'PENDIENTE_ENVIO' } as never;
-      }),
+      saveWithTransactionalOutbox: jest.fn(
+        async (entidad: { correlativo: number }) => {
+          guardado.correlativo = entidad.correlativo;
+          return { id: 'inv-1', estado: 'PENDIENTE_ENVIO' } as never;
+        },
+      ),
     };
 
     const caso = new CreateInvoiceUseCase(repositorio as never, servicio);
@@ -197,10 +199,13 @@ describe('TA-60 · reserva atómica del correlativo', () => {
 
   it('sin el servicio de series conserva el correlativo del DTO', async () => {
     const repositorio = {
-      saveWithTransactionalOutbox: jest.fn(async (entidad: { correlativo: number }) => ({
-        id: 'inv-1',
-        correlativo: entidad.correlativo,
-      }) as never),
+      saveWithTransactionalOutbox: jest.fn(
+        async (entidad: { correlativo: number }) =>
+          ({
+            id: 'inv-1',
+            correlativo: entidad.correlativo,
+          }) as never,
+      ),
     };
     const caso = new CreateInvoiceUseCase(repositorio as never);
 
@@ -314,5 +319,39 @@ describe('TA-60 · configuración de facturación', () => {
     const puntoSeries = resultado.checklist.find((c) => c.clave === 'series');
     expect(puntoSeries?.configurado).toBe(false);
     expect(resultado.listo_para_emitir).toBe(false);
+  });
+});
+
+describe('D1 · Config permite guardar y leer sin exponer secretos', () => {
+  it('guarda por empresa y devuelve la proyección pública', async () => {
+    const writer = { save: jest.fn(async () => undefined) };
+    const context = {
+      companyId: 'company-1',
+      ruc: '20000000001',
+      source: 'company',
+      environment: 'MOCK',
+      endpoint: 'mock',
+      consultEndpoint: 'mock',
+      sol: { username: 'FAKE', password: 'obviously-fake' },
+      certificate: null,
+    };
+    const resolver = { resolve: jest.fn(async () => context) };
+    const config = new InvoiceConfigService(
+      { listar: async () => [] } as never,
+      {
+        getCertificate: () => {
+          throw new Error('unavailable');
+        },
+      } as never,
+      resolver as never,
+      writer as never,
+    );
+    const result = await config.actualizar('company-1', { entorno: 'MOCK' });
+    expect(writer.save).toHaveBeenCalledWith('company-1', { entorno: 'MOCK' });
+    expect(result).toMatchObject({
+      origen_efectivo: 'company',
+      sol_password_configurada: true,
+    });
+    expect(JSON.stringify(result)).not.toContain('obviously-fake');
   });
 });

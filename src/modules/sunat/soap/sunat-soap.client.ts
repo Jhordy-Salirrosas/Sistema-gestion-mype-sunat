@@ -1,3 +1,4 @@
+import type { IssuerContext } from '../issuerConfigResolver';
 /**
  * Cliente SOAP del billService de SUNAT (operacion sendBill).
  *
@@ -98,6 +99,7 @@ export function esTimeoutDeEnvio(error: unknown): boolean {
 }
 
 export interface SendBillParams {
+  context?: IssuerContext;
   /** Nombre del ZIP: RUC-TIPO-SERIE-CORRELATIVO.zip */
   fileName: string;
   /** ZIP con el XML firmado (sin codificar: el cliente lo pasa a Base64). */
@@ -152,7 +154,7 @@ export class SunatSoapClient {
     let rawResponse: string;
 
     try {
-      response = await fetch(this.endpoint, {
+      response = await fetch(params.context?.endpoint ?? this.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -161,7 +163,9 @@ export class SunatSoapClient {
           'Content-Length': String(Buffer.byteLength(envelope, 'utf8')),
         },
         body: envelope,
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(
+          params.context?.timeoutMs ?? this.timeoutMs,
+        ),
       });
 
       // La lectura del cuerpo se hace DENTRO del try: el AbortSignal tambien
@@ -406,4 +410,3 @@ function getErrorMessage(error: unknown): string {
   const nombre = getErrorName(error);
   return nombre ? `error de red (${nombre})` : 'error desconocido';
 }
-

@@ -1,3 +1,4 @@
+import { parseIssuerKey } from '../modules/sunat/issuerConfigEncryption';
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
@@ -103,6 +104,14 @@ class EnvironmentVariables {
 }
 
 export function validate(config: Record<string, unknown>) {
+  if (
+    config.ISSUER_CONFIG_ENCRYPTION_KEY !== undefined &&
+    !parseIssuerKey(String(config.ISSUER_CONFIG_ENCRYPTION_KEY))
+  ) {
+    throw new Error(
+      'ISSUER_CONFIG_ENCRYPTION_KEY debe ser una clave base64 de 32 bytes',
+    );
+  }
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });

@@ -18,9 +18,7 @@
  */
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import AdmZip from 'adm-zip';
-import {
-  SummaryEnvioService,
-} from '../../../src/modules/invoices/application/services/summaryEnvioService';
+import { SummaryEnvioService } from '../../../src/modules/invoices/application/services/summaryEnvioService';
 import type {
   VistaPrevia,
   LineaVista,
@@ -57,19 +55,21 @@ const vista = (
   }) as VistaPrevia;
 
 /** Servicio con dobles. */
-function montar(opciones: {
-  vistaResumen?: VistaPrevia;
-  vistaBaja?: VistaPrevia;
-  jobId?: string | null;
-  firmaFalla?: boolean;
-} = {}) {
+function montar(
+  opciones: {
+    vistaResumen?: VistaPrevia;
+    vistaBaja?: VistaPrevia;
+    jobId?: string | null;
+    firmaFalla?: boolean;
+  } = {},
+) {
   const signXml = jest.fn<(xml: string) => { signedXml: string }>((xml) => {
     if (opciones.firmaFalla) throw new Error('sin certificado');
     return { signedXml: `${xml}<!--firmado-->` };
   });
 
-  const encolar = jest.fn<(job: unknown) => Promise<string | null>>(
-    async () => (opciones.jobId === undefined ? 'job-1' : opciones.jobId),
+  const encolar = jest.fn<(job: unknown) => Promise<string | null>>(async () =>
+    opciones.jobId === undefined ? 'job-1' : opciones.jobId,
   );
 
   const resumenes = {
@@ -103,7 +103,7 @@ describe('M1 · envío real del resumen diario (RC)', () => {
 
     expect(r.enviado).toBe(true);
     expect(r.jobId).toBe('job-1');
-    expect(signXml).toHaveBeenCalledWith('<SummaryDocuments/>');
+    expect(signXml).toHaveBeenCalledWith('<SummaryDocuments/>', undefined);
     expect(encolar).toHaveBeenCalledTimes(1);
   });
 
@@ -112,7 +112,7 @@ describe('M1 · envío real del resumen diario (RC)', () => {
 
     await servicio.enviarResumenDiario(EMPRESA, FECHA);
 
-    const job = (encolar.mock.calls[0][0]) as {
+    const job = encolar.mock.calls[0][0] as {
       zipBase64: string;
       fileName: string;
       tipo: string;
@@ -215,7 +215,11 @@ describe('M1 · envío real de la comunicación de baja (RA)', () => {
 
   it('una baja sin facturas en la fecha no se envía', async () => {
     const { servicio, encolar } = montar({
-      vistaBaja: vista({ lineas: [], xml: null, identificador: 'RA-20261101-001' }),
+      vistaBaja: vista({
+        lineas: [],
+        xml: null,
+        identificador: 'RA-20261101-001',
+      }),
     });
 
     const r = await servicio.enviarComunicacionBaja(EMPRESA, FECHA);
@@ -229,10 +233,32 @@ describe('M1 · el envío nunca entrega un agregado sin firma', () => {
   it('si la firma falla, el error se propaga y no se encola', async () => {
     const { servicio, encolar } = montar({ firmaFalla: true });
 
-    await expect(
-      servicio.enviarResumenDiario(EMPRESA, FECHA),
-    ).rejects.toThrow(/firmar/);
+    await expect(servicio.enviarResumenDiario(EMPRESA, FECHA)).rejects.toThrow(
+      /firmar/,
+    );
 
     expect(encolar).not.toHaveBeenCalled();
+  });
+});
+
+describe('D1 summary SOAP isolation', () => {
+  it('uses supplied SOL identity without consulting deployment variables', async () => {
+    const { construirSobreSendSummary } =
+      await import('../../../src/modules/sunat/soap/sunatSummaryOperations');
+    const before = process.env.SUNAT_SOL_USER;
+    process.env.SUNAT_SOL_USER = 'WRONG_FAKE_DEPLOYMENT';
+    try {
+      const envelope = construirSobreSendSummary({
+        fileName: '20000000001-RC-1.zip',
+        contentFileBase64: '',
+        ruc: '20000000001',
+        credentials: { usuario: 'FAKE_COMPANY', clave: 'obviously-fake' },
+      });
+      expect(envelope).toContain('20000000001FAKE_COMPANY');
+      expect(envelope).not.toContain('WRONG_FAKE_DEPLOYMENT');
+    } finally {
+      if (before === undefined) delete process.env.SUNAT_SOL_USER;
+      else process.env.SUNAT_SOL_USER = before;
+    }
   });
 });

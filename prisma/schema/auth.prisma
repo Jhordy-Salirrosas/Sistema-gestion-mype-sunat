@@ -16,6 +16,9 @@ model Company {
   sol_user              String
   sol_pass_encrypted    String
   cert_storage_url      String?
+  issuer_environment    String?
+  issuer_config_activated_at DateTime?
+  issuer_config_version String?
   cert_pass_encrypted   String?
   sire_client_id_enc    String?
   sire_client_secret_enc String?

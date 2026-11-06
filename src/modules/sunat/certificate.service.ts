@@ -1,4 +1,11 @@
-import { Injectable, Logger, OnModuleInit, BadRequestException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import type { IssuerContext } from './issuerConfigResolver';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  BadRequestException,
+} from '@nestjs/common';
 import * as forge from 'node-forge';
 
 export interface ValidatedCertificate {
@@ -13,19 +20,49 @@ export interface ValidatedCertificate {
 @Injectable()
 export class CertificateService implements OnModuleInit {
   private readonly logger = new Logger(CertificateService.name);
-  private validatedCert: ValidatedCertificate | null = null;
+  private readonly cache = new Map<string, ValidatedCertificate>();
 
   onModuleInit() {
     // La validación se realizará cuando se necesite el certificado,
     // mediante getCertificate(), y no durante el arranque de la API.
   }
 
-  public getCertificate(): ValidatedCertificate {
-    if (!this.validatedCert) {
-      return this.validarYCargarCertificado();
-    }
-
-    return this.validatedCert;
+  public getCertificate(context?: IssuerContext): ValidatedCertificate {
+    const base64 = context
+      ? context.certificate?.base64
+      : process.env.CERT_BASE64;
+    const password = context
+      ? context.certificate?.password
+      : process.env.CERT_PASSWORD;
+    const ruc = context?.ruc ?? process.env.RUC_EMISOR;
+    const key = JSON.stringify([
+      context?.companyId ?? 'deployment',
+      context?.version,
+      ruc,
+      createHash('sha256')
+        .update(JSON.stringify([base64, password]))
+        .digest('hex'),
+    ]);
+    const cached = this.cache.get(key);
+    if (
+      cached &&
+      cached.validFrom <= new Date() &&
+      cached.validTo >= new Date()
+    )
+      return {
+        ...cached,
+        daysRemaining: Math.ceil(
+          (cached.validTo.getTime() - Date.now()) / 86400000,
+        ),
+      };
+    const certificate = this.validarYCargarCertificado(
+      base64 ?? '',
+      password ?? '',
+      ruc ?? '',
+    );
+    if (this.cache.size >= 100) this.cache.clear();
+    this.cache.set(key, certificate);
+    return certificate;
   }
 
   public validarYCargarCertificado(
@@ -35,9 +72,7 @@ export class CertificateService implements OnModuleInit {
   ): ValidatedCertificate {
     // 1. Comprobar la presencia de las variables de entorno.
     if (!certBase64) {
-      throw new BadRequestException(
-        'Falta la variable de entorno CERT_BASE64',
-      );
+      throw new BadRequestException('Falta la variable de entorno CERT_BASE64');
     }
 
     if (!certPassword) {
@@ -47,20 +82,14 @@ export class CertificateService implements OnModuleInit {
     }
 
     if (!rucEmisor) {
-      throw new BadRequestException(
-        'Falta la variable de entorno RUC_EMISOR',
-      );
+      throw new BadRequestException('Falta la variable de entorno RUC_EMISOR');
     }
 
     try {
       // 2. Decodificar Base64 y procesar el archivo PKCS#12.
       const p12Der = forge.util.decode64(certBase64);
       const p12Asn1 = forge.asn1.fromDer(p12Der);
-      const p12 = forge.pkcs12.pkcs12FromAsn1(
-        p12Asn1,
-        false,
-        certPassword,
-      );
+      const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, certPassword);
 
       // 3. Extraer el certificado y la clave privada.
       let certificate: forge.pki.Certificate | null = null;
@@ -73,9 +102,7 @@ export class CertificateService implements OnModuleInit {
           }
 
           if (safeBag.key) {
-            privateKeyPem = forge.pki.privateKeyToPem(
-              safeBag.key,
-            );
+            privateKeyPem = forge.pki.privateKeyToPem(safeBag.key);
           }
         }
       }
@@ -83,6 +110,16 @@ export class CertificateService implements OnModuleInit {
       if (!certificate || !privateKeyPem) {
         throw new BadRequestException(
           'El archivo PKCS#12 no contiene un par de certificado y clave privada válidos',
+        );
+      }
+
+      const key = forge.pki.privateKeyFromPem(
+        privateKeyPem,
+      ) as forge.pki.rsa.PrivateKey;
+      const publicKey = certificate.publicKey as forge.pki.rsa.PublicKey;
+      if (!key.n.equals(publicKey.n) || !key.e.equals(publicKey.e)) {
+        throw new BadRequestException(
+          'El certificado y la clave privada no corresponden',
         );
       }
 
@@ -102,9 +139,7 @@ export class CertificateService implements OnModuleInit {
       }
 
       const diffMs = validTo.getTime() - now.getTime();
-      const daysRemaining = Math.ceil(
-        diffMs / (1000 * 60 * 60 * 24),
-      );
+      const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
       if (daysRemaining <= 30) {
         this.logger.warn(
@@ -117,14 +152,13 @@ export class CertificateService implements OnModuleInit {
       }
 
       // 5. Comprobar que el certificado corresponda al RUC emisor.
-      const subjectString = certificate.subject.attributes
-        .map(
-          (attr) =>
-            `${attr.name || attr.shortName}=${attr.value}`,
+      if (
+        !certificate.subject.attributes.some((attr) =>
+          String(attr.value)
+            .split(/[^0-9]+/)
+            .includes(rucEmisor),
         )
-        .join(' ');
-
-      if (!subjectString.includes(rucEmisor)) {
+      ) {
         this.logger.error(
           `El certificado no corresponde al RUC configurado: ${rucEmisor}`,
         );
@@ -135,7 +169,7 @@ export class CertificateService implements OnModuleInit {
       }
 
       // 6. Guardar el certificado validado en memoria.
-      this.validatedCert = {
+      const validatedCert: ValidatedCertificate = {
         certificatePem: forge.pki.certificateToPem(certificate),
         privateKeyPem,
         validFrom,
@@ -144,23 +178,15 @@ export class CertificateService implements OnModuleInit {
         daysRemaining,
       };
 
-      return this.validatedCert;
+      return validatedCert;
     } catch (error: unknown) {
       if (error instanceof BadRequestException) {
         throw error;
       }
 
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Error desconocido al procesar el certificado';
-
-      this.logger.error(
-        `Error al procesar el certificado digital: ${message}`,
-      );
-
+      this.logger.error('No se pudo procesar el certificado digital');
       throw new BadRequestException(
-        `Contraseña inválida o formato PKCS#12 corrupto: ${message}`,
+        'Contraseña inválida o formato PKCS#12 corrupto',
       );
     }
   }
