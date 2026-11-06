@@ -75,6 +75,12 @@ export interface CdrDto {
 
 /** Detalle completo de un comprobante (GET /invoices/:id). */
 export interface ComprobanteDetalleDto extends ComprobanteListadoDto {
+  lineas_origen: Array<{
+    codigo: string | null; descripcion: string | null; unidad: string | null;
+    cantidad: number | null; valor_unitario: number | null;
+    precio_unitario: number | null; afectacion: string | null;
+    icbper: number | null; descuentos: Array<{ codigo: string | null; monto: number | null }>;
+  }>;
   ruc_emisor: string;
   base_imponible: number;
   total_igv: number;
