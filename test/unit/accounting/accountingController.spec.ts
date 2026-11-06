@@ -10,6 +10,7 @@ import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/ap
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
+import { GetBalanceSheetUseCase } from '../../../src/modules/accounting/application/use-cases/getBalanceSheetUseCase';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -24,6 +25,7 @@ describe('AccountingController', () => {
   let getLedgerUseCase: jest.Mocked<GetLedgerUseCase>;
   let getTrialBalanceUseCase: jest.Mocked<GetTrialBalanceUseCase>;
   let getIncomeStatementUseCase: jest.Mocked<GetIncomeStatementUseCase>;
+  let getBalanceSheetUseCase: jest.Mocked<GetBalanceSheetUseCase>;
   let mockPrisma: any;
 
   beforeEach(() => {
@@ -58,6 +60,7 @@ describe('AccountingController', () => {
     getLedgerUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetLedgerUseCase>;
     getTrialBalanceUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetTrialBalanceUseCase>;
     getIncomeStatementUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetIncomeStatementUseCase>;
+    getBalanceSheetUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetBalanceSheetUseCase>;
 
     mockPrisma = {
       accountingMapping: {
@@ -79,6 +82,7 @@ describe('AccountingController', () => {
       getLedgerUseCase,
       getTrialBalanceUseCase,
       getIncomeStatementUseCase,
+      getBalanceSheetUseCase,
       mockPrisma,
     );
   });
