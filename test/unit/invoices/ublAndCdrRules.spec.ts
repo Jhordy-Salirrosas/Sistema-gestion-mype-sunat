@@ -151,9 +151,9 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
     expect(alto.detraccion).toBe(141.6);
   });
 
-  it('redondea la retención del IGV al entero superior', () => {
-    expect(generator.calcularRetencion(1180)).toBe(36);
-    expect(generator.calcularRetencion(100)).toBe(3);
+  it('aplica el umbral y redondea la retención del IGV a céntimos', () => {
+    expect(generator.calcularRetencion(1180)).toBe(35.4);
+    expect(generator.calcularRetencion(100)).toBe(0);
     expect(generator.calcularRetencion(0)).toBe(0);
   });
 
