@@ -206,5 +206,36 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       }),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('genera el asiento contable de la compra con inventario, IGV y CxP', async () => {
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    mockPrisma.accountingEntry = { findFirst: jest.fn().mockResolvedValue(null) };
+    const conContabilidad = new InventoryPurchaseService(mockPrisma, accounting as any);
+
+    await (conContabilidad as any).registrarAsientoCompra(
+      companyId,
+      {
+        purchaseNumber: 'COM-00000001',
+        documentSerial: 'F001',
+        documentNumber: '00000001',
+        supplierName: 'Proveedor SAC',
+        netAmount: 100,
+        igvAmount: 18,
+        totalAmount: 118,
+      },
+      new Date('2026-11-05T00:00:00.000Z'),
+    );
+
+    expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sourceModule: 'PURCHASES',
+      sourceReferenceId: 'COM-00000001',
+      period: '2026-11',
+      lines: expect.arrayContaining([
+        expect.objectContaining({ accountCode: '601', debitAmount: 100 }),
+        expect.objectContaining({ accountCode: '40111', debitAmount: 18 }),
+        expect.objectContaining({ accountCode: '421', creditAmount: 118 }),
+      ]),
+    }));
+  });
 });
 
