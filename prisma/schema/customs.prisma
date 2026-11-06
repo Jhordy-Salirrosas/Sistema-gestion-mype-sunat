@@ -85,6 +85,7 @@ model ForeignSupplier {
   created_at       DateTime        @default(now())
 
   shipments        CustomsShipment[]
+  orders           ImportOrder[]
 
   @@map("foreign_suppliers")
 }
@@ -117,6 +118,7 @@ model CustomsShipment {
   local_expenses        LocalExpenseInvoice[]
   goods_receipts        GoodsReceipt[]
   landed_cost_sheet     LandedCostSheet?
+  orders                ImportOrder[]
 
   @@unique([company_id, shipment_number])
   @@map("customs_shipments")
@@ -158,6 +160,8 @@ model CustomsDeclaration {
   company                   Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
   shipment_id               String?
   shipment                  CustomsShipment?    @relation(fields: [shipment_id], references: [id], onDelete: Restrict)
+  order_id                  String?
+  order                     ImportOrder?        @relation(fields: [order_id], references: [id], onDelete: SetNull)
   dua_number                String              // 118-2026-10-123456
   customs_agency_code       String              @default("118")
   customs_code              String?             // 118
@@ -271,6 +275,8 @@ model GoodsReceipt {
   declaration           CustomsDeclaration  @relation(fields: [declaration_id], references: [id], onDelete: Restrict)
   shipment_id           String?
   shipment              CustomsShipment?    @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
+  order_id              String?
+  order                 ImportOrder?        @relation(fields: [order_id], references: [id], onDelete: SetNull)
   warehouse_code        String              @default("ALM-01")
   reception_date        DateTime            @default(now())
   reception_type        String              @default("TOTAL") // TOTAL, PARCIAL
@@ -386,5 +392,133 @@ model LandedCostItem {
   @@index([landed_cost_sheet_id])
   @@map("landed_cost_items")
 }
+
+// ---------------------------------------------------------------------------
+// Fase 3.1: Órdenes de Importación y Etapas del Flujo Aduanero
+// ---------------------------------------------------------------------------
+
+enum ImportOrderStatus {
+  BORRADOR
+  APROBADA
+  EN_TRANSITO
+  ARRIBADA
+  EN_DESPACHO
+  CON_LEVANTE
+  RECEPCIONADA
+  COSTEADA
+  CERRADA
+  CANCELADA
+}
+
+model ImportOrder {
+  id                    String                    @id @default(uuid())
+  company_id            String
+  company               Company                   @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  order_number          String                    // OC-2026-0001
+  supplier_name         String
+  supplier_country      String                    @default("CN")
+  supplier_tax_id       String?
+  supplier_address      String?
+  supplier_condition    String?                   @default("FABRICANTE") // FABRICANTE, DISTRIBUIDOR, COMERCIANTE, BROKER
+  is_related            Boolean                   @default(false)        // Art. 24 OMC / Decisión 571 SUNAT
+  supplier_email        String?
+  supplier_phone        String?
+  supplier_id           String?
+  supplier              ForeignSupplier?          @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  incoterm              String                    @default("FOB") // FOB, CIF, EXW, CFR
+  currency_code         String                    @default("USD")
+  exchange_rate         Decimal?                  @db.Decimal(14, 6)
+  issue_date            DateTime
+  expected_arrival_date DateTime?
+  port_of_origin        String?
+  port_of_destination   String?                   @default("CALLAO")
+  transport_mode        String                    @default("MARITIMO")
+
+  total_fob             Decimal                   @db.Decimal(14, 2)
+  estimated_freight     Decimal?                  @default(0.00) @db.Decimal(14, 2)
+  estimated_insurance   Decimal?                  @default(0.00) @db.Decimal(14, 2)
+  total_cif             Decimal?                  @default(0.00) @db.Decimal(14, 2)
+
+  current_stage         String                    @default("APROBACION_OC")
+  current_stage_index   Int                       @default(1)
+  status                ImportOrderStatus         @default(APROBADA)
+  proforma_number       String?
+  notes                 String?
+  responsible           String?
+
+  shipment_id           String?
+  shipment              CustomsShipment?          @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
+
+  items                 ImportOrderItem[]
+  stages                ImportOrderStageHistory[]
+  documents             ImportOrderDocument[]
+  declarations          CustomsDeclaration[]
+  goods_receipts        GoodsReceipt[]
+
+  created_at            DateTime                  @default(now())
+  updated_at            DateTime                  @updatedAt
+
+  @@unique([company_id, order_number])
+  @@index([company_id, issue_date])
+  @@map("import_orders")
+}
+
+model ImportOrderItem {
+  id                    String      @id @default(uuid())
+  order_id              String
+  order                 ImportOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product_code          String?
+  description           String
+  hs_code               String?
+  quantity              Decimal     @db.Decimal(12, 4)
+  unit_price_fob        Decimal     @db.Decimal(14, 4)
+  total_fob             Decimal     @db.Decimal(14, 2)
+  unit_code             String      @default("NIU")
+  created_at            DateTime    @default(now())
+
+  @@index([order_id])
+  @@map("import_order_items")
+}
+
+model ImportOrderStageHistory {
+  id                    String      @id @default(uuid())
+  order_id              String
+  order                 ImportOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  stage_index           Int
+  stage_name            String
+  status                String      @default("COMPLETADO")
+  transition_date       DateTime    @default(now())
+  user_name             String
+  evidence_notes        String?
+  document_url          String?
+  created_at            DateTime    @default(now())
+
+  @@index([order_id, stage_index])
+  @@map("import_order_stage_histories")
+}
+
+model ImportOrderDocument {
+  id              String      @id @default(uuid())
+  order_id        String
+  order           ImportOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  stage_index     Int
+  stage_name      String
+  document_type   String      // ORDEN_COMPRA, PROFORMA, BL_GUIA_AEREA, PACKING_LIST, POLIZA_SEGURO, CERTIFICADO_ORIGEN, DAM_DUA, CANAL_ASIGNADO, LIQUIDACION_TRIBUTOS, LEVANTE_AUTORIZADO, GUIA_RETIRO, ACTA_RECEPCION, HOJA_COSTEO, OTRO
+  document_number String
+  file_name       String
+  storage_url     String
+  file_hash       String?     // Hash SHA-256
+  file_size_bytes Int?
+  mime_type       String?
+  is_mandatory    Boolean     @default(true)
+  is_verified     Boolean     @default(false)
+  uploaded_by     String?
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+
+  @@index([order_id, stage_index])
+  @@map("import_order_documents")
+}
+
 
 

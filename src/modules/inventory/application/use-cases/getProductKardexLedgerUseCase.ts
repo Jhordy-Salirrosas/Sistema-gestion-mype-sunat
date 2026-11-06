@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../../../database/prismaService';
 import {
   INVENTORY_PRODUCT_REPOSITORY_PORT,
   type IInventoryProductRepositoryPort,
@@ -22,6 +23,7 @@ export class GetProductKardexLedgerUseCase {
     private readonly movementRepository: IInventoryMovementRepositoryPort,
     @Inject(INVENTORY_BALANCE_REPOSITORY_PORT)
     private readonly balanceRepository: IInventoryBalanceRepositoryPort,
+    private readonly prisma: PrismaService,
   ) {}
 
   async execute(query: QueryKardexLedgerDto, companyId: string) {
@@ -48,6 +50,28 @@ export class GetProductKardexLedgerUseCase {
       endDate,
     );
 
+    const balanceRows = await this.prisma.inventoryBalance.findMany({
+      where: {
+        product_id: product.id!,
+        company_id: companyId,
+      },
+      include: {
+        warehouse: true,
+      },
+    });
+
+    const totalStock = balanceRows.reduce((acc, b) => acc + Number(b.current_stock), 0);
+    const totalValuation = balanceRows.reduce((acc, b) => acc + Number(b.total_inventory_value), 0);
+    const averageCost = totalStock > 0 ? totalValuation / totalStock : 0;
+
+    const warehouseBalances = balanceRows.map((b) => ({
+      warehouseCode: b.warehouse?.warehouse_code ?? 'ALM-01',
+      warehouseDescription: b.warehouse?.description ?? 'Almacén Principal',
+      stock: Number(b.current_stock),
+      averageCost: Number(b.average_unit_cost),
+      totalValue: Number(b.total_inventory_value),
+    }));
+
     return {
       product: {
         id: product.id,
@@ -56,8 +80,15 @@ export class GetProductKardexLedgerUseCase {
         sunatTypeCode: product.sunatTypeCode,
         sunatUnitCode: product.sunatUnitCode,
       },
-      movements: movements.map((m) => ({
+      summary: {
+        totalStock,
+        averageCost,
+        totalValuation,
+        warehouseBalances,
+      },
+      movements: movements.map((m: any) => ({
         id: m.id,
+        warehouseCode: m.warehouseCode ?? 'ALM-01',
         movementNumber: m.movementNumber,
         movementDate: m.movementDate,
         operationTypeCode: m.operationTypeCode,

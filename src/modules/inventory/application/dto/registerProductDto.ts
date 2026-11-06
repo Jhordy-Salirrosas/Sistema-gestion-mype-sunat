@@ -21,5 +21,38 @@ export class RegisterProductDto {
   @Min(0, { message: 'El stock mínimo no puede ser negativo.' })
   @IsOptional()
   min_stock_alert?: number;
+
+  @IsString()
+  @IsOptional()
+  brand?: string;
+
+  @IsString()
+  @IsOptional()
+  model?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
+
+  @IsString()
+  @IsOptional()
+  barcode?: string;
+
+  @IsString()
+  @IsOptional()
+  hs_code?: string;
+
+  @IsNumber()
+  @IsOptional()
+  weight_kg?: number;
+
+  @IsNumber()
+  @IsOptional()
+  volume_m3?: number;
+
+  @IsString()
+  @IsOptional()
+  tax_affectation?: string;
 }
+
 

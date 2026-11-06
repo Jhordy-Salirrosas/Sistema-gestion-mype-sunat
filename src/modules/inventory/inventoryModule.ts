@@ -4,6 +4,17 @@ import { CustomsModule } from '../customs/customsModule';
 import { InventoryStocksController } from './infrastructure/controllers/inventoryStocksController';
 import { InventoryMovementsController } from './infrastructure/controllers/inventoryMovementsController';
 import { InventoryPleController } from './infrastructure/controllers/inventoryPleController';
+import {
+  InventoryAdjustmentsController,
+  InventoryTransfersController,
+} from './infrastructure/controllers/inventoryTransfersController';
+import { InventoryTransferService } from './application/services/inventoryTransferService';
+import { InventoryKardexService } from './application/services/inventoryKardexService';
+import { InventoryKardexController } from './infrastructure/controllers/inventoryKardexController';
+import { InventoryOpeningService } from './application/services/inventoryOpeningService';
+import { InventoryOpeningController } from './infrastructure/controllers/inventoryOpeningController';
+import { InventoryPurchaseService } from './application/services/inventoryPurchaseService';
+import { InventoryPurchasesController } from './infrastructure/controllers/inventoryPurchasesController';
 
 // Use Cases
 import { ProcessImportCostOrderUseCase } from './application/use-cases/processImportCostOrderUseCase';
@@ -40,8 +51,17 @@ import { Ple13_1FlatFileWriterAdapter } from './infrastructure/adapters/ple13_1F
     InventoryStocksController,
     InventoryMovementsController,
     InventoryPleController,
+    InventoryTransfersController,
+    InventoryAdjustmentsController,
+    InventoryKardexController,
+    InventoryOpeningController,
+    InventoryPurchasesController,
   ],
   providers: [
+    InventoryTransferService,
+    InventoryKardexService,
+    InventoryOpeningService,
+    InventoryPurchaseService,
     // Use Cases
     ProcessImportCostOrderUseCase,
     RegisterManualMovementUseCase,
@@ -92,6 +112,7 @@ import { Ple13_1FlatFileWriterAdapter } from './infrastructure/adapters/ple13_1F
     ListWarehouseStockUseCase,
     EvaluateBookObligationUseCase,
     GeneratePleBookUseCase,
+    InventoryPurchaseService,
     INVENTORY_WAREHOUSE_REPOSITORY_PORT,
     INVENTORY_PRODUCT_REPOSITORY_PORT,
     INVENTORY_BALANCE_REPOSITORY_PORT,

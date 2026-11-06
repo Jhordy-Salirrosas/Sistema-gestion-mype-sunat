@@ -9,6 +9,7 @@ import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/app
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
+import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -22,6 +23,8 @@ describe('AccountingController', () => {
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
   let getLedgerUseCase: jest.Mocked<GetLedgerUseCase>;
   let getTrialBalanceUseCase: jest.Mocked<GetTrialBalanceUseCase>;
+  let getIncomeStatementUseCase: jest.Mocked<GetIncomeStatementUseCase>;
+  let mockPrisma: any;
 
   beforeEach(() => {
     generateUseCase = {
@@ -54,6 +57,16 @@ describe('AccountingController', () => {
 
     getLedgerUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetLedgerUseCase>;
     getTrialBalanceUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetTrialBalanceUseCase>;
+    getIncomeStatementUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetIncomeStatementUseCase>;
+
+    mockPrisma = {
+      accountingMapping: {
+        findMany: jest.fn().mockResolvedValue([
+          { process_code: 'COMPRA', role_code: 'GASTO_COMPRA', account_code: '60111-CUSTOM' },
+        ]),
+        upsert: jest.fn().mockResolvedValue({ id: 'map-1' }),
+      },
+    };
 
     controller = new AccountingController(
       generateUseCase,
@@ -65,6 +78,8 @@ describe('AccountingController', () => {
       closePeriodUseCase,
       getLedgerUseCase,
       getTrialBalanceUseCase,
+      getIncomeStatementUseCase,
+      mockPrisma,
     );
   });
 
@@ -184,7 +199,7 @@ describe('AccountingController', () => {
   });
 
   it('delega el libro mayor y el balance de comprobación', async () => {
-    const ledger = { period: '2026-11', accountCode: '1211', accountName: 'CxC', nature: 'Deudora', openingBalance: 0, movements: [], totalDebit: 0, totalCredit: 0, closingBalance: 0 };
+    const ledger = { period: '2026-11', accountCode: '1211', accountName: 'CxC', nature: 'Deudora' as const, openingBalance: 0, movements: [], totalDebit: 0, totalCredit: 0, closingBalance: 0 };
     const balance = { period: '2026-11', rows: [], totalDebit: 0, totalCredit: 0 };
     getLedgerUseCase.execute.mockResolvedValue(ledger);
     getTrialBalanceUseCase.execute.mockResolvedValue(balance);
@@ -194,5 +209,19 @@ describe('AccountingController', () => {
 
     await expect(controller.getTrialBalance('comp-1', '2026-11')).resolves.toBe(balance);
     expect(getTrialBalanceUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
+  });
+
+  it('obtiene y actualiza los mapeos contables por proceso y rol', async () => {
+    const mappings = await controller.getAccountingMappings('comp-1');
+    expect(mappings.length).toBeGreaterThan(0);
+    const customMapping = mappings.find((m) => m.process_code === 'COMPRA' && m.role_code === 'GASTO_COMPRA');
+    expect(customMapping?.account_code).toBe('60111-CUSTOM');
+    expect(customMapping?.is_custom).toBe(true);
+
+    const updated = await controller.updateAccountingMapping(
+      { process_code: 'VENTA', role_code: 'INGRESO', account_code: '70111' },
+      'comp-1',
+    );
+    expect(updated).toEqual({ id: 'map-1' });
   });
 });
