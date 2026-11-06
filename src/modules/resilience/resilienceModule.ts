@@ -11,6 +11,7 @@ import {
   RETRY_SLEEP,
 } from './infrastructure/queue/invoiceRetryService';
 import { InvoiceDlqService } from './infrastructure/queue/invoiceDlqService';
+import { InvoiceQueueReconciler } from './application/invoiceQueueReconciler';
 import { SunatMockModule } from './infrastructure/mock/sunatMockModule';
 
 @Module({
@@ -30,6 +31,7 @@ import { SunatMockModule } from './infrastructure/mock/sunatMockModule';
   ],
   controllers: [ResilienceController],
   providers: [
+    InvoiceQueueReconciler,
     InvoiceRetryService,
     InvoiceDlqService,
     { provide: RETRY_SLEEP, useValue: dormir },
