@@ -9,7 +9,12 @@
  * prueba el sobre SOAP de verdad (que el XML viaje bien formado y que el ZIP
  * del CDR llegue íntegro en Base64), no solo la función que arma el XML.
  */
-import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
+import {
+  createServer,
+  IncomingMessage,
+  Server,
+  ServerResponse,
+} from 'node:http';
 import { AddressInfo } from 'node:net';
 import AdmZip from 'adm-zip';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
@@ -61,24 +66,22 @@ class ConsultServiceFake {
   public demoraMs = 0;
 
   async start(): Promise<void> {
-    this.server = createServer(
-      (req: IncomingMessage, res: ServerResponse) => {
-        let datos = '';
-        req.on('data', (chunk) => {
-          datos += chunk;
-        });
-        req.on('end', async () => {
-          this.ultimoCuerpo = datos;
-          this.ultimasCabeceras = req.headers;
-          if (this.demoraMs > 0) {
-            await new Promise((resolve) => setTimeout(resolve, this.demoraMs));
-          }
-          const { status, body } = this.respuesta(datos);
-          res.writeHead(status, { 'Content-Type': 'text/xml' });
-          res.end(body);
-        });
-      },
-    );
+    this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      let datos = '';
+      req.on('data', (chunk) => {
+        datos += chunk;
+      });
+      req.on('end', async () => {
+        this.ultimoCuerpo = datos;
+        this.ultimasCabeceras = req.headers;
+        if (this.demoraMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, this.demoraMs));
+        }
+        const { status, body } = this.respuesta(datos);
+        res.writeHead(status, { 'Content-Type': 'text/xml' });
+        res.end(body);
+      });
+    });
 
     await new Promise<void>((resolve) => {
       this.server!.listen(0, '127.0.0.1', () => resolve());
@@ -129,9 +132,13 @@ describe('TA-30 - sobre SOAP de getStatusCdr', () => {
       correlativo: 7,
     });
 
-    expect(sobre).toContain('<ser:rucComprobante>20601012341</ser:rucComprobante>');
+    expect(sobre).toContain(
+      '<ser:rucComprobante>20601012341</ser:rucComprobante>',
+    );
     expect(sobre).toContain('<ser:tipoComprobante>01</ser:tipoComprobante>');
-    expect(sobre).toContain('<ser:serieComprobante>F001</ser:serieComprobante>');
+    expect(sobre).toContain(
+      '<ser:serieComprobante>F001</ser:serieComprobante>',
+    );
     expect(sobre).toContain(
       '<ser:numeroComprobante>00000007</ser:numeroComprobante>',
     );
@@ -247,7 +254,10 @@ describe('TA-30 - consulta contra el Mock (PRUEBA del backlog)', () => {
       new SunatSoapClient({ endpoint: fake.baseUrl, timeoutMs: 3000 }),
     );
 
-    fake.respuesta = () => ({ status: 200, body: sobreConCdr(cdrAceptadoZip()) });
+    fake.respuesta = () => ({
+      status: 200,
+      body: sobreConCdr(cdrAceptadoZip()),
+    });
     fake.demoraMs = 0;
   });
 
@@ -336,9 +346,7 @@ describe('TA-30 - consulta contra el Mock (PRUEBA del backlog)', () => {
   it('recupera un comprobante que SUNAT rechazó después del timeout', async () => {
     fake.respuesta = () => ({
       status: 200,
-      body: sobreConCdr(
-        construirCdrRechazado(),
-      ),
+      body: sobreConCdr(construirCdrRechazado()),
     });
 
     const desenlace = await servicio.consultar(request);
@@ -375,5 +383,54 @@ describe('TA-30 - Mock del consultService', () => {
   it('expone los modos que necesita la prueba de integración', () => {
     const controlador = new SunatConsultMockController();
     expect(typeof controlador.consultar).toBe('function');
+  });
+});
+
+describe('D1 consulta company context', () => {
+  it('recovers company from persisted invoice for the existing retry port', async () => {
+    const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+    const context = fakeIssuerContext('a');
+    const resolve = jest.fn(async () => context);
+    const getStatusCdr = jest.fn(async () => ({ responseCode: '0127' }));
+    const service = new SunatStatusConsultaService(
+      {} as never,
+      { invoice: { findUnique: async () => ({ company_id: 'a' }) } } as never,
+      { getStatusCdr } as never,
+      { resolve } as never,
+    );
+    await expect(
+      service.consultarEstado({
+        invoiceId: 'fake-invoice',
+        rucEmisor: context.ruc,
+        tipoComprobante: '01',
+        serie: 'F001',
+        correlativo: 1,
+      }),
+    ).resolves.toBeNull();
+    expect(resolve).toHaveBeenCalledWith('a');
+    expect(getStatusCdr).toHaveBeenCalledWith(
+      expect.objectContaining({ credentials: context.sol }),
+      { endpoint: context.consultEndpoint },
+    );
+  });
+  it('rejects explicit cross-company consultation before transport', async () => {
+    const getStatusCdr = jest.fn();
+    const service = new SunatStatusConsultaService(
+      {} as never,
+      { invoice: { findUnique: async () => ({ company_id: 'a' }) } } as never,
+      { getStatusCdr } as never,
+      {} as never,
+    );
+    await expect(
+      service.consultar({
+        companyId: 'b',
+        invoiceId: 'fake-invoice',
+        rucEmisor: '20000000001',
+        tipoComprobante: '01',
+        serie: 'F001',
+        correlativo: 1,
+      }),
+    ).rejects.toThrow('ISSUER_COMPANY_REQUIRED');
+    expect(getStatusCdr).not.toHaveBeenCalled();
   });
 });

@@ -233,3 +233,39 @@ describe('SunatBillService (unitaria) - credenciales SOL', () => {
     expect(String(resultado.error)).not.toContain('clave-secreta-123');
   });
 });
+
+describe('D1 Bill company context', () => {
+  it('passes company credentials and immutable context to SOAP, leaving deployment intact', async () => {
+    const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+    const context = fakeIssuerContext('a', { ruc: RUC });
+    const sendBill = jest
+      .fn()
+      .mockResolvedValue({ applicationResponse: null, tiempoRespuestaMs: 1 });
+    const service = new SunatBillService(
+      { persistFailure: jest.fn().mockResolvedValue({}) } as never,
+      { sendBill } as never,
+      undefined,
+      { resolve: async () => context } as never,
+    );
+    const env = { ...process.env };
+    await service.sendAndProcess({ ...paramsBase, companyId: 'a' });
+    expect(sendBill.mock.calls[0][0]).toMatchObject({
+      credentials: context.sol,
+      context,
+    });
+    expect(process.env).toEqual(env);
+  });
+  it('rejects mismatched company context before transport', async () => {
+    const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+    const sendBill = jest.fn();
+    const service = new SunatBillService({} as never, { sendBill } as never);
+    await expect(
+      service.sendAndProcess({
+        ...paramsBase,
+        companyId: 'b',
+        context: fakeIssuerContext('a', { ruc: RUC }),
+      }),
+    ).rejects.toThrow('ISSUER_IDENTITY_MISMATCH');
+    expect(sendBill).not.toHaveBeenCalled();
+  });
+});

@@ -1,3 +1,4 @@
+import type { IssuerContext } from '../issuerConfigResolver';
 import { InvoiceStatus } from '../../../generated/client/enums';
 import { CdrClassification } from './cdr-classifier';
 import { ParsedCdr } from './cdr.parser';
@@ -7,6 +8,8 @@ import {
 } from './soap.constants';
 
 export interface SendInvoiceParams {
+  companyId?: string;
+  context?: IssuerContext;
   invoiceId: string;
   rucEmisor: string;
   tipoComprobante: string;

@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../sunat/issuerConfigResolver';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../database/prismaService';
 import { UblGeneratorService } from './ublGeneratorService';
 import type { InvoicePayload } from './invoicePayload';
@@ -28,6 +32,7 @@ export class InvoiceWorkerService {
     private readonly ublGenerator: UblGeneratorService,
     private readonly xsdValidator: XsdValidatorService,
     private readonly signatureService: SignatureService,
+    @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
   private actualizarEstado(id: string, status: string, xml?: string) {
@@ -43,7 +48,16 @@ export class InvoiceWorkerService {
     mensaje: string,
     tiempoMs = 0,
   ) {
-    return registrarAuditoria(this.prisma, invoiceId, 1, anterior, nuevo, codigo, mensaje, tiempoMs);
+    return registrarAuditoria(
+      this.prisma,
+      invoiceId,
+      1,
+      anterior,
+      nuevo,
+      codigo,
+      mensaje,
+      tiempoMs,
+    );
   }
 
   public async processInvoiceJob(jobData: {
@@ -56,7 +70,13 @@ export class InvoiceWorkerService {
 
     // 1. Transición de estado: PENDIENTE -> PROCESANDO (Criterio 1)
     await this.actualizarEstado(invoiceId, 'PROCESANDO');
-    await this.auditar(invoiceId, 'PENDIENTE', 'PROCESANDO', 'JOB_ACQUIRED', 'Job tomado por el worker');
+    await this.auditar(
+      invoiceId,
+      'PENDIENTE',
+      'PROCESANDO',
+      'JOB_ACQUIRED',
+      'Job tomado por el worker',
+    );
 
     try {
       // 2. Generación de XML UBL 2.1 oficial (Criterio 2)
@@ -91,7 +111,16 @@ export class InvoiceWorkerService {
       }
 
       // 4. Firma digital XMLDSig X.509
-      const signatureResult = this.signatureService.signXml(rawXml);
+      const company = this.issuerConfig
+        ? await this.prisma.invoice.findUnique({
+            where: { id: invoiceId },
+            select: { company_id: true },
+          })
+        : null;
+      const context = this.issuerConfig
+        ? await this.issuerConfig.resolve(company?.company_id ?? '')
+        : undefined;
+      const signatureResult = this.signatureService.signXml(rawXml, context);
 
       // 5. Transición exitosa y auditoría completa (Criterio 4)
       const duration = Date.now() - startTime;

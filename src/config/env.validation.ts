@@ -1,3 +1,4 @@
+import { parseIssuerKey } from '../modules/sunat/issuerConfigEncryption';
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
@@ -103,6 +104,12 @@ class EnvironmentVariables {
 }
 
 export function validate(config: Record<string, unknown>) {
+  // Encryption is optional for legacy deployments. Invalid keys disable new
+  // encrypted writes (the encryption service enforces this), not legacy reads.
+  const issuerEncryptionAvailable = Boolean(
+    typeof config.ISSUER_CONFIG_ENCRYPTION_KEY === 'string' &&
+    parseIssuerKey(config.ISSUER_CONFIG_ENCRYPTION_KEY),
+  );
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
@@ -121,5 +128,7 @@ export function validate(config: Record<string, unknown>) {
     );
   }
 
-  return validatedConfig;
+  return Object.assign(validatedConfig, {
+    ISSUER_CONFIG_ENCRYPTION_AVAILABLE: issuerEncryptionAvailable,
+  });
 }

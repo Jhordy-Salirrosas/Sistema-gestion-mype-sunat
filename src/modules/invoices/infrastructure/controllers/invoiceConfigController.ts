@@ -1,3 +1,5 @@
+import { Roles } from '../../../../common/decorators';
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 /**
  * Endpoints de configuración de Facturación Electrónica (TA-60, HU-09).
  *
@@ -17,7 +19,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  ConflictException,
   Get,
   HttpCode,
   HttpStatus,
@@ -60,22 +61,14 @@ export class InvoiceConfigController {
     return this.config.obtener(companyId);
   }
 
-  /**
-   * PUT /api/v1/invoices/config
-   *
-   * La configuración de entorno y credenciales se aplica en el despliegue
-   * (variables de entorno), no en caliente: aceptar secretos por HTTP los
-   * dejaría en el cuerpo de la petición y en el log de acceso del servidor.
-   * Por eso esta ruta devuelve 409 explicando dónde se cambia, en lugar de
-   * fingir que guarda algo.
-   */
   @Put('config')
-  actualizarConfiguracion(): never {
-    throw new ConflictException(
-      'La configuración de entorno y credenciales SOL se aplica en las variables ' +
-        'de entorno del despliegue (SUNAT_ENV, SUNAT_SOL_USER, SUNAT_SOL_PASSWORD, ' +
-        'CERT_BASE64, CERT_PASSWORD). Use POST /api/v1/invoices/series para las series.',
-    );
+  @Roles('ADMIN')
+  @UseGuards(RolesGuard)
+  actualizarConfiguracion(
+    @CurrentCompany() companyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.config.actualizar(companyId, body);
   }
 
   /** GET /api/v1/invoices/series — series de la empresa con su correlativo. */
@@ -124,10 +117,7 @@ export class InvoiceConfigController {
     }
 
     const inicial = body.correlativo_inicial;
-    if (
-      inicial !== undefined &&
-      (!Number.isInteger(inicial) || inicial < 0)
-    ) {
+    if (inicial !== undefined && (!Number.isInteger(inicial) || inicial < 0)) {
       throw new BadRequestException(
         'correlativo_inicial debe ser un entero mayor o igual que 0',
       );
