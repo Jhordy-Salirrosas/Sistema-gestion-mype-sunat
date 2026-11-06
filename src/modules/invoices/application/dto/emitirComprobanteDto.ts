@@ -183,6 +183,11 @@ export class EmitirComprobanteDto {
   @IsBoolean()
   agente_retencion?: boolean;
 
+  /** La persona modificó expresamente la selección sugerida por el maestro. */
+  @IsOptional()
+  @IsBoolean()
+  correccion_retencion?: boolean;
+
   /** Forma de pago; con 'Credito' se requiere al menos una cuota. */
   @IsOptional()
   @IsIn(['Contado', 'Credito'])

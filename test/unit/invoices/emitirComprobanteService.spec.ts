@@ -62,6 +62,8 @@ const montar = (
   const actualizaciones: Array<Record<string, unknown>> = [];
 
   const prisma = {
+    businessPartner: { findFirst: jest.fn(async () => null as { id: string } | null) },
+    partnerTaxStatus: { findFirst: jest.fn(async () => null as { value: boolean } | null) },
     company: {
       findUnique: jest.fn(async () => ({
         ruc: '20100070970',
@@ -181,6 +183,19 @@ const montar = (
 describe('EmitirComprobanteService — emisión de factura', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each([
+    [true, false, false, 4, 'maestro'],
+    [false, true, false, 0, 'maestro'],
+    [true, false, true, 0, 'corrección manual'],
+  ])('aplica decisión de retención y conserva su auditoría', async (maestro, enviado, correccion, monto, origen) => {
+    const { servicio, prisma, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({ id: 'cliente' });
+    prisma.partnerTaxStatus.findFirst.mockResolvedValue({ value: maestro });
+    const resultado = await servicio.emitir(factura({ agente_retencion: enviado, correccion_retencion: correccion }), COMPANY_ID);
+    expect(resultado.importes.retencion).toBe(monto);
+    expect(String(creadas[0].auditoria_retencion).toLowerCase()).toContain(origen);
   });
 
   it('emite una factura válida y devuelve el número real', async () => {

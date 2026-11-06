@@ -47,6 +47,7 @@ import { InvoiceNoteService } from './invoiceNoteService';
 // usa `ControlSaldoNotas` para no tener dos definiciones de "nota vigente".
 import { ESTADOS_NOTA_SIN_EFECTO } from './creditNoteBalanceGuard';
 import { InvoiceEntity } from '../../domain/entities/invoiceEntity';
+import { resolverRetencionMaestro } from './retencionMaestro';
 import {
   type IInvoiceRepositoryPort,
   INVOICE_REPOSITORY_PORT,
@@ -115,6 +116,12 @@ export class EmitirComprobanteService {
     }
 
     const emisor = await this.datosDelEmisor(companyId);
+    const determinacion = dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03'
+      ? await resolverRetencionMaestro(this.prisma, { companyId, tipo: dto.customer_identity_type,
+          numero: dto.customer_identity_number, fecha: new Date(), enviado: dto.agente_retencion,
+          correccion: dto.correccion_retencion })
+      : null;
+    if (determinacion) dto = { ...dto, agente_retencion: determinacion.aplica };
 
     // Valida el descuento global antes de reservar correlativo.
     const calculoPrevio = traducirEmision(dto, emisor, 0);
@@ -173,7 +180,7 @@ export class EmitirComprobanteService {
 
     const traducido = traducirEmision(dtoConCuenta, emisor, correlativo);
 
-    await this.persistir(traducido.dto, companyId, traducido.importes);
+    await this.persistir(traducido.dto, companyId, traducido.importes, determinacion?.mensaje);
     const numero = `${traducido.dto.serie}-${String(correlativo).padStart(8, '0')}`;
     this.logger.log(
       `[M1] Emitido ${numero} por S/ ${traducido.importes.total.toFixed(2)} ` +
@@ -524,8 +531,10 @@ export class EmitirComprobanteService {
     dto: CreateInvoiceDto,
     companyId: string,
     importes?: ComprobanteTraducido['importes'],
+    auditoriaRetencion?: string,
   ): Promise<InvoicePersistenceResult> {
     const entidad = new InvoiceEntity({
+      auditoria_retencion: auditoriaRetencion,
       company_id: companyId,
       ruc_emisor: dto.ruc_emisor,
       serie: dto.serie,
