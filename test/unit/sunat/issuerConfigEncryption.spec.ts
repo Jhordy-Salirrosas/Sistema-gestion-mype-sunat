@@ -118,3 +118,54 @@ describe('D1 optional encryption environment validation', () => {
     ).toBe(true);
   });
 });
+
+describe('D1 malformed envelopes and canonical key encoding', () => {
+  const env = { ...process.env };
+  const encryption = new IssuerConfigEncryption();
+  beforeEach(() => {
+    process.env.ISSUER_CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 31).toString(
+      'base64',
+    );
+  });
+  afterAll(() => {
+    process.env = env;
+  });
+  it('rejects noncanonical base64 encodings of an otherwise 32-byte key', () => {
+    expect(parseIssuerKey('A'.repeat(42) + 'B=')).toBeUndefined();
+  });
+  it.each(['not-json', 'null', '{}', '[]'])(
+    'returns a sanitized failure for malformed envelope %s',
+    (value) => {
+      expect(() =>
+        encryption.decrypt(value, 'fake-company', 'sol_pass_encrypted'),
+      ).toThrow(/^ISSUER_CONFIG_DECRYPTION_FAILED$/);
+    },
+  );
+  it.each([
+    { ciphertext: 42 },
+    { nonce: Buffer.alloc(11).toString('base64') },
+    { tag: Buffer.alloc(15).toString('base64') },
+  ])('rejects invalid envelope shape %j', (mutation) => {
+    const data = JSON.parse(
+      encryption.encrypt('obviously-fake', 'a', 'sol_pass_encrypted'),
+    );
+    expect(() =>
+      encryption.decrypt(
+        JSON.stringify({ ...data, ...mutation }),
+        'a',
+        'sol_pass_encrypted',
+      ),
+    ).toThrow('ISSUER_CONFIG_DECRYPTION_FAILED');
+  });
+  it('does not disclose key absence or plaintext through decryption errors', () => {
+    const envelope = encryption.encrypt(
+      'obviously-fake-plaintext',
+      'a',
+      'sol_pass_encrypted',
+    );
+    delete process.env.ISSUER_CONFIG_ENCRYPTION_KEY;
+    expect(() =>
+      encryption.decrypt(envelope, 'a', 'sol_pass_encrypted'),
+    ).toThrow(/^ISSUER_CONFIG_DECRYPTION_FAILED$/);
+  });
+});

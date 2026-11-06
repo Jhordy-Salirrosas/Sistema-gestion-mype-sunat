@@ -174,3 +174,174 @@ describe('D1 deployment routing remains intact', () => {
     }
   });
 });
+
+describe('D1 resolver boundary cases', () => {
+  const env = { ...process.env };
+  const encryption = new IssuerConfigEncryption();
+  const company = () => ({
+    id: 'fake-a',
+    ruc: '20000000001',
+    issuer_config_activated_at: new Date(),
+    issuer_config_version: null,
+    issuer_environment: null,
+    issuer_sol_configured: false,
+    issuer_cert_configured: false,
+    sol_user: 'FAKE_LEGACY',
+    sol_pass_encrypted: 'not-an-envelope',
+    cert_storage_url: null,
+    cert_pass_encrypted: null,
+  });
+  beforeEach(() => {
+    process.env = {
+      ...env,
+      ISSUER_CONFIG_ENCRYPTION_KEY: Buffer.alloc(32, 29).toString('base64'),
+    };
+  });
+  afterAll(() => {
+    process.env = env;
+  });
+  it.each(['PRODUCTION', 'PRODUCCION', 'BETA', 'unknown', undefined])(
+    'resolves legacy environment %s with complete-group fallback',
+    async (value) => {
+      if (value === undefined) delete process.env.SUNAT_ENV;
+      else process.env.SUNAT_ENV = value;
+      process.env.SUNAT_SOL_USER = '20000000001FAKE';
+      process.env.SUNAT_SOL_PASSWORD = 'fake-password';
+      delete process.env.CERT_BASE64;
+      delete process.env.CERT_PASSWORD;
+      delete process.env.SUNAT_CONSULT_SERVICE_URL;
+      const row = { ...company(), issuer_config_activated_at: null };
+      const context = await new IssuerConfigResolver(
+        {} as never,
+        encryption,
+      ).fromCompany(row, {} as never);
+      expect(context.environment).toBe(
+        value?.startsWith('PROD')
+          ? 'PRODUCCION'
+          : value === 'BETA'
+            ? 'BETA'
+            : 'MOCK',
+      );
+      expect(context.sol?.username).toBe('20000000001FAKE');
+      expect(context.certificate).toBeNull();
+      expect(context.consultEndpoint).toBe(
+        context.endpoint.replace(/\/billService$/, '/billConsultService'),
+      );
+    },
+  );
+  it.each(['user', 'password', 'base64', 'certPassword'])(
+    'never mixes an incomplete deployment group with an inactive persisted %s',
+    async (missing) => {
+      process.env.SUNAT_SOL_USER = 'FAKE';
+      process.env.SUNAT_SOL_PASSWORD = 'fake-password';
+      process.env.CERT_BASE64 = 'fake-data';
+      process.env.CERT_PASSWORD = 'fake-cert-password';
+      delete process.env[
+        {
+          user: 'SUNAT_SOL_USER',
+          password: 'SUNAT_SOL_PASSWORD',
+          base64: 'CERT_BASE64',
+          certPassword: 'CERT_PASSWORD',
+        }[missing]!
+      ];
+      const context = await new IssuerConfigResolver(
+        {} as never,
+        encryption,
+      ).fromCompany(company(), {} as never);
+      expect(
+        missing === 'user' || missing === 'password'
+          ? context.sol
+          : context.certificate,
+      ).toBeNull();
+    },
+  );
+  it('retains an already-prefixed company SOL username and defaults a missing version', async () => {
+    const row = {
+      ...company(),
+      issuer_sol_configured: true,
+      sol_user: '20000000001FAKE',
+      sol_pass_encrypted: encryption.encrypt(
+        'fake',
+        'fake-a',
+        'sol_pass_encrypted',
+      ),
+      issuer_environment: 'BETA',
+    };
+    const result = await new IssuerConfigResolver(
+      {} as never,
+      encryption,
+    ).fromCompany(row, {} as never);
+    expect(result.sol?.username).toBe(row.sol_user);
+    expect(result.version).toBe('');
+    expect(result.endpoint).toContain('e-beta.sunat.gob.pe');
+  });
+  it.each([
+    { cert_storage_url: null, cert_pass_encrypted: 'fake' },
+    { cert_storage_url: 'https://public.invalid', cert_pass_encrypted: 'fake' },
+    { cert_storage_url: 'private:fake', cert_pass_encrypted: null },
+  ])('rejects malformed persisted certificate groups: %j', async (fields) => {
+    const db = { issuerCertificate: { findFirst: jest.fn() } };
+    await expect(
+      new IssuerConfigResolver(db as never, encryption).fromCompany(
+        { ...company(), ...fields, issuer_cert_configured: true },
+        db as never,
+      ),
+    ).rejects.toThrow('ISSUER_CERT_GROUP_INCOMPLETE');
+    expect(db.issuerCertificate.findFirst).not.toHaveBeenCalled();
+  });
+  it('requires the private object to belong to the requested company', async () => {
+    const db = { issuerCertificate: { findFirst: jest.fn(async () => null) } };
+    const row = {
+      ...company(),
+      issuer_cert_configured: true,
+      cert_storage_url: 'private:missing',
+      cert_pass_encrypted: 'fake',
+    };
+    await expect(
+      new IssuerConfigResolver(db as never, encryption).fromCompany(
+        row,
+        db as never,
+      ),
+    ).rejects.toThrow('ISSUER_CERT_UNAVAILABLE');
+    expect(db.issuerCertificate.findFirst).toHaveBeenCalledWith({
+      where: { id: 'missing', company_id: row.id },
+    });
+  });
+  it('rejects certificate ciphertext copied from another company without fallback', async () => {
+    const db = {
+      issuerCertificate: {
+        findFirst: jest.fn(async () => ({
+          encrypted_content: encryption.encrypt(
+            'fake-p12',
+            'fake-other',
+            'certificate_pkcs12',
+          ),
+        })),
+      },
+    };
+    const row = {
+      ...company(),
+      issuer_cert_configured: true,
+      cert_storage_url: 'private:fake',
+      cert_pass_encrypted: encryption.encrypt(
+        'fake-password',
+        'fake-a',
+        'cert_pass_encrypted',
+      ),
+    };
+    await expect(
+      new IssuerConfigResolver(db as never, encryption).fromCompany(
+        row,
+        db as never,
+      ),
+    ).rejects.toThrow('ISSUER_CONFIG_DECRYPTION_FAILED');
+  });
+  it('rejects invalid persisted environments instead of silently choosing another identity', async () => {
+    await expect(
+      new IssuerConfigResolver({} as never, encryption).fromCompany(
+        { ...company(), issuer_environment: 'INVALID' },
+        {} as never,
+      ),
+    ).rejects.toThrow('ISSUER_ENV_INVALID');
+  });
+});
