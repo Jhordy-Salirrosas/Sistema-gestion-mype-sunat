@@ -45,6 +45,12 @@ model Incoterm {
   @@map("incoterms")
 }
 
+enum PartnerTaxIndicator {
+  RETENCION
+  PERCEPCION
+  BUEN_CONTRIBUYENTE
+}
+
 /// Cliente, proveedor, importador, agente o transportista.
 /// Los roles se guardan como texto para no crear un enum adicional en esta fase.
 model BusinessPartner {
@@ -74,11 +80,28 @@ model BusinessPartner {
   bank_accounts   PartnerBankAccount[]
   products        InventoryProduct[] @relation("ProductDefaultSupplier")
   national_purchases NationalPurchase[]
+  tax_status      PartnerTaxStatus[]
 
   @@unique([company_id, doc_type, doc_number])
   @@index([company_id, legal_name])
   @@index([company_id, is_active])
   @@map("business_partners")
+}
+
+model PartnerTaxStatus {
+  id          String              @id @default(uuid())
+  partner_id  String
+  partner     BusinessPartner     @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  indicator   PartnerTaxIndicator
+  value       Boolean
+  valid_from  DateTime
+  valid_to    DateTime?
+  source      String              @default("MANUAL") // MANUAL | SUNAT
+  updated_by  String?
+  created_at  DateTime            @default(now())
+
+  @@index([partner_id, indicator, valid_from])
+  @@map("partner_tax_status")
 }
 
 model PartnerAddress {

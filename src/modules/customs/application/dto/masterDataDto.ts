@@ -333,3 +333,26 @@ export class UpsertAccountingMappingDto {
   @IsBoolean()
   isActive?: boolean;
 }
+
+export class UpsertPartnerTaxStatusDto {
+  @IsIn(['RETENCION', 'PERCEPCION', 'BUEN_CONTRIBUYENTE'])
+  indicator!: 'RETENCION' | 'PERCEPCION' | 'BUEN_CONTRIBUYENTE';
+
+  @IsBoolean()
+  value!: boolean;
+
+  @IsDateString()
+  validFrom!: string;
+
+  @IsOptional()
+  @IsDateString()
+  validTo?: string;
+
+  @IsOptional()
+  @IsIn(['MANUAL', 'SUNAT'])
+  source?: 'MANUAL' | 'SUNAT';
+
+  @IsOptional()
+  @IsString()
+  updatedBy?: string;
+}

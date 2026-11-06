@@ -195,6 +195,51 @@ export class MasterDataService {
     });
   }
 
+  async getPartnerTaxStatus(companyId: string, partnerId: string) {
+    await this.getPartner(companyId, partnerId);
+    const hoy = new Date();
+    const rows = await this.prisma.partnerTaxStatus.findMany({
+      where: {
+        partner_id: partnerId,
+        valid_from: { lte: hoy },
+        OR: [{ valid_to: null }, { valid_to: { gte: hoy } }],
+      },
+      orderBy: [{ indicator: 'asc' }, { valid_from: 'desc' }],
+    });
+    return rows;
+  }
+
+  async upsertPartnerTaxStatus(
+    companyId: string,
+    partnerId: string,
+    dto: { indicator: string; value: boolean; validFrom: string; validTo?: string; source?: string; updatedBy?: string },
+  ) {
+    await this.getPartner(companyId, partnerId);
+    const validFrom = new Date(dto.validFrom);
+    await this.prisma.$transaction([
+      this.prisma.partnerTaxStatus.updateMany({
+        where: {
+          partner_id: partnerId,
+          indicator: dto.indicator as never,
+          valid_to: null,
+        },
+        data: { valid_to: validFrom },
+      }),
+      this.prisma.partnerTaxStatus.create({
+        data: {
+          partner_id: partnerId,
+          indicator: dto.indicator as never,
+          value: dto.value,
+          valid_from: validFrom,
+          valid_to: dto.validTo ? new Date(dto.validTo) : null,
+          source: dto.source ?? 'MANUAL',
+          updated_by: dto.updatedBy ?? null,
+        },
+      }),
+    ]);
+    return this.getPartnerTaxStatus(companyId, partnerId);
+  }
+
   async addAddress(companyId: string, partnerId: string, dto: AddPartnerAddressDto) {
     await this.getPartner(companyId, partnerId);
     return this.prisma.partnerAddress.create({
