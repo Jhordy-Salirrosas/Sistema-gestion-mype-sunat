@@ -168,6 +168,56 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Reencola un comprobante varado solo si no tiene un job vivo.
+   *
+   * La unicidad la garantiza `singletonKey`: pg-boss rechaza un segundo job
+   * con la misma clave mientras el primero siga en la cola. La comprobación
+   * previa de cola y DLQ solo evita ruido; la carrera entre dos instancias la
+   * resuelve la base de datos, no esta función.
+   *
+   * El callback `estadoPermitido` lo aporta M1: M2 no conoce los estados
+   * fiscales y no debe decidir si una factura ya fue aceptada.
+   */
+  async reenqueueInvoiceIfIdle(
+    invoiceId: string,
+    companyId: string,
+    estadoPermitido?: () => Promise<boolean>,
+  ): Promise<{
+    estado: 'ENCOLADO' | 'YA_EN_COLA' | 'EN_DLQ' | 'ESTADO_NO_PERMITIDO';
+    jobId?: string;
+  }> {
+    if (!invoiceId || !companyId) {
+      throw new Error('invoiceId y companyId son obligatorios para reencolar.');
+    }
+
+    const vivos = await this.boss.findJobs(INVOICE_QUEUE, {
+      data: { invoice_id: invoiceId },
+      queued: true,
+    });
+    if (vivos.length > 0) return { estado: 'YA_EN_COLA' };
+
+    const enDlq = await this.boss.findJobs(INVOICE_DLQ, {
+      data: { invoice_id: invoiceId },
+      queued: true,
+    });
+    if (enDlq.length > 0) return { estado: 'EN_DLQ' };
+
+    if (estadoPermitido && !(await estadoPermitido())) {
+      return { estado: 'ESTADO_NO_PERMITIDO' };
+    }
+
+    const jobId = await this.boss.send(
+      INVOICE_QUEUE,
+      { invoice_id: invoiceId, company_id: companyId },
+      { singletonKey: `invoice:${invoiceId}` },
+    );
+
+    return jobId
+      ? { estado: 'ENCOLADO', jobId }
+      : { estado: 'YA_EN_COLA' };
+  }
+
+  /**
    * Cuantos trabajos esperan en la cola principal.
    * Mantiene el conteo operativo de la cola para las tareas internas.
    */
