@@ -73,4 +73,10 @@ describe('Reportes contables', () => {
     expect(result.resultadoBruto).toBe(4480);
     expect(result.resultadoOperativo).toBe(3480);
   });
+
+  it('rechaza un periodo invalido en el estado de resultados', async () => {
+    await expect(
+      new GetIncomeStatementUseCase(repository).execute('c1', '2026-13'),
+    ).rejects.toThrow(BadRequestException);
+  });
 });

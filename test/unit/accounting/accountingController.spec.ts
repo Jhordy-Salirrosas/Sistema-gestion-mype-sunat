@@ -224,4 +224,20 @@ describe('AccountingController', () => {
     );
     expect(updated).toEqual({ id: 'map-1' });
   });
+
+  it('delega el estado de resultados', async () => {
+    const statement = {
+      period: '2026-11',
+      groups: [],
+      ingresos: 0,
+      costoVentas: 0,
+      gastosOperativos: 0,
+      resultadoBruto: 0,
+      resultadoOperativo: 0,
+    };
+    getIncomeStatementUseCase.execute.mockResolvedValue(statement);
+
+    await expect(controller.getIncomeStatement('comp-1', '2026-11')).resolves.toBe(statement);
+    expect(getIncomeStatementUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
+  });
 });
