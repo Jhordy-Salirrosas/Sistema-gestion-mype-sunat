@@ -1,9 +1,10 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   ACCOUNTING_REPOSITORY_PORT,
   type IAccountingRepositoryPort,
 } from '../../domain/ports/accountingRepositoryPort';
 import type { BalanceSheetGroup } from '../../domain/entities/balanceSheetEntity';
+import { agruparSaldos, resultadoDelEjercicio, validarPeriodo } from '../utils/accountingReportUtils';
 
 const GRUPOS = [
   { key: 'activo' as const, label: 'Activo', prefijos: ['1', '2', '3'], signo: 1 },
@@ -19,38 +20,10 @@ export class GetBalanceSheetUseCase {
   ) {}
 
   async execute(companyId: string, period: string) {
-    const normalizado = /^\d{4}-\d{1,2}$/.test(period)
-      ? `${period.slice(0, 4)}-${period.slice(5).padStart(2, '0')}`
-      : period;
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(normalizado)) {
-      throw new BadRequestException('El período debe tener formato YYYY-MM');
-    }
-
+    const normalizado = validarPeriodo(period);
     const rows = await this.repository.findTrialBalanceRows(companyId, normalizado);
-    const groups: BalanceSheetGroup[] = GRUPOS.map((grupo) => {
-      const lines = rows
-        .filter((row) => grupo.prefijos.some((prefijo) => row.accountCode.startsWith(prefijo)))
-        .map((row) => ({
-          accountCode: row.accountCode,
-          accountName: row.accountName,
-          amount: Math.round(grupo.signo * (row.debit - row.credit) * 100) / 100,
-        }))
-        .filter((line) => line.amount !== 0);
-      return {
-        key: grupo.key,
-        label: grupo.label,
-        lines,
-        total: Math.round(lines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100,
-      };
-    });
-
-    const ingreso = rows
-      .filter((row) => row.accountCode.startsWith('70'))
-      .reduce((sum, row) => sum + (row.credit - row.debit), 0);
-    const gasto = rows
-      .filter((row) => /^(69|6|9)/.test(row.accountCode))
-      .reduce((sum, row) => sum + (row.debit - row.credit), 0);
-    const resultadoEjercicio = Math.round((ingreso - gasto) * 100) / 100;
+    const groups = agruparSaldos(rows, GRUPOS) as BalanceSheetGroup[];
+    const resultadoEjercicio = resultadoDelEjercicio(rows);
 
     const activo = groups.find((g) => g.key === 'activo')!;
     const pasivo = groups.find((g) => g.key === 'pasivo')!;
