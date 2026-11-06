@@ -207,11 +207,11 @@ export const calcularTotales = (
 
 /**
  * Importe de la retención del IGV para un agente de retención.
- * SUNAT exige que se redondee al entero superior en soles.
+ * Se aplica sobre el total superior a S/ 700 y se redondea a céntimos.
  */
 export const calcularRetencion = (importe: number): number => {
-  if (importe <= 0) return 0;
-  return Math.ceil(importe * TASA_RETENCION_IGV);
+  if (centimos(importe) <= 700) return 0;
+  return centimos(importe * TASA_RETENCION_IGV);
 };
 
 /** Tasa del IGV reexportada para que el generador no la importe por separado. */
