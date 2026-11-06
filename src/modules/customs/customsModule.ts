@@ -6,6 +6,10 @@ import { CustomsSettlementController } from './infrastructure/controllers/custom
 import { LandedCostController } from './infrastructure/controllers/landedCostController';
 import { GoodsReceiptController } from './infrastructure/controllers/goodsReceiptController';
 import { CustomsSirePurchasesController } from './infrastructure/controllers/customsSirePurchasesController';
+import { MasterDataController } from './infrastructure/controllers/masterDataController';
+import { MasterDataService } from './application/services/masterDataService';
+import { ImportOrderController } from './infrastructure/controllers/importOrderController';
+import { ImportOrderService } from './application/services/importOrderService';
 
 // Use Cases
 import {
@@ -52,8 +56,12 @@ import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nest
     LandedCostController,
     GoodsReceiptController,
     CustomsSirePurchasesController,
+    MasterDataController,
+    ImportOrderController,
   ],
   providers: [
+    MasterDataService,
+    ImportOrderService,
     // Use Cases
     CalculateDuaUseCase,
     RegisterDuaUseCase,
@@ -106,6 +114,8 @@ import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nest
     },
   ],
   exports: [
+    MasterDataService,
+    ImportOrderService,
     CUSTOMS_REPOSITORY_PORT,
     CUSTOMS_SHIPMENT_REPOSITORY_PORT,
     CUSTOMS_SETTLEMENT_REPOSITORY_PORT,

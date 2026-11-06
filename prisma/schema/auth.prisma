@@ -34,6 +34,7 @@ model Company {
   invoices              Invoice[]
   declarations          CustomsDeclaration[]
   shipments             CustomsShipment[]
+  import_orders         ImportOrder[]
   goods_receipts        GoodsReceipt[]
   landed_cost_sheets    LandedCostSheet[]
   inventory_warehouses  InventoryWarehouse[]
@@ -41,6 +42,7 @@ model Company {
   inventory_balances    InventoryBalance[]
   inventory_movements   InventoryMovement[]
   inventory_obligations InventoryBookObligationDecision[]
+  national_purchases    NationalPurchase[]
   sire_proposals        SireProposal[]
   sire_report_uploads   SireReportUpload[]
   sire_periods          SirePeriod[]
@@ -49,6 +51,9 @@ model Company {
   accounting_periods    AccountingPeriod[]
   ple_books             PleBook[]
   audit_logs            AuditLog[]
+  business_partners     BusinessPartner[]
+  accounting_mappings   AccountingMapping[]
+  treasury_movements    TreasuryMovement[]
 
   @@map("companies")
 }
