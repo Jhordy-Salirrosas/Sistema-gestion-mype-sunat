@@ -7,6 +7,7 @@
  */
 import {
   INVOICE_DLQ,
+  INVOICE_QUEUE,
   QueueService,
 } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 
@@ -196,5 +197,57 @@ describe('HU-04 · QueueService (DLQ)', () => {
     } finally {
       process.env.DATABASE_URL = original;
     }
+  });
+
+  describe('reenqueueInvoiceIfIdle', () => {
+    it('encola con singletonKey cuando no hay job vivo ni DLQ', async () => {
+      const { service, boss } = crearServicio();
+      boss.findJobs.mockResolvedValue([]);
+      boss.send.mockResolvedValue('job-nuevo');
+
+      await expect(
+        service.reenqueueInvoiceIfIdle('inv-1', 'company-a'),
+      ).resolves.toEqual({ estado: 'ENCOLADO', jobId: 'job-nuevo' });
+
+      expect(boss.send).toHaveBeenCalledWith(
+        INVOICE_QUEUE,
+        { invoice_id: 'inv-1', company_id: 'company-a' },
+        { singletonKey: 'invoice:inv-1' },
+      );
+    });
+
+    it('no duplica si ya hay un job vivo', async () => {
+      const { service, boss } = crearServicio();
+      boss.findJobs
+        .mockResolvedValueOnce([{ id: 'job-vivo' }])
+        .mockResolvedValueOnce([]);
+
+      await expect(
+        service.reenqueueInvoiceIfIdle('inv-1', 'company-a'),
+      ).resolves.toEqual({ estado: 'YA_EN_COLA' });
+      expect(boss.send).not.toHaveBeenCalled();
+    });
+
+    it('no reencola si el comprobante está en DLQ', async () => {
+      const { service, boss } = crearServicio();
+      boss.findJobs
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'job-dlq' }]);
+
+      await expect(
+        service.reenqueueInvoiceIfIdle('inv-1', 'company-a'),
+      ).resolves.toEqual({ estado: 'EN_DLQ' });
+      expect(boss.send).not.toHaveBeenCalled();
+    });
+
+    it('respeta el callback de estado de M1', async () => {
+      const { service, boss } = crearServicio();
+      boss.findJobs.mockResolvedValue([]);
+
+      await expect(
+        service.reenqueueInvoiceIfIdle('inv-1', 'company-a', async () => false),
+      ).resolves.toEqual({ estado: 'ESTADO_NO_PERMITIDO' });
+      expect(boss.send).not.toHaveBeenCalled();
+    });
   });
 });
