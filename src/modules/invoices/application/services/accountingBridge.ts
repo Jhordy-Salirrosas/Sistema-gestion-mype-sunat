@@ -140,6 +140,23 @@ export const lineasAsientoVenta = (
   return lineas.map((l, index) => ({ ...l, lineOrder: index + 1 }));
 };
 
+/**
+ * Asiento de una Nota de Crédito (07): invierte la venta original.
+ *
+ * Una NC reduce el crédito fiscal del cliente y la cuenta por cobrar del
+ * emisor. Se obtiene invirtiendo debe/haber del asiento de venta, para que
+ * ambas caras usen exactamente las mismas cuentas e importes.
+ */
+export const lineasAsientoNotaCredito = (
+  datos: DatosAsientoVenta,
+): readonly AccountingLineDto[] =>
+  lineasAsientoVenta(datos).map((linea, index) => ({
+    ...linea,
+    debitAmount: linea.creditAmount,
+    creditAmount: linea.debitAmount,
+    lineOrder: index + 1,
+  }));
+
 /** Balance del asiento, para verificar antes de persistir. */
 export const balanceAsiento = (
   lineas: readonly AccountingLineDto[],

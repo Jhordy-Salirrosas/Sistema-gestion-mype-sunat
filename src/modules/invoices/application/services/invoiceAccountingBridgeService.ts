@@ -25,7 +25,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { RegisterManualMovementUseCase } from '../../../inventory/application/use-cases/registerManualMovementUseCase';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
-import { CUENTAS_VENTA, balanceAsiento, lineasAsientoVenta, periodoDe } from './accountingBridge';
+import { CUENTAS_VENTA, balanceAsiento, lineasAsientoNotaCredito, lineasAsientoVenta, periodoDe } from './accountingBridge';
 import { movimientosDeFactura, type LineaParaKardex } from './kardexBridge';
 
 /** Módulo que se escribe en `source_module` del asiento. */
@@ -207,7 +207,9 @@ export class InvoiceAccountingBridgeService {
       return { asientoId: existente.id, asientoOmitido: true };
     }
 
-    const lineas = lineasAsientoVenta(factura.importes);
+    const lineas = factura.tipoComprobante === '07'
+      ? lineasAsientoNotaCredito(factura.importes)
+      : lineasAsientoVenta(factura.importes);
     const balance = balanceAsiento(lineas);
 
     if (!balance.cuadra) {
