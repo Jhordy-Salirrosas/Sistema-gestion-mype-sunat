@@ -52,6 +52,7 @@ export interface DecisionCompuerta {
    * solo aparece en la consola se pierde cuando el proceso se reinicia.
    */
   omitidaPorDemo: boolean;
+  noConcluyente?: boolean;
 }
 
 /**
@@ -94,6 +95,14 @@ export async function validarAntesDeEnviar(
   persistence: CdrPersistenceService,
 ): Promise<ProcessCdrResult | null> {
   const decision = await decidirEnvio(params, xml, validator, persistence);
+  // Este atajo no tiene acceso a las demás comprobaciones ni puede permitir
+  // por sí solo un despacho sin el consumidor que las ejecuta y audita.
+  if (decision.noConcluyente) {
+    throw new ErrorValidacionBloqueada(
+      'Requiere comprobaciones y auditoría del consumidor',
+      'NO_CONCLUYENTE',
+    );
+  }
   return decision.bloqueo;
 }
 
@@ -126,6 +135,14 @@ export async function decidirEnvio(
   }
 
   const resultado = await validator.validar(xml, params.tipoComprobante);
+
+  if (
+    resultado.causaNoConcluyente === 'DEPENDENCIA_VALIDATE_UTILS_AUSENTE' &&
+    !resultado.bloqueado && !resultado.valido && !resultado.validadoDeVerdad &&
+    resultado.errores.length === 0
+  ) {
+    return { bloqueo: null, omitidaPorDemo: false, noConcluyente: true };
+  }
 
   if (resultado.bloqueado) {
     throw new ErrorValidacionBloqueada(

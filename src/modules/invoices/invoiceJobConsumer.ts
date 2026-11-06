@@ -601,6 +601,24 @@ export class InvoiceJobConsumer implements OnModuleInit {
       this.xslValidator,
       this.cdrPersistence,
     );
+    if (decision.noConcluyente) {
+      // Incluye XML ya firmado en intentos anteriores: esa ruta antes no se
+      // volvía a comprobar. El servicio actual aplica estructura y negocio;
+      // no ejecuta los esquemas XSD oficiales completos.
+      const comprobacion = this.xsdValidator.validateInvoiceUbl21(xml);
+      if (!comprobacion.isValid) {
+        throw new Error(`XML invalido contra comprobaciones UBL: ${(comprobacion.errors ?? []).join(' | ')}`);
+      }
+      await this.cdrPersistence.persistFailure({
+        invoiceId: invoice.id,
+        estadoNuevo: invoice.estado,
+        estadoAnterior: invoice.estado,
+        intento: params.intento ?? 1,
+        codigoError: null,
+        mensajeError: 'Validación XSL no concluyente: falta commons/error/validate_utils.xsl; el despacho se apoya en comprobaciones estructurales UBL y reglas internas, no en una validación XSD oficial completa.',
+        tiempoRespuestaMs: null,
+      });
+    }
     if (decision.omitidaPorDemo) {
       this.logger.warn(`[WARN][DEMO] ${invoiceId}: ${AVISO_DEMO}`);
     }
