@@ -15,6 +15,7 @@ import { describe, expect, it, jest } from '@jest/globals';
 import {
   CUENTAS_VENTA,
   balanceAsiento,
+  lineasAsientoNotaCredito,
   lineasAsientoVenta,
   type DatosAsientoVenta,
 } from '../../../src/modules/invoices/application/services/accountingBridge';
@@ -154,5 +155,29 @@ describe('M1 · el guardado del XML nunca lanza', () => {
     const servicio = new SignedXmlStorageService(prisma as never);
 
     await expect(servicio.guardar('inv-1', '<Invoice/>')).resolves.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5 · Nota de Crédito
+// ---------------------------------------------------------------------------
+
+describe('M1 · asiento de Nota de Crédito', () => {
+  it('invierte debe y haber de la venta y sigue cuadrado', () => {
+    const datos: DatosAsientoVenta = {
+      gravado: 100,
+      igv: 18,
+      exonerado: 0,
+      inafecto: 0,
+      icbper: 0,
+      detraccion: 0,
+      retencion: 0,
+      total: 118,
+    };
+    const lineas = lineasAsientoNotaCredito(datos);
+    expect(lineas.find((l) => l.accountCode === '12121')?.creditAmount).toBe(118);
+    expect(lineas.find((l) => l.accountCode === '70121')?.debitAmount).toBe(100);
+    expect(lineas.find((l) => l.accountCode === '40111')?.debitAmount).toBe(18);
+    expect(balanceAsiento(lineas).cuadra).toBe(true);
   });
 });
