@@ -1,3 +1,8 @@
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../../../sunat/issuerConfigResolver';
+import { Optional } from '@nestjs/common';
 /**
  * Descarga de XML, CDR y PDF de un comprobante (TA-65, HU-11).
  *
@@ -72,6 +77,7 @@ export class InvoiceDownloadService {
     private readonly qr: InvoiceQrService,
     private readonly signature: SignatureService,
     private readonly xmlFirmadoGuardado: SignedXmlStorageService,
+    @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
   /**
@@ -88,7 +94,8 @@ export class InvoiceDownloadService {
   ): Promise<ArchivoDescarga> {
     const fila = await this.cargar(companyId, invoiceId);
 
-    if (tipo === 'xml') return this.xml(fila);
+    if (tipo === 'xml')
+      return this.xml(fila, await this.issuerConfig?.resolve(companyId));
     if (tipo === 'cdr') return this.cdr(fila);
     return this.pdfDelComprobante(fila, formato);
   }
@@ -113,6 +120,7 @@ export class InvoiceDownloadService {
    */
   private async xml(
     fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+    context?: IssuerContext,
   ): Promise<ArchivoDescarga> {
     const guardado = fila.xml_storage_url;
     const esXml = guardado && guardado.trimStart().startsWith('<?xml');
@@ -121,7 +129,7 @@ export class InvoiceDownloadService {
     if (esXml) {
       texto = guardado;
     } else {
-      texto = this.regenerarXmlFirmado(fila);
+      texto = this.regenerarXmlFirmado(fila, context);
       // Se persiste para no volver a firmar en cada descarga. El servicio de
       // guardado nunca lanza: si la base falla, se entrega el XML firmado
       // igualmente y solo se pierde la caché.
@@ -145,6 +153,7 @@ export class InvoiceDownloadService {
    */
   private regenerarXmlFirmado(
     fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+    context?: IssuerContext,
   ): string {
     const payload = fila.payload_ubl as unknown as InvoicePayload | null;
     if (!payload || typeof payload !== 'object') {
@@ -160,9 +169,8 @@ export class InvoiceDownloadService {
         'se regenera y se firma antes de entregarlo',
     );
 
-    return this.signature.signXml(sinFirma).signedXml;
+    return this.signature.signXml(sinFirma, context).signedXml;
   }
-
 
   /**
    * Fila mínima del comprobante, con sus ítems y su cliente.
@@ -253,7 +261,9 @@ export class InvoiceDownloadService {
    * Se aceptan las dos fuentes: `cdr_sunat` (el XML en crudo que guarda el
    * worker) y, si algún día existe, `cdr_storage_url`.
    */
-  private cdr(fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>): ArchivoDescarga {
+  private cdr(
+    fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
+  ): ArchivoDescarga {
     const cdr = this.xmlDelCdr(fila);
 
     if (!cdr || !cdr.trimStart().startsWith('<?xml')) {
@@ -314,8 +324,19 @@ export class InvoiceDownloadService {
     fila: Awaited<ReturnType<InvoiceDownloadService['cargar']>>,
   ): Promise<DatosPdfComprobante> {
     const gratuitas = new Set([
-      '11', '12', '13', '14', '15', '16',
-      '21', '31', '32', '33', '34', '35', '36',
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '16',
+      '21',
+      '31',
+      '32',
+      '33',
+      '34',
+      '35',
+      '36',
     ]);
 
     const lineas: LineaImpresa[] = fila.items.map((item) => ({
@@ -356,7 +377,9 @@ export class InvoiceDownloadService {
     // sumaba `igv_amount` de todas las líneas, así que una boleta de S/ 100 sin
     // bolsas imprimía "ICBPER 18.00" y el total se iba a S/ 136. El importe real
     // de las bolsas solo existe en el payload cuando se emitieron.
-    const icbper = centimos(Number(payload['icbper'] ?? payload['montoIcbper'] ?? 0) || 0);
+    const icbper = centimos(
+      Number(payload['icbper'] ?? payload['montoIcbper'] ?? 0) || 0,
+    );
     const total = centimos(gravadoR + igv + exonerado + inafecto + icbper);
 
     const fecha = fila.fecha_emision.toISOString().slice(0, 10);
@@ -376,7 +399,9 @@ export class InvoiceDownloadService {
 
     return {
       rucEmisor: fila.ruc_emisor,
-      razonSocialEmisor: String(payload['razonSocialEmisor'] ?? 'EMPRESA EMISORA'),
+      razonSocialEmisor: String(
+        payload['razonSocialEmisor'] ?? 'EMPRESA EMISORA',
+      ),
       direccionEmisor: payload['direccionEmisor'] as string | undefined,
       tipoComprobante: fila.tipo_comprobante,
       serie: fila.serie,

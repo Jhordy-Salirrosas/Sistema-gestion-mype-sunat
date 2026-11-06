@@ -1,3 +1,4 @@
+import type { IssuerContext } from '../issuerConfigResolver';
 /**
  * Operaciones SOAP `sendSummary` y `getStatus` del billService (TA-67).
  *
@@ -21,7 +22,6 @@ import {
   SUNAT_DEFAULT_TIMEOUT_MS,
   SUNAT_SEND_BILL_SOAP_ACTION,
 } from './soap.constants';
-import { buildSolUsername } from './sunatBillTypes';
 
 /** Acciones SOAP de las dos operaciones. */
 export const SEND_SUMMARY_SOAP_ACTION =
@@ -39,6 +39,7 @@ export interface CredencialesSol {
 
 /** Parámetros de `sendSummary`. */
 export interface SendSummaryParams {
+  context?: IssuerContext;
   /** Nombre del ZIP: RUC-TIPO-CORRELATIVO.zip (RC-... o RA-...). */
   fileName: string;
   /** ZIP del XML ya firmado. */
@@ -82,7 +83,10 @@ const cabeceraSeguridad = (
   credentiales: CredencialesSol | null | undefined,
 ): string => {
   if (!credentiales) return '';
-  const usuario = buildSolUsername(ruc) ?? credentiales.usuario;
+  const usuario =
+    ruc && !credentiales.usuario.startsWith(ruc)
+      ? ruc + credentiales.usuario
+      : credentiales.usuario;
 
   return `<soapenv:Header>
       <wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
@@ -137,7 +141,10 @@ export const construirSobreGetStatus = (params: {
  * texto y solo se necesitan dos campos; cargar un DOM completo por respuesta en
  * el worker sería desproporcionado.
  */
-export const extraerEtiqueta = (xml: string, etiqueta: string): string | null => {
+export const extraerEtiqueta = (
+  xml: string,
+  etiqueta: string,
+): string | null => {
   const patron = new RegExp(
     `<(?:\\w+:)?${etiqueta}[^>]*>([\\s\\S]*?)</(?:\\w+:)?${etiqueta}>`,
     'i',
@@ -188,7 +195,10 @@ export const parseGetStatusResponse = (
 export class SunatSummaryTransportError extends Error {
   readonly reintentable = true;
 
-  constructor(message: string, readonly cause?: unknown) {
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
     super(message);
     this.name = 'SunatSummaryTransportError';
   }
@@ -218,7 +228,7 @@ export class SunatSummaryClient {
       ruc: params.fileName.split('-')[0],
     });
 
-    const { respuesta, crudo, ms } = await this.post(sobre);
+    const { respuesta, crudo, ms } = await this.post(sobre, params.context);
     const { ticket, fault } = parseSendSummaryResponse(crudo);
 
     if (fault) {
@@ -242,9 +252,10 @@ export class SunatSummaryClient {
   public async getStatus(
     ticket: string,
     credentials?: CredencialesSol | null,
+    context?: IssuerContext,
   ): Promise<GetStatusResult> {
     const sobre = construirSobreGetStatus({ ticket, credentials });
-    const { respuesta, crudo, ms } = await this.post(sobre);
+    const { respuesta, crudo, ms } = await this.post(sobre, context);
     const parsed = parseGetStatusResponse(crudo);
 
     if (parsed.fault) {
@@ -262,7 +273,10 @@ export class SunatSummaryClient {
   }
 
   /** POST al billService con la misma política de timeout que `sendBill`. */
-  private async post(sobre: string): Promise<{
+  private async post(
+    sobre: string,
+    context?: IssuerContext,
+  ): Promise<{
     respuesta: Response;
     crudo: string;
     ms: number;
@@ -270,7 +284,7 @@ export class SunatSummaryClient {
     const inicio = Date.now();
 
     try {
-      const respuesta = await fetch(this.endpoint, {
+      const respuesta = await fetch(context?.endpoint ?? this.endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -280,7 +294,7 @@ export class SunatSummaryClient {
         body: sobre,
         // Sin este timeout, un cuelgue de SUNAT bloquea el worker hasta 300 s
         // por el headersTimeout de undici.
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(context?.timeoutMs ?? this.timeoutMs),
       });
 
       const crudo = await respuesta.text();

@@ -21,11 +21,17 @@ describe('CertificateService (TT-04)', () => {
 
     const now = new Date();
     if (isExpired) {
-      cert.validity.notBefore = new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000);
-      cert.validity.notAfter = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+      cert.validity.notBefore = new Date(
+        now.getTime() - 40 * 24 * 60 * 60 * 1000,
+      );
+      cert.validity.notAfter = new Date(
+        now.getTime() - 10 * 24 * 60 * 60 * 1000,
+      );
     } else {
       cert.validity.notBefore = now;
-      cert.validity.notAfter = new Date(now.getTime() + daysValid * 24 * 60 * 60 * 1000);
+      cert.validity.notAfter = new Date(
+        now.getTime() + daysValid * 24 * 60 * 60 * 1000,
+      );
     }
 
     const attrs = [
@@ -36,10 +42,15 @@ describe('CertificateService (TT-04)', () => {
     cert.setIssuer(attrs);
     cert.sign(keys.privateKey, forge.md.sha256.create());
 
-    const p12Asn1 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], password, {
-      generateLocalKeyId: true,
-      friendlyName: 'cert-test',
-    });
+    const p12Asn1 = forge.pkcs12.toPkcs12Asn1(
+      keys.privateKey,
+      [cert],
+      password,
+      {
+        generateLocalKeyId: true,
+        friendlyName: 'cert-test',
+      },
+    );
     const p12Der = forge.asn1.toDer(p12Asn1).getBytes();
     return Buffer.from(p12Der, 'binary').toString('base64');
   }
@@ -60,7 +71,11 @@ describe('CertificateService (TT-04)', () => {
     const ruc = '20601234567';
     const certBase64 = generateTestP12Base64(ruc, false, 90, 'secret123');
 
-    const result = service.validarYCargarCertificado(certBase64, 'secret123', ruc);
+    const result = service.validarYCargarCertificado(
+      certBase64,
+      'secret123',
+      ruc,
+    );
 
     expect(result).toBeDefined();
     expect(result.issuerRuc).toBe(ruc);
@@ -73,7 +88,11 @@ describe('CertificateService (TT-04)', () => {
     const ruc = '20601234567';
     const certBase64 = generateTestP12Base64(ruc, false, 15, 'secret123');
 
-    const result = service.validarYCargarCertificado(certBase64, 'secret123', ruc);
+    const result = service.validarYCargarCertificado(
+      certBase64,
+      'secret123',
+      ruc,
+    );
     expect(result.daysRemaining).toBeLessThanOrEqual(30);
   });
 
@@ -89,10 +108,91 @@ describe('CertificateService (TT-04)', () => {
   it('Criterio Rechazo 2: debe lanzar BadRequestException si el RUC emisor no coincide', () => {
     const rucConfigurado = '20601234567';
     const rucDistintoEnCert = '20999999999';
-    const certConOtroRuc = generateTestP12Base64(rucDistintoEnCert, false, 180, 'secret123');
+    const certConOtroRuc = generateTestP12Base64(
+      rucDistintoEnCert,
+      false,
+      180,
+      'secret123',
+    );
 
     expect(() => {
-      service.validarYCargarCertificado(certConOtroRuc, 'secret123', rucConfigurado);
+      service.validarYCargarCertificado(
+        certConOtroRuc,
+        'secret123',
+        rucConfigurado,
+      );
     }).toThrow(BadRequestException);
+  });
+});
+
+describe('D1 certificate cache partitioning', () => {
+  it('caches by company, version and content, even for identical deployment credentials', async () => {
+    const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+    const service = new CertificateService();
+    const validate = jest
+      .spyOn(service, 'validarYCargarCertificado')
+      .mockImplementation((_base64, _password, ruc) => ({
+        issuerRuc: ruc!,
+        certificatePem: 'obviously-fake-cert',
+        privateKeyPem: 'obviously-fake-key',
+        validFrom: new Date(Date.now() - 1000),
+        validTo: new Date(Date.now() + 86400000),
+        daysRemaining: 1,
+      }));
+    const certificate = Object.freeze({
+      base64: 'fake-p12',
+      password: 'fake-password',
+    });
+    const a = fakeIssuerContext('a', { certificate });
+    service.getCertificate(a);
+    service.getCertificate(a);
+    expect(validate).toHaveBeenCalledTimes(1);
+    service.getCertificate(fakeIssuerContext('b', { certificate }));
+    service.getCertificate(
+      fakeIssuerContext('a', { certificate, version: 'v2' }),
+    );
+    expect(validate).toHaveBeenCalledTimes(3);
+    expect(validate).toHaveBeenCalledWith('fake-p12', 'fake-password', a.ruc);
+  });
+  it('does not use deployment certificate when an explicit context has no certificate', async () => {
+    const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+    expect(() =>
+      new CertificateService().getCertificate(fakeIssuerContext()),
+    ).toThrow('CERT_BASE64');
+  });
+});
+
+describe('D1 PKCS#12 certificate selection', () => {
+  it('selects the certificate matching the private key when additional certificates follow it', () => {
+    const keys = forge.pki.rsa.generateKeyPair(1024);
+    const extraKeys = forge.pki.rsa.generateKeyPair(1024);
+    const makeCertificate = (pair: typeof keys, subject: string) => {
+      const certificate = forge.pki.createCertificate();
+      certificate.publicKey = pair.publicKey;
+      certificate.serialNumber = '01';
+      certificate.validity.notBefore = new Date(Date.now() - 10000);
+      certificate.validity.notAfter = new Date(Date.now() + 86400000);
+      certificate.setSubject([{ name: 'commonName', value: subject }]);
+      certificate.setIssuer(certificate.subject.attributes);
+      certificate.sign(pair.privateKey, forge.md.sha256.create());
+      return certificate;
+    };
+    const leaf = makeCertificate(keys, 'Obviously Fake Issuer 20000000001');
+    const extra = makeCertificate(
+      extraKeys,
+      'Obviously Fake Extra Certificate',
+    );
+    const p12 = forge.pkcs12.toPkcs12Asn1(
+      keys.privateKey,
+      [leaf, extra],
+      'obviously-fake-password',
+    );
+    const base64 = forge.util.encode64(forge.asn1.toDer(p12).getBytes());
+    const result = new CertificateService().validarYCargarCertificado(
+      base64,
+      'obviously-fake-password',
+      '20000000001',
+    );
+    expect(result.certificatePem).toBe(forge.pki.certificateToPem(leaf));
   });
 });

@@ -1,4 +1,10 @@
-import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import type { IssuerContext } from './issuerConfigResolver';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { SignedXml } from 'xml-crypto';
 import { DOMParser, XMLSerializer, Document, Element } from '@xmldom/xmldom';
 import { CertificateService } from './certificate.service';
@@ -10,7 +16,6 @@ export interface SignatureResult {
   signatureId: string;
 }
 
-
 interface SignedXmlExtended extends Omit<SignedXml, 'getKeyInfoContent'> {
   signingKey?: string | Buffer;
   getKeyInfoContent?: (args?: unknown) => string | null;
@@ -21,29 +26,38 @@ export class SignatureService {
   private readonly logger = new Logger(SignatureService.name);
 
   // Algoritmos mandatorios según especificación técnica de SUNAT UBL 2.1
-  private readonly CANONICALIZATION_ALGORITHM = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
-  private readonly SIGNATURE_ALGORITHM = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+  private readonly CANONICALIZATION_ALGORITHM =
+    'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
+  private readonly SIGNATURE_ALGORITHM =
+    'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
   private readonly DIGEST_ALGORITHM = 'http://www.w3.org/2001/04/xmlenc#sha256';
-  private readonly TRANSFORM_ALGORITHM = 'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
+  private readonly TRANSFORM_ALGORITHM =
+    'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
 
   constructor(private readonly certificateService: CertificateService) {}
 
   /**
    * Firma digitalmente un comprobante XML en formato UBL 2.1
    */
-  public signXml(xmlString: string): SignatureResult {
+  public signXml(xmlString: string, context?: IssuerContext): SignatureResult {
     if (!xmlString || xmlString.trim().length === 0) {
-      throw new BadRequestException('El XML proporcionado para firma está vacío');
+      throw new BadRequestException(
+        'El XML proporcionado para firma está vacío',
+      );
     }
 
     // 1. Criterio 4: Obtener y validar el certificado X.509
     let certData;
     try {
-      certData = this.certificateService.getCertificate();
+      certData = this.certificateService.getCertificate(context);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[ERROR_CERTIFICADO_SUNAT] Falla de certificado al intentar firmar: ${message}`);
-      throw new BadRequestException(`ERR_CERT_INVALID: No se puede firmar el comprobante. ${message}`);
+      this.logger.error(
+        `[ERROR_CERTIFICADO_SUNAT] Falla de certificado al intentar firmar: ${message}`,
+      );
+      throw new BadRequestException(
+        `ERR_CERT_INVALID: No se puede firmar el comprobante. ${message}`,
+      );
     }
 
     try {
@@ -57,15 +71,18 @@ export class SignatureService {
       )[0];
 
       if (!extensionContentNode) {
-        extensionContentNode = doc.getElementsByTagName('ext:ExtensionContent')[0] ||
-                               doc.getElementsByTagName('ExtensionContent')[0];
+        extensionContentNode =
+          doc.getElementsByTagName('ext:ExtensionContent')[0] ||
+          doc.getElementsByTagName('ExtensionContent')[0];
       }
 
       // Si no existe el nodo contenedor oficial de SUNAT, se inyecta en la cabecera
       if (!extensionContentNode) {
         const rootElement: Element | null = doc.documentElement;
         if (!rootElement) {
-          throw new BadRequestException('El XML no contiene un elemento raíz válido');
+          throw new BadRequestException(
+            'El XML no contiene un elemento raíz válido',
+          );
         }
 
         const ublExtensions = doc.createElementNS(
@@ -99,7 +116,9 @@ export class SignatureService {
         privateKey: certData.privateKeyPem,
         signatureAlgorithm: this.SIGNATURE_ALGORITHM,
         canonicalizationAlgorithm: this.CANONICALIZATION_ALGORITHM,
-      } as unknown as { canonicalizationAlgorithm?: string }) as SignedXmlExtended;
+      } as unknown as {
+        canonicalizationAlgorithm?: string;
+      }) as SignedXmlExtended;
       sig.signingKey = certData.privateKeyPem;
 
       // Inclusión de la referencia al documento completo con transformación enveloped
@@ -133,15 +152,27 @@ export class SignatureService {
 
       // Extracción de metadatos de verificación
       const signedDoc: Document = parser.parseFromString(signedXml, 'text/xml');
-      const digestNode = signedDoc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'DigestValue')[0] ||
-                         signedDoc.getElementsByTagName('ds:DigestValue')[0];
-      const signatureValueNode = signedDoc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'SignatureValue')[0] ||
-                                signedDoc.getElementsByTagName('ds:SignatureValue')[0];
+      const digestNode =
+        signedDoc.getElementsByTagNameNS(
+          'http://www.w3.org/2000/09/xmldsig#',
+          'DigestValue',
+        )[0] || signedDoc.getElementsByTagName('ds:DigestValue')[0];
+      const signatureValueNode =
+        signedDoc.getElementsByTagNameNS(
+          'http://www.w3.org/2000/09/xmldsig#',
+          'SignatureValue',
+        )[0] || signedDoc.getElementsByTagName('ds:SignatureValue')[0];
 
-      const digestValue = digestNode?.textContent || digestNode?.firstChild?.nodeValue || '';
-      const signatureValue = signatureValueNode?.textContent || signatureValueNode?.firstChild?.nodeValue || '';
+      const digestValue =
+        digestNode?.textContent || digestNode?.firstChild?.nodeValue || '';
+      const signatureValue =
+        signatureValueNode?.textContent ||
+        signatureValueNode?.firstChild?.nodeValue ||
+        '';
 
-      this.logger.log(`Comprobante firmado con éxito. Algoritmo: RSA-SHA256 | RUC Emisor: ${certData.issuerRuc}`);
+      this.logger.log(
+        `Comprobante firmado con éxito. Algoritmo: RSA-SHA256 | RUC Emisor: ${certData.issuerRuc}`,
+      );
 
       return {
         signedXml,
@@ -152,8 +183,12 @@ export class SignatureService {
     } catch (error: unknown) {
       if (error instanceof BadRequestException) throw error;
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error durante el cálculo de la firma XMLDSig: ${message}`);
-      throw new InternalServerErrorException(`Falla criptográfica al firmar XML: ${message}`);
+      this.logger.error(
+        `Error durante el cálculo de la firma XMLDSig: ${message}`,
+      );
+      throw new InternalServerErrorException(
+        `Falla criptográfica al firmar XML: ${message}`,
+      );
     }
   }
 
@@ -163,22 +198,42 @@ export class SignatureService {
   public verifySignature(signedXml: string): boolean {
     if (!signedXml || typeof signedXml !== 'string') return false;
     try {
-      const doc: Document = new DOMParser().parseFromString(signedXml, 'text/xml');
-      const signatureNode = doc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'Signature')[0] ||
-                            doc.getElementsByTagName('ds:Signature')[0] ||
-                            doc.getElementsByTagName('Signature')[0];
+      const doc: Document = new DOMParser().parseFromString(
+        signedXml,
+        'text/xml',
+      );
+      const signatureNode =
+        doc.getElementsByTagNameNS(
+          'http://www.w3.org/2000/09/xmldsig#',
+          'Signature',
+        )[0] ||
+        doc.getElementsByTagName('ds:Signature')[0] ||
+        doc.getElementsByTagName('Signature')[0];
 
       if (!signatureNode) return false;
 
-      const digestNode = doc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'DigestValue')[0] ||
-                         doc.getElementsByTagName('ds:DigestValue')[0];
-      const sigValueNode = doc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'SignatureValue')[0] ||
-                           doc.getElementsByTagName('ds:SignatureValue')[0];
+      const digestNode =
+        doc.getElementsByTagNameNS(
+          'http://www.w3.org/2000/09/xmldsig#',
+          'DigestValue',
+        )[0] || doc.getElementsByTagName('ds:DigestValue')[0];
+      const sigValueNode =
+        doc.getElementsByTagNameNS(
+          'http://www.w3.org/2000/09/xmldsig#',
+          'SignatureValue',
+        )[0] || doc.getElementsByTagName('ds:SignatureValue')[0];
 
-      const digest = digestNode?.textContent || digestNode?.firstChild?.nodeValue;
-      const sigVal = sigValueNode?.textContent || sigValueNode?.firstChild?.nodeValue;
+      const digest =
+        digestNode?.textContent || digestNode?.firstChild?.nodeValue;
+      const sigVal =
+        sigValueNode?.textContent || sigValueNode?.firstChild?.nodeValue;
 
-      return Boolean(digest && sigVal && digest.trim().length > 0 && sigVal.trim().length > 0);
+      return Boolean(
+        digest &&
+        sigVal &&
+        digest.trim().length > 0 &&
+        sigVal.trim().length > 0,
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Validación de firma fallida: ${message}`);

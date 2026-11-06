@@ -116,7 +116,9 @@ describe('SignatureService (TT-07)', () => {
   it('Criterio 3: el XML firmado debe conservar la estructura e identificadores UBL 2.1', () => {
     const { signedXml } = service.signXml(fixtureXmlInvoice);
 
-    expect(signedXml).toContain('urn:oasis:names:specification:ubl:schema:xsd:Invoice-2');
+    expect(signedXml).toContain(
+      'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2',
+    );
     expect(signedXml).toContain('<cbc:UBLVersionID>2.1</cbc:UBLVersionID>');
     expect(signedXml).toContain('<cbc:ID>F001-00000001</cbc:ID>');
     expect(signedXml).toContain('MYPE CONFECCIONES SAC');
@@ -139,5 +141,20 @@ describe('SignatureService (TT-07)', () => {
     expect(result.signedXml).toContain('ext:UBLExtensions');
     expect(result.signedXml).toContain('ext:ExtensionContent');
     expect(result.signedXml).toContain('ds:Signature');
+  });
+});
+
+describe('D1 signature company context', () => {
+  it('forwards the exact issuer snapshot to certificate validation', async () => {
+    const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+    const context = fakeIssuerContext('a');
+    const getCertificate = jest.fn(() => {
+      throw new Error('fake-certificate-unavailable');
+    });
+    const service = new SignatureService({ getCertificate } as never);
+    expect(() => service.signXml('<Invoice/>', context)).toThrow(
+      'ERR_CERT_INVALID',
+    );
+    expect(getCertificate).toHaveBeenCalledWith(context);
   });
 });

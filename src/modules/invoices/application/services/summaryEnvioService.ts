@@ -1,3 +1,8 @@
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../../../sunat/issuerConfigResolver';
+import { Optional } from '@nestjs/common';
 /**
  * Envío REAL de resúmenes diarios (RC) y comunicaciones de baja (RA) — M1.
  *
@@ -58,6 +63,7 @@ export class SummaryEnvioService {
     private readonly despacho: SummaryDispatchService,
     private readonly firma: SignatureService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
   /**
@@ -126,7 +132,11 @@ export class SummaryEnvioService {
     // Se reetiqueta solo el `cbc:ID` raíz: el contenido fiscal no cambia.
     const rucEmisor = await this.rucDeEmpresa(companyId);
     const xmlConId = this.reetiquetarId(vista.xml as string, identificador);
-    const xmlFirmado = this.firmar(xmlConId, identificador);
+    const xmlFirmado = this.firmar(
+      xmlConId,
+      identificador,
+      await this.issuerConfig?.resolve(companyId),
+    );
 
     const { zip, fileName } = this.comprimir(
       xmlFirmado,
@@ -199,16 +209,17 @@ export class SummaryEnvioService {
    * líneas (el número de cada boleta) no se tocan: son datos fiscales.
    */
   private reetiquetarId(xml: string, idEsperado: string): string {
-    return xml.replace(
-      /(<cbc:ID>)[^<]*(<\/cbc:ID>)/,
-      `$1${idEsperado}$2`,
-    );
+    return xml.replace(/(<cbc:ID>)[^<]*(<\/cbc:ID>)/, `$1${idEsperado}$2`);
   }
 
   /** Firma el XML del agregado. Sin firma no se envía. */
-  private firmar(xml: string, identificador: string): string {
+  private firmar(
+    xml: string,
+    identificador: string,
+    context?: IssuerContext,
+  ): string {
     try {
-      return this.firma.signXml(xml).signedXml;
+      return this.firma.signXml(xml, context).signedXml;
     } catch (error) {
       // Se propaga como 400 con el motivo: entregar o enviar un resumen sin
       // firma es exactamente el defecto que se está corrigiendo.
@@ -292,7 +303,10 @@ export class SummaryEnvioService {
       Buffer.from(xmlFirmado, 'utf8'),
     );
 
-    return { zip: zip.toBuffer(), fileName: `${rucEmisor}-${identificador}.zip` };
+    return {
+      zip: zip.toBuffer(),
+      fileName: `${rucEmisor}-${identificador}.zip`,
+    };
   }
 
   /**

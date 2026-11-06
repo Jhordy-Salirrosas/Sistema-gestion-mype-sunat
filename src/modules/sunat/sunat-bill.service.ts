@@ -1,3 +1,4 @@
+import { IssuerConfigResolver } from './issuerConfigResolver';
 /**
  * Orquestacion de TA-03: XML firmado -> peticion SOAP -> CDR -> estado.
  *
@@ -37,14 +38,8 @@ import {
   buildSolUsername,
 } from './soap/sunatBillTypes';
 
-export type {
-  SendInvoiceParams,
-  ProcessCdrResult,
-};
-export {
-  resolveEndpoint,
-  resolveTimeout,
-};
+export type { SendInvoiceParams, ProcessCdrResult };
+export { resolveEndpoint, resolveTimeout };
 
 @Injectable()
 export class SunatBillService {
@@ -57,6 +52,7 @@ export class SunatBillService {
     private readonly persistence: CdrPersistenceService,
     private readonly soapClient: SunatSoapClient,
     private readonly resilienceState?: ResilienceStateService,
+    private readonly resolver?: IssuerConfigResolver,
   ) {}
 
   /** Crea el servicio resolviendo endpoint y timeout del entorno. */
@@ -64,6 +60,7 @@ export class SunatBillService {
     persistence: CdrPersistenceService,
     client?: SunatSoapClient,
     resilienceState?: ResilienceStateService,
+    resolver?: IssuerConfigResolver,
   ): SunatBillService {
     return new SunatBillService(
       persistence,
@@ -73,6 +70,7 @@ export class SunatBillService {
           timeoutMs: resolveTimeout(),
         }),
       resilienceState,
+      resolver,
     );
   }
 
@@ -123,6 +121,19 @@ export class SunatBillService {
    * para que la capa de cola decida el backoff.
    */
   async sendAndProcess(params: SendInvoiceParams): Promise<ProcessCdrResult> {
+    const companyId = params.companyId ?? params.context?.companyId;
+    const context =
+      params.context ??
+      (this.resolver && companyId
+        ? await this.resolver.resolve(companyId)
+        : undefined);
+    if (this.resolver && !context)
+      throw new InternalServerErrorException('ISSUER_COMPANY_REQUIRED');
+    if (
+      context &&
+      (context.companyId !== companyId || context.ruc !== params.rucEmisor)
+    )
+      throw new InternalServerErrorException('ISSUER_IDENTITY_MISMATCH');
     let soapResponded = false;
     let httpStatusCode: number | null = null;
     let elapsedMs: number | null = null;
@@ -131,7 +142,10 @@ export class SunatBillService {
         await this.soapClient.sendBill({
           fileName: this.buildFileName(params),
           zip: params.zip,
-          credentials: this.resolveCredentials(params.rucEmisor),
+          credentials: context
+            ? context.sol
+            : this.resolveCredentials(params.rucEmisor),
+          context,
         });
       soapResponded = true;
       httpStatusCode = httpStatus;
@@ -206,8 +220,10 @@ export class SunatBillService {
       }
 
       if (!soapResponded) {
-        if (isSunatTransportError(error) &&
-          (error.httpStatus === null || error.httpStatus >= 500)) {
+        if (
+          isSunatTransportError(error) &&
+          (error.httpStatus === null || error.httpStatus >= 500)
+        ) {
           this.resilienceState?.recordFailure();
         } else {
           this.resilienceState?.recordSuccess();

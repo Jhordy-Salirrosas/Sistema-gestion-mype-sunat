@@ -1,3 +1,5 @@
+import { IssuerConfigEncryption } from './issuerConfigEncryption';
+import { IssuerConfigResolver } from './issuerConfigResolver';
 import { Module } from '@nestjs/common';
 import { CertificateService } from './certificate.service';
 import { SignatureService } from './signature.service';
@@ -32,6 +34,8 @@ import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
   imports: [PrismaModule, ResilienceStateModule],
   controllers: [],
   providers: [
+    IssuerConfigEncryption,
+    IssuerConfigResolver,
     CertificateService,
     SignatureService,
     CdrPersistenceService,
@@ -51,18 +55,32 @@ import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
       useFactory: (
         persistence: CdrPersistenceService,
         resilienceState: ResilienceStateService,
-      ) => SunatBillService.create(persistence, undefined, resilienceState),
-      inject: [CdrPersistenceService, ResilienceStateService],
+        resolver: IssuerConfigResolver,
+      ) =>
+        SunatBillService.create(
+          persistence,
+          undefined,
+          resilienceState,
+          resolver,
+        ),
+      inject: [
+        CdrPersistenceService,
+        ResilienceStateService,
+        IssuerConfigResolver,
+      ],
     },
     // TA-67: cliente de `sendSummary` y `getStatus(ticket)`. Comparte la misma
     // resolución de endpoint y timeout que el billService, para que apuntar al
     // Mock en las pruebas no requiera configurar dos variables distintas.
     {
       provide: SunatSummaryClient,
-      useFactory: () => new SunatSummaryClient(resolveEndpoint(), resolveTimeout()),
+      useFactory: () =>
+        new SunatSummaryClient(resolveEndpoint(), resolveTimeout()),
     },
   ],
   exports: [
+    IssuerConfigEncryption,
+    IssuerConfigResolver,
     SunatBillService,
     CertificateService,
     SignatureService,

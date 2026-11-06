@@ -213,10 +213,38 @@ export class InvoiceQueryService {
       };
     }
 
-    const jobId = await this.queue.enqueueInvoiceInTx(
-      this.transaccionDePrisma(),
-      fila.id,
-    );
+    let encolado = false;
+    let mensaje: string;
+
+    if (typeof this.queue.reenqueueInvoiceIfIdle === 'function') {
+      const resultado = await this.queue.reenqueueInvoiceIfIdle(
+        fila.id,
+        companyId,
+        async () => {
+          const actual = await this.prisma.invoice.findUnique({
+            where: { id: fila.id },
+            select: { estado: true },
+          });
+          return Boolean(actual && ESTADOS_REINTENTABLES.includes(actual.estado));
+        },
+      );
+      encolado = resultado.estado === 'ENCOLADO';
+      mensaje = {
+        ENCOLADO: 'El comprobante se reencoló para consultar su CDR',
+        YA_EN_COLA: 'El comprobante ya tiene un job activo; no se duplicó',
+        EN_DLQ: 'El comprobante está en la DLQ; requiere revisión manual',
+        ESTADO_NO_PERMITIDO: 'El comprobante cambió de estado y ya no admite reintento',
+      }[resultado.estado];
+    } else {
+      const jobId = await this.queue.enqueueInvoiceInTx(
+        this.transaccionDePrisma(),
+        fila.id,
+      );
+      encolado = jobId !== null;
+      mensaje = encolado
+        ? 'El comprobante se reencoló para consultar su CDR'
+        : 'El comprobante no se pudo reencolar: la cola no está disponible';
+    }
 
     await this.prisma.auditLog.create({
       data: {
@@ -233,11 +261,8 @@ export class InvoiceQueryService {
     return {
       id: fila.id,
       estado: fila.estado,
-      encolado: jobId !== null,
-      mensaje:
-        jobId !== null
-          ? 'El comprobante se reencoló para consultar su CDR'
-          : 'El comprobante no se pudo reencolar: la cola no está disponible',
+      encolado,
+      mensaje,
     };
   }
 

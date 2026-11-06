@@ -1,3 +1,8 @@
+import {
+  IssuerConfigResolver,
+  type IssuerContext,
+} from '../../../sunat/issuerConfigResolver';
+import { Optional } from '@nestjs/common';
 /**
  * Cola del envío de resúmenes diarios y comunicaciones de baja (TA-67).
  *
@@ -113,6 +118,7 @@ export class SummaryDispatchService {
   constructor(
     private readonly cola: QueueService,
     private readonly cliente: SunatSummaryClient,
+    @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
   /**
@@ -159,12 +165,20 @@ export class SummaryDispatchService {
       return { ...base, error: 'El job no trae el ZIP del resumen' };
     }
 
+    const context = await this.issuerConfig?.resolve(job.companyId);
+    if (context && !job.fileName.startsWith(context.ruc + '-'))
+      throw new Error('ISSUER_IDENTITY_MISMATCH');
     let ticket: string | null;
     try {
       const envio = await this.cliente.sendSummary({
         fileName: job.fileName,
         zip: Buffer.from(job.zipBase64, 'base64'),
-        credentials: opciones.credentials ?? null,
+        credentials: context
+          ? context.sol
+            ? { usuario: context.sol.username, clave: context.sol.password }
+            : null
+          : (opciones.credentials ?? null),
+        context,
       });
       ticket = envio.ticket;
     } catch (error) {
@@ -183,7 +197,7 @@ export class SummaryDispatchService {
       return { ...base, error: motivo };
     }
 
-    const sondeo = await this.sondear(ticket, opciones);
+    const sondeo = await this.sondear(ticket, opciones, context);
     const resultado: ResultadoEnvioResumen = {
       ...base,
       enviado: sondeo.contenido !== null,
@@ -217,6 +231,7 @@ export class SummaryDispatchService {
   private async sondear(
     ticket: string,
     opciones: OpcionesEnvio,
+    context?: IssuerContext,
   ): Promise<{
     status: string | null;
     contenido: string | null;
@@ -238,7 +253,15 @@ export class SummaryDispatchService {
       }
 
       try {
-        ultimo = await this.cliente.getStatus(ticket, opciones.credentials ?? null);
+        ultimo = await this.cliente.getStatus(
+          ticket,
+          context
+            ? context.sol
+              ? { usuario: context.sol.username, clave: context.sol.password }
+              : null
+            : (opciones.credentials ?? null),
+          context,
+        );
       } catch (error) {
         return {
           status: ultimo?.statusCode ?? null,

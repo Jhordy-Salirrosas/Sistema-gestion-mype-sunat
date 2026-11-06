@@ -107,3 +107,13 @@ model InvoiceItem {
   @@index([invoice_id, item_order])
   @@map("invoice_items")
 }
+
+// Private encrypted PKCS#12 objects. Never exposed by Config projections.
+model IssuerCertificate {
+  id String @id
+  company_id String
+  encrypted_content String
+  created_at DateTime @default(now())
+  @@index([company_id])
+  @@map("issuer_certificates")
+}
