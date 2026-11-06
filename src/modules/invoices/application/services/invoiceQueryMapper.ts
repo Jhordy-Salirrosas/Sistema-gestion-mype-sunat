@@ -237,8 +237,30 @@ export function condicionesDePago(payload: unknown): {
   return { forma_pago, cuotas };
 }
 
+export function lineasDelPayload(payload: unknown): ComprobanteDetalleDto['lineas_origen'] {
+  if (!payload || typeof payload !== 'object') return [];
+  const datos = payload as Record<string, unknown>;
+  const fuente = Array.isArray(datos.lineas) ? datos.lineas : datos.linea ? [datos.linea] : [];
+  const texto = (valor: unknown): string | null => typeof valor === 'string' ? valor : null;
+  const numeroSeguro = (valor: unknown): number | null => typeof valor === 'number' && Number.isFinite(valor) ? valor : null;
+  return fuente.map((valor) => {
+    const linea = valor && typeof valor === 'object' && !Array.isArray(valor) ? valor as Record<string, unknown> : {};
+    return {
+      codigo: texto(linea.codigo), descripcion: texto(linea.descripcion), unidad: texto(linea.unidad),
+      cantidad: numeroSeguro(linea.cantidad), valor_unitario: numeroSeguro(linea.valorUnitario),
+      precio_unitario: numeroSeguro(linea.precioUnitario), afectacion: texto(linea.afectacion),
+      icbper: numeroSeguro(linea.icbperLinea),
+      descuentos: Array.isArray(linea.descuentos) ? linea.descuentos.map((valorDescuento) => {
+        const d = valorDescuento && typeof valorDescuento === 'object' && !Array.isArray(valorDescuento) ? valorDescuento as Record<string, unknown> : {};
+        return { codigo: texto(d.codigo), monto: numeroSeguro(d.monto) };
+      }) : [],
+    };
+  });
+}
+
 export function aDetalle(fila: FilaDetalle): ComprobanteDetalleDto {  return {
     ...aListado(fila),
+    lineas_origen: lineasDelPayload(fila.payload_ubl),
     ruc_emisor: fila.ruc_emisor,
     base_imponible: numero(fila.taxable_operations),
     total_igv: numero(fila.total_igv),
