@@ -54,6 +54,7 @@ describe('D1 company issuer resolution', () => {
   });
   it('prefers activated company SOL and keeps certificate group from deployment', async () => {
     activate();
+    company.issuer_sol_configured = true;
     company.sol_user = 'FAKE_COMPANY';
     company.sol_pass_encrypted = encryption.encrypt(
       'fake-company-password',
@@ -86,13 +87,19 @@ describe('D1 company issuer resolution', () => {
     'rejects partial persisted %s group',
     async (group) => {
       activate();
-      if (group === 'sol') company.sol_user = 'FAKE_ONLY_USER';
-      else company.cert_pass_encrypted = 'fake';
+      if (group === 'sol') {
+        company.issuer_sol_configured = true;
+        company.sol_user = 'FAKE_ONLY_USER';
+      } else {
+        company.issuer_cert_configured = true;
+        company.cert_pass_encrypted = 'fake';
+      }
       await expect(resolver.resolve('a')).rejects.toThrow('GROUP_INCOMPLETE');
     },
   );
   it('never falls back on corrupt ciphertext', async () => {
     activate();
+    company.issuer_sol_configured = true;
     company.sol_user = 'FAKE';
     company.sol_pass_encrypted = 'invalid';
     await expect(resolver.resolve('a')).rejects.toThrow(
@@ -101,6 +108,7 @@ describe('D1 company issuer resolution', () => {
   });
   it('resolves private certificate by company and decrypts both parts', async () => {
     activate();
+    company.issuer_cert_configured = true;
     company.cert_storage_url = 'private:object';
     company.cert_pass_encrypted = encryption.encrypt(
       'fake-p12-password',

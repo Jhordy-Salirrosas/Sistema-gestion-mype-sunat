@@ -88,6 +88,8 @@ export class IssuerConfigResolver {
       ruc: string;
       issuer_config_activated_at: Date | null;
       issuer_config_version: string | null;
+      issuer_sol_configured?: boolean | null;
+      issuer_cert_configured?: boolean | null;
       issuer_environment: string | null;
       sol_user: string;
       sol_pass_encrypted: string;
@@ -98,7 +100,7 @@ export class IssuerConfigResolver {
   ): Promise<IssuerContext> {
     const fallback = deploymentContext(company.id, company.ruc);
     if (!company.issuer_config_activated_at) return fallback;
-    const hasSol = Boolean(company.sol_user || company.sol_pass_encrypted);
+    const hasSol = company.issuer_sol_configured === true;
     if (hasSol && !(company.sol_user && company.sol_pass_encrypted))
       throw new BadRequestException('ISSUER_SOL_GROUP_INCOMPLETE');
     const sol = hasSol
@@ -113,9 +115,7 @@ export class IssuerConfigResolver {
           ),
         })
       : fallback.sol;
-    const hasCert = Boolean(
-      company.cert_storage_url || company.cert_pass_encrypted,
-    );
+    const hasCert = company.issuer_cert_configured === true;
     let certificate = fallback.certificate;
     if (hasCert) {
       if (

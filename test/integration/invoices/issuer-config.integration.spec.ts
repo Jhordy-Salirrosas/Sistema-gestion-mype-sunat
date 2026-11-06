@@ -275,6 +275,27 @@ const enabled = process.env.RUN_D1_DB_TESTS === '1';
       await put({ cert_password: 'obviously-fake-wrong-password' }).expect(400);
       expect((await resolver.resolve(a)).certificate?.password).toBe(password);
     });
+    it('preserves inactive legacy fields without treating them as managed secrets', async () => {
+      await put({ entorno: 'MOCK' }).expect(200);
+      const company = await prisma.company.findUniqueOrThrow({
+        where: { id: a },
+      });
+      expect(company.sol_user).toBe('legacy-fake');
+      expect(company.sol_pass_encrypted).toBe('legacy-fake');
+      expect((await resolver.resolve(a)).sol?.password).toBe(
+        'obviously-fake-backup',
+      );
+      await put({ sol_password: 'obviously-fake-partial' }).expect(400);
+    });
+    it('retains managed secrets across reset and subsequent partial activation', async () => {
+      await put({ sol_user: 'FAKE', sol_password: secret }).expect(200);
+      await put({ action: 'reset' }).expect(200);
+      expect((await resolver.resolve(a)).sol?.password).toBe(
+        'obviously-fake-backup',
+      );
+      await put({ entorno: 'MOCK' }).expect(200);
+      expect((await resolver.resolve(a)).sol?.password).toBe(secret);
+    });
     it('serializes concurrent partial updates without losing a rotated password', async () => {
       await writer.save(a, { sol_user: 'FAKE', sol_password: secret });
       await Promise.all([

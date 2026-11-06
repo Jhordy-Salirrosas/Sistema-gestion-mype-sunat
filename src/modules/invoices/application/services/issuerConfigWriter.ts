@@ -83,17 +83,39 @@ export class IssuerConfigWriter {
           return;
         }
         const active = Boolean(company.issuer_config_activated_at);
-        // Do not reinterpret pre-D1 values, even if a legacy field resembles an envelope.
+        // Preserve omitted fields, but only explicitly configured groups are eligible for resolution.
         const data = {
-          sol_user: active ? company.sol_user : '',
-          sol_pass_encrypted: active ? company.sol_pass_encrypted : '',
-          cert_storage_url: active ? company.cert_storage_url : null,
-          cert_pass_encrypted: active ? company.cert_pass_encrypted : null,
+          sol_user: company.sol_user,
+          sol_pass_encrypted: company.sol_pass_encrypted,
+          cert_storage_url: company.cert_storage_url,
+          cert_pass_encrypted: company.cert_pass_encrypted,
+          issuer_sol_configured: company.issuer_sol_configured,
+          issuer_cert_configured: company.issuer_cert_configured,
           issuer_environment:
             input.entorno ?? (active ? company.issuer_environment : null),
           issuer_config_activated_at: new Date(),
           issuer_config_version: randomUUID(),
         };
+        const changesSol =
+          supplied(input.sol_user) || supplied(input.sol_password);
+        const changesCert =
+          supplied(input.cert_base64) || supplied(input.cert_password);
+        if (changesSol) {
+          if (
+            !company.issuer_sol_configured &&
+            !(supplied(input.sol_user) && supplied(input.sol_password))
+          )
+            throw new BadRequestException('ISSUER_SOL_GROUP_INCOMPLETE');
+          data.issuer_sol_configured = true;
+        }
+        if (changesCert) {
+          if (
+            !company.issuer_cert_configured &&
+            !(supplied(input.cert_base64) && supplied(input.cert_password))
+          )
+            throw new BadRequestException('ISSUER_CERT_GROUP_INCOMPLETE');
+          data.issuer_cert_configured = true;
+        }
         if (supplied(input.sol_user)) data.sol_user = input.sol_user!.trim();
         if (supplied(input.sol_password))
           data.sol_pass_encrypted = this.encryption.encrypt(
