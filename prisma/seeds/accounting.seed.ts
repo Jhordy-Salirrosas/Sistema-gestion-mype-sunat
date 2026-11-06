@@ -89,6 +89,7 @@ const ACCOUNTS: Array<[string, string]> = [
   ['701111', 'Ventas de mercaderías - terceros'],
   ['702', 'Productos terminados'],
   ['703', 'Servicios'],
+  ['74', 'Descuentos, rebajas y bonificaciones concedidos'],
   ['704', 'Descuentos, rebajas y bonificaciones concedidos'],
   ['8', 'Saldos intermediarios de gestión'],
   ['80', 'Margen comercial'],
