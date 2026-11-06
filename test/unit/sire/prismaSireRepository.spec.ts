@@ -184,6 +184,7 @@ describe('PrismaSireRepository report uploads', () => {
         .mockResolvedValueOnce({ count: 0 });
       const findMany = jest.fn().mockResolvedValue([
         {
+          id: 'proposal-1',
           company_id: 'company-a',
           period: '202610',
           book_type: 'RVIE_VENTAS',
@@ -193,6 +194,7 @@ describe('PrismaSireRepository report uploads', () => {
           document_type: '01',
           series: 'F001',
           correlative: '1',
+          origin: 'SUNAT',
           taxable_base: { toNumber: () => 100 },
           igv_amount: { toNumber: () => 18 },
           total_amount: { toNumber: () => 118 },
@@ -208,7 +210,12 @@ describe('PrismaSireRepository report uploads', () => {
       await repository.restoreProposal('company-a', 'p-1');
       await expect(repository.restoreProposal('company-a', 'missing')).rejects.toBeInstanceOf(Error);
       await expect(repository.getPeriodProposals('company-a', '202610', 'RVIE')).resolves.toEqual([
-        expect.objectContaining({ bookType: 'RVIE', totalAmount: 118 }),
+        expect.objectContaining({
+          id: 'proposal-1',
+          bookType: 'RVIE',
+          totalAmount: 118,
+          origin: 'SUNAT',
+        }),
       ]);
       await repository.setPeriodTicket('company-a', '202610', 'RCE', 'PROCESANDO_GENERACION', 'T-1', 'GENERACION');
       await expect(repository.setPeriodTicket('company-a', '202610', 'RCE', 'GENERADO', 'T-2', 'GENERACION')).rejects.toBeInstanceOf(Error);

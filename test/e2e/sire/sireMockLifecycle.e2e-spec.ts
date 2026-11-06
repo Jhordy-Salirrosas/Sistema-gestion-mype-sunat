@@ -24,6 +24,7 @@ import { MockSireSunatGateway } from '../../../src/modules/sire/infrastructure/s
 import { SireController } from '../../../src/modules/sire/infrastructure/controllers/sireController';
 import { AcceptSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/acceptSireProposalUseCase';
 import { RestoreSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/restoreSireRecordUseCase';
+import type { SireProposalRecord } from '../../../src/modules/sire/domain/ports/sireRepositoryPort';
 
 const authHeader = 'Bearer mock-tenant';
 
@@ -32,6 +33,7 @@ describe('SIRE mock lifecycle HTTP flow', () => {
   let now: number;
   const periods = new Map<string, { state: string; ticket: string | null; ticketOperation: string | null }>();
   const proposals = new Map<string, { id: string; origin: 'SUNAT' | 'USUARIO'; periodState: string }>();
+  const periodProposals = new Map<string, SireProposalRecord[]>();
 
   const repository = {
     upsertPeriod: jest.fn(async (_companyId: string, period: string, bookType: string) => {
@@ -44,9 +46,16 @@ describe('SIRE mock lifecycle HTTP flow', () => {
       const value = periods.get(`${period}:${bookType}`);
       return value ? { id: `${period}:${bookType}`, ...value } : null;
     }),
-    saveSunatProposal: jest.fn(async (_companyId: string, period: string, bookType: string, records: Array<{ origin?: 'SUNAT' | 'USUARIO' }>) => {
+    saveSunatProposal: jest.fn(async (_companyId: string, period: string, bookType: 'RVIE' | 'RCE', records: Array<Omit<SireProposalRecord, 'id'>>) => {
       const key = `${period}:${bookType}`;
       periods.set(key, { state: 'PROPUESTA', ticket: null, ticketOperation: null });
+      periodProposals.set(
+        key,
+        records.map((record, index) => ({
+          ...record,
+          id: `proposal-${period}-${index + 1}`,
+        })),
+      );
       records.forEach((record, index) => {
         proposals.set(`proposal-${index + 1}`, {
           id: `proposal-${index + 1}`,
@@ -55,7 +64,9 @@ describe('SIRE mock lifecycle HTTP flow', () => {
         });
       });
     }),
-    getPeriodProposals: jest.fn().mockResolvedValue([]),
+    getPeriodProposals: jest.fn(async (_companyId: string, period: string, bookType: 'RVIE' | 'RCE') =>
+      periodProposals.get(`${period}:${bookType}`) ?? [],
+    ),
     setPeriodTicket: jest.fn(async (_companyId: string, period: string, bookType: string, state: string, ticket: string, operation: string) => {
       periods.set(`${period}:${bookType}`, { state, ticket, ticketOperation: operation });
     }),
@@ -118,7 +129,11 @@ describe('SIRE mock lifecycle HTTP flow', () => {
       .set('Authorization', authHeader)
       .send(body)
       .expect(201)
-      .expect(({ body: response }) => expect(response).toMatchObject({ state: 'PROPUESTA', count: 3 }));
+      .expect(({ body: response }) => {
+        expect(response).toMatchObject({ state: 'PROPUESTA', count: 3 });
+        expect(response.proposals).toHaveLength(3);
+        expect(response.proposals[0]).toHaveProperty('id');
+      });
 
     const preliminary = await request(app.getHttpServer())
       .post('/api/v1/sire/preliminary')
@@ -155,9 +170,10 @@ describe('SIRE mock lifecycle HTTP flow', () => {
       .get(`/sire/propuesta?${query}`)
       .set('Authorization', authHeader)
       .expect(200)
-      .expect(({ body: response }) =>
-        expect(response).toMatchObject({ state: 'PROPUESTA', count: 3 }),
-      );
+      .expect(({ body: response }) => {
+        expect(response).toMatchObject({ state: 'PROPUESTA', count: 3 });
+        expect(response.proposals[0]).toHaveProperty('id');
+      });
 
     await request(app.getHttpServer())
       .get(`/sire/preliminar?${query}`)

@@ -99,10 +99,14 @@ La propuesta recibida, el resultado conciliado y el archivo generado deben poder
 
 ### 4.3. API de backend
 
+- `POST /api/v1/sire/proposal` y `GET /api/v1/sire/propuesta`: obtiene y persiste la propuesta del gateway configurado. La respuesta incluye `period`, `bookType`, `state`, `count` y `proposals`; cada propuesta persistida incluye `id` para acciones posteriores.
+- `GET /api/v1/sire/preliminar?periodo=YYYYMM&libro=RVIE_VENTAS|RCE_COMPRAS`: devuelve el estado del periodo y sus `records` persistidos, incluyendo `id`.
 - `POST /api/v1/sire/import`: `multipart/form-data` con `file` (`.txt`, máximo 5 MiB), `period` y `bookType`. Devuelve cantidad importada y filas rechazadas con línea/motivo.
+- `POST /api/v1/sire/upload`: `multipart/form-data` con `file` (`.csv` o `.xlsx`, máximo 5 MiB), `period` y `bookType`.
 - `POST /api/v1/sire/export`: JSON con `period` y `bookType`; descarga `text/plain`. Mientras el layout del Anexo N.° 3 no esté confirmado, el archivo es solo un borrador de auditoría.
 - `GET /api/v1/sire/history?page=1&limit=20`: lista paginada de conciliaciones cerradas con porcentaje y totales por escenario.
 - `POST /api/v1/sire/close`: JSON con `period` y `bookType`; cierra la conciliación existente.
+- El ciclo de tickets se consulta con `POST /api/v1/sire/tickets/:period/poll?bookType=...`. `SUNAT_SIRE_ENV=mock` permite probar localmente el ciclo completo sin enviar operaciones a SUNAT.
 
 Todos los endpoints requieren autenticación. `companyId` se obtiene exclusivamente del JWT y no se acepta como campo del body/query. Un periodo cerrado rechaza nuevas importaciones o conciliaciones.
 

@@ -21,6 +21,17 @@ export class GetSireProposalUseCase {
     const bookType = toDomainBookType(dto.bookType);
     const proposals = await this.sunat.getProposal(companyId, dto.period, bookType);
     await this.repository.saveSunatProposal(companyId, dto.period, bookType, proposals);
-    return { period: dto.period, bookType: dto.bookType, state: 'PROPUESTA', count: proposals.length };
+    const savedProposals = await this.repository.getPeriodProposals(
+      companyId,
+      dto.period,
+      bookType,
+    );
+    return {
+      period: dto.period,
+      bookType: dto.bookType,
+      state: 'PROPUESTA',
+      count: savedProposals.length,
+      proposals: savedProposals,
+    };
   }
 }
