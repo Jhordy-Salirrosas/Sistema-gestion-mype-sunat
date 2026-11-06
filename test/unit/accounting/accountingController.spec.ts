@@ -9,6 +9,7 @@ import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/app
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
+import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -22,6 +23,7 @@ describe('AccountingController', () => {
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
   let getLedgerUseCase: jest.Mocked<GetLedgerUseCase>;
   let getTrialBalanceUseCase: jest.Mocked<GetTrialBalanceUseCase>;
+  let getIncomeStatementUseCase: jest.Mocked<GetIncomeStatementUseCase>;
   let mockPrisma: any;
 
   beforeEach(() => {
@@ -55,6 +57,7 @@ describe('AccountingController', () => {
 
     getLedgerUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetLedgerUseCase>;
     getTrialBalanceUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetTrialBalanceUseCase>;
+    getIncomeStatementUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetIncomeStatementUseCase>;
 
     mockPrisma = {
       accountingMapping: {
@@ -75,6 +78,7 @@ describe('AccountingController', () => {
       closePeriodUseCase,
       getLedgerUseCase,
       getTrialBalanceUseCase,
+      getIncomeStatementUseCase,
       mockPrisma,
     );
   });
@@ -219,5 +223,21 @@ describe('AccountingController', () => {
       'comp-1',
     );
     expect(updated).toEqual({ id: 'map-1' });
+  });
+
+  it('delega el estado de resultados', async () => {
+    const statement = {
+      period: '2026-11',
+      groups: [],
+      ingresos: 0,
+      costoVentas: 0,
+      gastosOperativos: 0,
+      resultadoBruto: 0,
+      resultadoOperativo: 0,
+    };
+    getIncomeStatementUseCase.execute.mockResolvedValue(statement);
+
+    await expect(controller.getIncomeStatement('comp-1', '2026-11')).resolves.toBe(statement);
+    expect(getIncomeStatementUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
   });
 });

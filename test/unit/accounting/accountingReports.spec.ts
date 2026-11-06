@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
+import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
 import type { IAccountingRepositoryPort } from '../../../src/modules/accounting/domain/ports/accountingRepositoryPort';
 
 describe('Reportes contables', () => {
@@ -56,5 +57,26 @@ describe('Reportes contables', () => {
     const result = await new GetLedgerUseCase(repository).execute('c1', '2026-11', '70121');
     expect(result.movements[0].saldo).toBe(887);
     expect(result.closingBalance).toBe(887);
+  });
+
+  it('clasifica ingresos, costo y gastos en el estado de resultados', async () => {
+    repository.findTrialBalanceRows.mockResolvedValue([
+      { accountCode: '70121', accountName: 'Ventas', debit: 0, credit: 12480 },
+      { accountCode: '691', accountName: 'Costo de ventas', debit: 8000, credit: 0 },
+      { accountCode: '941', accountName: 'Gastos administrativos', debit: 1000, credit: 0 },
+    ]);
+
+    const result = await new GetIncomeStatementUseCase(repository).execute('c1', '2026-11');
+    expect(result.ingresos).toBe(12480);
+    expect(result.costoVentas).toBe(8000);
+    expect(result.gastosOperativos).toBe(1000);
+    expect(result.resultadoBruto).toBe(4480);
+    expect(result.resultadoOperativo).toBe(3480);
+  });
+
+  it('rechaza un periodo invalido en el estado de resultados', async () => {
+    await expect(
+      new GetIncomeStatementUseCase(repository).execute('c1', '2026-13'),
+    ).rejects.toThrow(BadRequestException);
   });
 });
