@@ -104,14 +104,12 @@ class EnvironmentVariables {
 }
 
 export function validate(config: Record<string, unknown>) {
-  if (
-    config.ISSUER_CONFIG_ENCRYPTION_KEY !== undefined &&
-    !parseIssuerKey(String(config.ISSUER_CONFIG_ENCRYPTION_KEY))
-  ) {
-    throw new Error(
-      'ISSUER_CONFIG_ENCRYPTION_KEY debe ser una clave base64 de 32 bytes',
-    );
-  }
+  // Encryption is optional for legacy deployments. Invalid keys disable new
+  // encrypted writes (the encryption service enforces this), not legacy reads.
+  const issuerEncryptionAvailable = Boolean(
+    typeof config.ISSUER_CONFIG_ENCRYPTION_KEY === 'string' &&
+    parseIssuerKey(config.ISSUER_CONFIG_ENCRYPTION_KEY),
+  );
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
@@ -130,5 +128,7 @@ export function validate(config: Record<string, unknown>) {
     );
   }
 
-  return validatedConfig;
+  return Object.assign(validatedConfig, {
+    ISSUER_CONFIG_ENCRYPTION_AVAILABLE: issuerEncryptionAvailable,
+  });
 }

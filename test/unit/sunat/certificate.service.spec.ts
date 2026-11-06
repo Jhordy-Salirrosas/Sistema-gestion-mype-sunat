@@ -161,3 +161,38 @@ describe('D1 certificate cache partitioning', () => {
     ).toThrow('CERT_BASE64');
   });
 });
+
+describe('D1 PKCS#12 certificate selection', () => {
+  it('selects the certificate matching the private key when additional certificates follow it', () => {
+    const keys = forge.pki.rsa.generateKeyPair(1024);
+    const extraKeys = forge.pki.rsa.generateKeyPair(1024);
+    const makeCertificate = (pair: typeof keys, subject: string) => {
+      const certificate = forge.pki.createCertificate();
+      certificate.publicKey = pair.publicKey;
+      certificate.serialNumber = '01';
+      certificate.validity.notBefore = new Date(Date.now() - 10000);
+      certificate.validity.notAfter = new Date(Date.now() + 86400000);
+      certificate.setSubject([{ name: 'commonName', value: subject }]);
+      certificate.setIssuer(certificate.subject.attributes);
+      certificate.sign(pair.privateKey, forge.md.sha256.create());
+      return certificate;
+    };
+    const leaf = makeCertificate(keys, 'Obviously Fake Issuer 20000000001');
+    const extra = makeCertificate(
+      extraKeys,
+      'Obviously Fake Extra Certificate',
+    );
+    const p12 = forge.pkcs12.toPkcs12Asn1(
+      keys.privateKey,
+      [leaf, extra],
+      'obviously-fake-password',
+    );
+    const base64 = forge.util.encode64(forge.asn1.toDer(p12).getBytes());
+    const result = new CertificateService().validarYCargarCertificado(
+      base64,
+      'obviously-fake-password',
+      '20000000001',
+    );
+    expect(result.certificatePem).toBe(forge.pki.certificateToPem(leaf));
+  });
+});

@@ -92,13 +92,13 @@ export class CertificateService implements OnModuleInit {
       const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, certPassword);
 
       // 3. Extraer el certificado y la clave privada.
-      let certificate: forge.pki.Certificate | null = null;
+      const certificates: forge.pki.Certificate[] = [];
       let privateKeyPem = '';
 
       for (const safeContent of p12.safeContents) {
         for (const safeBag of safeContent.safeBags) {
           if (safeBag.cert) {
-            certificate = safeBag.cert;
+            certificates.push(safeBag.cert);
           }
 
           if (safeBag.key) {
@@ -107,19 +107,24 @@ export class CertificateService implements OnModuleInit {
         }
       }
 
-      if (!certificate || !privateKeyPem) {
+      if (!privateKeyPem) {
         throw new BadRequestException(
-          'El archivo PKCS#12 no contiene un par de certificado y clave privada válidos',
+          'El archivo PKCS#12 no contiene una clave privada válida',
         );
       }
-
       const key = forge.pki.privateKeyFromPem(
         privateKeyPem,
       ) as forge.pki.rsa.PrivateKey;
-      const publicKey = certificate.publicKey as forge.pki.rsa.PublicKey;
-      if (!key.n.equals(publicKey.n) || !key.e.equals(publicKey.e)) {
+      // A PKCS#12 may contain intermediate certificates after the issuer leaf.
+      const certificate = certificates.find((candidate) => {
+        const publicKey = candidate.publicKey as forge.pki.rsa.PublicKey;
+        return (
+          publicKey.n && key.n.equals(publicKey.n) && key.e.equals(publicKey.e)
+        );
+      });
+      if (!certificate) {
         throw new BadRequestException(
-          'El certificado y la clave privada no corresponden',
+          'El archivo PKCS#12 no contiene un par de certificado y clave privada válidos',
         );
       }
 

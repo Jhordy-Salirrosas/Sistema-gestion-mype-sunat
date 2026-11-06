@@ -1,3 +1,4 @@
+import { validate } from '../../../src/config/env.validation';
 import {
   IssuerConfigEncryption,
   parseIssuerKey,
@@ -87,5 +88,33 @@ describe('D1 authenticated issuer encryption', () => {
     const rotated = encryption.encrypt(plain, 'a', 'sol_pass_encrypted');
     expect(JSON.parse(rotated).kid).not.toBe(JSON.parse(old).kid);
     expect(encryption.decrypt(rotated, 'a', 'sol_pass_encrypted')).toBe('fake');
+  });
+});
+
+describe('D1 optional encryption environment validation', () => {
+  const legacy = {
+    DATABASE_URL: 'postgresql://fake:fake@127.0.0.1/ta13_test',
+    API_KEY: 'obviously-fake',
+    JWT_SECRET: 'obviously-fake-jwt',
+    RUC_EMISOR: '20000000001',
+    CERT_PASSWORD: 'obviously-fake-cert-password',
+    CERT_BASE64: 'obviously-fake-base64',
+  };
+  it.each([undefined, '', 'invalid'])(
+    'keeps legacy startup usable without a valid encryption key: %s',
+    (key) => {
+      expect(
+        validate({ ...legacy, ISSUER_CONFIG_ENCRYPTION_KEY: key })
+          .ISSUER_CONFIG_ENCRYPTION_AVAILABLE,
+      ).toBe(false);
+    },
+  );
+  it('recognizes a valid 32 byte key', () => {
+    expect(
+      validate({
+        ...legacy,
+        ISSUER_CONFIG_ENCRYPTION_KEY: Buffer.alloc(32, 13).toString('base64'),
+      }).ISSUER_CONFIG_ENCRYPTION_AVAILABLE,
+    ).toBe(true);
   });
 });
