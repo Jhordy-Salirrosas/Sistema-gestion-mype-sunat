@@ -20,6 +20,7 @@ import {
   CreateExchangeRateDto,
   CreatePartnerDto,
   UpdatePartnerDto,
+  UpsertPartnerTaxStatusDto,
   UpsertAccountingMappingDto,
   UpsertCurrencyDto,
   UpsertDocumentTypeDto,
@@ -126,6 +127,27 @@ export class MasterDataController {
     @Param('id') id: string,
   ) {
     return this.masterData.deletePartner(this.requireCompany(companyId), id);
+  }
+
+  @Get('partners/:id/tax-status')
+  getPartnerTaxStatus(
+    @CurrentCompany() companyId: string | undefined,
+    @Param('id') id: string,
+  ) {
+    return this.masterData.getPartnerTaxStatus(this.requireCompany(companyId), id);
+  }
+
+  @Put('partners/:id/tax-status')
+  upsertPartnerTaxStatus(
+    @CurrentCompany() companyId: string | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpsertPartnerTaxStatusDto,
+  ) {
+    return this.masterData.upsertPartnerTaxStatus(
+      this.requireCompany(companyId),
+      id,
+      dto,
+    );
   }
 
   @Post('partners/:id/addresses')
