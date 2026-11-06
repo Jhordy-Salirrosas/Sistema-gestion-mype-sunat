@@ -11,6 +11,30 @@ describe('líneas reales del detalle del comprobante', () => {
   });
   it('devuelve una lista vacía cuando no existen líneas', () => {
     expect(lineasDelPayload(null)).toEqual([]);
+    expect(lineasDelPayload('texto')).toEqual([]);
+    expect(lineasDelPayload(42)).toEqual([]);
     expect(lineasDelPayload({})).toEqual([]);
+  });
+
+  it('conserva descuentos válidos y convierte los campos inválidos en null', () => {
+    expect(lineasDelPayload({ lineas: [{
+      codigo: 123, descripcion: {}, unidad: false, afectacion: 10,
+      cantidad: NaN, valorUnitario: Infinity, precioUnitario: '59', icbperLinea: -Infinity,
+      descuentos: [{ codigo: '01', monto: 5 }, { codigo: 1, monto: NaN }, null, 'inválido', []],
+    }] })).toEqual([{
+      codigo: null, descripcion: null, unidad: null, afectacion: null,
+      cantidad: null, valor_unitario: null, precio_unitario: null, icbper: null,
+      descuentos: [
+        { codigo: '01', monto: 5 }, { codigo: null, monto: null },
+        { codigo: null, monto: null }, { codigo: null, monto: null }, { codigo: null, monto: null },
+      ],
+    }]);
+  });
+
+  it('tolera líneas inválidas y descuentos ausentes o que no son arreglos', () => {
+    const vacia = { codigo: null, descripcion: null, unidad: null, cantidad: null,
+      valor_unitario: null, precio_unitario: null, afectacion: null, icbper: null, descuentos: [] };
+    expect(lineasDelPayload({ lineas: [null, 'texto', [], { descuentos: {} }, {}] }))
+      .toEqual([vacia, vacia, vacia, vacia, vacia]);
   });
 });
