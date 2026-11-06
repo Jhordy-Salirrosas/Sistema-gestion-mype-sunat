@@ -74,6 +74,7 @@ export interface FacturaParaPuente {
     detraccion: number;
     retencion: number;
     total: number;
+    descuentoNoAfecto?: number;
   };
   /** Motivo para no generar asiento automático; el Kardex sigue su curso. */
   motivoBloqueoAsiento?: string | null;

@@ -63,6 +63,8 @@ export interface DatosAsientoVenta {
   retencion: number;
   /** Total del comprobante (base + IGV + ICBPER). */
   total: number;
+  /** Descuentos 01/03 que no reducen la base del IGV. */
+  descuentoNoAfecto?: number;
   /** Descuento 01/03 que no reduce la base del IGV. */
   descuento?: number;
 }
@@ -103,7 +105,7 @@ export const lineasAsientoVenta = (
   const detraccion = r2(datos.detraccion);
   const retencion = r2(datos.retencion);
   const icbper = r2(datos.icbper);
-  const descuento = r2(datos.descuento ?? 0);
+  const descuento = r2(datos.descuentoNoAfecto ?? datos.descuento ?? 0);
 
   // Cobro efectivo: lo que el cliente paga al proveedor.
   const porCobrar = r2(total - detraccion - retencion);
