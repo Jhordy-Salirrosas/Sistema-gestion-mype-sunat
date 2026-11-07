@@ -68,4 +68,43 @@ describe('PrismaAccountingRepository', () => {
       expect(prismaMock.accountingEntry.create).toHaveBeenCalled();
     });
   });
+
+  describe('findByIdempotencyKey', () => {
+    it('devuelve el asiento existente con sus líneas', async () => {
+      prismaMock.accountingEntry.findFirst.mockResolvedValue({
+        id: 'entry-1',
+        company_id: 'company-1',
+        period: '2026-11',
+        entry_number: 3,
+        entry_date: new Date('2026-11-06'),
+        glosa: 'Asiento offline',
+        source_module: 'MANUAL',
+        source_reference_id: null,
+        idempotency_key: 'offline-op-1',
+        lines: [
+          {
+            line_order: 1,
+            account_code: '12121',
+            account_name: 'CxC',
+            debit_amount: 118,
+            credit_amount: 0,
+          },
+        ],
+      });
+
+      const result = await repository.findByIdempotencyKey('company-1', 'offline-op-1');
+
+      expect(result?.idempotencyKey).toBe('offline-op-1');
+      expect(result?.lines).toHaveLength(1);
+      expect(prismaMock.accountingEntry.findFirst).toHaveBeenCalledWith({
+        where: { company_id: 'company-1', idempotency_key: 'offline-op-1' },
+        include: { lines: true },
+      });
+    });
+
+    it('devuelve null si la clave no existe', async () => {
+      prismaMock.accountingEntry.findFirst.mockResolvedValue(null);
+      await expect(repository.findByIdempotencyKey('company-1', 'no-existe')).resolves.toBeNull();
+    });
+  });
 });
