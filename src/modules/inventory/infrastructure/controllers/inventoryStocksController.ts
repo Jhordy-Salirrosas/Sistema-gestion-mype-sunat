@@ -183,10 +183,11 @@ export class InventoryStocksController {
     @Query('start_date') startDate?: string,
     @Query('end_date') endDate?: string,
     @CurrentCompany() companyId?: string,
+    @Query('metodo') metodo?: 'PROMEDIO' | 'FIFO',
   ) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.getKardexUseCase.execute(
-      { sku, start_date: startDate, end_date: endDate },
+      { sku, start_date: startDate, end_date: endDate, metodo },
       companyId,
     );
   }

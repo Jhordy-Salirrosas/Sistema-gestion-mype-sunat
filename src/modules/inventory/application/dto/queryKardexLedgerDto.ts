@@ -20,5 +20,9 @@ export class QueryKardexLedgerDto {
   @IsString()
   @IsOptional()
   end_date?: string;
+
+  @IsString()
+  @IsOptional()
+  metodo?: 'PROMEDIO' | 'FIFO';
 }
 

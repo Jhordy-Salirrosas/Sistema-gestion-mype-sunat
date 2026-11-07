@@ -31,6 +31,7 @@ model Company {
   // no la trae.
   detraction_account    String?
   is_active             Boolean       @default(true)
+  inventory_cost_method String        @default("PROMEDIO") // PROMEDIO | FIFO
   created_at            DateTime      @default(now())
   updated_at            DateTime      @updatedAt
 
@@ -46,6 +47,7 @@ model Company {
   inventory_warehouses  InventoryWarehouse[]
   inventory_products    InventoryProduct[]
   inventory_balances    InventoryBalance[]
+  inventory_cost_layers InventoryCostLayer[]
   inventory_movements   InventoryMovement[]
   inventory_obligations InventoryBookObligationDecision[]
   national_purchases    NationalPurchase[]

@@ -19,6 +19,7 @@ import { RegisterManualMovementDto } from '../dto/registerManualMovementDto';
 import { MovingWeightedAverageEngine } from '../../domain/rules/MovingWeightedAverageEngine';
 import { InventoryMovementEntity } from '../../domain/entities/inventoryMovementEntity';
 import { InventoryBalanceEntity } from '../../domain/entities/inventoryBalanceEntity';
+import { InventoryCostLayerService } from '../services/inventoryCostLayerService';
 
 @Injectable()
 export class RegisterManualMovementUseCase {
@@ -31,6 +32,7 @@ export class RegisterManualMovementUseCase {
     private readonly balanceRepository: IInventoryBalanceRepositoryPort,
     @Inject(INVENTORY_MOVEMENT_REPOSITORY_PORT)
     private readonly movementRepository: IInventoryMovementRepositoryPort,
+    private readonly costLayers?: InventoryCostLayerService,
   ) {}
 
   async execute(dto: RegisterManualMovementDto, companyId: string) {
@@ -57,15 +59,31 @@ export class RegisterManualMovementUseCase {
     const prevTotalVal = balance?.totalInventoryValue ?? 0;
 
     let calculation;
+    let fifo = false;
     try {
-      calculation = MovingWeightedAverageEngine.calculate({
-        previousStock: prevStock,
-        previousAverageCost: prevAvgCost,
-        previousTotalValue: prevTotalVal,
-        movementDirection: dto.direction,
-        quantity: dto.quantity,
-        unitCost: dto.unit_cost,
-      });
+      const metodo = this.costLayers ? await this.costLayers.metodo(companyId) : 'PROMEDIO';
+      if (metodo === 'FIFO' && this.costLayers) {
+        const capas = await this.costLayers.capas(companyId, warehouse.id!, product.id!);
+        const r = this.costLayers.calcular(capas, dto.direction, dto.quantity, dto.unit_cost);
+        calculation = {
+          movementQuantity: dto.quantity,
+          movementUnitCost: r.movementUnitCost,
+          movementTotalCost: r.movementTotalCost,
+          resultingStock: r.resultingStock,
+          resultingAverageCost: r.resultingAverageCost,
+          resultingTotalValue: r.resultingTotalValue,
+        };
+        fifo = true;
+      } else {
+        calculation = MovingWeightedAverageEngine.calculate({
+          previousStock: prevStock,
+          previousAverageCost: prevAvgCost,
+          previousTotalValue: prevTotalVal,
+          movementDirection: dto.direction,
+          quantity: dto.quantity,
+          unitCost: dto.unit_cost,
+        });
+      }
     } catch (err: any) {
       throw new BadRequestException(err.message);
     }
@@ -100,6 +118,14 @@ export class RegisterManualMovementUseCase {
     });
 
     const savedMovement = await this.movementRepository.create(movement);
+
+    if (fifo && this.costLayers) {
+      if (dto.direction === 'ENTRADA') {
+        await this.costLayers.registrarEntrada(companyId, warehouse.id!, product.id!, dto.quantity, calculation.movementUnitCost);
+      } else {
+        await this.costLayers.consumir(companyId, warehouse.id!, product.id!, dto.quantity);
+      }
+    }
 
     await this.balanceRepository.upsertBalance(
       new InventoryBalanceEntity({
