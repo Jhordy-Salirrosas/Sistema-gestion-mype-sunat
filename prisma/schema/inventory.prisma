@@ -25,6 +25,7 @@ model InventoryWarehouse {
 
   balances                  InventoryBalance[]
   movements                 InventoryMovement[]
+  cost_layers               InventoryCostLayer[]
 
   @@unique([company_id, warehouse_code])
   @@index([company_id])
@@ -57,6 +58,7 @@ model InventoryProduct {
   is_active             Boolean             @default(true)
   created_at            DateTime            @default(now())
   updated_at            DateTime            @updatedAt
+  cost_layers           InventoryCostLayer[]
 
   balances              InventoryBalance[]
   movements             InventoryMovement[]
@@ -87,6 +89,23 @@ model InventoryBalance {
   @@index([company_id, warehouse_id])
   @@index([company_id, product_id])
   @@map("inventory_balances")
+}
+
+model InventoryCostLayer {
+  id                 String             @id @default(uuid())
+  company_id         String
+  company            Company            @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  warehouse_id       String
+  warehouse          InventoryWarehouse @relation(fields: [warehouse_id], references: [id], onDelete: Restrict)
+  product_id         String
+  product            InventoryProduct   @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  quantity_remaining Decimal            @db.Decimal(12, 4)
+  unit_cost          Decimal            @db.Decimal(14, 4)
+  source_movement_id String?
+  created_at         DateTime           @default(now())
+
+  @@index([company_id, warehouse_id, product_id, created_at])
+  @@map("inventory_cost_layers")
 }
 
 model InventoryMovement {
