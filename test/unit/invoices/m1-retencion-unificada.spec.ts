@@ -37,7 +37,7 @@ it('valida y escribe el crédito por el neto después de la retención', () => {
 
 it('conserva la detracción existente y valida cuotas por el neto con ambos descuentos', () => {
   const r = traducirEmision({ tipo_comprobante: '01', serie: 'F001', customer_legal_name: 'Cliente',
-    agente_retencion: true, forma_pago: 'Credito', fecha_emision: '2026-11-01', cuenta_banco_nacion: '00123456789',
+    agente_retencion: true, forma_pago: 'Credito', fecha_emision: '2026-11-01', cuenta_banco_nacion: '00123456789', medio_pago_detraccion: '003',
     cuotas: [{ monto: 548.7, vencimiento: '2026-12-01' }, { monto: 548.7, vencimiento: '2027-01-01' }],
     items: [{ descripcion: 'Flete', cantidad: 1, valorUnitario: 1000, afectacion: '10', codigoDetraccion: '027' }] },
   { ruc: '20100070970', razonSocial: 'Empresa' }, 1);

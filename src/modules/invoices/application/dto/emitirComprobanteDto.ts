@@ -150,7 +150,7 @@ export class LineaEmisionDto {
  * sus propias líneas, que es el descuadre más caro de detectar.
  */
 export class EmitirComprobanteDto {
-  /** Opcional hasta la ronda de front. Ausencia conserva 999; no admite null. */
+  /** Obligatorio con detracción efectiva; se valida tras liquidar las líneas. */
   @ValidateIf((_objeto, valor: unknown) => valor !== undefined)
   @IsIn(Object.keys(CATALOGO_59_MEDIOS_PAGO))
   medio_pago_detraccion?: MedioPagoDetraccion;

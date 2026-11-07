@@ -111,7 +111,7 @@ describe('PrismaInvoiceRepository', () => {
     expect(result.id).toBe('invoice-test-001');
   });
 
-  it.each([undefined, '003'] as const)('ida y vuelta del payload con medio %s por caso de uso y repositorio real', async (medio) => {
+  it.each(['001', '003', '999'] as const)('ida y vuelta del payload con medio %s por caso de uso y repositorio real', async (medio) => {
     const formulario = { ...formularioMedioPago(), medio_pago_detraccion: medio };
     const { dto } = traducirEmision(formulario, emisorMedioPago, 1);
     let guardado: Record<string, unknown> = {};
@@ -120,10 +120,9 @@ describe('PrismaInvoiceRepository', () => {
       return { id: 'invoice-test-001', estado: 'PENDIENTE', created_at: new Date() };
     });
     await new CreateInvoiceUseCase(repository).execute(dto, 'company-test-001');
-    if (medio === undefined) expect(guardado).not.toHaveProperty('medioPagoDetraccion');
-    else expect(guardado.medioPagoDetraccion).toBe(medio);
+    expect(guardado.medioPagoDetraccion).toBe(medio);
     expect(new UblGeneratorService().generateInvoiceXml(guardado as unknown as InvoicePayload))
-      .toContain(`<cbc:PaymentMeansCode>${medio ?? '999'}</cbc:PaymentMeansCode>`);
+      .toContain(`<cbc:PaymentMeansCode>${medio}</cbc:PaymentMeansCode>`);
     expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledTimes(1);
   });
 

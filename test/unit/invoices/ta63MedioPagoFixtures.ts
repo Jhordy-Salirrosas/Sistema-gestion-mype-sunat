@@ -15,6 +15,8 @@ export function formularioMedioPago(): EmitirComprobanteDto {
 }
 
 export function payloadMedioPago(): InvoicePayload {
-  return traducirEmision(formularioMedioPago(), emisorMedioPago, 1)
+  const payload = traducirEmision({ ...formularioMedioPago(), medio_pago_detraccion: '001' }, emisorMedioPago, 1)
     .dto.payload_ubl as unknown as InvoicePayload;
+  delete payload.medioPagoDetraccion; // Simula un comprobante histórico anterior a la obligatoriedad.
+  return payload;
 }

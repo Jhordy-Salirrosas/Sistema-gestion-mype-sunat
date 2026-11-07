@@ -34,7 +34,10 @@ import {
   validarPago,
 } from './application/services/paymentTermsAndSpotValidator';
 import type { InvoicePayload } from './invoicePayload';
-import { validarMedioPagoDetraccion } from './application/services/validarMedioPagoDetraccion';
+import {
+  validarMedioPagoDetraccion,
+  validarMedioPagoDetraccionEmision,
+} from './application/services/validarMedioPagoDetraccion';
 
 export type { TotalesCalculados } from './ublTotalesHelper';
 export type { InvoicePayload } from './invoicePayload';
@@ -44,9 +47,9 @@ const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 @Injectable()
 export class UblGeneratorService {
-  /** También se usa en el alta por API, antes de reservar número o persistir. */
-  public validarMedioPagoDetraccion(payload: InvoicePayload) {
-    return validarMedioPagoDetraccion(
+  /** Exclusivo del alta nueva por API, antes de reservar número o persistir. */
+  public validarMedioPagoDetraccionEmision(payload: InvoicePayload) {
+    return validarMedioPagoDetraccionEmision(
       payload.medioPagoDetraccion,
       esOperacionConDetraccion(payload.tipoOperacion) &&
         calcularTotales(this.conLineas(payload)).detraccion > 0,

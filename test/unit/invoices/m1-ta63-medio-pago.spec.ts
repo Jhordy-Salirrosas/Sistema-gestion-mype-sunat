@@ -11,7 +11,7 @@ import { emisorMedioPago, formularioMedioPago, payloadMedioPago } from './ta63Me
 const generador = new UblGeneratorService();
 const invalidos: unknown[] = ['1001', '014', '000', 'DEPÓSITO EN CUENTA', '', ' 001', '001 ', 1, null, {}, 'toString'];
 
-describe('TA-63 · contrato opcional del Catálogo 59', () => {
+describe('TA-63 · obligatoriedad del Catálogo 59 en emisiones nuevas', () => {
   it('conserva las 22 entradas completas y sus descripciones documentadas', () => {
     const documento = readFileSync('specs/M1-TA63-CATALOGO59-CONTRATO.md', 'utf8');
     expect(Object.keys(CATALOGO_59_MEDIOS_PAGO).sort()).toEqual([
@@ -34,6 +34,35 @@ describe('TA-63 · contrato opcional del Catálogo 59', () => {
     expect(xml).toContain('<cbc:ID>Detraccion</cbc:ID>');
     expect(xml).toContain('<cbc:ID>00019123456</cbc:ID>');
     expect(xml.indexOf('<cac:PaymentMeans>')).toBeLessThan(xml.indexOf('<cac:PaymentTerms>'));
+  });
+
+  it('rechaza emisión nueva con detracción efectiva sin medio', () => {
+    expect(() => traducirEmision(formularioMedioPago(), emisorMedioPago, 1))
+      .toThrow(/medio_pago_detraccion.*obligatorio/);
+  });
+
+  it.each([100, 700 / 1.18])('sin medio y sin superar S/ 700 acepta la emisión (%s)', (valorUnitario) => {
+    const dto = formularioMedioPago();
+    dto.items[0].valorUnitario = valorUnitario;
+    const { dto: alta, importes } = traducirEmision(dto, emisorMedioPago, 1);
+    expect(importes.detraccion).toBe(0);
+    expect(alta.payload_ubl).not.toHaveProperty('medioPagoDetraccion');
+  });
+
+  it.each([undefined, '003'] as const)('alta directa con detracción y medio %s', async (medio) => {
+    const repo = { saveWithTransactionalOutbox: jest.fn().mockResolvedValue({ id: 'nuevo' }) };
+    const series = { reservarCorrelativo: jest.fn().mockResolvedValue(1) };
+    const caso = new CreateInvoiceUseCase(repo, series as never);
+    const dto = traducirEmision({ ...formularioMedioPago(), medio_pago_detraccion: '003' }, emisorMedioPago, 1).dto;
+    dto.payload_ubl = { ...payloadMedioPago(), medioPagoDetraccion: medio };
+    if (medio === undefined) {
+      await expect(caso.execute(dto, 'empresa')).rejects.toThrow(/obligatorio/);
+      expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+      expect(repo.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+    } else {
+      await expect(caso.execute(dto, 'empresa')).resolves.toEqual({ id: 'nuevo' });
+      expect(repo.saveWithTransactionalOutbox).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('ausencia conserva 999 y no agrega un medio al JSON histórico', () => {
@@ -90,7 +119,7 @@ describe('TA-63 · contrato opcional del Catálogo 59', () => {
     const caso = new CreateInvoiceUseCase(repo, series as never);
     const payload = { ...payloadMedioPago(), medioPagoDetraccion: medio,
       ...(medio === '001' ? { montoDetraccion: 0 } : {}) };
-    const dto = { ...traducirEmision(formularioMedioPago(), emisorMedioPago, 1).dto, payload_ubl: payload };
+    const dto = { ...traducirEmision({ ...formularioMedioPago(), medio_pago_detraccion: '001' }, emisorMedioPago, 1).dto, payload_ubl: payload };
     await expect(caso.execute(dto, 'empresa')).rejects.toThrow(/Catálogo 59|sin detracción efectiva/);
     expect(series.reservarCorrelativo).not.toHaveBeenCalled();
     expect(repo.saveWithTransactionalOutbox).not.toHaveBeenCalled();
