@@ -40,7 +40,7 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
 
     try {
-      await this.prisma.accountingEntry.create({
+      const persisted = await this.prisma.accountingEntry.create({
         data: {
           company_id: entry.companyId,
           period: entry.period,
@@ -65,12 +65,15 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
         },
       });
       console.log('✅ ¡ASIENTO GUARDADO EXITOSAMENTE EN SUPABASE!');
+      return new AccountingEntryEntity({
+        ...entry,
+        id: persisted.id,
+        lines: [...entry.lines],
+      });
     } catch (error) {
       console.error('❌ ERROR AL GUARDAR EN SUPABASE:', error);
       throw error;
     }
-
-    return entry;
   }
 
   async findByIdempotencyKey(companyId: string, key: string): Promise<AccountingEntryEntity | null> {
