@@ -59,4 +59,13 @@ describe('GenerateAccountingEntryUseCase - validaciones de período y cuentas', 
   it('rechaza un período con formato inválido', async () => {
     await expect(useCase.execute({ ...dto, period: '202611' })).rejects.toThrow(BadRequestException);
   });
+
+  it('devuelve el asiento existente si la clave idempotente ya se proceso', async () => {
+    const existente = { id: 'asiento-1' } as never;
+    repository.findByIdempotencyKey = jest.fn().mockResolvedValue(existente);
+    await expect(
+      useCase.execute({ ...dto, idempotencyKey: 'offline-op-1' }),
+    ).resolves.toBe(existente);
+    expect(repository.saveEntry).not.toHaveBeenCalled();
+  });
 });

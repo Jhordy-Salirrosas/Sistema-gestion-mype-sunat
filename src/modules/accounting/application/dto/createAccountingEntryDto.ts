@@ -56,6 +56,10 @@ export class CreateAccountingEntryDto {
   @IsOptional()
   sourceReferenceId?: string;
 
+  @IsString()
+  @IsOptional()
+  idempotencyKey?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => AccountingLineDto)

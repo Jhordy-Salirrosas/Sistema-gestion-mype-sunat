@@ -6,6 +6,7 @@ import type { LedgerMovement, TrialBalanceRow } from '../entities/accountingRepo
 export interface IAccountingRepositoryPort {
   saveEntry(entry: AccountingEntryEntity): Promise<AccountingEntryEntity>;
   findEntriesByPeriod(companyId: string, period: string): Promise<AccountingEntryEntity[]>;
+  findByIdempotencyKey(companyId: string, key: string): Promise<AccountingEntryEntity | null>;
   getNextEntryNumber(companyId: string, period: string): Promise<number>;
   /** Evita duplicar el asiento de una misma factura si el job se reprocesa. */
   existsBySourceReference(
