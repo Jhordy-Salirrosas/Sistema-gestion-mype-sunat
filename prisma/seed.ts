@@ -4,6 +4,7 @@ import { PrismaClient } from '../src/generated/client/client';
 import { seedAuth } from './seeds/auth.seed';
 import { seedCustoms } from './seeds/customs.seed';
 import { seedAccounting } from './seeds/accounting.seed';
+import { seedInventory } from './seeds/inventory.seed';
 
 const connectionString = process.env.DATABASE_URL;
 const adapter = new PrismaPg({ connectionString });
@@ -14,6 +15,7 @@ async function main() {
     console.log('Iniciando orquestador maestro de semillas (seed.ts)...');
     await prisma.$connect();
     await seedAuth(prisma);
+    await seedInventory(prisma);
     await seedCustoms(prisma);
     await seedAccounting(prisma);
     console.log('Proceso de seed finalizado exitosamente.');
