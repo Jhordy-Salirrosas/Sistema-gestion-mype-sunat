@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 import {
   BadRequestException,
   ConflictException,
@@ -22,7 +24,12 @@ const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
  */
 @Injectable()
 export class InventoryTransferService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(InventoryTransferService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accounting?: GenerateAccountingEntryUseCase,
+  ) {}
 
   listTransfers(companyId: string) {
     return this.prisma.inventoryTransfer.findMany({
@@ -204,8 +211,55 @@ export class InventoryTransferService {
         await this.upsertBalance(tx, companyId, update.warehouseId, update.productId, update.calc, update.date);
       }
 
+      const items = transfer.items ?? [];
+      const valor = items.reduce((acc: number, item: { total_cost: unknown }) => acc + Number(item.total_cost), 0);
+      await this.registrarAsientoTransferencia(companyId, transfer, valor);
       return transfer;
     });
+  }
+
+  /** Asiento interno: debita almacén destino y acredita almacén origen. */
+  private async registrarAsientoTransferencia(
+    companyId: string,
+    transfer: { id: string; transfer_number: string; transfer_date: Date; from_warehouse_code: string; to_warehouse_code: string; items?: { total_cost: unknown }[] },
+    valor: number,
+  ): Promise<void> {
+    if (!this.accounting || valor <= 0) return;
+    try {
+      const existente = await this.prisma.accountingEntry.findFirst({
+        where: { company_id: companyId, source_reference_id: transfer.id },
+      });
+      if (existente) return;
+      await this.accounting.execute({
+        companyId,
+        period: transfer.transfer_date.toISOString().slice(0, 7),
+        entryDate: transfer.transfer_date.toISOString().slice(0, 10),
+        glosa: `Transferencia ${transfer.transfer_number}: ${transfer.from_warehouse_code} -> ${transfer.to_warehouse_code}`,
+        sourceModule: 'INVENTORY',
+        sourceReferenceId: transfer.id,
+        idempotencyKey: `transfer:${transfer.id}`,
+        lines: [
+          {
+            lineOrder: 1,
+            accountCode: '20111.02',
+            accountName: `Mercaderías Almacén ${transfer.to_warehouse_code}`,
+            debitAmount: valor,
+            creditAmount: 0,
+          },
+          {
+            lineOrder: 2,
+            accountCode: '20111.01',
+            accountName: `Mercaderías Almacén ${transfer.from_warehouse_code}`,
+            debitAmount: 0,
+            creditAmount: valor,
+          },
+        ],
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Transferencia ${transfer.transfer_number} sin asiento: ${(error as Error).message}`,
+      );
+    }
   }
 
   async createAdjustment(companyId: string, dto: CreateAdjustmentDto) {

@@ -39,6 +39,7 @@ model Company {
   invoices              Invoice[]
   declarations          CustomsDeclaration[]
   shipments             CustomsShipment[]
+  foreign_suppliers     ForeignSupplier[]
   import_orders         ImportOrder[]
   goods_receipts        GoodsReceipt[]
   landed_cost_sheets    LandedCostSheet[]

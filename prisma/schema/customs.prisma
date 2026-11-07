@@ -77,16 +77,33 @@ model CustomsBroker {
 
 model ForeignSupplier {
   id               String          @id @default(uuid())
+  company_id       String
+  company          Company         @relation(fields: [company_id], references: [id], onDelete: Restrict)
   tax_id           String?
   business_name    String
   country_code     String
   default_currency String          @default("USD")
   is_related       Boolean         @default(false)
+  address          String?
+  email            String?
+  phone            String?
+  contact_name     String?
+  payment_terms    String?
+  bank_name        String?
+  bank_account     String?
+  swift_code       String?
+  vessel_name      String?
+  voyage_number    String?
+  bl_number        String?
+  port_origin      String?
   created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
 
   shipments        CustomsShipment[]
   orders           ImportOrder[]
 
+  @@unique([company_id, tax_id])
+  @@index([company_id, business_name])
   @@map("foreign_suppliers")
 }
 

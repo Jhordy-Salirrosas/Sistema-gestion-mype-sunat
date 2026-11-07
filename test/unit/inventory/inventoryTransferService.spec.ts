@@ -32,6 +32,9 @@ describe('InventoryTransferService', () => {
       inventoryMovement: {
         create: jest.fn(),
       },
+      accountingEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       $transaction: jest.fn(async (cb) => cb(mockPrisma)),
     };
 
@@ -164,6 +167,37 @@ describe('InventoryTransferService', () => {
       expect(res.id).toBe('trf-new');
       expect(mockPrisma.inventoryMovement.create).toHaveBeenCalledTimes(2); // 1 salida, 1 entrada
       expect(mockPrisma.inventoryBalance.upsert).toHaveBeenCalledTimes(2);
+    });
+
+    it('genera el asiento interno al confirmar la transferencia', async () => {
+      const accounting = { execute: jest.fn().mockResolvedValue({ id: 'entry-1' }) };
+      const serviceConAsiento = new InventoryTransferService(mockPrisma, accounting as never);
+      mockPrisma.inventoryTransfer.findFirst.mockResolvedValue(null);
+      mockPrisma.inventoryWarehouse.findFirst
+        .mockResolvedValueOnce({ id: 'w-from', warehouse_code: 'ALM-01' })
+        .mockResolvedValueOnce({ id: 'w-to', warehouse_code: 'ALM-02' });
+      mockPrisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'p-1', sku: 'SKU-1', description: 'Producto 1', is_inventory: true });
+      mockPrisma.inventoryBalance.findUnique
+        .mockResolvedValueOnce({ current_stock: 10, average_unit_cost: 50, total_inventory_value: 500 })
+        .mockResolvedValueOnce(null);
+      mockPrisma.inventoryTransfer.create.mockResolvedValue({
+        id: 'trf-new', transfer_number: 'TRF-001', transfer_date: new Date('2026-11-06'),
+        from_warehouse_code: 'ALM-01', to_warehouse_code: 'ALM-02',
+        items: [{ total_cost: 200 }],
+      });
+
+      await serviceConAsiento.createTransfer(companyId, {
+        fromWarehouseCode: 'ALM-01', toWarehouseCode: 'ALM-02', transferNumber: 'TRF-001',
+        items: [{ sku: 'SKU-1', quantity: 4 }],
+      });
+
+      expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
+        sourceModule: 'INVENTORY',
+        lines: expect.arrayContaining([
+          expect.objectContaining({ accountCode: '20111.02', debitAmount: 200 }),
+          expect.objectContaining({ accountCode: '20111.01', creditAmount: 200 }),
+        ]),
+      }));
     });
   });
 

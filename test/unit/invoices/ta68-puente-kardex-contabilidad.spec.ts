@@ -439,6 +439,16 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
     expect(movimientos[0].operation_type_code).toBe('05');
   });
 
+  it('una Nota de Débito 08 genera SALIDA de Kardex', () => {
+    const movimientos = movimientosDeFactura(
+      [{ itemCode: 'CEM-001', descripcion: 'Cemento', unidad: 'NIU', cantidad: 2, valorUnitario: 50, afectacion: '10' }],
+      { tipoComprobante: '08', serie: 'FD01', correlativo: 3, fechaEmision: '2026-11-06' },
+    );
+    expect(movimientos).toHaveLength(1);
+    expect(movimientos[0].direction).toBe('SALIDA');
+    expect(movimientos[0].operation_type_code).toBe('01');
+  });
+
   it('omite movimientos si la Nota de Crédito es por motivo económico / descuento', () => {
     const movimientos = movimientosDeFactura(
       [
