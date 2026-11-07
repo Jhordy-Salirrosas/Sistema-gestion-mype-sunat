@@ -234,6 +234,49 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         expect.objectContaining({ accountCode: '601', debitAmount: 100 }),
         expect.objectContaining({ accountCode: '40111', debitAmount: 18 }),
         expect.objectContaining({ accountCode: '421', creditAmount: 118 }),
+        expect.objectContaining({ accountCode: '201', debitAmount: 100 }),
+        expect.objectContaining({ accountCode: '611', creditAmount: 100 }),
+      ]),
+    }));
+  });
+
+  it('aplica mapeador dinámico de cuentas PCGE (60111, 42121, 20111, 61111) cuando existe configuración', async () => {
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    mockPrisma.accountingEntry = { findFirst: jest.fn().mockResolvedValue(null) };
+    mockPrisma.accountingMapping = {
+      findMany: jest.fn().mockResolvedValue([
+        { role_code: 'GASTO_COMPRA', account_code: '60111' },
+        { role_code: 'IGV_CREDITO', account_code: '40111' },
+        { role_code: 'CXP', account_code: '42121' },
+        { role_code: 'DESTINO_INVENTARIO', account_code: '20111' },
+        { role_code: 'VARIACION_EXISTENCIA', account_code: '61111' },
+      ]),
+    };
+    const conContabilidad = new InventoryPurchaseService(mockPrisma, accounting as any);
+
+    await (conContabilidad as any).registrarAsientoCompra(
+      companyId,
+      {
+        purchaseNumber: 'COM-00000002',
+        documentSerial: 'F001',
+        documentNumber: '00000002',
+        supplierName: 'Distribuidora Lima SAC',
+        netAmount: 500,
+        igvAmount: 90,
+        totalAmount: 590,
+      },
+      new Date('2026-11-05T00:00:00.000Z'),
+    );
+
+    expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sourceModule: 'PURCHASES',
+      sourceReferenceId: 'COM-00000002',
+      lines: expect.arrayContaining([
+        expect.objectContaining({ accountCode: '60111', debitAmount: 500 }),
+        expect.objectContaining({ accountCode: '40111', debitAmount: 90 }),
+        expect.objectContaining({ accountCode: '42121', creditAmount: 590 }),
+        expect.objectContaining({ accountCode: '20111', debitAmount: 500 }),
+        expect.objectContaining({ accountCode: '61111', creditAmount: 500 }),
       ]),
     }));
   });
