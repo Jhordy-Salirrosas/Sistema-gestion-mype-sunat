@@ -80,6 +80,7 @@ describe('SIRE workflow use cases', () => {
       imported: 1,
       rejected: 1,
       errors: [{ line: 3, reason: 'invalid row' }],
+      formatStatus: 'PROVISIONAL_NOT_OFFICIAL',
     });
   });
 

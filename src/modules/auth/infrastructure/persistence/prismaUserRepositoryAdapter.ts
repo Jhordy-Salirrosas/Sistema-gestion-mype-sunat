@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../database/prismaService';
 import { UserEntity, type UserRole } from '../../domain/entities/userEntity';
 import { CompanyEntity } from '../../domain/entities/companyEntity';
@@ -27,9 +28,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           passwordHash: raw.password_hash,
         };
       }
-    } catch {
-      // Si la BD remota de Supabase falla o no hay internet en el aula, entra en modo Demo Local
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
+
+    if (this.isProduction()) return null;
 
     // Usuario Mock de respaldo para garantizar el login en la exposición
     const mockUser = new UserEntity({
@@ -55,9 +58,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { id, ...(companyId ? { company_id: companyId } : {}) },
       });
       if (raw) return this.mapUser(raw);
-    } catch {
-      // Fallback local
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
+
+    if (this.isProduction()) return null;
 
     return new UserEntity({
       id: id || 'mock-admin-id',
@@ -75,9 +80,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { ruc },
       });
       if (raw) return this.mapCompany(raw);
-    } catch {
-      // Fallback local
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
+
+    if (this.isProduction()) return null;
 
     return new CompanyEntity({
       id: 'mock-company-id',
@@ -100,9 +107,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { id: companyId },
       });
       if (raw) return this.mapCompany(raw);
-    } catch {
-      // Fallback local
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
+
+    if (this.isProduction()) return null;
 
     return new CompanyEntity({
       id: companyId || 'mock-company-id',
@@ -122,61 +131,71 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
   async createUserWithCompany(
     params: CreateUserWithCompanyParams,
   ): Promise<{ user: UserEntity; company: CompanyEntity }> {
-    try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const createdCompany = await tx.company.create({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const createdCompany = await tx.company.create({
+        data: {
+          id: params.company.id,
+          ruc: params.company.ruc,
+          legal_name: params.company.legalName,
+          trade_name: params.company.tradeName,
+          sol_user: params.company.solUser,
+          sol_pass_encrypted: params.company.solPassEncrypted,
+          cert_storage_url: params.company.certStorageUrl,
+          cert_pass_encrypted: params.company.certPassEncrypted,
+          is_active: params.company.isActive,
+        },
+      });
+
+      const createdUser = await tx.user.create({
+        data: {
+          id: params.user.id,
+          company_id: createdCompany.id,
+          email: params.user.email,
+          password_hash: params.passwordHash,
+          full_name: params.user.fullName,
+          role: params.user.role,
+          is_active: params.user.isActive,
+        },
+      });
+
+      if (params.initialRefreshToken) {
+        await tx.refreshToken.create({
           data: {
-            id: params.company.id,
-            ruc: params.company.ruc,
-            legal_name: params.company.legalName,
-            trade_name: params.company.tradeName,
-            sol_user: params.company.solUser,
-            sol_pass_encrypted: params.company.solPassEncrypted,
-            cert_storage_url: params.company.certStorageUrl,
-            cert_pass_encrypted: params.company.certPassEncrypted,
-            is_active: params.company.isActive,
+            user_id: createdUser.id,
+            token_hash: params.initialRefreshToken.tokenHash,
+            expires_at: params.initialRefreshToken.expiresAt,
+            is_revoked: false,
           },
         });
+      }
 
-        const createdUser = await tx.user.create({
-          data: {
-            id: params.user.id,
-            company_id: createdCompany.id,
-            email: params.user.email,
-            password_hash: params.passwordHash,
-            full_name: params.user.fullName,
-            role: params.user.role,
-            is_active: params.user.isActive,
-          },
-        });
-
-        if (params.initialRefreshToken) {
-          await tx.refreshToken.create({
-            data: {
-              user_id: createdUser.id,
-              token_hash: params.initialRefreshToken.tokenHash,
-              expires_at: params.initialRefreshToken.expiresAt,
-              is_revoked: false,
-            },
-          });
-        }
-
-        return {
-          company: createdCompany,
-          user: createdUser,
-        };
+      await tx.auditLog.create({
+        data: {
+          company_id: createdCompany.id,
+          user_id: createdUser.id,
+          module: 'M0_AUTH',
+          action: 'SOL_CREDENTIALS_ENCRYPTED',
+          entity_name: 'Company',
+          entity_id: createdCompany.id,
+          ip_address: params.auditContext?.ipAddress ?? 'desconocida',
+          user_agent: params.auditContext?.userAgent ?? null,
+          new_values: { sol_credentials: 'encrypted_at_rest' },
+          digest_hash: createHash('sha256')
+            .update(`${createdCompany.id}:SOL_CREDENTIALS_ENCRYPTED:${createdUser.id}`)
+            .digest('hex'),
+        },
       });
 
       return {
-        company: this.mapCompany(result.company),
-        user: this.mapUser(result.user),
+        company: createdCompany,
+        user: createdUser,
       };
-    } catch {
-      return {
-        company: params.company,
-        user: params.user,
-      };
-    }
+    });
+
+    return {
+      company: this.mapCompany(result.company),
+      user: this.mapUser(result.user),
+    };
   }
 
   async saveRefreshToken(
@@ -194,7 +213,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         },
       });
       return this.mapRefreshToken(raw);
-    } catch {
+    } catch (error) {
+      if (this.isProduction()) throw error;
       return new RefreshTokenEntity({
         id: 'mock-refresh-token-id',
         userId,
@@ -211,9 +231,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { token_hash: tokenHash },
       });
       if (raw) return this.mapRefreshToken(raw);
-    } catch {
-      // Fallback local
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
+
+    if (this.isProduction()) return null;
 
     return new RefreshTokenEntity({
       id: 'mock-refresh-token-id',
@@ -230,8 +252,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { token_hash: tokenHash },
         data: { is_revoked: true },
       });
-    } catch {
-      // Ignorar en modo offline
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
   }
 
@@ -241,8 +263,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { user_id: userId },
         data: { is_revoked: true },
       });
-    } catch {
-      // Ignorar en modo offline
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
   }
 
@@ -252,8 +274,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         where: { id: userId },
         data: { password_hash: newPasswordHash },
       });
-    } catch {
-      // Ignorar en modo offline
+    } catch (error) {
+      if (this.isProduction()) throw error;
     }
   }
 
@@ -264,7 +286,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         data: { full_name: fullName.trim() },
       });
       return this.mapUser(updated);
-    } catch {
+    } catch (error) {
+      if (this.isProduction()) throw error;
       return new UserEntity({
         id: userId,
         companyId: 'mock-company-id',
@@ -346,5 +369,9 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       isRevoked: raw.is_revoked,
       createdAt: raw.created_at,
     });
+  }
+
+  private isProduction(): boolean {
+    return process.env.NODE_ENV === 'production';
   }
 }

@@ -11,6 +11,10 @@ export interface CreateUserWithCompanyParams {
   user: UserEntity;
   company: CompanyEntity;
   passwordHash: string;
+  auditContext?: {
+    ipAddress: string;
+    userAgent?: string | null;
+  };
   initialRefreshToken?: {
     tokenHash: string;
     expiresAt: Date;

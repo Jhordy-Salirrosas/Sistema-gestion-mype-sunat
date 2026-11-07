@@ -27,6 +27,7 @@
     "test:load": "node test/load/ta15/run-ta15.mjs",
     "test:sunat:beta": "node --experimental-vm-modules -r dotenv/config node_modules/jest/bin/jest.js --runInBand test/integration/sunat/sunatBetaConnection.spec.ts",
     "seed": "npx tsx prisma/seed.ts",
+    "migrate:sol-credentials": "node -r dotenv/config scripts/migrateSolCredentials.mjs",
     "check:secrets": "node scripts/check-secrets.js"
   },
   "dependencies": {

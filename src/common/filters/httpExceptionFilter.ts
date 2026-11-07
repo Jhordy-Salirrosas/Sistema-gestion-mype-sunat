@@ -37,10 +37,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
       title = exception.name.replace(/Exception$/, '');
       const exceptionResponse = exception.getResponse();
 
-      if (typeof exceptionResponse === 'string') {
+      if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        detail = 'Ha ocurrido un error inesperado en el servidor.';
+        this.logger.error('Error HTTP interno.');
+      } else if (typeof exceptionResponse === 'string') {
         detail = exceptionResponse;
         rawMessage = exceptionResponse;
-      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null
+      ) {
         const respObj = exceptionResponse as Record<string, unknown>;
         rawMessage = respObj['message'] ?? exceptionResponse;
 
@@ -56,13 +62,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      detail = exception.message;
-      this.logger.error(`Error no controlado: ${exception.message}`, exception.stack);
+      this.logger.error('Error no controlado.');
+    } else {
+      this.logger.error('Error no controlado de tipo desconocido.');
     }
 
-    const slug = title
-      .replace(/([a-z])([A-Z])/g, '$1-$2')
-      .toLowerCase();
+    const slug = title.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
 
     const problem: ProblemDetails = {
       type: `https://sync-sunat.pe/errors/${slug}`,
