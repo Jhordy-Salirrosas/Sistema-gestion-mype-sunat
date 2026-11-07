@@ -49,9 +49,17 @@ con sus ceros iniciales. Implementación: `src/modules/invoices/domain/rules/med
   en el payload UBL también tipo de operación 1001–1004). Sin ella es error 400.
   `null` y cadena vacía son inválidos, no ausencia.
 - En el alta se valida antes de reservar correlativo o persistir. El generador
-  aplica la misma regla para la cola y para regenerar descargas.
-- **En esta ronda es OPCIONAL**, incluso con detracción. Si no se envía,
-  se conserva exactamente `PaymentMeansCode=999`. No se escribe ni infiere `001`.
+  mantiene la validación estricta del código informado y su contexto para la
+  cola y para regenerar descargas; la exigencia de presencia es solo del alta.
+- **Obligatoriedad activada en backend (cierre TA-63, 2026-11-06)** para
+  comprobantes NUEVOS: si hay detracción efectiva (líneas sujetas a detracción
+  y monto que supera el umbral vigente de S/ 700), el medio es obligatorio.
+  Su ausencia rechaza el alta con error 400 claro, tanto en `/emitir` como en
+  el alta directa con `payload_ubl`, antes de reservar correlativo o persistir.
+- Sin detracción efectiva no se exige el campo; si se informa, sigue siendo
+  error. Se conserva la validación estricta de las 22 cadenas oficiales.
+- La obligatoriedad no se aplica al generador de XML histórico. La ausencia
+  conserva exactamente `PaymentMeansCode=999`; no se escribe ni infiere `001`.
 - La selección se conserva en el JSON `payload_ubl` existente. No hay columnas
   nuevas ni migraciones. La ausencia sigue ausente en el JSON; el fallback se
   aplica únicamente al construir el XML.
@@ -65,17 +73,17 @@ Ejemplo de cabecera del formulario (junto a los demás campos de emisión):
 { "medio_pago_detraccion": "001" }
 ```
 
-## Compatibilidad histórica y siguiente ronda
+## Compatibilidad histórica y alcance de la activación
 
 Los payloads históricos sin el campo siguen generando `999`, incluida la
 regeneración para descarga. No se modifica ni se regenera un XML firmado ya
 guardado por motivo de esta funcionalidad; se devuelve por el flujo existente.
 No se actualizan comprobantes existentes ni trabajos en cola.
 
-La **obligatoriedad al existir detracción se activará en la ronda de front**,
-cuando la pantalla permita elegir y enviar explícitamente el medio real y se
-coordine la compatibilidad de consumidores. No está activada aquí. El soporte
-backend no equivale al cierre de la selección explícita en pantalla.
+La obligatoriedad se limita a la validación de emisiones nuevas en el backend
+del módulo de facturación. No cambia documentos ya emitidos o firmados, ni
+su regeneración, descargas o procesamiento de payloads históricos en cola.
+No se actualizan registros existentes. Este cierre no modifica el front.
 
 No se modifican tasas, cálculos, cuotas, correlativos, firma ni compuerta XSL.
 La conformidad fiscal integral sigue sujeta a TA-70; los tests locales no

@@ -36,7 +36,7 @@ import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalog
 import { importeEnLetras } from './importeEnLetras';
 import { numeroDeCuota } from './paymentTermsAndSpotValidator';
 import { aplicarDescuentoGlobal } from './descuentoGlobal';
-import { validarMedioPagoDetraccion } from './validarMedioPagoDetraccion';
+import { validarMedioPagoDetraccionEmision } from './validarMedioPagoDetraccion';
 
 /** Datos del emisor que vienen de la empresa autenticada, no del formulario. */
 export interface DatosEmisor {
@@ -274,7 +274,7 @@ export const traducirEmision = (
   const total = global.total;
 
   const detraccion = calcularDetraccion(liquidadas, dto, total, originales.gravado, antesGlobal.total);
-  validarMedioPagoDetraccion(dto.medio_pago_detraccion, detraccion > 0);
+  validarMedioPagoDetraccionEmision(dto.medio_pago_detraccion, detraccion > 0);
   const retencion = dto.agente_retencion ? calcularRetencion(total) : 0;
   const importePagar = centimos(total - detraccion - retencion);
 
