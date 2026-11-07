@@ -36,6 +36,7 @@ import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalog
 import { importeEnLetras } from './importeEnLetras';
 import { numeroDeCuota } from './paymentTermsAndSpotValidator';
 import { aplicarDescuentoGlobal } from './descuentoGlobal';
+import { validarMedioPagoDetraccion } from './validarMedioPagoDetraccion';
 
 /** Datos del emisor que vienen de la empresa autenticada, no del formulario. */
 export interface DatosEmisor {
@@ -273,6 +274,7 @@ export const traducirEmision = (
   const total = global.total;
 
   const detraccion = calcularDetraccion(liquidadas, dto, total, originales.gravado, antesGlobal.total);
+  validarMedioPagoDetraccion(dto.medio_pago_detraccion, detraccion > 0);
   const retencion = dto.agente_retencion ? calcularRetencion(total) : 0;
   const importePagar = centimos(total - detraccion - retencion);
 
@@ -340,6 +342,9 @@ export const traducirEmision = (
       ? dto.items.find((i) => i.codigoDetraccion?.trim())?.codigoDetraccion
       : undefined,
     montoDetraccion: detraccion > 0 ? detraccion : undefined,
+    ...(dto.medio_pago_detraccion !== undefined
+      ? { medioPagoDetraccion: dto.medio_pago_detraccion }
+      : {}),
     montoRetencion: retencion > 0 ? retencion : undefined,
     /**
      * Leyenda 2006: el importe en letras.

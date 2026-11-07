@@ -4,6 +4,10 @@ import { PrismaInvoiceRepository } from '../../../src/modules/invoices/infrastru
 import { PrismaService } from '../../../src/database/prismaService';
 import { QueueService } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 import { InvoiceEntity } from '../../../src/modules/invoices/domain/entities/invoiceEntity';
+import { traducirEmision } from '../../../src/modules/invoices/application/services/emitirComprobanteAdapter';
+import { CreateInvoiceUseCase } from '../../../src/modules/invoices/application/use-cases/createInvoiceUseCase';
+import { UblGeneratorService, type InvoicePayload } from '../../../src/modules/invoices/ublGeneratorService';
+import { emisorMedioPago, formularioMedioPago } from './ta63MedioPagoFixtures';
 
 describe('PrismaInvoiceRepository', () => {
   let repository: PrismaInvoiceRepository;
@@ -105,6 +109,22 @@ describe('PrismaInvoiceRepository', () => {
       'invoice-test-001',
     );
     expect(result.id).toBe('invoice-test-001');
+  });
+
+  it.each([undefined, '003'] as const)('ida y vuelta del payload con medio %s por caso de uso y repositorio real', async (medio) => {
+    const formulario = { ...formularioMedioPago(), medio_pago_detraccion: medio };
+    const { dto } = traducirEmision(formulario, emisorMedioPago, 1);
+    let guardado: Record<string, unknown> = {};
+    tx.invoice.create.mockImplementation(async ({ data }: { data: { payload_ubl: Record<string, unknown> } }) => {
+      guardado = JSON.parse(JSON.stringify(data.payload_ubl));
+      return { id: 'invoice-test-001', estado: 'PENDIENTE', created_at: new Date() };
+    });
+    await new CreateInvoiceUseCase(repository).execute(dto, 'company-test-001');
+    if (medio === undefined) expect(guardado).not.toHaveProperty('medioPagoDetraccion');
+    else expect(guardado.medioPagoDetraccion).toBe(medio);
+    expect(new UblGeneratorService().generateInvoiceXml(guardado as unknown as InvoicePayload))
+      .toContain(`<cbc:PaymentMeansCode>${medio ?? '999'}</cbc:PaymentMeansCode>`);
+    expect(queueMock.enqueueInvoiceInTx).toHaveBeenCalledTimes(1);
   });
 
   it('persiste el origen de retención en la misma transacción que la cola', async () => {

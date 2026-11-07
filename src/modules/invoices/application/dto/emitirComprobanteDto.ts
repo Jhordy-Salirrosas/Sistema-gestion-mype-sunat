@@ -38,7 +38,9 @@ import {
   Matches,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
+import { CATALOGO_59_MEDIOS_PAGO, type MedioPagoDetraccion } from '../../domain/rules/medioPagoDetraccion';
 
 /** Tipos que pueden emitirse desde la pantalla. */
 export const TIPOS_EMISION_PANTALLA = ['01', '03', '07', '08'] as const;
@@ -148,6 +150,11 @@ export class LineaEmisionDto {
  * sus propias líneas, que es el descuadre más caro de detectar.
  */
 export class EmitirComprobanteDto {
+  /** Opcional hasta la ronda de front. Ausencia conserva 999; no admite null. */
+  @ValidateIf((_objeto, valor: unknown) => valor !== undefined)
+  @IsIn(Object.keys(CATALOGO_59_MEDIOS_PAGO))
+  medio_pago_detraccion?: MedioPagoDetraccion;
+
   @IsIn(TIPOS_EMISION_PANTALLA as unknown as string[])
   tipo_comprobante: TipoEmisionPantalla;
 

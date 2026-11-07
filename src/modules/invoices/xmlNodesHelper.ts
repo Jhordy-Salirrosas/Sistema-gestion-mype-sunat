@@ -330,7 +330,8 @@ export const bloqueLeyenda2006 = (montoEnLetras: string): string =>
  *
  *  1. `cbc:PaymentMeansCode` NO puede ser texto libre: es un código del
  *     Catálogo 59 (medio de pago) y SUNAT responde 3174 si no lo es. Para la
- *     detracción se usa `999` ("Otros medios de pago").
+ *     detracción se respeta la selección validada. Sin selección se conserva
+ *     `999` por compatibilidad (specs/M1-TA63-CATALOGO59-CONTRATO.md).
  *  2. La cuenta del Banco de la Nación va en
  *     `cac:PayeeFinancialAccount/cbc:ID`; `cbc:PaymentDestinationAccountID` no
  *     existe en el esquema y rompía la validación XSD.
@@ -339,9 +340,10 @@ export const bloqueLeyenda2006 = (montoEnLetras: string): string =>
  */
 export const bloquePaymentMeansDetraccion = (
   cuentaBancoNacion?: string,
+  medioPago: import('./domain/rules/medioPagoDetraccion').MedioPagoDetraccion = '999',
 ): string => `  <cac:PaymentMeans>
     <cbc:ID>Detraccion</cbc:ID>
-    <cbc:PaymentMeansCode>999</cbc:PaymentMeansCode>${
+    <cbc:PaymentMeansCode>${medioPago}</cbc:PaymentMeansCode>${
       cuentaBancoNacion
         ? `\n    <cac:PayeeFinancialAccount>
       <cbc:ID>${esc(cuentaBancoNacion)}</cbc:ID>
