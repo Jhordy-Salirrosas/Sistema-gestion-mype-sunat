@@ -7,6 +7,7 @@ describe('MasterDataService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $queryRaw: jest.fn(),
       currency: {
         findMany: jest.fn(),
         upsert: jest.fn(),
@@ -110,10 +111,37 @@ describe('MasterDataService', () => {
     const companyId = 'comp-100';
 
     it('lista terceros con filtros de rol y búsqueda', async () => {
-      mockPrisma.businessPartner.findMany.mockResolvedValue([{ id: 'bp-1', legal_name: 'Tech Corp' }]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ id: 'bp-1', legal_name: 'Tech Corp' }]);
 
       const res = await service.listPartners(companyId, 'supplier', 'tech');
       expect(res.length).toBe(1);
+      const query = mockPrisma.$queryRaw.mock.calls[0][0];
+      expect(query.values).toEqual(expect.arrayContaining([companyId, 'SUPPLIER', 'tech']));
+      expect(query.text).toContain('ANY(roles)');
+      expect(query.text).toContain('normalize(lower(');
+      expect(query.text).toContain('LIMIT 200');
+      expect(query.text).not.toContain('comp-100');
+      expect(mockPrisma.businessPartner.findMany).not.toHaveBeenCalled();
+    });
+
+    it('sin búsqueda conserva empresa, rol, orden y límite', async () => {
+      mockPrisma.businessPartner.findMany.mockResolvedValue([]);
+      await service.listPartners(companyId, 'cliente', '  ');
+      expect(mockPrisma.businessPartner.findMany).toHaveBeenCalledWith({
+        where: { company_id: companyId, roles: { has: 'CLIENTE' } },
+        orderBy: { legal_name: 'asc' }, take: 200,
+      });
+      expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('parametriza caracteres especiales sin ampliar la búsqueda', async () => {
+      mockPrisma.$queryRaw.mockResolvedValue([]);
+      const term = "%_' OR true --";
+      await service.listPartners(companyId, undefined, term);
+      const query = mockPrisma.$queryRaw.mock.calls[0][0];
+      expect(query.values).toContain(term);
+      expect(query.text).not.toContain(term);
+      expect(query.text).not.toContain('ANY(roles)');
     });
 
     it('obtiene tercero por ID o lanza NotFoundException', async () => {

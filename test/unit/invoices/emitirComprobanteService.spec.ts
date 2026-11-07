@@ -399,6 +399,31 @@ describe('EmitirComprobanteService — nota sobre comprobante existente', () => 
       ...parcial,
     } as never);
 
+  it.each(['07', '08'])('admite la nota %s sobre ACEPTADO', async (tipo) => {
+    const { servicio } = montar({
+      facturas: [{ id: 'origen-1', monto_total: 500, estado: 'ACEPTADO' }],
+    });
+    await expect(servicio.emitir(nota({ tipo_comprobante: tipo }), COMPANY_ID))
+      .resolves.toMatchObject({ success: true });
+  });
+
+  it.each(['ERROR_RED', 'DLQ', 'OBSERVADO', 'EN_COLA', 'RECHAZADO', 'ANULADO']) (
+    'rechaza ambas notas sobre %s antes de reservar o persistir', async (estado) => {
+      for (const tipo of ['07', '08']) {
+        const { servicio, series, creadas } = montar({
+          facturas: [{ id: 'origen-1', monto_total: 500, estado }],
+        });
+        await expect(servicio.emitir(nota({ tipo_comprobante: tipo }), COMPANY_ID))
+          .rejects.toMatchObject({
+            status: 400,
+            message: `El comprobante no está aceptado por SUNAT (estado: ${estado}) y por eso no admite notas de crédito ni de débito.`,
+          });
+        expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+        expect(creadas).toHaveLength(0);
+      }
+    },
+  );
+
   it('rechaza una nota sin documento afectado, sin reservar número', async () => {
     const { servicio, series } = montar();
 

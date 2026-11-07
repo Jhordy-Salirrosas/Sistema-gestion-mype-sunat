@@ -149,9 +149,10 @@ describe('compuerta XSL - bandera de demostración (BYPASS_XSL_GATE_DEMO)', () =
         mensajeError: string;
       };
 
-      expect(registro.mensajeError).toContain('[DEMO]');
-      expect(registro.mensajeError).toContain(BANDERA_DEMO);
-      expect(registro.mensajeError).toContain('DEUDA_VALIDADOR_XSL');
+      expect(registro.mensajeError).toBe(
+        'Validación XSL no concluyente; se continúa el envío según configuración.',
+      );
+      expect(registro.mensajeError).not.toMatch(/DEMO|BYPASS|specs\/|DEUDA_VALIDADOR/i);
       // La omisión no es un rechazo: el estado se queda como estaba.
       expect(registro.estadoNuevo).toBe(InvoiceStatus.EN_COLA);
       expect(registro.codigoError).toBeNull();
@@ -179,8 +180,9 @@ describe('compuerta XSL - bandera de demostración (BYPASS_XSL_GATE_DEMO)', () =
       // Un literal compartido evita el defecto de tener dos versiones del
       // mensaje que se desincronicen: quien lea la captura y quien consulte el
       // historial deben ver el mismo texto.
-      expect(AVISO_DEMO).toContain(BANDERA_DEMO);
-      expect(AVISO_DEMO).toContain('specs/DEUDA_VALIDADOR_XSL.md');
+      expect(AVISO_DEMO).toBe(
+        'Validación XSL no concluyente; se continúa el envío según configuración.',
+      );
     });
   });
 
