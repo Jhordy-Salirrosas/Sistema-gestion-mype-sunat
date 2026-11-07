@@ -95,7 +95,7 @@ describe('SIRE CAR idempotency', () => {
   it('conserva aislamiento por empresa y libro en la búsqueda del CAR', async () => {
     const { repository, txFindMany, createMany } = createRepository();
 
-    await repository.saveBatchProposals([proposal]);
+    await repository.saveBatchProposals([{ ...proposal, origin: 'USUARIO' }]);
 
     expect(txFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -106,6 +106,26 @@ describe('SIRE CAR idempotency', () => {
       }),
     );
     expect(createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('no abre transacción para una importación vacía y rechaza lotes de distintos ámbitos', async () => {
+    const { repository, transaction } = createRepository();
+
+    await expect(repository.saveBatchProposals([])).resolves.toBeUndefined();
+    expect(transaction).not.toHaveBeenCalled();
+
+    await expect(
+      repository.saveBatchProposals([
+        proposal,
+        { ...proposal, companyId: 'company-b' },
+      ]),
+    ).rejects.toThrow('La importación debe pertenecer a una empresa, periodo y libro.');
+    await expect(
+      repository.saveBatchProposals([
+        proposal,
+        { ...proposal, period: '202611' },
+      ]),
+    ).rejects.toThrow('La importación debe pertenecer a una empresa, periodo y libro.');
   });
 
   it('rechaza CAR repetido con datos incompatibles dentro de un mismo archivo', async () => {
@@ -133,5 +153,121 @@ describe('SIRE CAR idempotency', () => {
       repository.saveBatchProposals([proposal]),
     ).resolves.toBeUndefined();
     expect(rootFindMany).toHaveBeenCalled();
+  });
+
+  it('trata decimales almacenados como texto y un origen legado nulo como replay idéntico', async () => {
+    const legacyRecord = existingRecord({
+      origin: null,
+      taxable_base: '100',
+      igv_amount: '18.0',
+      total_amount: '118.00',
+    });
+    const { repository, createMany } = createRepository([legacyRecord]);
+
+    await expect(repository.saveBatchProposals([proposal])).resolves.toBeUndefined();
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it('mapea una carrera de CAR en RVIE usando el target de Prisma como texto', async () => {
+    const rvieProposal = { ...proposal, bookType: 'RVIE' as const };
+    const createMany = jest.fn().mockRejectedValue({
+      code: 'P2002',
+      meta: { target: 'company_id,book_type,car_sunat' },
+    });
+    const rootFindMany = jest.fn().mockResolvedValue([existingRecord()]);
+    const { repository } = createRepository([], createMany, rootFindMany);
+
+    await expect(
+      repository.saveBatchProposals([rvieProposal]),
+    ).resolves.toBeUndefined();
+    expect(rootFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ book_type: 'RVIE_VENTAS' }),
+      }),
+    );
+  });
+
+  it('devuelve 409 si la carrera P2002 no corresponde al mismo CAR', async () => {
+    const createMany = jest.fn().mockRejectedValue({
+      code: 'P2002',
+      meta: { target: ['company_id', 'book_type', 'car_sunat'] },
+    });
+    const rootFindMany = jest.fn().mockResolvedValue([]);
+    const { repository } = createRepository([], createMany, rootFindMany);
+
+    await expect(
+      repository.saveBatchProposals([proposal]),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('no clasifica P2002 con target no estructurado como conflicto de CAR', async () => {
+    const prismaError = {
+      code: 'P2002',
+      meta: {},
+    };
+    const createMany = jest.fn().mockRejectedValue(prismaError);
+    const rootFindMany = jest.fn().mockResolvedValue([]);
+    const { repository } = createRepository([], createMany, rootFindMany);
+
+    await expect(
+      repository.saveBatchProposals([proposal]),
+    ).rejects.toBe(prismaError);
+    expect(rootFindMany).not.toHaveBeenCalled();
+  });
+
+  it('no transforma otros errores de persistencia en conflictos de CAR', async () => {
+    const persistenceError = new Error('simulated database failure');
+    const createMany = jest.fn().mockRejectedValue(persistenceError);
+    const rootFindMany = jest.fn();
+    const { repository } = createRepository([], createMany, rootFindMany);
+
+    await expect(
+      repository.saveBatchProposals([proposal]),
+    ).rejects.toBe(persistenceError);
+    expect(rootFindMany).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un P2002 de carga vacía sin intentar buscar un CAR', async () => {
+    const prismaError = {
+      code: 'P2002',
+      meta: { target: 'sire_proposals_company_id_book_type_car_sunat_key' },
+    };
+    const findMany = jest.fn();
+    const repository = new PrismaSireRepository({
+      sireProposal: { findMany },
+      $transaction: jest.fn().mockRejectedValue(prismaError),
+    } as never);
+
+    await expect(
+      repository.saveReportUpload({
+        companyId: 'company-a',
+        period: '202610',
+        bookType: 'RVIE',
+        fileName: 'empty.csv',
+        fileHash: 'fake-hash',
+        proposals: [],
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('propaga errores no-objeto de la base sin clasificarlos como P2002', async () => {
+    const findMany = jest.fn();
+    const repository = new PrismaSireRepository({
+      sireProposal: { findMany },
+      $transaction: jest.fn().mockRejectedValue('database failure'),
+    } as never);
+
+    await expect(
+      repository.saveReportUpload({
+        companyId: 'company-a',
+        period: '202610',
+        bookType: 'RCE',
+        fileName: 'report.csv',
+        fileHash: 'fake-hash',
+        proposals: [proposal],
+      }),
+    ).rejects.toBe('database failure');
+    expect(findMany).not.toHaveBeenCalled();
   });
 });

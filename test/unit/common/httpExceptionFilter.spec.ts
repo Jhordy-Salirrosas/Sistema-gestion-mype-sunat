@@ -78,4 +78,53 @@ describe('HttpExceptionFilter (RFC 7807 Problem Details)', () => {
     expect(logs).not.toContain(secret);
     loggerSpy.mockRestore();
   });
+
+  it('conserva mensajes simples y normaliza arreglos de errores de validación', () => {
+    filter.catch(new HttpException('Solicitud inválida', 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        detail: 'Solicitud inválida',
+        message: 'Solicitud inválida',
+      }),
+    );
+
+    filter.catch(new HttpException({ message: ['campo requerido'] }, 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        detail: 'Se detectaron errores de validación en la solicitud.',
+        invalidParams: ['campo requerido'],
+      }),
+    );
+
+    filter.catch(new HttpException({ message: 'Mensaje directo' }, 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({ detail: 'Mensaje directo' }),
+    );
+
+    filter.catch(new HttpException(['error de campo'], 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        detail: 'Se detectaron errores de validación en la solicitud.',
+        invalidParams: ['error de campo'],
+      }),
+    );
+
+    filter.catch(new HttpException(null, 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 400 }),
+    );
+  });
+
+  it('oculta excepciones de tipo desconocido', () => {
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+    filter.catch('error-ficticio', mockHost);
+
+    expect(loggerSpy).toHaveBeenCalledWith('Error no controlado de tipo desconocido.');
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(JSON.stringify(mockJson.mock.calls.at(-1)?.[0])).not.toContain('error-ficticio');
+    loggerSpy.mockRestore();
+  });
 });

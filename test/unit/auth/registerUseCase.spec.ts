@@ -6,6 +6,8 @@ import type { UserRepositoryPort } from '../../../src/modules/auth/domain/ports/
 import type { HasherPort } from '../../../src/modules/auth/domain/ports/hasherPort';
 import type { TokenServicePort } from '../../../src/modules/auth/domain/ports/tokenServicePort';
 import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
+import { PasswordStrengthRule } from '../../../src/modules/auth/domain/rules/passwordStrengthRule';
+import { RucVo } from '../../../src/modules/auth/domain/value-objects/rucVo';
 
 describe('RegisterUseCase', () => {
   let useCase: RegisterUseCase;
@@ -153,5 +155,34 @@ describe('RegisterUseCase', () => {
     });
 
     await expect(useCase.execute(validDto)).rejects.toThrow(ConflictException);
+  });
+
+  it('traduce fallos de validadores que no son instancias Error a mensajes seguros', async () => {
+    const rucSpy = jest.spyOn(RucVo, 'create').mockImplementation(() => {
+      throw 'invalid-ruc';
+    });
+    await expect(useCase.execute(validDto)).rejects.toThrow(
+      'El RUC no es válido.',
+    );
+    rucSpy.mockRestore();
+
+    const passwordSpy = jest
+      .spyOn(PasswordStrengthRule, 'validate')
+      .mockImplementation(() => {
+        throw 'invalid-password';
+      });
+    await expect(useCase.execute(validDto)).rejects.toThrow(
+      'La contraseña no cumple los requisitos de seguridad.',
+    );
+    passwordSpy.mockRestore();
+  });
+
+  it('permite registrar sin razón social comercial opcional', async () => {
+    const { tradeName: _tradeName, ...dto } = validDto;
+    await useCase.execute(dto);
+
+    const savedCompany =
+      mockUserRepo.createUserWithCompany.mock.calls[0][0].company;
+    expect(savedCompany.tradeName).toBeNull();
   });
 });

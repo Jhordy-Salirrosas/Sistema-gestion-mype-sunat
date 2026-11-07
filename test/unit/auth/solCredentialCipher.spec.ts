@@ -32,4 +32,19 @@ describe('SolCredentialCipher', () => {
       /No se pudieron descifrar las credenciales SOL/,
     );
   });
+
+  it.each([
+    'sol:v1:::',
+    'sol:v1::tag:encrypted',
+    'sol:v1:iv::encrypted',
+    'sol:v1:iv:tag',
+    'sol:v1:iv:tag:encrypted:extra',
+    `sol:v1:${Buffer.alloc(11).toString('base64')}:${Buffer.alloc(16).toString('base64')}:`,
+    `sol:v1:${Buffer.alloc(12).toString('base64')}:${Buffer.alloc(15).toString('base64')}:`,
+  ])('rechaza envelopes con estructura inválida: %s', (envelope) => {
+    const cipher = new SolCredentialCipher(key);
+    expect(() => cipher.decrypt(envelope)).toThrow(
+      /formato cifrado válido/,
+    );
+  });
 });

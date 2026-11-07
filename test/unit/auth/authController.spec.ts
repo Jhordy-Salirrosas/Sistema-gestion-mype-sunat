@@ -100,6 +100,45 @@ describe('AuthController', () => {
     );
   });
 
+  it('usa valores de auditoría seguros cuando la solicitud no informa IP ni agente', async () => {
+    mockRegisterUseCase.execute.mockResolvedValue({
+      accessToken: 'access.jwt.token',
+      tokenType: 'Bearer',
+      expiresInSeconds: 900,
+      refreshToken: null,
+      user: {
+        id: 'usr-123',
+        email: 'admin@mype.pe',
+        fullName: 'Admin Demo',
+        role: 'ADMIN',
+        companyId: 'comp-456',
+      },
+    });
+    const req = {
+      ip: undefined,
+      get: jest.fn().mockReturnValue(undefined),
+    } as unknown as Request;
+
+    await controller.register(
+      {
+        ruc: '20100070970',
+        legalName: 'DEMO S.A.C.',
+        solUser: 'MODDATOS',
+        solPassword: 'fake-sol-password',
+        fullName: 'Admin Demo',
+        email: 'admin@mype.pe',
+        password: 'Password123!#',
+      },
+      req,
+      createMockResponse(),
+    );
+
+    expect(mockRegisterUseCase.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      { ipAddress: 'desconocida', userAgent: null },
+    );
+  });
+
   it('debería iniciar sesión y setear cookie con refreshToken', async () => {
     const mockAuthResponse = {
       accessToken: 'access.jwt.token',

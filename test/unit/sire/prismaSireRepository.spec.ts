@@ -63,7 +63,7 @@ describe('PrismaSireRepository report uploads', () => {
       bookType: 'RCE',
       fileName: 'rce.csv',
       fileHash: 'hash-1',
-      proposals: [proposal],
+      proposals: [{ ...proposal, origin: 'USUARIO' }],
     });
 
     expect(create).toHaveBeenCalledWith({
@@ -82,6 +82,7 @@ describe('PrismaSireRepository report uploads', () => {
           book_type: 'RCE_COMPRAS',
           source_upload_id: 'upload-1',
           car_sunat: 'CAR-1',
+          origin: 'USUARIO',
         }),
       ],
     });
@@ -155,7 +156,7 @@ describe('PrismaSireRepository report uploads', () => {
       state: 'PROPUESTA',
     });
     await expect(
-      repository.getPeriod('company-a', '202610', 'RCE'),
+      repository.getPeriod('company-a', '202610', 'RVIE'),
     ).resolves.toEqual({
       id: 'period-1',
       state: 'PROCESANDO_GENERACION',
