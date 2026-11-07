@@ -46,7 +46,8 @@ describe('notas separadas en la bandeja real', () => {
     expect(debitos.getByText('Total de notas de débito: S/ 59.00')).toBeTruthy();
     expect(creditos.getByRole('table')).toBeTruthy();
     expect(debitos.getByRole('table')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /^Notas/ }).textContent).toBe('Notas3');
+    expect(screen.queryByRole('tab', { name: /^Notas/ })).toBeNull();
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
   });
 
   it('conserva la sección de débito vacía con conteo e importe cero', () => {

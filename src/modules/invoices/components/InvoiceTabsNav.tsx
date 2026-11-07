@@ -3,9 +3,8 @@
  *
  * Pestañas accesibles (Radix Tabs) con badge de conteo por apartado:
  *  1. Facturas y Boletas (01 y 03).
- *  2. Notas (07 y 08).
- *  3. Bajas y Resúmenes Diarios (RA y RC).
- *  4. Monitor Outbox y Auditoría CDR.
+ *  2. Bajas y Resúmenes Diarios (RA y RC).
+ *  3. Monitor Outbox y Auditoría CDR.
  */
 import { Badge, TabsList, TabsTrigger } from '@/components/ui';
 import type { ComprobanteDemo } from '../data/invoiceDemoSchema';
@@ -89,7 +88,8 @@ interface InvoiceTabsNavProps {
 export const InvoiceTabsNav = ({ conteo }: InvoiceTabsNavProps) => {
   return (
     <TabsList aria-label="Apartados del módulo de facturación">
-      {INVOICE_TABS.map((tab) => (
+      {/* Notas conserva su ruta y contenido desde el menú lateral. */}
+      {INVOICE_TABS.filter((tab) => tab.id !== 'notas').map((tab) => (
         <TabsTrigger key={tab.id} value={tab.id}>
           {tab.label}
           <Badge variant="secondary" className="ml-1.5 text-[10px]">

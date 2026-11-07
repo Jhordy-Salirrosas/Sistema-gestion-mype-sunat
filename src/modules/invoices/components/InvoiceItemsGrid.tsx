@@ -8,6 +8,7 @@
  * La lógica de cálculo y validación NO vive aquí: está en `../lib/invoiceItems`
  * para poder probarla sin montar React.
  */
+import { Fragment } from 'react';
 import { Button, PageText } from '@/components/ui';
 import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
@@ -70,7 +71,7 @@ export const InvoiceItemsGrid = ({
   const revision = revisarGrilla(items, productos);
 
   return (
-    <div className="space-y-2 sm:col-span-2">
+    <div className="min-w-0 space-y-2 sm:col-span-2">
       <div className="flex items-center justify-between">
         <PageText variant="label">Detalle del comprobante</PageText>
         <PageText variant="caption">
@@ -98,8 +99,15 @@ export const InvoiceItemsGrid = ({
         />
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-xs">
+      <div className="max-w-full overflow-x-auto rounded-lg border" role="region" aria-label="Líneas del comprobante" tabIndex={0}>
+        {/* Una sola tabla mantiene cabecera y filas alineadas al desplazarse.
+            Los anchos reservan espacio para los textos completos de los selects. */}
+        <table className="w-full min-w-[1768px] table-fixed text-xs">
+          <colgroup>
+            {[120, 280, 80, 100, 120, 210, 150, 340, 110, 110, 48].map((ancho, indice) => (
+              <col key={indice} style={{ width: ancho }} />
+            ))}
+          </colgroup>
           <thead className="bg-muted/60 text-[11px] uppercase">
             <tr>
               <th className="px-2 py-1 text-left">Código</th>
@@ -121,9 +129,9 @@ export const InvoiceItemsGrid = ({
               const revisionLinea = revision.lineas[i];
               const conError = revisionLinea?.gravedad === 'error';
               return (
+                <Fragment key={item.clave}>
                 <tr
-                  key={item.clave}
-                  className={`border-t align-middle ${
+                  className={`border-t align-top ${
                     conError ? 'bg-destructive/5' : ''
                   }`}
                 >
@@ -199,7 +207,6 @@ export const InvoiceItemsGrid = ({
                         onCambiar(i, { valorUnitario: Number(e.target.value) })
                       }
                     />
-                    {item.valorUnitario === 0 && item.afectacion !== 'GRATUITA' && <p className="text-xs text-amber-700">El valor unitario es cero; revise la afectación de la línea.</p>}
                   </td>
                   <td className="px-1 py-1">
                     <select aria-label={`Tipo de descuento de la línea ${i + 1}`} className={CLASE_CELDA}
@@ -279,6 +286,14 @@ export const InvoiceItemsGrid = ({
                     </Button>
                   </td>
                 </tr>
+                {item.valorUnitario === 0 && item.afectacion !== 'GRATUITA' && (
+                  <tr className={conError ? 'bg-destructive/5' : ''}>
+                    <td colSpan={11} className="px-2 pb-2">
+                      <p className="text-xs text-amber-700">El valor unitario es cero; revise la afectación de la línea.</p>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
