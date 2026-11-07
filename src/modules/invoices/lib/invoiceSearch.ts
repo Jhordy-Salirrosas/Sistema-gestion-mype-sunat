@@ -21,6 +21,8 @@
 
 /** Cliente que ofrece el buscador. */
 export interface ClienteBuscado {
+  /** ID del maestro; ausente al escribir un cliente manualmente. */
+  id?: string;
   tipoDocumento: string;
   numeroDocumento: string;
   razonSocial: string;

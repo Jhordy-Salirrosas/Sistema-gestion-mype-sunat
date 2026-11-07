@@ -9,17 +9,17 @@ import { apiClient } from '@/lib/axios';
 
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn() } }));
 vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => []) }));
-// Contrato de InvoiceCustomerService.buscar: GET /invoices/customers/lookup?q=...
-// devuelve un array de { tipoDocumento, numeroDocumento, razonSocial }.
+// La selección de M1 se resuelve desde el maestro, sin usar el lookup histórico.
 const cliente = { tipoDocumento: '6', numeroDocumento: '20100070970', razonSocial: 'FERRETERÍA LOS ANDES S.A.C.' };
 const sinTilde = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-const montar = () => render(<MemoryRouter><InvoiceEmissionPage /></MemoryRouter>);
+const montar = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}><MemoryRouter><InvoiceEmissionPage /></MemoryRouter></QueryClientProvider>);
 beforeEach(() => vi.mocked(apiClient.get).mockImplementation(async (url, config) => {
-  if (url !== '/invoices/customers/lookup') throw new Error(`Ruta inesperada: ${url}`);
+  if (String(url).endsWith('/tax-status')) return { data: [] } as never;
+  if (url !== '/master-data/partners') throw new Error(`Ruta inesperada: ${url}`);
   const params = config?.params as { q?: string } | undefined;
   const q = String(params?.q ?? '');
   const coincide = /^\d+$/.test(q) ? cliente.numeroDocumento.startsWith(q) : sinTilde(cliente.razonSocial).includes(sinTilde(q));
-  return { data: coincide ? [cliente] : [] } as never;
+  return { data: coincide ? [{ id: 'master-1', doc_type: cliente.tipoDocumento, doc_number: cliente.numeroDocumento, legal_name: cliente.razonSocial, roles: ['CLIENTE'], is_active: true }] : [] } as never;
 }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
@@ -37,7 +37,7 @@ describe('búsqueda real del formulario de emisión', () => {
     await usuario.type(screen.getByLabelText('Razón social / nombre'), nombre);
     expect(screen.getByRole('status').textContent).toContain('Buscando');
     const sugerencia = await screen.findByRole('button', { name: /FERRETERÍA LOS ANDES S.A.C./i });
-    expect(apiClient.get).toHaveBeenCalledWith('/invoices/customers/lookup', { params: { q: nombre } });
+    expect(apiClient.get).toHaveBeenCalledWith('/master-data/partners', { params: { role: 'CLIENTE', q: nombre } });
     await usuario.click(sugerencia);
     expect((screen.getByLabelText('RUC del cliente') as HTMLInputElement).value).toBe('20100070970');
     expect((screen.getByLabelText('Razón social / nombre') as HTMLInputElement).value).toBe(cliente.razonSocial);
@@ -46,7 +46,7 @@ describe('búsqueda real del formulario de emisión', () => {
     const usuario = userEvent.setup(); montar();
     await usuario.type(screen.getByLabelText('RUC del cliente'), '20100070970');
     expect(await screen.findByRole('button', { name: /FERRETERÍA LOS ANDES S.A.C./i })).toBeTruthy();
-    expect(apiClient.get).toHaveBeenCalledWith('/invoices/customers/lookup', { params: { q: '20100070970' } });
+    expect(apiClient.get).toHaveBeenCalledWith('/master-data/partners', { params: { role: 'CLIENTE', q: '20100070970' } });
   });
   it('informa el error de red sin mostrar cero resultados como respuesta', async () => {
     vi.mocked(apiClient.get).mockRejectedValue(new Error('red'));
@@ -64,7 +64,7 @@ it('también busca por nombre desde el formulario de notas', async () => {
   render(<QueryClientProvider client={client}><InvoiceEmitModal tipoInicial="07" fecha="2026-11-05" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
   await usuario.type(screen.getByLabelText('Razón social / nombre'), 'FERRETERIA');
   expect(await screen.findByRole('button', { name: /FERRETERÍA LOS ANDES S.A.C./i })).toBeTruthy();
-  expect(apiClient.get).toHaveBeenCalledWith('/invoices/customers/lookup', { params: { q: 'FERRETERIA' } });
+  expect(apiClient.get).toHaveBeenCalledWith('/master-data/partners', { params: { role: 'CLIENTE', q: 'FERRETERIA' } });
   cleanup(); client.clear();
 });
 

@@ -102,6 +102,11 @@ export const AppRoutes = () => {
                 </RoleProtectedRoute>
               }
             />
+            <Route path="/invoices/clientes" element={
+              <RoleProtectedRoute allowedRoles={['ADMIN', 'OPERADOR_FACTURACION', 'CONTADOR', 'AUDITOR', 'OPERATOR', 'ACCOUNTANT']}>
+                <PartnersPage key="billing" context="billing" />
+              </RoleProtectedRoute>
+            } />
             <Route
               path="/invoices/emision"
               element={

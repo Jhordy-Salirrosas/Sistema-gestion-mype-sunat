@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRolePermissions } from '@/hooks/useRolePermissions';
+import { masterDataApi, type BusinessPartnerRecord } from '@/modules/customs/services/masterDataApi';
+import { PartnerFormDialog } from '@/modules/customs/components/PartnerFormDialog';
 import { PageText } from '@/components/ui';
-import { invoicesApi } from '../services/invoicesApi';
 import { ESPERA_MS, MINIMO_CARACTERES, type ClienteBuscado } from '../lib/invoiceSearch';
+
+export const partnerToCustomer = (p: BusinessPartnerRecord): ClienteBuscado => ({ id: p.id, tipoDocumento: p.doc_type, numeroDocumento: p.doc_number, razonSocial: p.legal_name, direccion: p.address ?? undefined });
 
 type Campo = 'documento' | 'nombre';
 interface CustomerLookupFieldProps {
@@ -15,8 +20,16 @@ interface CustomerLookupFieldProps {
   errorDocumento?: string;
 }
 
-/** Busca en la cartera de la empresa desde cualquiera de los dos campos. */
+/** Busca clientes activos del maestro desde cualquiera de los dos campos. */
 export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocumentoChange, onRazonSocialChange, labelDocumento, placeholderDocumento, errorDocumento }: CustomerLookupFieldProps) => {
+  const queryClient = useQueryClient();
+  const { canEmitInvoices } = useRolePermissions();
+  const [registering, setRegistering] = useState(false);
+  const elegir = (cliente: ClienteBuscado) => {
+    onElegir(cliente);
+    setConsulta(null);
+    void queryClient.invalidateQueries({ queryKey: ['master-data', 'partner-tax-status'] });
+  };
   const contenedor = useRef<HTMLDivElement | null>(null);
   const [consulta, setConsulta] = useState<{ campo: Campo; texto: string } | null>(null);
   const [respuesta, setRespuesta] = useState<{ campo: Campo; texto: string; clientes: readonly ClienteBuscado[]; error: boolean } | null>(null);
@@ -28,14 +41,15 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
     if (!consulta || texto.length < MINIMO_CARACTERES) return;
     let viva = true;
     const timer = window.setTimeout(() => {
-      void invoicesApi.buscarClientes(texto).then((clientes) => {
+      void queryClient.fetchQuery({ queryKey: ['master-data', 'partners', 'CLIENTE', texto], queryFn: () => masterDataApi.getPartners({ role: 'CLIENTE', q: texto }), staleTime: 0, retry: false }).then((partners) => {
+        const clientes = partners.filter((p) => p.is_active && p.roles.includes('CLIENTE')).map(partnerToCustomer);
         if (viva) setRespuesta({ campo: consulta.campo, texto, clientes, error: false });
       }).catch(() => {
         if (viva) setRespuesta({ campo: consulta.campo, texto, clientes: [], error: true });
       });
     }, ESPERA_MS);
     return () => { viva = false; window.clearTimeout(timer); };
-  }, [consulta, texto]);
+  }, [consulta, texto, queryClient]);
 
   useEffect(() => {
     const cerrar = (e: MouseEvent) => {
@@ -46,18 +60,18 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
   }, []);
 
   const lista = (campo: Campo) => consulta?.campo === campo && buscando ? (
-    !vigente ? <PageText role="status" variant="caption">Buscando en la cartera…</PageText> : respuesta?.error ? (
-      <PageText role="alert" variant="error">No se pudo buscar en la cartera. Vuelva a intentarlo.</PageText>
+    !vigente ? <PageText role="status" variant="caption">Buscando en el maestro…</PageText> : respuesta?.error ? (
+      <PageText role="alert" variant="error">No se pudo buscar en el maestro. Vuelva a intentarlo.</PageText>
     ) : respuesta?.clientes.length ? (
       <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-background shadow">
         {respuesta.clientes.map((cliente) => <li key={`${cliente.tipoDocumento}-${cliente.numeroDocumento}`}>
-          <button type="button" className="w-full px-3 py-2 text-left text-xs hover:bg-muted" onClick={() => { onElegir(cliente); setConsulta(null); }}>
+          <button type="button" className="w-full px-3 py-2 text-left text-xs hover:bg-muted" onClick={() => { elegir(cliente); }}>
             <span className="block font-medium">{cliente.razonSocial || '(sin razón social)'}</span>
             <span className="block text-muted-foreground">{cliente.tipoDocumento === '6' ? 'RUC' : 'DNI'} {cliente.numeroDocumento}</span>
           </button>
         </li>)}
       </ul>
-    ) : <PageText variant="caption">Sin coincidencias en su cartera. Puede escribirlo a mano.</PageText>
+    ) : <PageText variant="caption">Sin coincidencias en el maestro. Puede escribirlo a mano.</PageText>
   ) : null;
 
   return <div ref={contenedor} className="contents">
@@ -78,5 +92,7 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
         onKeyDown={(e) => { if (e.key === 'Escape') setConsulta(null); }} />
       {lista('nombre')}
     </div>
+    {canEmitInvoices && <button type="button" className="text-xs text-primary underline" onClick={() => { setConsulta(null); setRegistering(true); }}>Registrar cliente nuevo</button>}
+    {registering && canEmitInvoices && <PartnerFormDialog initialRole="CLIENTE" requiredRole="CLIENTE" initialDocument={documento} initialName={razonSocial} onClose={() => setRegistering(false)} onSaved={(partner) => elegir(partnerToCustomer(partner))} />}
   </div>;
 };

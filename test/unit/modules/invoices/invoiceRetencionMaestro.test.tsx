@@ -1,8 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RetencionMaestro } from '@/modules/invoices/components/RetencionMaestro';
 import { apiClient } from '@/lib/axios';
 
+vi.mock('@/hooks/useRolePermissions', () => ({ useRolePermissions: () => ({ canEmitInvoices: true }) }));
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
@@ -27,5 +30,8 @@ it('permite crear un cliente ausente sin impedir la selección manual', async ()
   render(<RetencionMaestro documento="20601234567" razonSocial="Empresa" valor={false} onChange={vi.fn()} />);
   expect(await screen.findByText(/Sin registro en el maestro/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Crear cliente/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Guardar tercero' }));
   await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/master-data/partners', expect.objectContaining({ docNumber: '20601234567', legalName: 'Empresa' })));
 });
+
+function render(ui: ReactNode) { return rtlRender(ui, { wrapper: ({ children }) => <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}>{children}</QueryClientProvider> }); }

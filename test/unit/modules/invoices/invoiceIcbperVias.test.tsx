@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
 vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => []) }));
@@ -20,3 +22,5 @@ it('10 bolsas por botón conservan la tarifa de S/ 5', () => {
   expect(screen.getByText('S/ 1185.59')).toBeTruthy();
   expect((screen.getByLabelText('ICBPER de la línea 2') as HTMLInputElement).value).toBe('5');
 });
+
+function render(ui: ReactNode) { return rtlRender(ui, { wrapper: ({ children }) => <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}>{children}</QueryClientProvider> }); }

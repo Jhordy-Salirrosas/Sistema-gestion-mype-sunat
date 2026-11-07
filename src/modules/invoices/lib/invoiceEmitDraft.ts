@@ -47,6 +47,9 @@ export interface BorradorEmision {
   tipo: TipoEmisible;
   serie: string;
   correlativo: number;
+  clienteId?: string;
+  clienteTipoDocumento?: string;
+  clienteDireccion?: string;
   clienteDoc: string;
   clienteTipoDoc: '1' | '6';
   clienteRazonSocial: string;

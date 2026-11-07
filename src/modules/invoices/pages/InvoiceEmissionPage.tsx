@@ -118,6 +118,7 @@ export default function InvoiceEmissionPage() {
   const [tipo, setTipo] = useState<'01' | '03'>(
     searchParams.get('tipo') === '03' ? '03' : '01',
   );
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<import('../lib/invoiceSearch').ClienteBuscado | null>(null);
   const [clienteDoc, setClienteDoc] = useState('');
   const [clienteRazonSocial, setClienteRazonSocial] = useState('');
   const [items, setItems] = useState<readonly ItemBorrador[]>([itemVacio('1')]);
@@ -390,6 +391,9 @@ export default function InvoiceEmissionPage() {
         tipo,
         serie: SERIES[tipo],
         correlativo: 0, // lo asigna la serie en el backend
+        clienteId: clienteSeleccionado?.id,
+        clienteTipoDocumento: clienteSeleccionado?.tipoDocumento,
+        clienteDireccion: clienteSeleccionado?.direccion,
         clienteDoc,
         clienteTipoDoc: tipo === '01' ? '6' : '1',
         clienteRazonSocial,
@@ -590,9 +594,10 @@ export default function InvoiceEmissionPage() {
                 }
                 placeholderDocumento={tipo === '01' ? '20100070970' : '70123456'}
                 errorDocumento={clienteDoc.length > 0 && !documentoValidoParaTipo(tipo, clienteDoc) ? mensajeErrorDocumento(tipo) : undefined}
-                onDocumentoChange={(valor) => { setClienteDoc(valor); setClienteRazonSocial(''); }}
-                onRazonSocialChange={setClienteRazonSocial}
+                onDocumentoChange={(valor) => { setClienteSeleccionado(null); setClienteDoc(valor); setClienteRazonSocial(''); }}
+                onRazonSocialChange={(valor) => { setClienteSeleccionado(null); setClienteRazonSocial(valor); }}
                 onElegir={(cliente) => {
+                  setClienteSeleccionado(cliente);
                   setClienteDoc(cliente.numeroDocumento);
                   setClienteRazonSocial(cliente.razonSocial);
                 }}
