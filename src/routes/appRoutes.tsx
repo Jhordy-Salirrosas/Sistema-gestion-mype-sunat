@@ -206,7 +206,7 @@ export const AppRoutes = () => {
               path="/customs/partners"
               element={
                 <RoleProtectedRoute allowedRoles={['ADMIN']}>
-                  <PartnersPage />
+                  <Navigate to="/invoices/clientes" replace />
                 </RoleProtectedRoute>
               }
             />

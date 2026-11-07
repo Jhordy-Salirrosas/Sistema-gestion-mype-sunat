@@ -40,7 +40,7 @@ export default function PartnersPage({ context = 'customs' }: { context?: 'custo
   return (
     <Page>
       <PageHeader
-        title={billing ? 'Clientes' : 'Clientes y proveedores'}
+        title="Clientes y proveedores"
         description="Maestro único de terceros: datos fiscales, contactos, direcciones y cuentas bancarias."
       >
         <Button variant="outline" size="sm" onClick={refresh} className="gap-1.5">
@@ -49,7 +49,7 @@ export default function PartnersPage({ context = 'customs' }: { context?: 'custo
         </Button>
         {canWrite && <Button size="sm" onClick={() => setIsNewOpen(true)} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
-          {billing ? 'Nuevo cliente' : 'Nuevo tercero'}
+          Nuevo tercero
         </Button>}
       </PageHeader>
 
@@ -164,7 +164,7 @@ export default function PartnersPage({ context = 'customs' }: { context?: 'custo
       <PartnerDetailDrawer partnerId={selectedId} onClose={() => setSelectedId(null)} readOnly={!canWrite} />
 
 
-      {canWrite && isNewOpen && <PartnerFormDialog onClose={() => setIsNewOpen(false)} initialRole={billing ? 'CLIENTE' : 'PROVEEDOR'} requiredRole={billing ? 'CLIENTE' : undefined} allowOffline={!billing} />}
+      {canWrite && isNewOpen && <PartnerFormDialog onClose={() => setIsNewOpen(false)} initialRole={billing ? 'CLIENTE' : 'PROVEEDOR'} allowOffline={!billing} />}
       {canWrite && editingPartner && <PartnerFormDialog partner={editingPartner} onClose={() => setEditingPartner(null)} />}
     </Page>
   );

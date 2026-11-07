@@ -64,7 +64,7 @@ const NAV_ITEMS: NavItem[] = [
     allowedRoles: ['ADMIN', 'OPERADOR_FACTURACION', 'CONTADOR', 'AUDITOR', 'OPERATOR', 'ACCOUNTANT'],
     subItems: [
       { title: 'Facturas y Boletas', path: '/invoices/facturas', icon: FileText },
-      { title: 'Clientes', path: '/invoices/clientes', icon: Building2 },
+      { title: 'Clientes y proveedores', path: '/invoices/clientes', icon: Building2 },
       // La pantalla de emisión existía y funcionaba desde el Sprint 1, pero
       // ninguna entrada del menú llevaba a ella: solo se llegaba por URL o
       // desde el botón de asientos contables. El docente juzga lo que ve en el
@@ -99,7 +99,6 @@ const NAV_ITEMS: NavItem[] = [
       { title: '2. Tránsito y arribo', path: '/customs/shipments', icon: FolderGit2 },
       { title: '3. Despacho y DAM', path: '/customs/declarations', icon: FileCheck2 },
       { title: '4. Recojo y almacén (Kardex)', path: '/customs/landed-cost', icon: Calculator },
-      { title: 'Proveedores internacionales', path: '/customs/partners', icon: Building2, allowedRoles: ['ADMIN', 'OPERADOR_ADUANAS'] },
       { title: 'Configuración aduanera', path: '/customs/config', icon: Settings, allowedRoles: ['ADMIN'] },
     ],
   },
