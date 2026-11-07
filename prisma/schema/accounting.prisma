@@ -54,6 +54,7 @@ model AccountingEntry {
   glosa                 String
   source_module         String
   source_reference_id   String?
+  idempotency_key       String?
   total_debit           Decimal           @db.Decimal(14, 2)
   total_credit          Decimal           @db.Decimal(14, 2)
   is_balanced           Boolean
@@ -63,6 +64,7 @@ model AccountingEntry {
   lines                 AccountingLine[]
 
   @@unique([company_id, period, entry_number])
+  @@unique([company_id, idempotency_key])
   @@index([company_id, period, entry_date])
   @@map("accounting_entries")
 }

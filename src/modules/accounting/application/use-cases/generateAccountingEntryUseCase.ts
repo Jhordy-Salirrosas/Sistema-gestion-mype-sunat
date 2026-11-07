@@ -15,6 +15,13 @@ export class GenerateAccountingEntryUseCase {
   async execute(dto: CreateAccountingEntryDto): Promise<AccountingEntryEntity> {
     const companyId = dto.companyId ?? '';
     const period = dto.period;
+    if (dto.idempotencyKey) {
+      const existente = await this.accountingRepository.findByIdempotencyKey(
+        companyId,
+        dto.idempotencyKey,
+      );
+      if (existente) return existente;
+    }
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
       throw new BadRequestException('El período debe tener formato YYYY-MM');
     }
@@ -58,6 +65,7 @@ export class GenerateAccountingEntryUseCase {
       glosa: dto.glosa,
       sourceModule: dto.sourceModule,
       sourceReferenceId: dto.sourceReferenceId,
+      idempotencyKey: dto.idempotencyKey,
       lines: dto.lines.map((l, index) => ({
         lineOrder: l.lineOrder ?? index + 1,
         accountCode: l.accountCode,
