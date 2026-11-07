@@ -45,11 +45,13 @@ describe('PrismaSireRepository report uploads', () => {
   it('persists an RCE upload and links its proposals atomically', async () => {
     const create = jest.fn().mockResolvedValue({ id: 'upload-1' });
     const createMany = jest.fn().mockResolvedValue({ count: 1 });
-    const transaction = jest.fn(async (callback: (tx: unknown) => Promise<void>) =>
-      callback({
-        sireReportUpload: { create },
-        sireProposal: { createMany },
-      }),
+    const findMany = jest.fn().mockResolvedValue([]);
+    const transaction = jest.fn(
+      async (callback: (tx: unknown) => Promise<void>) =>
+        callback({
+          sireReportUpload: { create },
+          sireProposal: { createMany, findMany },
+        }),
     );
     const repository = new PrismaSireRepository({
       $transaction: transaction,
@@ -91,11 +93,13 @@ describe('PrismaSireRepository report uploads', () => {
   it('maps RVIE uploads to the ventas enum', async () => {
     const create = jest.fn().mockResolvedValue({ id: 'upload-2' });
     const createMany = jest.fn().mockResolvedValue({ count: 1 });
-    const transaction = jest.fn(async (callback: (tx: unknown) => Promise<void>) =>
-      callback({
-        sireReportUpload: { create },
-        sireProposal: { createMany },
-      }),
+    const findMany = jest.fn().mockResolvedValue([]);
+    const transaction = jest.fn(
+      async (callback: (tx: unknown) => Promise<void>) =>
+        callback({
+          sireReportUpload: { create },
+          sireProposal: { createMany, findMany },
+        }),
     );
     const repository = new PrismaSireRepository({
       $transaction: transaction,
@@ -119,108 +123,167 @@ describe('PrismaSireRepository report uploads', () => {
   });
 
   it('persists and reads the SIRE period lifecycle', async () => {
-    const upsert = jest.fn().mockResolvedValue({ id: 'period-1', state: 'PROPUESTA' });
+    const upsert = jest
+      .fn()
+      .mockResolvedValue({ id: 'period-1', state: 'PROPUESTA' });
     const findUnique = jest.fn().mockResolvedValue({
-        id: 'period-1',
-        state: 'PROCESANDO_GENERACION',
-        ticket: 'T-1',
-        ticket_operation: 'GENERACION',
-      });
-    const deleteMany = jest.fn();
+      id: 'period-1',
+      state: 'PROCESANDO_GENERACION',
+      ticket: 'T-1',
+      ticket_operation: 'GENERACION',
+    });
     const createMany = jest.fn();
+    const proposalFindMany = jest.fn().mockResolvedValue([]);
     const update = jest.fn();
+    const transaction = jest.fn(
+      async (callback: (tx: unknown) => Promise<void>) =>
+        callback({
+          sirePeriod: { update },
+          sireProposal: { findMany: proposalFindMany, createMany },
+        }),
+    );
     const repository = new PrismaSireRepository({
-        sirePeriod: { upsert, findUnique, update },
-        sireProposal: { deleteMany, createMany },
-        $transaction: jest.fn().mockResolvedValue([]),
+      sirePeriod: { upsert, findUnique },
+      sireProposal: {},
+      $transaction: transaction,
     } as never);
 
-    await expect(repository.upsertPeriod('company-a', '202610', 'RCE')).resolves.toEqual({
-        id: 'period-1',
-        state: 'PROPUESTA',
-      });
-    await expect(repository.getPeriod('company-a', '202610', 'RCE')).resolves.toEqual({
-        id: 'period-1',
-        state: 'PROCESANDO_GENERACION',
-        ticket: 'T-1',
-        ticketOperation: 'GENERACION',
-      });
+    await expect(
+      repository.upsertPeriod('company-a', '202610', 'RCE'),
+    ).resolves.toEqual({
+      id: 'period-1',
+      state: 'PROPUESTA',
+    });
+    await expect(
+      repository.getPeriod('company-a', '202610', 'RCE'),
+    ).resolves.toEqual({
+      id: 'period-1',
+      state: 'PROCESANDO_GENERACION',
+      ticket: 'T-1',
+      ticketOperation: 'GENERACION',
+    });
     await repository.saveSunatProposal('company-a', '202610', 'RCE', [
-        proposal,
-        { ...proposal, origin: 'USUARIO' },
-      ]);
-    expect(deleteMany).toHaveBeenCalled();
+      proposal,
+      { ...proposal, carSunat: 'CAR-2', origin: 'USUARIO' },
+    ]);
+    expect(proposalFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          company_id: 'company-a',
+          book_type: 'RCE_COMPRAS',
+        }),
+      }),
+    );
     expect(createMany).toHaveBeenCalledWith({
-        data: [
-          expect.objectContaining({ origin: 'SUNAT', book_type: 'RCE_COMPRAS' }),
-          expect.objectContaining({ origin: 'USUARIO', book_type: 'RCE_COMPRAS' }),
-        ],
-      });
+      data: [
+        expect.objectContaining({
+          origin: 'SUNAT',
+          book_type: 'RCE_COMPRAS',
+          car_sunat: 'CAR-1',
+        }),
+        expect.objectContaining({
+          origin: 'USUARIO',
+          book_type: 'RCE_COMPRAS',
+          car_sunat: 'CAR-2',
+        }),
+      ],
+    });
     expect(update).toHaveBeenCalled();
   });
 
-    it('enforces proposal origin and updates ticket/state transitions', async () => {
-      const findFirst = jest
-        .fn()
-        .mockResolvedValueOnce({
-          id: 'p-1',
-          origin: 'SUNAT',
-          period_id: 'period-1',
-          period_record: { state: 'PROPUESTA' },
-        })
-        .mockResolvedValueOnce({
-          id: 'p-2',
-          origin: 'USUARIO',
-          period_id: 'period-1',
-          period_record: { state: 'PROPUESTA' },
-        });
-      const proposalUpdate = jest.fn();
-      const updateMany = jest.fn()
-        .mockResolvedValueOnce({ count: 1 })
-        .mockResolvedValueOnce({ count: 0 })
-        .mockResolvedValueOnce({ count: 1 })
-        .mockResolvedValueOnce({ count: 0 })
-        .mockResolvedValueOnce({ count: 1 })
-        .mockResolvedValueOnce({ count: 0 });
-      const findMany = jest.fn().mockResolvedValue([
-        {
-          id: 'proposal-1',
-          company_id: 'company-a',
-          period: '202610',
-          book_type: 'RVIE_VENTAS',
-          car_sunat: 'CAR-1',
-          issue_date: new Date('2026-10-01'),
-          emitter_ruc: '20100070970',
-          document_type: '01',
-          series: 'F001',
-          correlative: '1',
-          origin: 'SUNAT',
-          taxable_base: { toNumber: () => 100 },
-          igv_amount: { toNumber: () => 18 },
-          total_amount: { toNumber: () => 118 },
-        },
-      ]);
-      const repository = new PrismaSireRepository({
-        sireProposal: { findFirst, update: proposalUpdate, updateMany, findMany },
-        sirePeriod: { updateMany },
-      } as never);
+  it('enforces proposal origin and updates ticket/state transitions', async () => {
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'p-1',
+        origin: 'SUNAT',
+        period_id: 'period-1',
+        period_record: { state: 'PROPUESTA' },
+      })
+      .mockResolvedValueOnce({
+        id: 'p-2',
+        origin: 'USUARIO',
+        period_id: 'period-1',
+        period_record: { state: 'PROPUESTA' },
+      });
+    const proposalUpdate = jest.fn();
+    const updateMany = jest
+      .fn()
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'proposal-1',
+        company_id: 'company-a',
+        period: '202610',
+        book_type: 'RVIE_VENTAS',
+        car_sunat: 'CAR-1',
+        issue_date: new Date('2026-10-01'),
+        emitter_ruc: '20100070970',
+        document_type: '01',
+        series: 'F001',
+        correlative: '1',
+        origin: 'SUNAT',
+        taxable_base: { toNumber: () => 100 },
+        igv_amount: { toNumber: () => 18 },
+        total_amount: { toNumber: () => 118 },
+      },
+    ]);
+    const repository = new PrismaSireRepository({
+      sireProposal: { findFirst, update: proposalUpdate, updateMany, findMany },
+      sirePeriod: { updateMany },
+    } as never);
 
-      await repository.excludeSunatProposal('company-a', 'p-1', 'user-a');
-      await expect(repository.excludeSunatProposal('company-a', 'p-2', 'user-a')).rejects.toBeInstanceOf(Error);
-      await repository.restoreProposal('company-a', 'p-1');
-      await expect(repository.restoreProposal('company-a', 'missing')).rejects.toBeInstanceOf(Error);
-      await expect(repository.getPeriodProposals('company-a', '202610', 'RVIE')).resolves.toEqual([
-        expect.objectContaining({
-          id: 'proposal-1',
-          bookType: 'RVIE',
-          totalAmount: 118,
-          origin: 'SUNAT',
-        }),
-      ]);
-      await repository.setPeriodTicket('company-a', '202610', 'RCE', 'PROCESANDO_GENERACION', 'T-1', 'GENERACION');
-      await expect(repository.setPeriodTicket('company-a', '202610', 'RCE', 'GENERADO', 'T-2', 'GENERACION')).rejects.toBeInstanceOf(Error);
-      await repository.setPeriodState('company-a', '202610', 'RCE', 'ERROR', 'falló');
-      await expect(repository.setPeriodState('company-a', '202610', 'RCE', 'GENERADO')).rejects.toBeInstanceOf(Error);
-      expect(proposalUpdate).toHaveBeenCalled();
-    });
+    await repository.excludeSunatProposal('company-a', 'p-1', 'user-a');
+    await expect(
+      repository.excludeSunatProposal('company-a', 'p-2', 'user-a'),
+    ).rejects.toBeInstanceOf(Error);
+    await repository.restoreProposal('company-a', 'p-1');
+    await expect(
+      repository.restoreProposal('company-a', 'missing'),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(
+      repository.getPeriodProposals('company-a', '202610', 'RVIE'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'proposal-1',
+        bookType: 'RVIE',
+        totalAmount: 118,
+        origin: 'SUNAT',
+      }),
+    ]);
+    await repository.setPeriodTicket(
+      'company-a',
+      '202610',
+      'RCE',
+      'PROCESANDO_GENERACION',
+      'T-1',
+      'GENERACION',
+    );
+    await expect(
+      repository.setPeriodTicket(
+        'company-a',
+        '202610',
+        'RCE',
+        'GENERADO',
+        'T-2',
+        'GENERACION',
+      ),
+    ).rejects.toBeInstanceOf(Error);
+    await repository.setPeriodState(
+      'company-a',
+      '202610',
+      'RCE',
+      'ERROR',
+      'falló',
+    );
+    await expect(
+      repository.setPeriodState('company-a', '202610', 'RCE', 'GENERADO'),
+    ).rejects.toBeInstanceOf(Error);
+    expect(proposalUpdate).toHaveBeenCalled();
+  });
 });

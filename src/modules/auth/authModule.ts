@@ -16,6 +16,8 @@ import { TOKEN_SERVICE_PORT } from './domain/ports/tokenServicePort';
 import { NativeJwtAdapter } from './infrastructure/security/nativeJwtAdapter';
 import { AuthGuard } from './infrastructure/guards/authGuard';
 import { RolesGuard } from './infrastructure/guards/rolesGuard';
+import { SOL_CREDENTIAL_CIPHER } from './domain/ports/solCredentialCipherPort';
+import { SolCredentialCipher } from './infrastructure/security/solCredentialCipher';
 
 @Module({
   imports: [PrismaModule],
@@ -39,6 +41,13 @@ import { RolesGuard } from './infrastructure/guards/rolesGuard';
     {
       provide: TOKEN_SERVICE_PORT,
       useClass: NativeJwtAdapter,
+    },
+    {
+      provide: SOL_CREDENTIAL_CIPHER,
+      useFactory: () =>
+        new SolCredentialCipher(
+          process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
+        ),
     },
     AuthGuard,
     RolesGuard,

@@ -27,6 +27,7 @@ export class IngestSireProposalUseCase {
     imported: number;
     rejected: number;
     errors: { line: number; reason: string }[];
+    formatStatus: 'PROVISIONAL_NOT_OFFICIAL';
   }> {
     if (!file.length) throw new BadRequestException('El archivo está vacío.');
     const bookType = toDomainBookType(dto.bookType);
@@ -49,6 +50,7 @@ export class IngestSireProposalUseCase {
       imported: parsed.records.length,
       rejected: parsed.rejected.length,
       errors: parsed.rejected,
+      formatStatus: 'PROVISIONAL_NOT_OFFICIAL',
     };
   }
 }

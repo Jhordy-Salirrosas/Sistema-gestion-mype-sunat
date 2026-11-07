@@ -68,6 +68,10 @@ describe('AuthController', () => {
       },
     };
     mockRegisterUseCase.execute.mockResolvedValue(mockAuthResponse);
+    const mockReq = {
+      ip: '127.0.0.1',
+      get: jest.fn().mockReturnValue('test-agent'),
+    } as unknown as Request;
     const mockRes = createMockResponse();
 
     const result = await controller.register(
@@ -80,10 +84,15 @@ describe('AuthController', () => {
         email: 'admin@mype.pe',
         password: 'Password123!#',
       },
+      mockReq,
       mockRes,
     );
 
     expect(result).toBe(mockAuthResponse);
+    expect(mockRegisterUseCase.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      { ipAddress: '127.0.0.1', userAgent: 'test-agent' },
+    );
     expect(mockRes.cookie).toHaveBeenCalledWith(
       'refreshToken',
       'raw_refresh_token_123',

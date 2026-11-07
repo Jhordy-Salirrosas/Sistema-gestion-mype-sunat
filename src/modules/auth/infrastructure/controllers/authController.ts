@@ -58,9 +58,13 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   async register(
     @Body() dto: RegisterDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
-    const result = await this.registerUseCase.execute(dto);
+    const result = await this.registerUseCase.execute(dto, {
+      ipAddress: req.ip || 'desconocida',
+      userAgent: req.get('user-agent') ?? null,
+    });
     if (result.refreshToken) {
       setRefreshTokenCookie(res, result.refreshToken);
     }

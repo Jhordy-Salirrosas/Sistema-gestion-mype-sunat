@@ -1,13 +1,14 @@
 import { randomBytes, scryptSync } from 'node:crypto';
 import type { PrismaClient } from '../../src/generated/client/client';
+import { SolCredentialCipher } from '../../src/modules/auth/infrastructure/security/solCredentialCipher';
 
 export const DEMO_COMPANY = {
   id: '5eaccb4e-a6ec-4f23-9909-85fe7fc9a87e', // ID exacta vinculada con el frontend
   ruc: '20601234567',
   legalName: 'SYNC-SUNAT DEMO MYPE S.A.C.',
   tradeName: 'DEMO MYPE',
-  solUser: 'MODDATOS',
-  solPassEncrypted: 'MODDATOS',
+  solUser: 'DEMO_SOL_USER',
+  solPassword: 'fake-demo-sol-password',
   isActive: true,
 };
 
@@ -52,6 +53,9 @@ function hashPassword(plainText: string): string {
 
 export async function seedAuth(prisma: PrismaClient) {
   console.log('--- Iniciando Seeding de Autenticación y MYPE Demo ---');
+  const solPasswordEncrypted = new SolCredentialCipher(
+    process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
+  ).encrypt(DEMO_COMPANY.solPassword);
 
   const company = await prisma.company.upsert({
     where: { ruc: DEMO_COMPANY.ruc },
@@ -59,7 +63,7 @@ export async function seedAuth(prisma: PrismaClient) {
       legal_name: DEMO_COMPANY.legalName,
       trade_name: DEMO_COMPANY.tradeName,
       sol_user: DEMO_COMPANY.solUser,
-      sol_pass_encrypted: DEMO_COMPANY.solPassEncrypted,
+      sol_pass_encrypted: solPasswordEncrypted,
       is_active: DEMO_COMPANY.isActive,
     },
     create: {
@@ -68,12 +72,14 @@ export async function seedAuth(prisma: PrismaClient) {
       legal_name: DEMO_COMPANY.legalName,
       trade_name: DEMO_COMPANY.tradeName,
       sol_user: DEMO_COMPANY.solUser,
-      sol_pass_encrypted: DEMO_COMPANY.solPassEncrypted,
+      sol_pass_encrypted: solPasswordEncrypted,
       is_active: DEMO_COMPANY.isActive,
     },
   });
 
-  console.log(`Empresa MYPE Demo configurada: ${company.legal_name} (RUC: ${company.ruc}) [ID: ${company.id}]`);
+  console.log(
+    `Empresa MYPE Demo configurada: ${company.legal_name} (RUC: ${company.ruc}) [ID: ${company.id}]`,
+  );
 
   for (const userDef of DEMO_USERS) {
     const passwordHash = hashPassword(userDef.password);
@@ -101,7 +107,9 @@ export async function seedAuth(prisma: PrismaClient) {
       },
     });
 
-    console.log(`Usuario demo listo: ${user.email} [${user.role}] - Pass: ${userDef.password}`);
+    console.log(
+      `Usuario demo listo: ${user.email} [${user.role}] - Pass: ${userDef.password}`,
+    );
   }
 
   console.log('--- Seeding de Autenticación Completado con Éxito ---');

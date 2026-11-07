@@ -158,6 +158,9 @@ skills-lock.json
 
 # Carpeta personal de documentación
 docs/
+!docs/
+docs/*
+!docs/sire-security.md
 
 # Certificados digitales y llaves criptográficas (Seguridad TT-04)
 *.pfx
