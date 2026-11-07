@@ -12,3 +12,24 @@ describe('padrón de agentes de retención', () => {
     expect(() => parsearPadron('ruc,razon_social,valid_from\n123,EMPRESA,2026-01-01\n')).toThrow(/RUC inválido/);
   });
 });
+
+describe('padrón de agentes de retención · validaciones', () => {
+  it('ignora comentarios y líneas vacías', () => {
+    const filas = parsearPadron(
+      'ruc,razon_social,valid_from\n# comentario\n\n20123456789,EMPRESA EJEMPLO S.A.C.,2026-01-01\n',
+    );
+    expect(filas).toHaveLength(1);
+  });
+
+  it('rechaza una fila sin razón social', () => {
+    expect(() =>
+      parsearPadron('ruc,razon_social,valid_from\n20123456789,,2026-01-01\n'),
+    ).toThrow(/Falta razón social/);
+  });
+
+  it('rechaza una fecha inválida', () => {
+    expect(() =>
+      parsearPadron('ruc,razon_social,valid_from\n20123456789,EMPRESA,no-es-fecha\n'),
+    ).toThrow(/Fecha inválida/);
+  });
+});
