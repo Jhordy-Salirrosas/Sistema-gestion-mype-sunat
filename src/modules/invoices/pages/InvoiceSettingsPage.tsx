@@ -1,20 +1,3 @@
-/**
- * Página de configuración de Facturación Electrónica (TA-61).
- *
- * POR QUÉ HAY UN ENVOLTORIO Y NO SE RUTEA LA PESTAÑA DIRECTAMENTE
- *
- * `InvoiceSettingsTab` es un componente de presentación: recibe `ruc`,
- * `configuracion` y `series` por props y avisa con `onGuardar`. No sabe de
- * dónde vienen esos datos ni cómo se guardan, y eso es correcto: así se puede
- * montar en una prueba sin backend.
- *
- * Una ruta, en cambio, tiene que resolver esas tres cosas. Eso es lo que hace
- * este archivo: lee el RUC de la sesión, pide la configuración y las series al
- * backend que ya existen (`GET /invoices/config` y `GET /invoices/series`) y
- * presenta el resultado. Si el backend no responde, la pantalla lo dice en
- * lugar de mostrar un formulario vacío que el usuario creería que se guardó.
- */
-import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -30,7 +13,7 @@ import { InvoiceStorageNote } from '../components/InvoiceStorageNote';
 import { invoicesApi } from '../services/invoicesApi';
 import { useInvoiceConfig } from '../hooks/useInvoiceConfig';
 import { useAuthStore } from '@/stores/authStore';
-import type { ConfiguracionFe } from '../lib/invoiceSettings';
+import { invoiceConfigError } from '../lib/invoiceConfigError';
 
 export default function InvoiceSettingsPage() {
   // El RUC sale de la empresa ACTIVA de la sesión y no de un campo del
@@ -38,7 +21,7 @@ export default function InvoiceSettingsPage() {
   // comprobantes ya emitidos).
   const ruc = (useAuthStore((state) => state.activeCompany?.ruc) ?? '').trim();
 
-  const { data, error, cargando } = useInvoiceConfig(ruc);
+  const { data, error, cargando, guardar } = useInvoiceConfig(ruc);
 
   /**
    * Aceptados de la empresa, para la nota de almacenamiento (D1, resto).
@@ -56,18 +39,6 @@ export default function InvoiceSettingsPage() {
 
   const aceptados = metricas?.aceptados ?? 0;
 
-  const configuracion = useMemo<Partial<ConfiguracionFe>>(
-    () => ({
-      ruc,
-      // El entorno lo decide el despliegue y el backend lo informa; el
-      // formulario lo muestra pero no lo escribe (PUT /config responde 409).
-      // El front solo contempla 'beta' y 'produccion', así que un entorno
-      // simulado (MOCK) se presenta como 'beta': es el entorno de pruebas de
-      // SUNAT y no dar a entender que se emitirá al ambiente real.
-      ambiente: data?.entorno === 'PRODUCCION' ? 'produccion' : 'beta',
-    }),
-    [ruc, data],
-  );
 
   return (
     <Page>
@@ -89,9 +60,7 @@ export default function InvoiceSettingsPage() {
         <Alert variant="destructive">
           <AlertTitle>No se pudo leer la configuración</AlertTitle>
           <AlertDescription>
-            {error instanceof Error
-              ? error.message
-              : 'El servicio de facturación no respondió.'}{' '}
+            {invoiceConfigError(error)}{' '}
             Los valores del formulario pueden estar incompletos.
           </AlertDescription>
         </Alert>
@@ -109,7 +78,8 @@ export default function InvoiceSettingsPage() {
 
       <InvoiceSettingsTab
         ruc={ruc}
-        configuracion={configuracion}
+        configuracion={data}
+        onGuardar={guardar}
         series={data?.series ?? []}
       />
     </Page>

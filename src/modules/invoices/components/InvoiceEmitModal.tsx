@@ -59,6 +59,7 @@ import {
   validarCronograma,
 } from '../lib/invoiceDetraccion';
 import { liquidarDescuentoGlobal } from '../lib/invoiceDescuentoGlobal';
+import { MedioPagoDetraccionSelect } from './MedioPagoDetraccionSelect';
 import { calcularFlujo } from '../lib/invoiceFlujoPago';
 export { calcularFlujo } from '../lib/invoiceFlujoPago';
 import { InvoiceEmitCampos } from './InvoiceEmitCampos';
@@ -139,7 +140,8 @@ const motivosPendientes = (
   }
 
   const esNota = esTipoNota(b.tipo);
-  const { importeTotal, neto } = calcularFlujo(b);
+  const { importeTotal, neto, detraccion } = calcularFlujo(b);
+  if (detraccion > 0 && !b.medioPagoDetraccion) motivos.push('Seleccione el medio de pago de la detracción.');
 
   if (!esNota && b.codigoDetraccion) {
     if (esDetraccionDadaDeBaja(b.codigoDetraccion)) {
@@ -418,6 +420,8 @@ export const InvoiceEmitModal = ({
         <RetencionMaestro documento={b.clienteDoc} razonSocial={b.clienteRazonSocial} valor={b.agenteRetencion}
           disabled={esTipoNota(b.tipo)} onChange={(agenteRetencion, correccionRetencion) => actualizar({ agenteRetencion, correccionRetencion })} />
 
+        <MedioPagoDetraccionSelect aplica={flujo.detraccion > 0} value={b.medioPagoDetraccion}
+          onChange={(medioPagoDetraccion) => actualizar({ medioPagoDetraccion })} />
         <InvoiceEmitResumen borrador={b} />
 
         {pendientes.length > 0 && (

@@ -40,6 +40,8 @@
  * El CDR se consulta en la bandeja. No se muestra "ACEPTADO" en ningún caso
  * aquí, porque SUNAT no ha respondido todavía.
  */
+import { MedioPagoDetraccionSelect } from '../components/MedioPagoDetraccionSelect';
+import type { MedioPagoDetraccion } from '../lib/medioPagoDetraccion';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -169,6 +171,7 @@ export default function InvoiceEmissionPage() {
     return acumulado;
   }, [items, totales.gravado]);
 
+  const [medioPagoDetraccion, setMedioPagoDetraccion] = useState<MedioPagoDetraccion | ''>('');
   const importeTotal = totales.total;
 
   // Detracción por LÍNEA: "los productos son con detracción, no la factura".
@@ -291,6 +294,10 @@ export default function InvoiceEmissionPage() {
 
     // Validaciones locales para que el usuario vea el problema en el mismo
     // formulario. El backend las repite: esto no sustituye su validación.
+    if (detraccion.aplica && !medioPagoDetraccion) {
+      setResultado({ ok: false, mensaje: 'Seleccione el medio de pago de la detracción.' });
+      return;
+    }
     if (problemaFecha) {
       setResultado({ ok: false, mensaje: problemaFecha });
       return;
@@ -390,6 +397,7 @@ export default function InvoiceEmissionPage() {
         cuotas,
         numeroCuotas: cuotas.length || 2,
         codigoDetraccion: '',
+        medioPagoDetraccion,
         agenteRetencion,
         correccionRetencion,
         bolsas: 0,
@@ -416,6 +424,7 @@ export default function InvoiceEmissionPage() {
 
       // La grilla se limpia para no reenviar la misma venta por doble clic.
       setItems([itemVacio('1')]);
+      setMedioPagoDetraccion('');
     } catch (error: unknown) {
       // NO se inventa un CDR ni un número. Si el backend rechaza, se dice por
       // qué: el mensaje del backend explica qué falta (stock, RUC, correlativo).
@@ -665,6 +674,7 @@ export default function InvoiceEmissionPage() {
                 Por eso se muestra qué línea la genera y cuánto, no un porcentaje
                 suelto sobre el total.
               */}
+              <MedioPagoDetraccionSelect aplica={detraccion.aplica} value={medioPagoDetraccion} onChange={setMedioPagoDetraccion} />
               {detraccion.aplica ? (
                 <div className="space-y-1 border-t border-border pt-2 text-xs">
                   <div className="flex justify-between text-muted-foreground">

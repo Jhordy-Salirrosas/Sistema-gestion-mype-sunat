@@ -43,6 +43,7 @@ import { diasEntreFechas, fechaIsoValida } from './invoiceFecha';
 
 /** Estado editable del formulario de emisión. */
 export interface BorradorEmision {
+  medioPagoDetraccion?: import('./medioPagoDetraccion').MedioPagoDetraccion | '';
   tipo: TipoEmisible;
   serie: string;
   correlativo: number;

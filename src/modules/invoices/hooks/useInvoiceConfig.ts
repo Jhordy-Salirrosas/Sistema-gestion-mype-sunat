@@ -2,26 +2,22 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/axios';
 import type { SerieFe } from '../lib/invoiceSettings';
 
-/**
- * Configuración de Facturación Electrónica (TA-61).
- *
- * Consume los dos endpoints que ya existen en el backend desde TA-60:
- *   GET /api/v1/invoices/config  -> entorno, checklist y series
- *   GET /api/v1/invoices/series  -> series de la empresa
- *
- * `config` ya devuelve las series dentro de `series`, así que normalmente basta
- * con una llamada. El endpoint suelto se usa cuando el primero no las trae (por
- * ejemplo, si una versión del backend todavía no las incluye): así la pantalla
- * funciona contra las dos versiones en lugar de mostrar una lista vacía.
- *
- * LO QUE ESTE HOOK NO HACE: escribir. `PUT /invoices/config` responde 409 a
- * propósito, porque el entorno y las credenciales SOL viven en las variables
- * del despliegue y aceptarlas por HTTP las dejaría en el cuerpo de la petición
- * y en el log de acceso. Fingir un guardado sería peor que no ofrecerlo.
- */
-
 /** Respuesta cruda de `GET /invoices/config`. */
+export type EntornoFiscal = 'MOCK' | 'BETA' | 'PRODUCCION';
+export interface ConfiguracionInput {
+  entorno?: EntornoFiscal;
+  sol_user?: string;
+  sol_password?: string;
+  cert_base64?: string;
+  cert_password?: string;
+}
 export interface ConfiguracionBackend {
+  ruc?: string;
+  origen_efectivo?: 'company' | 'deployment';
+  origen_sol?: 'company' | 'deployment';
+  origen_certificado?: 'company' | 'deployment';
+  sol_password_configurada?: boolean;
+  cert_password_configurada?: boolean;
   entorno?: string;
   endpoint_bill_service?: string;
   endpoint_consult_service?: string;
@@ -42,7 +38,7 @@ export interface ConfiguracionBackend {
 }
 
 /** Lo que consume la pantalla, ya normalizado. */
-export interface ConfiguracionFeVista {
+export interface ConfiguracionFeVista extends Omit<ConfiguracionBackend, 'series'> {
   entorno: string;
   endpoint_bill_service: string;
   endpoint_consult_service: string;
@@ -89,6 +85,7 @@ export const useInvoiceConfig = (ruc: string) => {
               .catch(() => []);
 
       return {
+        ...data,
         entorno: data.entorno ?? 'MOCK',
         endpoint_bill_service: data.endpoint_bill_service ?? '',
         endpoint_consult_service: data.endpoint_consult_service ?? '',
@@ -107,5 +104,9 @@ export const useInvoiceConfig = (ruc: string) => {
     error: consulta.error,
     cargando: consulta.isLoading,
     recargar: consulta.refetch,
+    guardar: async (input: ConfiguracionInput) => {
+      await apiClient.put('/invoices/config', input);
+      await consulta.refetch();
+    },
   };
 };

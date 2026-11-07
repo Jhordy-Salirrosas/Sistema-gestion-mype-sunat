@@ -97,6 +97,10 @@ export const borradorAPayloadEmision = (
     })),
   };
 
+  if (calcularFlujo(b).detraccion > 0 && b.medioPagoDetraccion) {
+    payload.medio_pago_detraccion = b.medioPagoDetraccion;
+  }
+
   if (esNota) {
     payload.documento_afectado = b.documentoAfectado;
     payload.codigo_motivo_nota = b.motivoCodigo;
