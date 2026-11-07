@@ -31,7 +31,7 @@
     "prestart": "prisma generate",
     "prestart:dev": "prisma generate",
     "prebuild": "prisma generate",
-    "seed:retencion": "tsx scripts/seed-retention-agents.ts"
+    "seed:retencion": "npx tsx scripts/seed-retention-agents.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
