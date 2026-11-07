@@ -9,8 +9,8 @@ import type {
 
 @Injectable()
 export class UnsupportedSireSunatGateway implements SireSunatGatewayPort {
-  private unavailable(): never {
-    throw new ServiceUnavailableException(
+  private unavailable(): ServiceUnavailableException {
+    return new ServiceUnavailableException(
       'El cliente SUNAT SIRE no está configurado para este ambiente.',
     );
   }

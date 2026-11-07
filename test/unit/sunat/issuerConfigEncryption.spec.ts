@@ -96,6 +96,7 @@ describe('D1 optional encryption environment validation', () => {
     DATABASE_URL: 'postgresql://fake:fake@127.0.0.1/ta13_test',
     API_KEY: 'obviously-fake',
     JWT_SECRET: 'obviously-fake-jwt',
+    SOL_CREDENTIALS_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
     RUC_EMISOR: '20000000001',
     CERT_PASSWORD: 'obviously-fake-cert-password',
     CERT_BASE64: 'obviously-fake-base64',

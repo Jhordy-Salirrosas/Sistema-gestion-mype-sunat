@@ -35,6 +35,7 @@ import { UnsupportedSireSunatGateway } from './infrastructure/sunat/unsupportedS
 import { MockSireSunatGateway } from './infrastructure/sunat/mockSireSunatGateway';
 import { AcceptSireProposalUseCase } from './application/use-cases/acceptSireProposalUseCase';
 import { RestoreSireRecordUseCase } from './application/use-cases/restoreSireRecordUseCase';
+import { selectSireSunatGateway } from './infrastructure/sunat/sireGatewaySelector';
 
 @Module({
   imports: [AuthModule, ResilienceStateModule],
@@ -82,9 +83,12 @@ import { RestoreSireRecordUseCase } from './application/use-cases/restoreSireRec
         mockGateway: MockSireSunatGateway,
         unsupportedGateway: UnsupportedSireSunatGateway,
       ) =>
-        process.env['SUNAT_SIRE_ENV']?.toLowerCase() === 'mock'
-          ? mockGateway
-          : unsupportedGateway,
+        selectSireSunatGateway(
+          process.env['SUNAT_SIRE_ENV'],
+          process.env['NODE_ENV'],
+          mockGateway,
+          unsupportedGateway,
+        ),
     },
   ],
   exports: [SIRE_REPOSITORY_PORT, ReconcileSireUseCase],

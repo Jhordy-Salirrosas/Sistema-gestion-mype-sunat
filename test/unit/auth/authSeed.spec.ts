@@ -1,4 +1,8 @@
-import { seedAuth, DEMO_COMPANY, DEMO_USERS } from '../../../prisma/seeds/auth.seed';
+import {
+  seedAuth,
+  DEMO_COMPANY,
+  DEMO_USERS,
+} from '../../../prisma/seeds/auth.seed';
 import type { PrismaClient } from '../../../src/generated/client/client';
 
 describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
@@ -34,7 +38,8 @@ describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
         create: expect.objectContaining({
           ruc: '20601234567',
           legal_name: 'SYNC-SUNAT DEMO MYPE S.A.C.',
-          sol_user: 'MODDATOS',
+          sol_user: 'DEMO_SOL_USER',
+          sol_pass_encrypted: expect.stringMatching(/^sol:v1:/),
         }),
       }),
     );
@@ -59,7 +64,9 @@ describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
           create: expect.objectContaining({
             company_id: 'mocked-company-uuid',
             role: expectedRole,
-            password_hash: expect.stringMatching(/^[a-f0-9]{32}:[a-f0-9]{128}$/),
+            password_hash: expect.stringMatching(
+              /^[a-f0-9]{32}:[a-f0-9]{128}$/,
+            ),
             is_active: true,
           }),
         }),

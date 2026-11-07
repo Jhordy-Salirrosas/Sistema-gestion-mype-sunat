@@ -65,6 +65,9 @@ describe('PrismaAccountingRepository', () => {
       const result = await repository.saveEntry(mockData);
 
       expect(result).toBeDefined();
+      expect(result.id).toBe('entry-uuid-1');
+      expect(result).not.toBe(mockData);
+      expect(result.getTotalDebit()).toBe(0);
       expect(prismaMock.accountingEntry.create).toHaveBeenCalled();
     });
   });

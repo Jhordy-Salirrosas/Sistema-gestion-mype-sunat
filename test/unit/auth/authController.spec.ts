@@ -68,6 +68,10 @@ describe('AuthController', () => {
       },
     };
     mockRegisterUseCase.execute.mockResolvedValue(mockAuthResponse);
+    const mockReq = {
+      ip: '127.0.0.1',
+      get: jest.fn().mockReturnValue('test-agent'),
+    } as unknown as Request;
     const mockRes = createMockResponse();
 
     const result = await controller.register(
@@ -80,14 +84,58 @@ describe('AuthController', () => {
         email: 'admin@mype.pe',
         password: 'Password123!#',
       },
+      mockReq,
       mockRes,
     );
 
     expect(result).toBe(mockAuthResponse);
+    expect(mockRegisterUseCase.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      { ipAddress: '127.0.0.1', userAgent: 'test-agent' },
+    );
     expect(mockRes.cookie).toHaveBeenCalledWith(
       'refreshToken',
       'raw_refresh_token_123',
       expect.objectContaining({ httpOnly: true }),
+    );
+  });
+
+  it('usa valores de auditoría seguros cuando la solicitud no informa IP ni agente', async () => {
+    mockRegisterUseCase.execute.mockResolvedValue({
+      accessToken: 'access.jwt.token',
+      tokenType: 'Bearer',
+      expiresInSeconds: 900,
+      refreshToken: null,
+      user: {
+        id: 'usr-123',
+        email: 'admin@mype.pe',
+        fullName: 'Admin Demo',
+        role: 'ADMIN',
+        companyId: 'comp-456',
+      },
+    });
+    const req = {
+      ip: undefined,
+      get: jest.fn().mockReturnValue(undefined),
+    } as unknown as Request;
+
+    await controller.register(
+      {
+        ruc: '20100070970',
+        legalName: 'DEMO S.A.C.',
+        solUser: 'MODDATOS',
+        solPassword: 'fake-sol-password',
+        fullName: 'Admin Demo',
+        email: 'admin@mype.pe',
+        password: 'Password123!#',
+      },
+      req,
+      createMockResponse(),
+    );
+
+    expect(mockRegisterUseCase.execute).toHaveBeenCalledWith(
+      expect.any(Object),
+      { ipAddress: 'desconocida', userAgent: null },
     );
   });
 

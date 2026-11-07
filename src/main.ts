@@ -2,9 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
 import { AppModule } from './appModule';
 import { HttpExceptionFilter } from './common/filters';
+import { httpsOnlyMiddleware } from './common/middleware/httpsOnlyMiddleware';
 
-async function bootstrap() {
+export async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  if (process.env.NODE_ENV === 'production') {
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+    app.use(httpsOnlyMiddleware);
+  }
 
   const extraOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
@@ -72,4 +77,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`Servidor corriendo en el puerto: ${port}`);
 }
-bootstrap();
+
+if (require.main === module) {
+  void bootstrap();
+}

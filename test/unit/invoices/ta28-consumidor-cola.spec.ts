@@ -270,7 +270,8 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() } } as never,
+      { invoice: { findUnique, update: jest.fn() },
+        accountingEntry: { findFirst: jest.fn(async () => null) } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,

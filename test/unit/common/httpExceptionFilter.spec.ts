@@ -40,18 +40,91 @@ describe('HttpExceptionFilter (RFC 7807 Problem Details)', () => {
     );
   });
 
-  it('debe manejar errores no controlados como 500 RFC 7807', () => {
-    const exception = new Error('Database connection failed');
+  it('no expone errores inesperados en respuestas ni logs', () => {
+    const secret = 'clave-sol-ficticia-no-registrar';
+    const exception = new Error(`SUNAT rechazó credencial ${secret}`);
+    exception.stack = `Error: ${secret}`;
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
 
     filter.catch(exception, mockHost);
 
     expect(mockStatus).toHaveBeenCalledWith(500);
-    expect(mockJson).toHaveBeenCalledWith(
+    const response = JSON.stringify(mockJson.mock.calls[0][0]);
+    const logs = JSON.stringify(loggerSpy.mock.calls);
+    expect(response).toContain('Ha ocurrido un error inesperado');
+    expect(response).not.toContain(secret);
+    expect(logs).not.toContain(secret);
+    loggerSpy.mockRestore();
+  });
+
+  it('oculta el cuerpo de errores HTTP de servidor', () => {
+    const secret = 'clave-sol-ficticia-no-registrar';
+    const exception = new HttpException(
+      { message: secret, detail: secret },
+      HttpStatus.BAD_GATEWAY,
+    );
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+    filter.catch(exception, mockHost);
+
+    const response = JSON.stringify(mockJson.mock.calls[0][0]);
+    const logs = JSON.stringify(loggerSpy.mock.calls);
+    expect(response).not.toContain(secret);
+    expect(response).toContain('Ha ocurrido un error inesperado');
+    expect(logs).not.toContain(secret);
+    loggerSpy.mockRestore();
+  });
+
+  it('conserva mensajes simples y normaliza arreglos de errores de validación', () => {
+    filter.catch(new HttpException('Solicitud inválida', 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        status: 500,
-        detail: 'Database connection failed',
-        instance: '/api/v1/invoices',
+        detail: 'Solicitud inválida',
+        message: 'Solicitud inválida',
       }),
     );
+
+    filter.catch(new HttpException({ message: ['campo requerido'] }, 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        detail: 'Se detectaron errores de validación en la solicitud.',
+        invalidParams: ['campo requerido'],
+      }),
+    );
+
+    filter.catch(new HttpException({ message: 'Mensaje directo' }, 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({ detail: 'Mensaje directo' }),
+    );
+
+    filter.catch(new HttpException(['error de campo'], 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        detail: 'Se detectaron errores de validación en la solicitud.',
+        invalidParams: ['error de campo'],
+      }),
+    );
+
+    filter.catch(new HttpException(null, 400), mockHost);
+    expect(mockJson).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 400 }),
+    );
+  });
+
+  it('oculta excepciones de tipo desconocido', () => {
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+    filter.catch('error-ficticio', mockHost);
+
+    expect(loggerSpy).toHaveBeenCalledWith('Error no controlado de tipo desconocido.');
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(JSON.stringify(mockJson.mock.calls.at(-1)?.[0])).not.toContain('error-ficticio');
+    loggerSpy.mockRestore();
   });
 });

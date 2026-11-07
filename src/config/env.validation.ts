@@ -59,6 +59,13 @@ class EnvironmentVariables {
   JWT_SECRET: string;
 
   @IsString()
+  @IsNotEmpty({
+    message:
+      'SOL_CREDENTIALS_ENCRYPTION_KEY es obligatoria para proteger credenciales SOL',
+  })
+  SOL_CREDENTIALS_ENCRYPTION_KEY: string;
+
+  @IsString()
   @IsNotEmpty({ message: 'RUC_EMISOR es obligatorio' })
   RUC_EMISOR: string;
 
@@ -125,6 +132,15 @@ export function validate(config: Record<string, unknown>) {
     );
     throw new Error(
       `\n❌ Error de configuración. Faltan variables de entorno obligatorias:${errorMessages.join('')}\n`,
+    );
+  }
+
+  if (
+    validatedConfig.NODE_ENV === Environment.Production &&
+    validatedConfig.SUNAT_SIRE_ENV === SireEnvironment.Mock
+  ) {
+    throw new Error(
+      'SUNAT_SIRE_ENV=mock no está permitido cuando NODE_ENV=production.',
     );
   }
 

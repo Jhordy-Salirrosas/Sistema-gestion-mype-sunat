@@ -20,6 +20,11 @@ import {
   TOKEN_SERVICE_PORT,
   type TokenServicePort,
 } from '../../domain/ports/tokenServicePort';
+import {
+  SOL_CREDENTIAL_CIPHER,
+  type SolCredentialCipherPort,
+} from '../../domain/ports/solCredentialCipherPort';
+import type { CreateUserWithCompanyParams } from '../../domain/ports/userRepositoryPort';
 
 @Injectable()
 export class RegisterUseCase {
@@ -30,9 +35,14 @@ export class RegisterUseCase {
     private readonly hasher: HasherPort,
     @Inject(TOKEN_SERVICE_PORT)
     private readonly tokenService: TokenServicePort,
+    @Inject(SOL_CREDENTIAL_CIPHER)
+    private readonly solCredentialCipher: SolCredentialCipherPort,
   ) {}
 
-  async execute(dto: RegisterDto): Promise<AuthResponseDto> {
+  async execute(
+    dto: RegisterDto,
+    auditContext?: CreateUserWithCompanyParams['auditContext'],
+  ): Promise<AuthResponseDto> {
     try {
       RucVo.create(dto.ruc);
     } catch (error) {
@@ -45,13 +55,17 @@ export class RegisterUseCase {
       PasswordStrengthRule.validate(dto.password);
     } catch (error) {
       throw new BadRequestException(
-        error instanceof Error ? error.message : 'La contraseña no cumple los requisitos de seguridad.',
+        error instanceof Error
+          ? error.message
+          : 'La contraseña no cumple los requisitos de seguridad.',
       );
     }
 
     const existingCompany = await this.userRepository.findByRuc(dto.ruc);
     if (existingCompany) {
-      throw new ConflictException('El RUC ya se encuentra registrado en el sistema.');
+      throw new ConflictException(
+        'El RUC ya se encuentra registrado en el sistema.',
+      );
     }
 
     const existingUser = await this.userRepository.findByEmail(dto.email);
@@ -69,7 +83,7 @@ export class RegisterUseCase {
       legalName: dto.legalName,
       tradeName: dto.tradeName ?? null,
       solUser: dto.solUser,
-      solPassEncrypted: dto.solPassword,
+      solPassEncrypted: this.solCredentialCipher.encrypt(dto.solPassword),
       isActive: true,
     });
 
@@ -90,6 +104,7 @@ export class RegisterUseCase {
       user,
       company,
       passwordHash,
+      auditContext,
       initialRefreshToken: {
         tokenHash,
         expiresAt,

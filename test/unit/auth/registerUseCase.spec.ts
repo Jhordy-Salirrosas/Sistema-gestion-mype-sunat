@@ -5,12 +5,16 @@ import { UserEntity } from '../../../src/modules/auth/domain/entities/userEntity
 import type { UserRepositoryPort } from '../../../src/modules/auth/domain/ports/userRepositoryPort';
 import type { HasherPort } from '../../../src/modules/auth/domain/ports/hasherPort';
 import type { TokenServicePort } from '../../../src/modules/auth/domain/ports/tokenServicePort';
+import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
+import { PasswordStrengthRule } from '../../../src/modules/auth/domain/rules/passwordStrengthRule';
+import { RucVo } from '../../../src/modules/auth/domain/value-objects/rucVo';
 
 describe('RegisterUseCase', () => {
   let useCase: RegisterUseCase;
   let mockUserRepo: jest.Mocked<UserRepositoryPort>;
   let mockHasher: jest.Mocked<HasherPort>;
   let mockTokenService: jest.Mocked<TokenServicePort>;
+  let mockSolCredentialCipher: jest.Mocked<SolCredentialCipherPort>;
 
   const validDto = {
     ruc: '20100070970',
@@ -49,11 +53,23 @@ describe('RegisterUseCase', () => {
     mockTokenService = {
       signToken: jest.fn().mockReturnValue('mocked.jwt.token.register'),
       verifyToken: jest.fn(),
-      generateRefreshToken: jest.fn().mockReturnValue('random_raw_refresh_token'),
+      generateRefreshToken: jest
+        .fn()
+        .mockReturnValue('random_raw_refresh_token'),
       hashToken: jest.fn().mockReturnValue('hash_of_raw_refresh_token'),
     };
 
-    useCase = new RegisterUseCase(mockUserRepo, mockHasher, mockTokenService);
+    mockSolCredentialCipher = {
+      encrypt: jest.fn((value) => `encrypted:${value}`),
+      decrypt: jest.fn(),
+    };
+
+    useCase = new RegisterUseCase(
+      mockUserRepo,
+      mockHasher,
+      mockTokenService,
+      mockSolCredentialCipher,
+    );
   });
 
   it('debería registrar una nueva empresa y usuario ADMIN exitosamente', async () => {
@@ -73,6 +89,23 @@ describe('RegisterUseCase', () => {
         }),
       }),
     );
+    const savedCompany =
+      mockUserRepo.createUserWithCompany.mock.calls[0][0].company;
+    expect(mockSolCredentialCipher.encrypt).toHaveBeenCalledWith(
+      validDto.solPassword,
+    );
+    expect(savedCompany.solPassEncrypted).toBe(
+      `encrypted:${validDto.solPassword}`,
+    );
+    expect(JSON.stringify(result)).not.toContain(validDto.solPassword);
+  });
+
+  it('no debe emitir tokens si falla la persistencia del registro', async () => {
+    const persistenceError = new Error('database unavailable');
+    mockUserRepo.createUserWithCompany.mockRejectedValue(persistenceError);
+
+    await expect(useCase.execute(validDto)).rejects.toBe(persistenceError);
+    expect(mockTokenService.signToken).not.toHaveBeenCalled();
   });
 
   it('debería lanzar BadRequestException si el RUC no cumple Módulo 11', async () => {
@@ -122,5 +155,34 @@ describe('RegisterUseCase', () => {
     });
 
     await expect(useCase.execute(validDto)).rejects.toThrow(ConflictException);
+  });
+
+  it('traduce fallos de validadores que no son instancias Error a mensajes seguros', async () => {
+    const rucSpy = jest.spyOn(RucVo, 'create').mockImplementation(() => {
+      throw 'invalid-ruc';
+    });
+    await expect(useCase.execute(validDto)).rejects.toThrow(
+      'El RUC no es válido.',
+    );
+    rucSpy.mockRestore();
+
+    const passwordSpy = jest
+      .spyOn(PasswordStrengthRule, 'validate')
+      .mockImplementation(() => {
+        throw 'invalid-password';
+      });
+    await expect(useCase.execute(validDto)).rejects.toThrow(
+      'La contraseña no cumple los requisitos de seguridad.',
+    );
+    passwordSpy.mockRestore();
+  });
+
+  it('permite registrar sin razón social comercial opcional', async () => {
+    const { tradeName: _tradeName, ...dto } = validDto;
+    await useCase.execute(dto);
+
+    const savedCompany =
+      mockUserRepo.createUserWithCompany.mock.calls[0][0].company;
+    expect(savedCompany.tradeName).toBeNull();
   });
 });
