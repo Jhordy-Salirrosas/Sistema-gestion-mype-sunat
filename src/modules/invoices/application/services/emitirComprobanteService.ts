@@ -1,3 +1,4 @@
+import { verificarOrigenAceptado } from './creditNoteBalanceGuard';
 /**
  * Emisión de un comprobante desde la PANTALLA (M1, corrección del docente).
  *
@@ -268,11 +269,7 @@ export class EmitirComprobanteService {
       );
     }
 
-    if (origen.estado === 'ANULADO') {
-      throw new BadRequestException(
-        `El comprobante ${referencia} está anulado: la nota no tendría efecto.`,
-      );
-    }
+    verificarOrigenAceptado(origen.estado);
 
     /**
      * TA-66: el UUID del origen viaja con la nota.

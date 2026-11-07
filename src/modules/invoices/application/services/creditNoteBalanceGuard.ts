@@ -11,7 +11,7 @@
  *
  * Reglas que se aplican:
  *
- *  - Solo se puede notar un comprobante **ACEPTADO u OBSERVADO**. Notar uno
+ *  - Solo se puede notar un comprobante **ACEPTADO**. Notar uno
  *    rechazado o en cola equivale a modificar un documento que SUNAT no ha
  *    reconocido.
  *  - Una Nota de Crédito (07) **devuelve** saldo; una de Débito (08) **aumenta**
@@ -22,11 +22,23 @@
  *  - El margen es al céntimo, sin tolerancia: exigir "no superar" con un epsilon
  *    deja pasar un céntimo de más en cada nota.
  */
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 
 /** Estados del comprobante origen que admiten una nota. */
-export const ESTADOS_NOTABLES = ['ACEPTADO', 'OBSERVADO'];
+export const ESTADOS_NOTABLES = ['ACEPTADO'];
+
+/** Regla compartida por la emisión 07/08 y la consulta de saldo. */
+export function verificarOrigenAceptado(estado: string): void {
+  if (!ESTADOS_NOTABLES.includes(estado)) {
+    throw new BadRequestException({
+      code: 'INVOICE_NO_NOTABLE',
+      message:
+        `El comprobante no está aceptado por SUNAT (estado: ${estado}) ` +
+        'y por eso no admite notas de crédito ni de débito.',
+    });
+  }
+}
 
 /** Estados de una nota que NO consumen saldo. */
 export const ESTADOS_NOTA_SIN_EFECTO = ['RECHAZADO', 'ANULADO'];
@@ -105,7 +117,7 @@ export class ControlSaldoNotas {
    * Devuelve el saldo disponible del comprobante origen.
    *
    * @throws NotFoundException si el comprobante no existe en la empresa.
-   * @throws ConflictException si su estado no admite notas.
+   * @throws BadRequestException si su estado no admite notas.
    */
   public async calcular(
     companyId: string,
@@ -129,14 +141,7 @@ export class ControlSaldoNotas {
       });
     }
 
-    if (!ESTADOS_NOTABLES.includes(origen.estado)) {
-      throw new ConflictException({
-        code: 'INVOICE_NO_NOTABLE',
-        message:
-          `El comprobante está en estado ${origen.estado} y no admite notas: ` +
-          'solo un comprobante aceptado u observado puede modificarse.',
-      });
-    }
+    verificarOrigenAceptado(origen.estado);
 
     // Suma de las notas de crédito (tipo 07) vigentes que apuntan a este
     // comprobante. Las de tipo 08 (débito) aumentan el importe y no consumen
