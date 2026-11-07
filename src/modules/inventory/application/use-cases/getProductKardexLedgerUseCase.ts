@@ -13,6 +13,7 @@ import {
   type IInventoryBalanceRepositoryPort,
 } from '../../domain/ports/IInventoryBalanceRepositoryPort';
 import { QueryKardexLedgerDto } from '../dto/queryKardexLedgerDto';
+import { FifoCostEngine, type CostLayer } from '../../domain/rules/FifoCostEngine';
 
 @Injectable()
 export class GetProductKardexLedgerUseCase {
@@ -72,7 +73,34 @@ export class GetProductKardexLedgerUseCase {
       totalValue: Number(b.total_inventory_value),
     }));
 
+    const metodo = query.metodo === 'FIFO' ? 'FIFO' : 'PROMEDIO';
+    let capas: CostLayer[] = [];
+    const movimientosCalculados = movements.map((m: any) => {
+      if (metodo !== 'FIFO') return m;
+      const resultado = FifoCostEngine.calculate({
+        layers: capas,
+        movementDirection: m.direction,
+        quantity: Number(m.quantity),
+        unitCost: Number(m.unitCost),
+      });
+      capas = resultado.layers;
+      return {
+        ...m,
+        unitCost: resultado.movementUnitCost,
+        totalCost: resultado.movementTotalCost,
+        resultingStock: resultado.resultingStock,
+        resultingUnitCost: resultado.resultingAverageCost,
+        resultingTotalValue: resultado.resultingTotalValue,
+      };
+    });
+    const fifoStock = capas.reduce((acc, c) => acc + c.quantity, 0);
+    const fifoValue = capas.reduce((acc, c) => acc + c.quantity * c.unitCost, 0);
+    const resumen = metodo === 'FIFO'
+      ? { totalStock: fifoStock, averageCost: fifoStock > 0 ? fifoValue / fifoStock : 0, totalValuation: fifoValue, warehouseBalances }
+      : { totalStock, averageCost, totalValuation, warehouseBalances };
+
     return {
+      costMethod: metodo,
       product: {
         id: product.id,
         sku: product.sku,
@@ -80,13 +108,8 @@ export class GetProductKardexLedgerUseCase {
         sunatTypeCode: product.sunatTypeCode,
         sunatUnitCode: product.sunatUnitCode,
       },
-      summary: {
-        totalStock,
-        averageCost,
-        totalValuation,
-        warehouseBalances,
-      },
-      movements: movements.map((m: any) => ({
+      summary: resumen,
+      movements: movimientosCalculados.map((m: any) => ({
         id: m.id,
         warehouseCode: m.warehouseCode ?? 'ALM-01',
         movementNumber: m.movementNumber,
