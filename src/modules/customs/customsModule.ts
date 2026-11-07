@@ -9,7 +9,9 @@ import { CustomsSirePurchasesController } from './infrastructure/controllers/cus
 import { MasterDataController } from './infrastructure/controllers/masterDataController';
 import { MasterDataService } from './application/services/masterDataService';
 import { ImportOrderController } from './infrastructure/controllers/importOrderController';
+import { ForeignSupplierController } from './infrastructure/controllers/foreignSupplierController';
 import { ImportOrderService } from './application/services/importOrderService';
+import { ForeignSupplierService } from './application/services/foreignSupplierService';
 
 // Use Cases
 import {
@@ -58,10 +60,12 @@ import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nest
     CustomsSirePurchasesController,
     MasterDataController,
     ImportOrderController,
+    ForeignSupplierController,
   ],
   providers: [
     MasterDataService,
     ImportOrderService,
+    ForeignSupplierService,
     // Use Cases
     CalculateDuaUseCase,
     RegisterDuaUseCase,
