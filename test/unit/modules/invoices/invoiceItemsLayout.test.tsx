@@ -41,6 +41,14 @@ describe('presentación del detalle de líneas', () => {
     fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '25' } });
     expect(callbacks.onCambiar).toHaveBeenCalledWith(0, { valorUnitario: 25 });
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar la línea 1' }));
+    expect(callbacks.onEliminar).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('Debe quedar al menos una línea');
+  });
+  it('elimina una línea cuando queda otra en el detalle', () => {
+    const callbacks = props();
+    render(<InvoiceItemsGrid items={[itemVacio('a'), itemVacio('b')]} {...callbacks} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar la línea 1' }));
     expect(callbacks.onEliminar).toHaveBeenCalledWith(0);
+    expect(screen.queryByText('Debe quedar al menos una línea')).toBeNull();
   });
 });

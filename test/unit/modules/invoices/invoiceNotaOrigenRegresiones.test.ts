@@ -161,7 +161,7 @@ describe('una nota hereda el adquirente del documento afectado', () => {
     expect(borrador.clienteRazonSocial).toBe('FERRETERIA LOS ANDES S.A.C.');
   });
 
-  it('NO pisa el cliente que el usuario ya había escrito', () => {
+  it('reemplaza el cliente previo por el del documento origen', () => {
     const { borrador } = vincularDocumentoAfectado(
       borradorVacio({
         documentoAfectado: 'F001-00000045',
@@ -173,8 +173,8 @@ describe('una nota hereda el adquirente del documento afectado', () => {
 
     // Se respeta lo tecleado y la validación avisará de la discrepancia; no se
     // le cambian los datos por detrás.
-    expect(borrador.clienteDoc).toBe('45678912');
-    expect(borrador.clienteRazonSocial).toBe('OTRO CLIENTE');
+    expect(borrador.clienteDoc).toBe('20100070970');
+    expect(borrador.clienteRazonSocial).toBe('FERRETERIA LOS ANDES S.A.C.');
   });
 
   it('hereda la forma de pago y las cuotas de una venta al crédito', () => {

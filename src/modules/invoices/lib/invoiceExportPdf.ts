@@ -3,8 +3,10 @@
  *
  * Genera un flujo `%PDF-1.4` real en memoria con el recuadro del RUC, los datos
  * del CPE, el desglose tributario, la glosa en letras, el Hash y la trama QR.
- * No usa librerías externas: los objetos PostScript se escriben a mano.
+ * Los objetos PDF se escriben a mano y qrcode-generator calcula los módulos QR.
  */
+import qrcode from 'qrcode-generator';
+import { extraerDigestValue, obtenerXmlDesdeBackend } from './invoiceDescarga';
 import type { ComprobanteDemo } from '../data/invoiceDemoTypes';
 import { montoEnLetrasSunat, generarTramaQrSunat } from './invoiceCreditAndRules';
 import { identidadEmisora } from './invoiceExportConstants';
@@ -20,13 +22,10 @@ const monto = (valor: number): string =>
     maximumFractionDigits: 2,
   });
 
-/** Líneas de texto que componen el recuadro del comprobante. */
-const lineasContenido = (c: ComprobanteDemo): string[] => {
-  const numeroSerie = `${c.serie}-${String(c.correlativo).padStart(4, '0')}`;
-  // El RUC y la razón social salen de la empresa activa, no de un literal: el
-  // QR impreso debe llevar el mismo RUC con el que el backend firmó el XML.
+/** La misma trama alimenta el texto y los módulos del QR de todos los tipos. */
+export const tramaQrDelComprobante = (c: ComprobanteDemo): string => {
   const emisor = identidadEmisora();
-  const trama = generarTramaQrSunat({
+  return generarTramaQrSunat({
     rucEmisor: emisor.ruc,
     tipo: c.tipo,
     serie: c.serie,
@@ -38,6 +37,32 @@ const lineasContenido = (c: ComprobanteDemo): string[] => {
     numDocCliente: c.clienteRuc,
     hashCpe: c.hashCpe,
   });
+};
+
+/** Dibuja módulos vectoriales con zona blanca de cuatro módulos. */
+export const comandosQrPdf = (trama: string): string => {
+  const qr = qrcode(0, 'M');
+  qr.addData(trama);
+  qr.make();
+  const n = qr.getModuleCount();
+  const escala = 120 / (n + 8);
+  const comandos = ['% QR SUNAT', 'q', '1 g', '435 30 120 120 re f', '0 g'];
+  for (let fila = 0; fila < n; fila += 1) {
+    for (let col = 0; col < n; col += 1) {
+      if (qr.isDark(fila, col)) comandos.push(`${(435 + (col + 4) * escala).toFixed(4)} ${(30 + (n + 3 - fila) * escala).toFixed(4)} ${escala.toFixed(4)} ${escala.toFixed(4)} re f`);
+    }
+  }
+  comandos.push('Q');
+  return comandos.join('\n');
+};
+
+/** Líneas de texto que componen el recuadro del comprobante. */
+const lineasContenido = (c: ComprobanteDemo): string[] => {
+  const numeroSerie = `${c.serie}-${String(c.correlativo).padStart(4, '0')}`;
+  // El RUC y la razón social salen de la empresa activa, no de un literal: el
+  // QR impreso debe llevar el mismo RUC con el que el backend firmó el XML.
+  const emisor = identidadEmisora();
+  const trama = tramaQrDelComprobante(c);
 
   return [
     'EMPRESA EMISORA',
@@ -83,6 +108,7 @@ const streamContenido = (c: ComprobanteDemo): string => {
     comandos.push(`(${ps(linea)}) Tj T*`);
   });
   comandos.push('ET');
+  if (c.hashCpe) comandos.push(comandosQrPdf(tramaQrDelComprobante(c)));
 
   return comandos.join('\n');
 };
@@ -129,8 +155,11 @@ export const nombreArchivoPdf = (c: ComprobanteDemo): string =>
   `${c.serie}-${String(c.correlativo).padStart(4, '0')}.pdf`;
 
 /** Descarga el PDF homologado con MIME application/pdf. */
-export const descargarPdfComprobante = (c: ComprobanteDemo): void => {
-  const blob = new Blob([construirPdfBinarioSunat(c)], {
+export const descargarPdfComprobante = async (c: ComprobanteDemo): Promise<void> => {
+  const digest = extraerDigestValue(await obtenerXmlDesdeBackend(c.id));
+  if (!digest) throw new Error('El XML firmado aún no está disponible para generar el PDF con QR.');
+  const firmado = { ...c, hashCpe: digest };
+  const blob = new Blob([construirPdfBinarioSunat(firmado)], {
     type: 'application/pdf',
   });
   const url = URL.createObjectURL(blob);

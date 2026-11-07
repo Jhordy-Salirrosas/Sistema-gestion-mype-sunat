@@ -18,10 +18,11 @@ interface CustomerLookupFieldProps {
   labelDocumento: string;
   placeholderDocumento?: string;
   errorDocumento?: string;
+  disabled?: boolean;
 }
 
 /** Busca clientes activos del maestro desde cualquiera de los dos campos. */
-export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocumentoChange, onRazonSocialChange, labelDocumento, placeholderDocumento, errorDocumento }: CustomerLookupFieldProps) => {
+export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocumentoChange, onRazonSocialChange, labelDocumento, placeholderDocumento, errorDocumento, disabled = false }: CustomerLookupFieldProps) => {
   const queryClient = useQueryClient();
   const { canEmitInvoices } = useRolePermissions();
   const [registering, setRegistering] = useState(false);
@@ -34,11 +35,11 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
   const [consulta, setConsulta] = useState<{ campo: Campo; texto: string } | null>(null);
   const [respuesta, setRespuesta] = useState<{ campo: Campo; texto: string; clientes: readonly ClienteBuscado[]; error: boolean } | null>(null);
   const texto = consulta?.texto.trim() ?? '';
-  const buscando = !!consulta && texto.length >= MINIMO_CARACTERES;
+  const buscando = !disabled && !!consulta && texto.length >= MINIMO_CARACTERES;
   const vigente = buscando && respuesta?.campo === consulta?.campo && respuesta?.texto === texto;
 
   useEffect(() => {
-    if (!consulta || texto.length < MINIMO_CARACTERES) return;
+    if (disabled || !consulta || texto.length < MINIMO_CARACTERES) return;
     let viva = true;
     const timer = window.setTimeout(() => {
       void queryClient.fetchQuery({ queryKey: ['master-data', 'partners', 'CLIENTE', texto], queryFn: () => masterDataApi.getPartners({ role: 'CLIENTE', q: texto }), staleTime: 0, retry: false }).then((partners) => {
@@ -49,7 +50,7 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
       });
     }, ESPERA_MS);
     return () => { viva = false; window.clearTimeout(timer); };
-  }, [consulta, texto, queryClient]);
+  }, [consulta, texto, queryClient, disabled]);
 
   useEffect(() => {
     const cerrar = (e: MouseEvent) => {
@@ -77,7 +78,7 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
   return <div ref={contenedor} className="contents">
     <div className="relative space-y-1">
       <label htmlFor="doc-cliente" className="text-xs font-medium">{labelDocumento}</label>
-      <input id="doc-cliente" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={documento} placeholder={placeholderDocumento} autoComplete="off"
+      <input disabled={disabled} id="doc-cliente" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={documento} placeholder={placeholderDocumento} autoComplete="off"
         onFocus={() => { setRespuesta(null); setConsulta({ campo: 'documento', texto: documento }); }}
         onChange={(e) => { const valor = e.target.value.replace(/\D/g, ''); onDocumentoChange?.(valor); setRespuesta(null); setConsulta({ campo: 'documento', texto: valor }); }}
         onKeyDown={(e) => { if (e.key === 'Escape') setConsulta(null); }} />
@@ -86,13 +87,13 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
     </div>
     <div className="relative space-y-1">
       <label htmlFor="razon-cliente" className="text-xs font-medium">Razón social / nombre</label>
-      <input id="razon-cliente" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={razonSocial} placeholder="FERRETERÍA LOS ANDES S.A.C." autoComplete="off"
+      <input disabled={disabled} id="razon-cliente" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={razonSocial} placeholder="FERRETERÍA LOS ANDES S.A.C." autoComplete="off"
         onFocus={() => { setRespuesta(null); setConsulta({ campo: 'nombre', texto: razonSocial }); }}
         onChange={(e) => { const valor = e.target.value; onRazonSocialChange?.(valor); setRespuesta(null); setConsulta({ campo: 'nombre', texto: valor }); }}
         onKeyDown={(e) => { if (e.key === 'Escape') setConsulta(null); }} />
       {lista('nombre')}
     </div>
-    {canEmitInvoices && <button type="button" className="text-xs text-primary underline" onClick={() => { setConsulta(null); setRegistering(true); }}>Registrar cliente nuevo</button>}
+    {!disabled && canEmitInvoices && <button type="button" className="text-xs text-primary underline" onClick={() => { setConsulta(null); setRegistering(true); }}>Registrar cliente nuevo</button>}
     {registering && canEmitInvoices && <PartnerFormDialog initialRole="CLIENTE" requiredRole="CLIENTE" initialDocument={documento} initialName={razonSocial} onClose={() => setRegistering(false)} onSaved={(partner) => elegir(partnerToCustomer(partner))} />}
   </div>;
 };

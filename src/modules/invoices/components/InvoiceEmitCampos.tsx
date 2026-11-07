@@ -24,7 +24,7 @@ import {
 } from '../lib/invoiceEmitDraft';
 import type { BorradorEmision } from '../lib/invoiceEmitDraft';
 import { minimoDeFechaEmision, topeDeFechaEmision } from '../lib/invoiceEmitFecha';
-import { buscarAfectado } from '../lib/invoiceNotaOrigen';
+import { admiteNota, buscarAfectado } from '../lib/invoiceNotaOrigen';
 import type { ComprobanteDemo } from '../data/invoiceDemoTypes';
 import type { ProductoBuscado } from '../lib/invoiceSearch';
 import { CampoFecha, CampoSelect, CampoTexto } from './InvoiceEmitCamposBase';
@@ -78,7 +78,8 @@ export const InvoiceEmitCampos = ({
   // Se busca por NÚMERO FISCAL, no por `id`: `id` es el UUID de la base y el
   // usuario teclea "F001-00000045". Comparar contra el UUID hacía que el campo
   // marcara error y que la serie no se vinculara nunca.
-  const afectado = buscarAfectado(existentes, b.documentoAfectado);
+  const elegibles = existentes.filter(admiteNota);
+  const afectado = buscarAfectado(elegibles, b.documentoAfectado);
 
   /**
    * ¿Una nota vinculada hereda la fecha del documento que modifica?
@@ -145,6 +146,7 @@ export const InvoiceEmitCampos = ({
       />
 
       <CustomerLookupField
+        disabled={esNota && Boolean(afectado)}
         documento={b.clienteDoc}
         razonSocial={b.clienteRazonSocial}
         labelDocumento={
@@ -194,6 +196,7 @@ export const InvoiceEmitCampos = ({
           <div className="sm:col-span-2">
             <CampoTexto
               id="doc-afectado"
+              list="documentos-aceptados"
               label="Documento afectado"
               value={b.documentoAfectado}
               onChange={(v) =>
@@ -207,11 +210,14 @@ export const InvoiceEmitCampos = ({
               placeholder="F001-0042"
               error={
                 b.documentoAfectado.trim() && !afectado
-                  ? 'No existe un comprobante con ese número en la grilla.'
+                  ? 'Seleccione una factura o boleta ACEPTADA por SUNAT.'
                   : undefined
               }
             />
           </div>
+          <datalist id="documentos-aceptados">
+            {elegibles.map((c) => <option key={c.id} value={`${c.serie}-${String(c.correlativo).padStart(8, '0')}`}>{c.clienteRazonSocial}</option>)}
+          </datalist>
           {afectado && (
             <div className="sm:col-span-2 rounded-lg border bg-muted/40 p-2">
               <p className="text-[11px] text-muted-foreground">

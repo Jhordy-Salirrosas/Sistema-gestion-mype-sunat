@@ -5,6 +5,7 @@
  * descripción, Hash y trama QR), la bitácora del pipeline de envío y, en modo
  * XML, el documento UBL 2.1 completo con scroll.
  */
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { useEffect, useState } from 'react';
 import {
   Badge,
@@ -60,7 +61,7 @@ export const InvoiceCdrModal = ({
    * dentro del efecto, que dispara renders en cascada.
    */
   const [xmlReal, setXmlReal] = useState<string | null | undefined>(undefined);
-  const [historialCargado, setHistorialCargado] = useState<{ id: string; eventos?: Invoice['historial']; error?: boolean } | null>(null);
+  const [historialCargado, setHistorialCargado] = useState<{ id: string; eventos?: Invoice['historial']; tieneCdr?: boolean; error?: boolean } | null>(null);
 
   const idComprobante = comprobante?.id ?? null;
 
@@ -68,7 +69,7 @@ export const InvoiceCdrModal = ({
     if (!idComprobante) return;
     let vigente = true;
     void Promise.resolve().then(() => invoicesApi.getInvoiceById(idComprobante)).then((detalle) => {
-      if (vigente) setHistorialCargado({ id: idComprobante, eventos: detalle.historial ?? [] });
+      if (vigente) setHistorialCargado({ id: idComprobante, eventos: detalle.historial ?? [], tieneCdr: detalle.tieneCdr ?? Boolean(detalle.cdrCodigo) });
     }).catch(() => { if (vigente) setHistorialCargado({ id: idComprobante, error: true }); });
     return () => { vigente = false; };
   }, [idComprobante]);
@@ -107,9 +108,7 @@ export const InvoiceCdrModal = ({
     try {
       await descargarDesdeBackend(c.id, formato);
     } catch (error: unknown) {
-      const mensaje =
-        error instanceof Error ? error.message : 'No se pudo descargar';
-      setErrorDescarga(mensaje);
+      setErrorDescarga(extractApiErrorMessage(error, 'No se pudo descargar el documento.'));
     } finally {
       setDescargando(null);
     }
@@ -366,7 +365,7 @@ export const InvoiceCdrModal = ({
           <Button
             variant="outline"
             size="sm"
-            disabled={descargando !== null}
+            disabled={descargando !== null || historialCargado?.id !== c.id || !historialCargado.tieneCdr}
             onClick={() => descargar('cdr')}
           >
             <Download aria-hidden="true" />

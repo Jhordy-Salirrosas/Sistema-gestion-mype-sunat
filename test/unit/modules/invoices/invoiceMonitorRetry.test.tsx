@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import InvoiceMonitorPage from '@/modules/invoices/pages/InvoiceMonitorPage';
+import InvoiceMonitorPage, { estadoDeMonitor } from '@/modules/invoices/pages/InvoiceMonitorPage';
 import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
 import { ALERTAS_VACIAS } from '@/modules/invoices/lib/invoiceAlertas';
 import { aInvoice } from '@/modules/invoices/lib/invoiceMapper';
 
 vi.mock('@/modules/invoices/services/invoicesApi', () => ({
-  invoicesApi: { getAlertas: vi.fn(), getInvoices: vi.fn(), retryCdr: vi.fn() },
+  invoicesApi: { getAlertas: vi.fn(), getInvoices: vi.fn(), getInvoiceById: vi.fn(), retryCdr: vi.fn() },
 }));
 
 const comprobante = aInvoice({
@@ -18,6 +18,7 @@ const comprobante = aInvoice({
 
 beforeEach(() => {
   vi.mocked(invoicesApi.getAlertas).mockResolvedValue(ALERTAS_VACIAS);
+  vi.mocked(invoicesApi.getInvoiceById).mockRejectedValue(new Error('Detalle no disponible'));
   vi.mocked(invoicesApi.getInvoices).mockImplementation(async (_page, filtros) => ({
     data: filtros?.estado === 'ERROR_RED' ? [comprobante] : [],
     total: filtros?.estado === 'ERROR_RED' ? 1 : 0,
@@ -64,4 +65,27 @@ describe('retroalimentación del reintento de CDR en el Monitor', () => {
     await screen.findByRole('button', { name: 'Actualizar' });
     expect(within(screen.getByRole('alert')).getByText(mensaje)).toBeTruthy();
   });
+});
+
+it('F8 distingue DLQ por bitácora y filtra la misma tabla por estado', async () => {
+  const dlq = { ...comprobante, id: 'invoice-dlq', numero: 'F001-00000053', estadoBackend: 'PENDIENTE', historial: [{ id: 'h1', fecha: '2026-11-07', mensaje: 'Rescate manual: EN_DLQ. Requiere revisión.' }] };
+  const pendiente = { ...comprobante, id: 'invoice-pendiente', numero: 'F001-00000054', estadoBackend: 'PENDIENTE' };
+  vi.mocked(invoicesApi.getInvoices).mockImplementation(async (_page, filtros) => ({ data: filtros?.estado === 'PENDIENTE' ? [{ ...dlq, historial: undefined }, pendiente] : filtros?.estado === 'ERROR_RED' ? [comprobante] : [], total: 3, page: 1, pageSize: 100, totalPages: 1 }));
+  vi.mocked(invoicesApi.getInvoiceById).mockImplementation(async (id) => id === dlq.id ? dlq : id === pendiente.id ? pendiente : comprobante);
+  render(<InvoiceMonitorPage />);
+  await screen.findByText(dlq.numero);
+  expect(invoicesApi.getInvoiceById).toHaveBeenCalledWith(dlq.id);
+  const fila = screen.getByText(dlq.numero).closest('tr')!;
+  expect(within(fila).getByText('DLQ')).toBeTruthy();
+  expect(within(fila).queryByText('PENDIENTE')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Filtrar estado del monitor'), { target: { value: 'DLQ' } });
+  expect(screen.getByText(dlq.numero)).toBeTruthy(); expect(screen.queryByText(pendiente.numero)).toBeNull(); expect(screen.queryByText(comprobante.numero)).toBeNull();
+  expect(screen.getByText('Comprobantes en vuelo (1)')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Filtrar estado del monitor'), { target: { value: 'ERROR_RED' } });
+  expect(screen.getByText(comprobante.numero)).toBeTruthy(); expect(screen.queryByText(dlq.numero)).toBeNull();
+});
+
+it('F8 deja de rotular DLQ cuando la bitácora registra un reencolado posterior', () => {
+  const historial = [{ id: '1', fecha: '2026-11-06', mensaje: 'Rescate: EN_DLQ.' }, { id: '2', fecha: '2026-11-07', mensaje: 'Rescate: ENCOLADO.' }];
+  expect(estadoDeMonitor({ ...comprobante, estadoBackend: 'PENDIENTE', historial })).toBe('PENDIENTE');
 });

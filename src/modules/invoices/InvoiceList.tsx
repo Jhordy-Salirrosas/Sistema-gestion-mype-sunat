@@ -23,6 +23,7 @@ import {
   Tabs,
   TabsContent,
 } from '@/components/ui';
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { formatCurrency } from '@/lib/formatters';
 import type { ComprobanteDemo } from './data/invoiceDemoTypes';
 import { InvoiceCombinedSummary } from './components/InvoiceCombinedSummary';
@@ -126,7 +127,7 @@ export const InvoiceList = () => {
     [pagina],
   );
 
-  const conteo = useMemo(() => contarPorTab(comprobantes), [comprobantes]);
+  const conteo = useMemo(() => contarPorTab(aplicarFiltros(comprobantes, filtros)), [comprobantes, filtros]);
 
   /** Lote filtrado que alimenta KPIs, monitor y grilla. */
   const visibles = useMemo(
@@ -196,7 +197,7 @@ export const InvoiceList = () => {
       }
       onVerXml={(c) => setVisor({ comprobante: c, modo: 'xml' })}
       onVerCdr={(c) => setVisor({ comprobante: c, modo: 'cdr' })}
-      onDescargarPdf={descargarPdfComprobante}
+      onDescargarPdf={(c) => { void descargarPdfComprobante(c).catch((error: unknown) => setAvisoCdr(extractApiErrorMessage(error, 'No se pudo generar el PDF.'))); }}
       onReintentarCdr={reintentarCdr}
     />
   );
@@ -317,6 +318,7 @@ export const InvoiceList = () => {
 
       {modalEmision && (
         <InvoiceEmitModal
+          key={modalEmision}
           tipoInicial={TIPO_POR_OPCION[modalEmision]}
           fecha={fechaHoy}
           existentes={comprobantes}

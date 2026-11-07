@@ -51,6 +51,12 @@ import type { AlertasOperativas } from '../lib/invoiceAlertas';
 /** Estados que el monitor vigila: todo lo que todavía no terminó. */
 const ESTADOS_EN_VUELO = ['EN_COLA', 'ENVIADO', 'PENDIENTE', 'ERROR_RED'];
 
+/** El último resultado explícito de cola evita perpetuar una DLQ ya rescatada. */
+export const estadoDeMonitor = (inv: Invoice): string => {
+  const evento = [...(inv.historial ?? [])].reverse().find((e) => /\b(EN_DLQ|ENCOLADO|YA_EN_COLA)\b/.test(e.mensaje ?? ''));
+  return evento?.mensaje?.includes('EN_DLQ') ? 'DLQ' : inv.estadoBackend ?? inv.cdrStatus;
+};
+
 /** Etiqueta y gravedad visual de cada alerta. */
 const VARIANTE_POR_GRAVEDAD = {
   OK: 'outline',
@@ -62,6 +68,8 @@ const VARIANTE_POR_GRAVEDAD = {
 export default function InvoiceMonitorPage() {
   const [alertas, setAlertas] = useState<AlertasOperativas | null>(null);
   const [enVuelo, setEnVuelo] = useState<readonly Invoice[]>([]);
+  const [filtroEstado, setFiltroEstado] = useState('TODOS');
+  const visibles = enVuelo.filter((inv) => filtroEstado === 'TODOS' || estadoDeMonitor(inv) === filtroEstado);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reintentando, setReintentando] = useState<string | null>(null);
@@ -81,7 +89,11 @@ export default function InvoiceMonitorPage() {
         invoicesApi.getAlertas(),
         Promise.all(
           ESTADOS_EN_VUELO.map((estado) =>
-            invoicesApi.getInvoices(1, { estado }).catch(() => null),
+            (async () => {
+              const primera = await invoicesApi.getInvoices(1, { estado, page_size: 100 });
+              const restantes = await Promise.all(Array.from({ length: Math.max(0, primera.totalPages - 1) }, (_, i) => invoicesApi.getInvoices(i + 2, { estado, page_size: 100 })));
+              return { ...primera, data: [...primera.data, ...restantes.flatMap((p) => p.data)] };
+            })(),
           ),
         ),
       ]);
@@ -94,7 +106,11 @@ export default function InvoiceMonitorPage() {
       for (const pagina of paginas) {
         for (const inv of pagina?.data ?? []) vistos.set(inv.id, inv);
       }
-      setEnVuelo([...vistos.values()]);
+      const detalles = await Promise.all([...vistos.values()].map(async (inv) => {
+        try { return { ...inv, ...await invoicesApi.getInvoiceById(inv.id) }; }
+        catch { return inv; }
+      }));
+      setEnVuelo(detalles);
     } catch (e: unknown) {
       setError(
         extractApiErrorMessage(e, 'No se pudo leer el estado de la cola.'),
@@ -226,9 +242,16 @@ export default function InvoiceMonitorPage() {
       {alertas && <Card flush>
         <CardHeader>
           <CardTitle className="text-base">
-            Comprobantes en vuelo ({enVuelo.length})
+            Comprobantes en vuelo ({visibles.length})
           </CardTitle>
         </CardHeader>
+        <label className="m-4 block text-sm">
+          Estado de los comprobantes en vuelo
+          <select aria-label="Filtrar estado del monitor" value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="ml-2 rounded border bg-background p-2">
+            <option value="TODOS">Todos los estados</option>
+            {[...ESTADOS_EN_VUELO, 'DLQ'].map((estado) => <option key={estado} value={estado}>{estado === 'ERROR_RED' ? 'Error de red' : estado}</option>)}
+          </select>
+        </label>
         <Table>
           <TableHeader>
             <TableRow>
@@ -239,16 +262,16 @@ export default function InvoiceMonitorPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {enVuelo.length === 0 ? (
+            {visibles.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center">
                   {cargando
                     ? 'Consultando la cola de envío…'
-                    : 'No hay comprobantes esperando en la cola. Todo lo emitido ya tiene respuesta de SUNAT.'}
+                    : filtroEstado !== 'TODOS' ? 'No hay comprobantes con ese estado.' : 'No hay comprobantes esperando en la cola. Todo lo emitido ya tiene respuesta de SUNAT.'}
                 </TableCell>
               </TableRow>
             ) : (
-              enVuelo.map((inv) => (
+              visibles.map((inv) => (
                 <TableRow key={inv.id}>
                   <TableCell>{inv.numero}</TableCell>
                   <TableCell>
@@ -262,18 +285,18 @@ export default function InvoiceMonitorPage() {
                   <TableCell>
                     <Badge
                       variant={
-                        inv.estadoBackend === 'ERROR_RED'
+                        (estadoDeMonitor(inv) === 'ERROR_RED' || estadoDeMonitor(inv) === 'DLQ')
                           ? 'destructive'
                           : 'outline'
                       }
                     >
-                      {inv.estadoBackend ?? inv.cdrStatus}
+                      {estadoDeMonitor(inv)}
                     </Badge>
                   </TableCell>
                   <TableCell align="center">
                     {/* Reintentar el CDR solo tiene sentido si no llegó
                         constancia: si SUNAT ya respondió, no hay nada que pedir. */}
-                    {inv.estadoBackend === 'ERROR_RED' && (
+                    {estadoDeMonitor(inv) === 'ERROR_RED' && (
                       <Button
                         variant="outline"
                         size="sm"

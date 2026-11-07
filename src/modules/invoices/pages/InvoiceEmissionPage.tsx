@@ -215,6 +215,9 @@ export default function InvoiceEmissionPage() {
    * render.
    */
   const [fechaEmision, setFechaEmision] = useState(hoyEnLima);
+  useEffect(() => {
+    setResultado((previo) => previo?.ok === false ? null : previo);
+  }, [tipo, clienteSeleccionado, clienteDoc, clienteRazonSocial, items, descuentoGlobal, agenteRetencion, correccionRetencion, formaPago, cuotas, medioPagoDetraccion, fechaEmision]);
 
   /** Motivo por el que la fecha de emisión no sirve, o `null` (D9). */
   const problemaFecha = problemaDeFechaEmision(fechaEmision);

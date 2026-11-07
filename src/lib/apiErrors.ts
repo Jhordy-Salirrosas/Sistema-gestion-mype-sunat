@@ -82,7 +82,7 @@ export const extractApiErrorMessage = (
   }
 
   // 6. Mensaje en error JS nativo
-  if (typeof err.message === 'string' && err.message.trim().length > 0) {
+  if (typeof err.message === 'string' && err.message.trim().length > 0 && !/^Request failed with status code \d+$/i.test(err.message)) {
     return err.message;
   }
 

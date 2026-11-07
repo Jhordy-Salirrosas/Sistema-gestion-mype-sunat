@@ -201,7 +201,7 @@ describe('admiteNota', () => {
   });
 
   it('acepta una boleta en cola (sí existe fiscalmente)', () => {
-    expect(admiteNota(comprobante({ tipo: '03', estado: 'EN_COLA' }))).toBe(true);
+    expect(admiteNota(comprobante({ tipo: '03', estado: 'EN_COLA' }))).toBe(false);
   });
 
   it('rechaza una nota de crédito', () => {

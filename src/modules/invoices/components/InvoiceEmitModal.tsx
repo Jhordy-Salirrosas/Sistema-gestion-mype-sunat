@@ -11,9 +11,10 @@
  * botón: el usuario ve el motivo en pantalla y el envío nunca pasa por alto una
  * regla del Catálogo 01/03/06/07/09/10/54.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { useQuery } from '@tanstack/react-query';
-import { buscarAfectado } from '../lib/invoiceNotaOrigen';
+import { admiteNota, buscarAfectado } from '../lib/invoiceNotaOrigen';
 import {
   Button,
   Dialog,
@@ -207,7 +208,9 @@ export const InvoiceEmitModal = ({
   const [errorEmision, setErrorEmision] = useState<string | null>(null);
   const [avisoLineas, setAvisoLineas] = useState('');
 
-  const afectado = buscarAfectado(existentes, b.documentoAfectado);
+  const drafts = useRef<Partial<Record<TipoEmisible, BorradorEmision>>>({});
+  useEffect(() => { setErrorEmision(null); }, [b]);
+  const afectado = buscarAfectado(existentes.filter(admiteNota), b.documentoAfectado);
   useEffect(() => {
     if (!esTipoNota(b.tipo) || !afectado) return;
     let vigente = true;
@@ -239,13 +242,18 @@ export const InvoiceEmitModal = ({
   const flujo = calcularFlujo(b);
   const pendientes = [...pendientesBase];
   if (b.tipo === '07' && afectado) {
-    if (!saldoNota.data || saldoNota.isFetching || saldoNota.isError) pendientes.push(saldoNota.isError ? 'No se pudo consultar el saldo de la nota; inténtelo de nuevo.' : 'Consultando saldo del comprobante…');
+    if (!saldoNota.data || saldoNota.isFetching || saldoNota.isError) pendientes.push(saldoNota.isError ? extractApiErrorMessage(saldoNota.error, 'No se pudo consultar el saldo de la nota; inténtelo de nuevo.') : 'Consultando saldo del comprobante…');
     else if (Math.round(flujo.importeTotal * 100) > Math.round(saldoNota.data.disponible * 100)) pendientes.push(`La nota supera el saldo disponible informado por el servidor (S/ ${saldoNota.data.disponible.toFixed(2)}).`);
   }
   const puedeEmitir = pendientes.length === 0;
 
   const actualizar = (parcial: Partial<BorradorEmision>) =>
     setB((previo) => {
+      if (parcial.tipo && parcial.tipo !== previo.tipo) {
+        drafts.current[previo.tipo] = previo;
+        const restaurado = drafts.current[parcial.tipo] ?? borradorInicial(parcial.tipo, fecha);
+        return { ...restaurado, correlativo: siguienteCorrelativo(existentes, restaurado.serie) };
+      }
       const siguiente = { ...previo, ...parcial };
       if (parcial.codigoDetraccion !== undefined && parcial.codigoDetraccion !== previo.codigoDetraccion) {
         siguiente.items = previo.items.map((item) => ({ ...item, codigoDetraccion: parcial.codigoDetraccion || undefined }));

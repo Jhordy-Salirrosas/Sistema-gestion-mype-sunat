@@ -45,12 +45,12 @@ export type { ComprobanteElegible };
 /**
  * ¿Este comprobante admite una nota de crédito o débito?
  *
- * Tres condiciones, cada una por un motivo distinto:
+ * Solo facturas y boletas aceptadas por SUNAT.
  *
  *  - **No es una nota.** Una nota que modifica otra nota es un caso que SUNAT
  *    admite pero que este módulo no emite: se cambiaría algo que ya modificó un
  *    documento anterior y el saldo se volvería difícil de seguir.
- *  - **No está rechazado.** Un comprobante que SUNAT no aceptó no existe
+ *  - **Está ACEPTADO.** Un comprobante que SUNAT no aceptó no existe
  *    fiscalmente; una nota sobre él sería un documento huérfano.
  *
  * (La anulación se gestiona por la comunicación de baja, no por un estado
@@ -59,8 +59,7 @@ export type { ComprobanteElegible };
  */
 export const admiteNota = (comprobante: ComprobanteElegible): boolean => {
   if (comprobante.tipo === '07' || comprobante.tipo === '08') return false;
-  if (comprobante.estado === 'RECHAZADO') return false;
-  return true;
+  return comprobante.estado === 'ACEPTADO';
 };
 
 /**

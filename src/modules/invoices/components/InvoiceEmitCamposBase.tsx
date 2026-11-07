@@ -25,6 +25,7 @@ export interface CampoTextoProps {
   placeholder?: string;
   error?: string;
   ayuda?: string;
+  list?: string;
 }
 
 /** Input de texto/número con etiqueta, ayuda y error opcionales. */
@@ -37,10 +38,12 @@ export const CampoTexto = ({
   placeholder,
   error,
   ayuda,
+  list,
 }: CampoTextoProps) => (
   <PageField label={label} htmlFor={id}>
     <input
       id={id}
+      list={list}
       type={type}
       min={type === 'number' ? '0' : undefined}
       className={CLASE_INPUT}

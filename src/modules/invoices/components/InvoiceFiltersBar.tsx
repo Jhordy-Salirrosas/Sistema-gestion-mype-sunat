@@ -34,6 +34,7 @@ export const FILTROS_ESTADO: ReadonlyArray<{
   { value: 'OBSERVADO', label: 'Observado (4xxx)' },
   { value: 'EN_COLA', label: 'En Cola Outbox' },
   { value: 'RECHAZADO', label: 'Rechazado' },
+  { value: 'SIN_CONFIRMAR', label: 'Error de red' },
 ];
 
 export interface InvoiceFiltros {

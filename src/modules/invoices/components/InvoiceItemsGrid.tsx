@@ -8,7 +8,7 @@
  * La lógica de cálculo y validación NO vive aquí: está en `../lib/invoiceItems`
  * para poder probarla sin montar React.
  */
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Button, PageText } from '@/components/ui';
 import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
@@ -60,6 +60,7 @@ export const InvoiceItemsGrid = ({
   productos = [],
   onAgregarConProducto,
 }: InvoiceItemsGridProps) => {
+  const [avisoMinimo, setAvisoMinimo] = useState(false);
   /**
    * Revisión contra el stock del almacén.
    *
@@ -72,6 +73,7 @@ export const InvoiceItemsGrid = ({
 
   return (
     <div className="min-w-0 space-y-2 sm:col-span-2">
+      {avisoMinimo && items.length === 1 && <PageText role="alert" variant="error">Debe quedar al menos una línea</PageText>}
       <div className="flex items-center justify-between">
         <PageText variant="label">Detalle del comprobante</PageText>
         <PageText variant="caption">
@@ -280,7 +282,7 @@ export const InvoiceItemsGrid = ({
                       variant="ghost"
                       size="sm"
                       aria-label={`Eliminar la línea ${i + 1}`}
-                      onClick={() => onEliminar(i)}
+                      onClick={() => { if (items.length === 1) setAvisoMinimo(true); else { setAvisoMinimo(false); onEliminar(i); } }}
                     >
                       ✕
                     </Button>

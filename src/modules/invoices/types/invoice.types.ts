@@ -34,6 +34,7 @@ export interface InvoiceItem {
 }
 
 export interface Invoice {
+  tieneCdr?: boolean;
   lineasOrigen?: readonly LineaOrigen[];
   historial?: readonly { id: string; fecha: string; mensaje: string | null }[];
   id: string;

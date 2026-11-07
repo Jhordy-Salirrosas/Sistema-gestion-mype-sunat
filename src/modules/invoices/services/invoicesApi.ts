@@ -171,6 +171,13 @@ export const invoicesApi = {
   ): Promise<{ blob: Blob; nombre: string }> => {
     const response = await apiClient.get(`/invoices/${id}/${formato}`, {
       responseType: 'blob',
+    }).catch(async (error: unknown) => {
+      const http = error as { response?: { data?: unknown } };
+      if (http.response?.data instanceof Blob) {
+        try { http.response.data = JSON.parse(await http.response.data.text()); }
+        catch { /* Un cuerpo binario sin motivo se trata con el fallback estándar. */ }
+      }
+      throw error;
     });
 
     // El nombre real viaja en Content-Disposition; si falta, se arma uno.
