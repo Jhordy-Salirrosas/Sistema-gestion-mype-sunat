@@ -134,5 +134,26 @@ describe('RegisterManualMovementUseCase', () => {
       ),
     ).rejects.toThrow(/Stock insuficiente/);
   });
+
+  it('usa las capas FIFO cuando la empresa tiene ese método', async () => {
+    const costLayers = {
+      metodo: jest.fn().mockResolvedValue('FIFO'),
+      capas: jest.fn().mockResolvedValue([{ quantity: 10, unitCost: 100 }]),
+      calcular: jest.fn().mockReturnValue({
+        movementUnitCost: 100, movementTotalCost: 500, resultingStock: 5,
+        resultingAverageCost: 100, resultingTotalValue: 500,
+      }),
+      consumir: jest.fn().mockResolvedValue(undefined),
+      registrarEntrada: jest.fn(),
+    };
+    const fifoUseCase = new RegisterManualMovementUseCase(
+      warehouseRepoMock, productRepoMock, balanceRepoMock, movementRepoMock, costLayers as never,
+    );
+    balanceRepoMock.findByWarehouseAndProduct.mockResolvedValue({
+      currentStock: 10, averageUnitCost: 100, totalInventoryValue: 1000, id: 'b1',
+    });
+    await fifoUseCase.execute({ sku: 'MON-27', direction: 'SALIDA', operation_type_code: '01', quantity: 5 }, 'comp-100');
+    expect(costLayers.consumir).toHaveBeenCalled();
+  });
 });
 
