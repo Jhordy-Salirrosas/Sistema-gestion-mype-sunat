@@ -231,6 +231,7 @@ describe('traducirEmision — detracción por línea', () => {
   it('detrae solo la línea sujeta, no todo el comprobante', () => {
     const { importes } = traducirEmision(
       formulario({
+        medio_pago_detraccion: '003',
         items: [
           linea({ descripcion: 'Cemento', afectacion: '10', valorUnitario: 1000 }),
           linea({
@@ -251,7 +252,7 @@ describe('traducirEmision — detracción por línea', () => {
   });
 
   it('calcula 4 % sobre S/ 1,180 con IGV', () => {
-    const { importes } = traducirEmision(formulario({ items: [linea({ valorUnitario: 1000, codigoDetraccion: '027' })] }), emisor, 1);
+    const { importes } = traducirEmision(formulario({ medio_pago_detraccion: '003', items: [linea({ valorUnitario: 1000, codigoDetraccion: '027' })] }), emisor, 1);
     expect(importes.detraccion).toBe(47.2);
     expect(importes.importePagar).toBe(1132.8);
   });

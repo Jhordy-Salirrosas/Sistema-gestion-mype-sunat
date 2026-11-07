@@ -181,6 +181,24 @@ const montar = (
 };
 
 describe('EmitirComprobanteService — emisión de factura', () => {
+  it.each([undefined, '003'] as const)('detracción efectiva con medio %s antes de reservar y persistir', async (medio) => {
+    const d = montar();
+    const dto = factura({
+      medio_pago_detraccion: medio,
+      cuenta_banco_nacion: '00019123456',
+      items: [{ descripcion: 'Flete', cantidad: 1, valorUnitario: 1000,
+        afectacion: '10', codigoDetraccion: '012' }],
+    });
+    if (medio === undefined) {
+      await expect(d.servicio.emitir(dto, COMPANY_ID)).rejects.toThrow(/obligatorio/);
+      expect(d.series.reservarCorrelativo).not.toHaveBeenCalled();
+      expect(d.repositorio.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+    } else {
+      await expect(d.servicio.emitir(dto, COMPANY_ID)).resolves.toMatchObject({ success: true });
+      expect(d.repositorio.saveWithTransactionalOutbox).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it.each(['1001', '014', '001'])('medio %s inválido se rechaza antes de reservar o persistir', async (medio) => {
     const d = montar();
     const dto = Object.assign(factura(), { medio_pago_detraccion: medio });

@@ -23,3 +23,17 @@ export function validarMedioPagoDetraccion(
   }
   return valor;
 }
+
+/** Solo para altas nuevas; nunca usar en cola ni regeneración histórica. */
+export function validarMedioPagoDetraccionEmision(
+  valor: unknown,
+  conDetraccionEfectiva: boolean,
+): MedioPagoDetraccion {
+  if (valor === undefined && conDetraccionEfectiva) {
+    throw new BadRequestException(
+      'El medio de pago de la detracción (medio_pago_detraccion / medioPagoDetraccion) ' +
+      'es obligatorio cuando hay detracción efectiva; indique un código del Catálogo 59.',
+    );
+  }
+  return validarMedioPagoDetraccion(valor, conDetraccionEfectiva);
+}

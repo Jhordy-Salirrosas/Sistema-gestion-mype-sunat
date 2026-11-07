@@ -55,11 +55,11 @@ export class CreateInvoiceUseCase {
       );
     }
 
-    // Solo el campo nuevo activa esta validación: los consumidores históricos
-    // conservan exactamente su contrato. Cola y descargas validan al generar.
-    if (dto.payload_ubl.medioPagoDetraccion !== undefined) {
-      this.ublGenerator.validarMedioPagoDetraccion(dto.payload_ubl as unknown as InvoicePayload);
-    }
+    // Alta nueva: exigir el medio antes de consumir correlativo o persistir.
+    // El generador histórico conserva su validación y fallback independientes.
+    this.ublGenerator.validarMedioPagoDetraccionEmision(
+      dto.payload_ubl as unknown as InvoicePayload,
+    );
 
     // TA-60: se valida el documento del adquirente ANTES de reservar el
     // correlativo. El orden importa: reservar consume un número de la serie y,

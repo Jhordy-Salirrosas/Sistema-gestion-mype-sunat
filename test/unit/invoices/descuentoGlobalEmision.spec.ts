@@ -21,6 +21,7 @@ describe('descuentos globales en emisión y UBL', () => {
   it('distribuye el descuento global entre líneas sujetas y no sujetas a detracción', () => {
     const datos = dto('02');
     datos.descuento_global!.monto = 200;
+    datos.medio_pago_detraccion = '003';
     datos.items = [
       { descripcion: 'Flete', cantidad: 1, valorUnitario: 1000, afectacion: '10', codigoDetraccion: '012' },
       { descripcion: 'Mercadería', cantidad: 1, valorUnitario: 1000, afectacion: '10' },
