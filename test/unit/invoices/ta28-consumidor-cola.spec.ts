@@ -14,6 +14,8 @@ import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
 import type { RetryInvoiceResult } from '../../../src/modules/resilience/infrastructure/queue/invoiceRetryService';
+import { UblGeneratorService, type InvoicePayload } from '../../../src/modules/invoices/ublGeneratorService';
+import { payloadMedioPago } from './ta63MedioPagoFixtures';
 
 /** Comprobante base que devuelve el repositorio. */
 const COMPROBANTE = {
@@ -53,7 +55,7 @@ interface Dobles {
   validate: jest.Mock<() => { isValid: boolean; errors: string[] }>;
 }
 
-function crearDobles(fila: unknown = COMPROBANTE): Dobles {
+function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles {
   const registerInvoiceWorker = jest.fn<
     (handler: (payload: { invoice_id: string }) => Promise<unknown>) => Promise<string>
   >(async () => 'worker-1');
@@ -67,7 +69,9 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
     signedXml: `${xml}<ds:Signature/>`,
   }));
   const generateInvoiceXml = jest.fn<(payload: unknown) => string>(
-    () => '<?xml version="1.0"?><Invoice/>',
+    (payload) => generadorReal
+      ? new UblGeneratorService().generateInvoiceXml(payload as InvoicePayload)
+      : '<?xml version="1.0"?><Invoice/>',
   );
   const validate = jest.fn<() => { isValid: boolean; errors: string[] }>(() => ({
     isValid: true,
@@ -121,6 +125,24 @@ function crearDobles(fila: unknown = COMPROBANTE): Dobles {
 }
 
 describe('TA-28 InvoiceJobConsumer', () => {
+  it.each([undefined, '003'] as const)('cola genera medio %s desde el payload recargado', async (medio) => {
+    const payload = { ...payloadMedioPago(), medioPagoDetraccion: medio };
+    const d = crearDobles({ ...COMPROBANTE, payload_ubl: JSON.parse(JSON.stringify(payload)), xml_storage_url: null }, true);
+    await d.consumidor.preparar('inv-1');
+    expect(d.signXml.mock.calls[0][0]).toContain(
+      `<cbc:PaymentMeansCode>${medio ?? '999'}</cbc:PaymentMeansCode>`,
+    );
+  });
+
+  it.each(['1001', '014', 'sin-detraccion'])('cola bloquea medio inválido %s antes de firmar y enviar', async (medio) => {
+    const payload = { ...payloadMedioPago(), medioPagoDetraccion: medio === 'sin-detraccion' ? '001' : medio,
+      ...(medio === 'sin-detraccion' ? { montoDetraccion: 0 } : {}) };
+    const d = crearDobles({ ...COMPROBANTE, payload_ubl: payload, xml_storage_url: null }, true);
+    await expect(d.consumidor.preparar('inv-1')).rejects.toThrow(/Catálogo 59|sin detracción efectiva/);
+    expect(d.signXml).not.toHaveBeenCalled();
+    expect(d.processWithRetry).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     process.env.CERT_BASE64 = 'certificado-de-prueba';
   });

@@ -26,6 +26,8 @@ import {
 } from '../../../src/modules/invoices/application/services/invoiceQrService';
 import { InvoicePdfService } from '../../../src/modules/invoices/application/services/invoicePdfService';
 import { InvoiceDownloadService } from '../../../src/modules/invoices/application/services/invoiceDownloadService';
+import { UblGeneratorService, type InvoicePayload } from '../../../src/modules/invoices/ublGeneratorService';
+import { payloadMedioPago } from './ta63MedioPagoFixtures';
 
 // ---------------------------------------------------------------------------
 // Utilidades
@@ -82,12 +84,14 @@ function filaComprobante(extra: Record<string, unknown> = {}) {
 }
 
 /** Construye el servicio con dobles. */
-function servicio(fila: unknown = filaComprobante()) {
+function servicio(fila: unknown = filaComprobante(), generadorReal = false) {
   const findFirst = jest.fn<(args: unknown) => Promise<unknown>>(
     async () => fila,
   );
   const generateInvoiceXml = jest.fn<(payload: unknown) => string>(
-    () => '<?xml version="1.0"?><Invoice regenerado="true"/>',
+    (payload) => generadorReal
+      ? new UblGeneratorService().generateInvoiceXml(payload as InvoicePayload)
+      : '<?xml version="1.0"?><Invoice regenerado="true"/>',
   );
 
   // Firma y guardado del XML regenerado. El fallback de la descarga FIRMA antes
@@ -285,6 +289,25 @@ describe('TA-65 · representación impresa en PDF', () => {
 // ---------------------------------------------------------------------------
 
 describe('TA-65 · descargas', () => {
+  it.each([undefined, '001'] as const)('regenera payload con medio %s sin inventar el medio histórico', async (medio) => {
+    const payload = JSON.parse(JSON.stringify({ ...payloadMedioPago(), medioPagoDetraccion: medio }));
+    const d = servicio(filaComprobante({ payload_ubl: payload, xml_storage_url: null }), true);
+    const archivo = await d.descargas.descargar('emp-1', 'inv-1', 'xml');
+    expect(archivo.contenido.toString('utf8')).toContain(
+      `<cbc:PaymentMeansCode>${medio ?? '999'}</cbc:PaymentMeansCode>`,
+    );
+    expect(d.signXml).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['1001', '014', 'sin-detraccion'])('descarga rechaza medio inválido %s antes de firmar o guardar', async (medio) => {
+    const payload = { ...payloadMedioPago(), medioPagoDetraccion: medio === 'sin-detraccion' ? '001' : medio,
+      ...(medio === 'sin-detraccion' ? { montoDetraccion: 0 } : {}) };
+    const d = servicio(filaComprobante({ payload_ubl: payload, xml_storage_url: null }), true);
+    await expect(d.descargas.descargar('emp-1', 'inv-1', 'xml')).rejects.toThrow(/Catálogo 59|sin detracción efectiva/);
+    expect(d.signXml).not.toHaveBeenCalled();
+    expect(d.guardar).not.toHaveBeenCalled();
+  });
+
   it('el XML se devuelve con su nombre y su tipo', async () => {
     const { descargas } = servicio();
     const archivo = await descargas.descargar('emp-1', 'inv-1', 'xml');

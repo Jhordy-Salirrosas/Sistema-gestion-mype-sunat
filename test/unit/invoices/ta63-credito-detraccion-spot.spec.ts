@@ -567,7 +567,7 @@ describe('TA-63 · XML de la detracción SPOT', () => {
 
   // El medio de pago tiene que ser un código del Catálogo 59, no texto libre:
   // con 'Detraccion' SUNAT responde 3174.
-  it('usa el código 999 del Catálogo 59 en el medio de pago', () => {
+  it('conserva 999 del Catálogo 59 cuando no se informa medio, incluidos históricos', () => {
     const xml = generador.generateInvoiceXml(facturaConDetraccion());
     expect(xml).toContain('<cbc:PaymentMeansCode>999</cbc:PaymentMeansCode>');
   });

@@ -181,6 +181,15 @@ const montar = (
 };
 
 describe('EmitirComprobanteService — emisión de factura', () => {
+  it.each(['1001', '014', '001'])('medio %s inválido se rechaza antes de reservar o persistir', async (medio) => {
+    const d = montar();
+    const dto = Object.assign(factura(), { medio_pago_detraccion: medio });
+    // 001 es válido en el catálogo, pero esta factura no tiene detracción.
+    await expect(d.servicio.emitir(dto, COMPANY_ID)).rejects.toThrow(/Catálogo 59|sin detracción efectiva/);
+    expect(d.series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(d.repositorio.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });

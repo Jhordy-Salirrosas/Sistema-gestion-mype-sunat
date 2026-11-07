@@ -10,6 +10,7 @@ import type {
   PartyCliente,
 } from './xmlNodesHelper';
 import type { DatosTributarios } from './ublTotalesHelper';
+import type { MedioPagoDetraccion } from './domain/rules/medioPagoDetraccion';
 
 export interface InvoicePayload extends DatosTributarios {
   rucEmisor: string;
@@ -38,6 +39,8 @@ export interface InvoicePayload extends DatosTributarios {
    * Activa la Leyenda 2006 y el `cac:PaymentMeans` de detracción.
    */
   codigoDetraccion?: string;
+  /** Catálogo 59; ausencia conserva 999, incluso al regenerar históricos. */
+  medioPagoDetraccion?: MedioPagoDetraccion;
   /**
    * Importe en letras para la Leyenda 2006, obligatoria cuando hay detracción
    * (regla 4265). Lo genera quien arma el payload; el generador no convierte

@@ -13,6 +13,7 @@ import {
 } from '../../domain/ports/invoiceRepositoryPort';
 import { InvoiceSeriesService } from '../services/invoiceSeriesService';
 import { validarAdquirente } from '../../domain/rules/taxpayerIdValidator';
+import { UblGeneratorService, type InvoicePayload } from '../../ublGeneratorService';
 
 @Injectable()
 export class CreateInvoiceUseCase {
@@ -32,6 +33,7 @@ export class CreateInvoiceUseCase {
      * falla al compilar con "can't resolve dependencies".
      */
     @Optional() private readonly series?: InvoiceSeriesService,
+    @Optional() private readonly ublGenerator: UblGeneratorService = new UblGeneratorService(),
   ) { }
 
   /**
@@ -51,6 +53,12 @@ export class CreateInvoiceUseCase {
       throw new ForbiddenException(
         'La peticion no tiene empresa asociada: falta companyId en el token',
       );
+    }
+
+    // Solo el campo nuevo activa esta validación: los consumidores históricos
+    // conservan exactamente su contrato. Cola y descargas validan al generar.
+    if (dto.payload_ubl.medioPagoDetraccion !== undefined) {
+      this.ublGenerator.validarMedioPagoDetraccion(dto.payload_ubl as unknown as InvoicePayload);
     }
 
     // TA-60: se valida el documento del adquirente ANTES de reservar el

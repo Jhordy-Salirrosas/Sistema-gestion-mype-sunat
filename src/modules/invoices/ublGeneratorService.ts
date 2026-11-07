@@ -34,6 +34,7 @@ import {
   validarPago,
 } from './application/services/paymentTermsAndSpotValidator';
 import type { InvoicePayload } from './invoicePayload';
+import { validarMedioPagoDetraccion } from './application/services/validarMedioPagoDetraccion';
 
 export type { TotalesCalculados } from './ublTotalesHelper';
 export type { InvoicePayload } from './invoicePayload';
@@ -43,6 +44,15 @@ const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 @Injectable()
 export class UblGeneratorService {
+  /** También se usa en el alta por API, antes de reservar número o persistir. */
+  public validarMedioPagoDetraccion(payload: InvoicePayload) {
+    return validarMedioPagoDetraccion(
+      payload.medioPagoDetraccion,
+      esOperacionConDetraccion(payload.tipoOperacion) &&
+        calcularTotales(this.conLineas(payload)).detraccion > 0,
+    );
+  }
+
   /** Calcula detracción, retención, ICBPER y el importe a pagar. */
   public calcularTotales(payload: DatosTributarios): TotalesCalculados {
     return calcularTotales(payload);
@@ -89,6 +99,10 @@ export class UblGeneratorService {
     // quien arma el payload puede no haber rellenado: llegaba 0 y la regla
     // 3319 rechazaba todo cronograma al crédito con "neto pendiente 0.00".
     const totales = calcularTotales(this.conLineas(payload));
+    const medioPagoDetraccion = validarMedioPagoDetraccion(
+      payload.medioPagoDetraccion,
+      esOperacionConDetraccion(tipoOperacion) && totales.detraccion > 0,
+    );
     const clienteXml = payload.cliente
       ? `\n${bloqueCliente(payload.cliente)}`
       : '';
@@ -132,7 +146,7 @@ export class UblGeneratorService {
         ? `\n${bloqueLeyenda2006(payload.montoEnLetras)}`
         : '';
     const mediosPago = conDetraccion
-      ? bloquePaymentMeansDetraccion(payload.cuentaBancoNacion)
+      ? bloquePaymentMeansDetraccion(payload.cuentaBancoNacion, medioPagoDetraccion)
       : '';
     const referenciaNota =
       payload.documentoAfectado && (tipo === '07' || tipo === '08')
