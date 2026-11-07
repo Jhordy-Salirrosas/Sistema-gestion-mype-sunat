@@ -42,5 +42,56 @@ describe('CustomsSirePurchasesController (Controller Unit Test)', () => {
       UnauthorizedException,
     );
   });
+
+  it('debe generar el reporte de conciliación SIRE RCE vs Kardex cruzando compras e importaciones', async () => {
+    mockPrisma.sireProposal = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'sp-1',
+          document_type: '01',
+          series: 'F001',
+          correlative: '00000001',
+          emitter_ruc: '20100000001',
+          emitter_legal_name: 'PROVEEDOR SAC',
+          taxable_base: 1000,
+          igv_amount: 180,
+          total_amount: 1180,
+          issue_date: new Date('2026-10-10'),
+        },
+      ]),
+    };
+    mockPrisma.nationalPurchase = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'np-1',
+          document_type_code: '01',
+          document_serial: 'F001',
+          document_number: '00000001',
+          supplier_doc_number: '20100000001',
+          supplier_name: 'PROVEEDOR SAC',
+          net_amount: 1000,
+          igv_amount: 180,
+          total_amount: 1180,
+          issue_date: new Date('2026-10-10'),
+        },
+      ]),
+    };
+    mockPrisma.inventoryMovement = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          document_serial: 'F001',
+          document_number: '00000001',
+          operation_type_code: '02',
+        },
+      ]),
+    };
+
+    const report = await controller.getSireRceKardexReconciliation('comp-1', '202610');
+
+    expect(report.summary.totalRecords).toBeGreaterThan(0);
+    expect(report.summary.matchedCount).toBe(1);
+    expect(report.items[0].status).toBe('CONCILIADO');
+    expect(report.items[0].origin).toBe('NACIONAL');
+  });
 });
 

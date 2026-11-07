@@ -3,77 +3,188 @@ export interface CostLayer {
   unitCost: number;
 }
 
+export interface FifoLayer {
+  layerId?: string;
+  quantity: number;
+  remainingQuantity: number;
+  unitCost: number;
+  entryDate?: Date | string;
+}
+
+export interface FifoConsumptionDetail {
+  layerId?: string;
+  consumedQuantity: number;
+  unitCost: number;
+  subtotalCost: number;
+}
+
 export interface FifoInput {
-  layers: readonly CostLayer[];
+  existingLayers?: FifoLayer[];
+  layers?: readonly CostLayer[];
   movementDirection: 'ENTRADA' | 'SALIDA';
   quantity: number;
   unitCost?: number;
+  layerId?: string;
+  movementDate?: Date | string;
 }
 
 export interface FifoResult {
+  movementQuantity: number;
   movementUnitCost: number;
   movementTotalCost: number;
-  layers: CostLayer[];
   resultingStock: number;
   resultingTotalValue: number;
   resultingAverageCost: number;
+  layers: CostLayer[];
+  updatedLayers: FifoLayer[];
+  consumptions?: FifoConsumptionDetail[];
 }
 
 const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-/** Costeo FIFO puro: consume las capas más antiguas primero. */
+/**
+ * Motor de valuación de inventarios por el método FIFO / PEPS
+ * (Primeras Entradas, Primeras Salidas), según Art. 62 de la Ley del Impuesto a la Renta.
+ */
 export class FifoCostEngine {
-  static calculate(input: FifoInput): FifoResult {
-    const quantity = r4(input.quantity);
-    if (quantity <= 0) throw new Error('La cantidad debe ser mayor que cero.');
+  public static calculate(input: FifoInput): FifoResult {
+    const qty = r4(input.quantity);
+    if (qty <= 0) {
+      throw new Error('La cantidad debe ser mayor que cero.');
+    }
 
-    const layers = input.layers.map((l) => ({ quantity: r4(l.quantity), unitCost: r4(l.unitCost) }));
-    const stock = r4(layers.reduce((acc, l) => acc + l.quantity, 0));
+    const incoming: readonly (CostLayer | FifoLayer)[] = input.existingLayers ?? input.layers ?? [];
+    const currentLayers: FifoLayer[] = incoming
+      .map((l, idx): FifoLayer => {
+        const remaining = 'remainingQuantity' in l && typeof (l as FifoLayer).remainingQuantity === 'number'
+          ? (l as FifoLayer).remainingQuantity
+          : l.quantity;
+        const layerId = 'layerId' in l && typeof (l as FifoLayer).layerId === 'string' && (l as FifoLayer).layerId
+          ? (l as FifoLayer).layerId
+          : `layer-${idx + 1}`;
+        const entryDate = 'entryDate' in l ? (l as FifoLayer).entryDate : undefined;
+
+        return {
+          layerId,
+          quantity: r4(l.quantity),
+          remainingQuantity: r4(remaining),
+          unitCost: r4(l.unitCost),
+          entryDate,
+        };
+      })
+      .filter((l) => l.remainingQuantity > 0);
+
+    const prevStock = r4(currentLayers.reduce((acc, l) => acc + l.remainingQuantity, 0));
 
     if (input.movementDirection === 'ENTRADA') {
       const unitCost = r4(input.unitCost ?? 0);
-      if (unitCost < 0) throw new Error('El costo de entrada no puede ser negativo.');
-      const next = [...layers, { quantity, unitCost }];
-      return this.resultado(quantity, r2(quantity * unitCost), next);
+      if (unitCost < 0) {
+        throw new Error('El costo de entrada no puede ser negativo.');
+      }
+
+      const movementTotalCost = r2(qty * unitCost);
+      const newLayer: FifoLayer = {
+        layerId: input.layerId || `layer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        quantity: qty,
+        remainingQuantity: qty,
+        unitCost,
+        entryDate: input.movementDate,
+      };
+
+      const updatedLayers = [...currentLayers, newLayer];
+      const resultingStock = r4(prevStock + qty);
+      const resultingTotalValue = r2(
+        updatedLayers.reduce((acc, l) => acc + l.remainingQuantity * l.unitCost, 0),
+      );
+      const resultingAverageCost = resultingStock > 0 ? r4(resultingTotalValue / resultingStock) : 0;
+      const layers: CostLayer[] = updatedLayers.map((l) => ({
+        quantity: l.remainingQuantity,
+        unitCost: l.unitCost,
+      }));
+
+      return {
+        movementQuantity: qty,
+        movementUnitCost: unitCost,
+        movementTotalCost,
+        resultingStock,
+        resultingTotalValue,
+        resultingAverageCost,
+        layers,
+        updatedLayers,
+        consumptions: [],
+      };
     }
 
-    if (quantity > stock) {
-      throw new Error(`Stock insuficiente. Disponible: ${stock}, solicitado: ${quantity}.`);
+    // SALIDA
+    if (qty > prevStock) {
+      throw new Error(
+        `Stock insuficiente para método FIFO. Existencia disponible: ${prevStock}, cantidad requerida: ${qty}.`,
+      );
     }
 
-    let pendiente = quantity;
-    let costo = 0;
-    const restantes: CostLayer[] = [];
-    for (const layer of layers) {
-      if (pendiente <= 0) {
-        restantes.push(layer);
+    let pendingToConsume = qty;
+    let movementTotalCost = 0;
+    const consumptions: FifoConsumptionDetail[] = [];
+    const updatedLayers: FifoLayer[] = [];
+
+    for (const layer of currentLayers) {
+      if (pendingToConsume <= 0) {
+        updatedLayers.push(layer);
         continue;
       }
-      const consumido = Math.min(layer.quantity, pendiente);
-      costo += consumido * layer.unitCost;
-      pendiente = r4(pendiente - consumido);
-      if (layer.quantity > consumido) {
-        restantes.push({ quantity: r4(layer.quantity - consumido), unitCost: layer.unitCost });
+
+      if (layer.remainingQuantity <= pendingToConsume) {
+        const consumed = layer.remainingQuantity;
+        const subtotal = r2(consumed * layer.unitCost);
+        movementTotalCost = r2(movementTotalCost + subtotal);
+        pendingToConsume = r4(pendingToConsume - consumed);
+        consumptions.push({
+          layerId: layer.layerId,
+          consumedQuantity: consumed,
+          unitCost: layer.unitCost,
+          subtotalCost: subtotal,
+        });
+        // La capa se agota completamente (remainingQuantity = 0)
+      } else {
+        const consumed = pendingToConsume;
+        const subtotal = r2(consumed * layer.unitCost);
+        movementTotalCost = r2(movementTotalCost + subtotal);
+        consumptions.push({
+          layerId: layer.layerId,
+          consumedQuantity: consumed,
+          unitCost: layer.unitCost,
+          subtotalCost: subtotal,
+        });
+        updatedLayers.push({
+          ...layer,
+          remainingQuantity: r4(layer.remainingQuantity - consumed),
+        });
+        pendingToConsume = 0;
       }
     }
 
-    return {
-      ...this.resultado(quantity, r2(costo), restantes),
-      movementUnitCost: r4(costo / quantity),
-    };
-  }
+    const movementUnitCost = qty > 0 ? r4(movementTotalCost / qty) : 0;
+    const resultingStock = r4(prevStock - qty);
+    const resultingTotalValue = r2(
+      updatedLayers.reduce((acc, l) => acc + l.remainingQuantity * l.unitCost, 0),
+    );
+    const resultingAverageCost = resultingStock > 0 ? r4(resultingTotalValue / resultingStock) : 0;
+    const layers: CostLayer[] = updatedLayers.map((l) => ({
+      quantity: l.remainingQuantity,
+      unitCost: l.unitCost,
+    }));
 
-  private static resultado(quantity: number, totalCost: number, layers: CostLayer[]): FifoResult {
-    const stock = r4(layers.reduce((acc, l) => acc + l.quantity, 0));
-    const valor = r2(layers.reduce((acc, l) => acc + l.quantity * l.unitCost, 0));
     return {
-      movementUnitCost: r4(totalCost / quantity),
-      movementTotalCost: totalCost,
-      layers: layers.filter((l) => l.quantity > 0),
-      resultingStock: stock,
-      resultingTotalValue: valor,
-      resultingAverageCost: stock > 0 ? r4(valor / stock) : 0,
+      movementQuantity: qty,
+      movementUnitCost,
+      movementTotalCost,
+      resultingStock,
+      resultingTotalValue,
+      resultingAverageCost,
+      layers,
+      updatedLayers,
+      consumptions,
     };
   }
 }
