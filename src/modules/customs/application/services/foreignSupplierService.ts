@@ -1,6 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
-import { CreateForeignSupplierDto, UpdateForeignSupplierDto } from '../dto/foreignSupplierDto';
+import { ForeignSupplierDto } from '../dto/foreignSupplierDto';
 
 /** Maestro de proveedores del exterior, aislado por empresa. */
 @Injectable()
@@ -18,7 +18,10 @@ export class ForeignSupplierService {
     });
   }
 
-  async create(companyId: string, dto: CreateForeignSupplierDto) {
+  async create(companyId: string, dto: ForeignSupplierDto) {
+    if (!dto.businessName?.trim() || !dto.countryCode?.trim()) {
+      throw new BadRequestException('Razón social y país son obligatorios.');
+    }
     try {
       return await this.prisma.foreignSupplier.create({
         data: {
@@ -50,7 +53,7 @@ export class ForeignSupplierService {
     }
   }
 
-  async update(companyId: string, id: string, dto: UpdateForeignSupplierDto) {
+  async update(companyId: string, id: string, dto: ForeignSupplierDto) {
     await this.get(companyId, id);
     return this.prisma.foreignSupplier.update({
       where: { id },

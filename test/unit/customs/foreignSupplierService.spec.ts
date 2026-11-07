@@ -58,4 +58,36 @@ describe('ForeignSupplierService multiempresa', () => {
     prisma.foreignSupplier.delete.mockResolvedValue({ id: 'sup-1' });
     await expect(service.remove('company-1', 'sup-1')).resolves.toEqual({ deleted: true });
   });
+
+  it('exige razón social y país al crear', async () => {
+    await expect(service.create('company-1', {})).rejects.toThrow(/obligatorios/);
+  });
+
+  it('actualiza todos los campos editables', async () => {
+    prisma.foreignSupplier.findFirst.mockResolvedValue({ id: 'sup-1' });
+    prisma.foreignSupplier.update.mockResolvedValue({ id: 'sup-1' });
+    await service.update('company-1', 'sup-1', {
+      taxId: 'US-1', businessName: 'Nuevo', countryCode: 'us', defaultCurrency: 'usd',
+      isRelated: true, address: 'Calle 1', email: 'a@b.com', phone: '123', contactName: 'Ana',
+      paymentTerms: '30 días', bankName: 'Bank', bankAccount: '123', swiftCode: 'SWIFT',
+      vesselName: 'Buque', voyageNumber: 'V1', blNumber: 'BL1', portOrigin: 'Shanghai',
+    });
+    expect(prisma.foreignSupplier.update).toHaveBeenCalledWith({
+      where: { id: 'sup-1' },
+      data: expect.objectContaining({
+        tax_id: 'US-1', business_name: 'Nuevo', country_code: 'US', default_currency: 'USD',
+        is_related: true, address: 'Calle 1', email: 'a@b.com', phone: '123', contact_name: 'Ana',
+        payment_terms: '30 días', bank_name: 'Bank', bank_account: '123', swift_code: 'SWIFT',
+        vessel_name: 'Buque', voyage_number: 'V1', bl_number: 'BL1', port_origin: 'Shanghai',
+      }),
+    });
+  });
+
+  it('lista con filtro de búsqueda', async () => {
+    prisma.foreignSupplier.findMany.mockResolvedValue([]);
+    await service.list('company-1', 'shen');
+    expect(prisma.foreignSupplier.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ company_id: 'company-1', OR: expect.any(Array) }) }),
+    );
+  });
 });

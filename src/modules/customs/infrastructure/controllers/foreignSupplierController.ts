@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import { CreateForeignSupplierDto, UpdateForeignSupplierDto } from '../../application/dto/foreignSupplierDto';
+import { ForeignSupplierDto } from '../../application/dto/foreignSupplierDto';
 import { ForeignSupplierService } from '../../application/services/foreignSupplierService';
 
 @Controller('api/v1/customs/suppliers')
@@ -15,12 +15,12 @@ export class ForeignSupplierController {
   }
 
   @Post()
-  create(@CurrentCompany() companyId: string | undefined, @Body() dto: CreateForeignSupplierDto) {
+  create(@CurrentCompany() companyId: string | undefined, @Body() dto: ForeignSupplierDto) {
     return this.suppliers.create(this.empresa(companyId), dto);
   }
 
   @Put(':id')
-  update(@CurrentCompany() companyId: string | undefined, @Param('id') id: string, @Body() dto: UpdateForeignSupplierDto) {
+  update(@CurrentCompany() companyId: string | undefined, @Param('id') id: string, @Body() dto: ForeignSupplierDto) {
     return this.suppliers.update(this.empresa(companyId), id, dto);
   }
 
