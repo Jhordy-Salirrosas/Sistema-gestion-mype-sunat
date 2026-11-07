@@ -309,7 +309,7 @@ export class InventoryPurchaseService {
     return result;
   }
 
-  /** Asiento de compra: inventario + IGV crédito fiscal contra CxP. */
+  /** Asiento de compra PCGE: Naturaleza (60/40/42) y Destino al almacén (20/61). */
   private async registrarAsientoCompra(
     companyId: string,
     purchase: any,
@@ -327,6 +327,18 @@ export class InventoryPurchaseService {
     });
     if (existente) return;
 
+    // Consultar mapeador dinámico de cuentas para COMPRA si existe
+    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+      where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
+    })) ?? [];
+    const mapRoles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+
+    const accGastoCompra = mapRoles.get('GASTO_COMPRA') || '601';
+    const accIgvCredito = mapRoles.get('IGV_CREDITO') || '40111';
+    const accCxp = mapRoles.get('CXP') || '421';
+    const accDestinoInv = mapRoles.get('DESTINO_INVENTARIO') || '201';
+    const accVariacionExist = mapRoles.get('VARIACION_EXISTENCIA') || '611';
+
     const periodo = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}`;
     try {
       await this.accounting.execute({
@@ -337,26 +349,45 @@ export class InventoryPurchaseService {
         sourceModule: 'PURCHASES',
         sourceReferenceId: purchase.purchaseNumber,
         lines: [
+          // 1. Naturaleza: Compra de mercaderías
           {
             lineOrder: 1,
-            accountCode: '601',
-            accountName: 'Mercaderías',
+            accountCode: accGastoCompra,
+            accountName: 'Mercaderías manufacturadas (Gasto Compra)',
             debitAmount: purchase.netAmount,
             creditAmount: 0,
           },
+          // 2. Naturaleza: IGV Crédito fiscal
           {
             lineOrder: 2,
-            accountCode: '40111',
-            accountName: 'IGV - Cuenta propia',
+            accountCode: accIgvCredito,
+            accountName: 'IGV - Cuenta propia / Crédito fiscal',
             debitAmount: purchase.igvAmount,
             creditAmount: 0,
           },
+          // 3. Naturaleza: Cuentas por pagar comerciales a proveedores
           {
             lineOrder: 3,
-            accountCode: '421',
-            accountName: 'Facturas por pagar',
+            accountCode: accCxp,
+            accountName: 'Facturas por pagar emitidas',
             debitAmount: 0,
             creditAmount: purchase.totalAmount,
+          },
+          // 4. Destino PCGE: Entrada de existencias a almacén
+          {
+            lineOrder: 4,
+            accountCode: accDestinoInv,
+            accountName: 'Mercaderías en almacén (Destino)',
+            debitAmount: purchase.netAmount,
+            creditAmount: 0,
+          },
+          // 5. Destino PCGE: Variación de existencias
+          {
+            lineOrder: 5,
+            accountCode: accVariacionExist,
+            accountName: 'Variación de mercaderías (Destino)',
+            debitAmount: 0,
+            creditAmount: purchase.netAmount,
           },
         ],
       });

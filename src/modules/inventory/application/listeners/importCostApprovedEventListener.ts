@@ -59,7 +59,7 @@ export class ImportCostApprovedEventListener implements OnModuleInit {
     }
   }
 
-  /** Asiento de importación: inventario contra cuenta por pagar. */
+  /** Asiento de importación PCGE: Descargo de existencias por recibir a mercaderías en almacén (28 -> 20). */
   private async registrarAsientoImportacion(event: ImportCostApprovedEvent): Promise<void> {
     if (!this.accounting || !this.prisma) return;
 
@@ -74,27 +74,37 @@ export class ImportCostApprovedEventListener implements OnModuleInit {
     });
     if (existente) return;
 
+    // Consultar mapeador dinámico de cuentas para IMPORTACION
+    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+      where: { company_id: companyId, process_code: 'IMPORTACION', is_active: true },
+    })) ?? [];
+    const mapRoles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+
+    // Cuentas PCGE: 20 (Ingreso almacén) y 28 (Descargo de tránsito / existencias por recibir)
+    const accIngreso = mapRoles.get('INGRESO_ALMACEN') || '201';
+    const accTransito = mapRoles.get('TRANSITO') || '281';
+
     const fecha = approvedAt instanceof Date ? approvedAt : new Date(approvedAt);
     const period = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
     await this.accounting.execute({
       companyId,
       period,
       entryDate: fecha.toISOString(),
-      glosa: `Importación ${shipmentId}`,
+      glosa: `Importación ${shipmentId} · Ingreso almacén Landed Cost (28 -> 20)`,
       sourceModule: 'PURCHASES_IMPORT',
       sourceReferenceId: shipmentId,
       lines: [
         {
           lineOrder: 1,
-          accountCode: '201',
-          accountName: 'Mercaderías',
+          accountCode: accIngreso,
+          accountName: 'Mercaderías en almacén (Destino definitivo)',
           debitAmount: totalInventoryCostPen,
           creditAmount: 0,
         },
         {
           lineOrder: 2,
-          accountCode: '421',
-          accountName: 'Facturas por pagar',
+          accountCode: accTransito,
+          accountName: 'Existencias por recibir / Tránsito (Descargo 28)',
           debitAmount: 0,
           creditAmount: totalInventoryCostPen,
         },

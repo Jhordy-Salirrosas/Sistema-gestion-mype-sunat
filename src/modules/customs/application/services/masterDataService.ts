@@ -1,3 +1,4 @@
+import { Prisma, type BusinessPartner } from '../../../../generated/client/client';
 import {
   ConflictException,
   Injectable,
@@ -108,19 +109,29 @@ export class MasterDataService {
   // -------------------------------------------------------------------------
   listPartners(companyId: string, role?: string, q?: string) {
     const term = (q ?? '').trim();
+    if (term) {
+      // PostgreSQL normaliza también el dato almacenado: no se reescriben
+      // terceros ni se requiere instalar una extensión o migrar el esquema.
+      const fold = (value: Prisma.Sql) => Prisma.sql`
+        regexp_replace(normalize(lower(${value}), NFD), ${'[\u0300-\u036f]'}, '', 'g')`;
+      const needle = fold(Prisma.sql`${term}`);
+      return this.prisma.$queryRaw<BusinessPartner[]>(Prisma.sql`
+        SELECT * FROM business_partners
+        WHERE company_id = ${companyId}
+          ${role ? Prisma.sql`AND ${role.toUpperCase()} = ANY(roles)` : Prisma.empty}
+          AND (
+            strpos(${fold(Prisma.sql`legal_name`)}, ${needle}) > 0
+            OR strpos(${fold(Prisma.sql`doc_number`)}, ${needle}) > 0
+            OR strpos(${fold(Prisma.sql`COALESCE(trade_name, '')`)}, ${needle}) > 0
+          )
+        ORDER BY legal_name ASC
+        LIMIT 200
+      `);
+    }
     return this.prisma.businessPartner.findMany({
       where: {
         company_id: companyId,
         ...(role ? { roles: { has: role.toUpperCase() } } : {}),
-        ...(term
-          ? {
-              OR: [
-                { legal_name: { contains: term, mode: 'insensitive' } },
-                { doc_number: { contains: term } },
-                { trade_name: { contains: term, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
       },
       orderBy: { legal_name: 'asc' },
       take: 200,

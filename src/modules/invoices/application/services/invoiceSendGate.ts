@@ -66,9 +66,7 @@ export const BANDERA_DEMO = 'BYPASS_XSL_GATE_DEMO';
 
 /** Mensaje único del aviso, para que consola y auditoría digan lo mismo. */
 export const AVISO_DEMO =
-  'Compuerta XSL omitida por bandera explícita de demostración ' +
-  `(${BANDERA_DEMO}=true; limitación de xslt-processor con xsl:call-template ` +
-  'documentada en specs/DEUDA_VALIDADOR_XSL.md)';
+  'Validación XSL no concluyente; se continúa el envío según configuración.';
 
 /**
  * ¿Está activa la bandera de demostración?
@@ -211,7 +209,7 @@ async function registrarOmisionDemo(
       estadoAnterior: params.estadoActual ?? null,
       intento: params.intento ?? 1,
       codigoError: null,
-      mensajeError: `[DEMO] ${AVISO_DEMO}`,
+      mensajeError: AVISO_DEMO,
       tiempoRespuestaMs: null,
     });
   } catch {

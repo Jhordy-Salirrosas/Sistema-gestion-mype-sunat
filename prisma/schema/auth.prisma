@@ -75,7 +75,6 @@ model User {
   full_name             String
   role                  Role          @default(OPERADOR_FACTURACION)
   is_active             Boolean       @default(true)
-  inventory_cost_method String        @default("PROMEDIO") // PROMEDIO | FIFO
   created_at            DateTime      @default(now())
   updated_at            DateTime      @updatedAt
 

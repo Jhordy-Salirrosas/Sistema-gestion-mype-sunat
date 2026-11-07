@@ -13,7 +13,7 @@
  *     esté bien formado.
  *  3. Los motivos de anulación y devolución TOTAL toman el saldo entero: pedir
  *     el importe dejaría dos fuentes de verdad para el mismo número.
- *  4. Solo un comprobante ACEPTADO u OBSERVADO admite notas.
+ *  4. Solo un comprobante ACEPTADO admite notas.
  *  5. Las notas rechazadas o anuladas no consumen saldo: no existen ante SUNAT.
  */
 import { describe, expect, it, jest } from '@jest/globals';
@@ -263,6 +263,16 @@ describe('TA-66 · autorización de Nota de Crédito', () => {
     ).rejects.toThrow(/01, 02, 03/);
   });
 
+  it.each(['ERROR_RED', 'DLQ', 'OBSERVADO', 'EN_COLA', 'RECHAZADO', 'ANULADO'])(
+    'saldo sobre %s devuelve 400 con el motivo específico', async (estado) => {
+      const { notas } = servicio({ estado });
+      await expect(notas.saldo('emp-1', 'inv-1')).rejects.toMatchObject({
+        status: 400,
+        message: `El comprobante no está aceptado por SUNAT (estado: ${estado}) y por eso no admite notas de crédito ni de débito.`,
+      });
+    },
+  );
+
   it('un comprobante en cola no admite notas', async () => {
     const { notas } = servicio({ estado: 'EN_COLA' });
 
@@ -272,7 +282,7 @@ describe('TA-66 · autorización de Nota de Crédito', () => {
         motivoCodigo: '07',
         importe: 10,
       }),
-    ).rejects.toThrow(ConflictException);
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('un comprobante rechazado no admite notas', async () => {
