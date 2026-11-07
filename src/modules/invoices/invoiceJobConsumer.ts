@@ -597,6 +597,23 @@ export class InvoiceJobConsumer implements OnModuleInit {
       return;
     }
 
+    // El puente y el respaldo identifican la misma venta con referencias
+    // distintas. Consultar ambas también cubre un puente sin id o un reproceso.
+    const existente = await this.prisma.accountingEntry.findFirst({
+      where: {
+        company_id: invoice.company_id,
+        OR: [
+          {
+            source_module: 'M1_INVOICES',
+            source_reference_id: `${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}`,
+          },
+          { source_module: 'INVOICES', source_reference_id: invoice.id },
+        ],
+      },
+      select: { id: true },
+    });
+    if (existente) return;
+
     const payload = (invoice.payload_ubl ?? {}) as Record<string, unknown>;
     const total = Number(invoice.monto_total);
     const numero = (valor: unknown): number | undefined => {
