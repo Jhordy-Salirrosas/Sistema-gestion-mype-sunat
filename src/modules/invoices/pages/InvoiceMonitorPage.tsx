@@ -43,6 +43,7 @@ import {
   TableRow,
 } from '@/components/ui';
 import { RefreshCw, RotateCw } from 'lucide-react';
+import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { invoicesApi } from '../services/invoicesApi';
 import type { Invoice } from '../types/invoice.types';
 import type { AlertasOperativas } from '../lib/invoiceAlertas';
@@ -64,6 +65,11 @@ export default function InvoiceMonitorPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reintentando, setReintentando] = useState<string | null>(null);
+  // Independiente de la carga: actualizar la lista no borra el resultado.
+  const [avisoReintento, setAvisoReintento] = useState<{
+    encolado: boolean;
+    mensaje: string;
+  } | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -91,7 +97,7 @@ export default function InvoiceMonitorPage() {
       setEnVuelo([...vistos.values()]);
     } catch (e: unknown) {
       setError(
-        e instanceof Error ? e.message : 'No se pudo leer el estado de la cola.',
+        extractApiErrorMessage(e, 'No se pudo leer el estado de la cola.'),
       );
     } finally {
       setCargando(false);
@@ -113,13 +119,16 @@ export default function InvoiceMonitorPage() {
 
   const reintentar = async (id: string) => {
     setReintentando(id);
+    setAvisoReintento(null);
     try {
-      await invoicesApi.retryCdr(id);
+      const resultado = await invoicesApi.retryCdr(id);
+      setAvisoReintento({ encolado: resultado.encolado, mensaje: resultado.mensaje });
       await cargar();
     } catch (e: unknown) {
-      setError(
-        e instanceof Error ? e.message : 'No se pudo reintentar el envío.',
-      );
+      setAvisoReintento({
+        encolado: false,
+        mensaje: extractApiErrorMessage(e, 'No se pudo reintentar el envío.'),
+      });
     } finally {
       setReintentando(null);
     }
@@ -141,6 +150,15 @@ export default function InvoiceMonitorPage() {
           {cargando ? 'Consultando…' : 'Actualizar'}
         </Button>
       </PageHeader>
+
+      {avisoReintento && (
+        <Alert variant={avisoReintento.encolado ? 'success' : 'destructive'}>
+          <AlertTitle>
+            {avisoReintento.encolado ? 'Comprobante reencolado' : 'Comprobante no reencolado'}
+          </AlertTitle>
+          <AlertDescription>{avisoReintento.mensaje}</AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive">
