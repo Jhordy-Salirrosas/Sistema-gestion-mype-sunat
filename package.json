@@ -27,7 +27,10 @@
     "test:load": "node test/load/ta15/run-ta15.mjs",
     "test:sunat:beta": "node --experimental-vm-modules -r dotenv/config node_modules/jest/bin/jest.js --runInBand test/integration/sunat/sunatBetaConnection.spec.ts",
     "seed": "npx tsx prisma/seed.ts",
-    "check:secrets": "node scripts/check-secrets.js"
+    "check:secrets": "node scripts/check-secrets.js",
+    "prestart": "prisma generate",
+    "prestart:dev": "prisma generate",
+    "prebuild": "prisma generate"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
