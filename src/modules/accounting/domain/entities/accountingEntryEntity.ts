@@ -15,6 +15,7 @@ export interface AccountingEntryProps {
   glosa: string;
   sourceModule: string; // INVOICES | CUSTOMS
   sourceReferenceId?: string;
+  idempotencyKey?: string;
   lines: AccountingLine[];
   status?: 'BORRADOR' | 'ASENTADO' | 'ANULADO';
 }
@@ -28,6 +29,7 @@ export class AccountingEntryEntity {
   public readonly glosa: string;
   public readonly sourceModule: string;
   public readonly sourceReferenceId?: string;
+  public readonly idempotencyKey?: string;
   public readonly lines: ReadonlyArray<AccountingLine>;
   public readonly status: 'BORRADOR' | 'ASENTADO' | 'ANULADO';
 
@@ -40,6 +42,7 @@ export class AccountingEntryEntity {
     this.glosa = props.glosa;
     this.sourceModule = props.sourceModule;
     this.sourceReferenceId = props.sourceReferenceId;
+    this.idempotencyKey = props.idempotencyKey;
     this.lines = Object.freeze([...props.lines]);
     this.status = props.status ?? 'ASENTADO';
   }

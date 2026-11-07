@@ -49,6 +49,7 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           glosa: entry.glosa,
           source_module: entry.sourceModule,
           source_reference_id: entry.sourceReferenceId,
+          idempotency_key: entry.idempotencyKey ?? null,
           total_debit: totalDebit,
           total_credit: totalCredit,
           is_balanced: isBalanced,
@@ -70,6 +71,32 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     }
 
     return entry;
+  }
+
+  async findByIdempotencyKey(companyId: string, key: string): Promise<AccountingEntryEntity | null> {
+    const e = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, idempotency_key: key },
+      include: { lines: true },
+    });
+    if (!e) return null;
+    return new AccountingEntryEntity({
+      id: e.id,
+      companyId: e.company_id,
+      period: e.period,
+      entryNumber: e.entry_number,
+      entryDate: e.entry_date,
+      glosa: e.glosa,
+      sourceModule: e.source_module,
+      sourceReferenceId: e.source_reference_id ?? undefined,
+      idempotencyKey: e.idempotency_key ?? undefined,
+      lines: e.lines.map((l: any) => ({
+        lineOrder: l.line_order,
+        accountCode: l.account_code,
+        accountName: l.account_name,
+        debitAmount: Number(l.debit_amount),
+        creditAmount: Number(l.credit_amount),
+      })),
+    });
   }
 
   async findEntriesByPeriod(companyId: string, period: string): Promise<AccountingEntryEntity[]> {
