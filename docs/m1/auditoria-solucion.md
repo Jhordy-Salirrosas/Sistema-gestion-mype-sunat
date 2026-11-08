@@ -55,3 +55,11 @@ La política de reenvío tras una consulta incierta y la transición atómica a 
 Se centraliza HALF_UP decimal (Prisma.Decimal): dos decimales para importes, diez para bases unitarias. Se preserva el precio final ingresado y se desglosa por línea, evitando redondear primero la base unitaria. PriceAmount conserva precisión; los bloques TaxTotal de cabecera no duplican ICBPER.
 
 `cantidadBolsas` permite declarar cantidades enteras: el servidor liquida S/ 0.50 por bolsa. El importe legado solo se acepta si coincide con cantidades enteras comprobables. No se infiere que un producto es bolsa; falta un indicador persistido en el maestro para imponer ese control desde producto, fuera de esta parte. SPOT se mantiene APARCADO: la base en operaciones mixtas queda pendiente de definición normativa de Jhordy, sin cambio de algoritmo ni de tasas.
+
+## Parte 8: certificado, entorno y perfil
+
+La inspección del certificado es distinta de la autorización para firmar: conserva sus fechas aun vencido, comprueba par de claves y RUC, y no devuelve material criptográfico a configuración. La proyección calcula días en cada consulta y distingue NO_CONFIGURADO, INVALIDO, AUN_NO_VIGENTE, VENCIDO, POR_VENCER y VIGENTE. El nombre de archivo histórico no está persistido: `archivo=null`, sin nombre sintético.
+
+El entorno se normaliza en un solo lugar, incluidos PRODUCCION/PRODUCTION y mayúsculas. Si falta, se expone null, sin declarar MOCK ni dirigir implícitamente a BETA. Se comprueba que los hosts efectivos correspondan al entorno antes de transportar credenciales. MOCK solo admite loopback. La configuración pública elimina credenciales y parámetros de las URLs y no declara listo_para_emitir con validación oficial incompleta.
+
+`tipo_comprobante_predeterminado` se calcula desde commercial_profile: MAYORISTA=01, MINORISTA=03, sin perfil=null. La preselección visual sigue dependiendo del repositorio de frontend. La disponibilidad efectiva de las operaciones SOAP de consulta BETA sigue sin verificarse en red.

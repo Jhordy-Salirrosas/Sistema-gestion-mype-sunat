@@ -35,19 +35,33 @@ export interface ProcessCdrResult {
   error: string | null;
 }
 
+export type EntornoSunat = 'MOCK' | 'BETA' | 'PRODUCCION';
+export function normalizarEntorno(value: string | undefined | null): EntornoSunat | null {
+  const env = value?.trim().toUpperCase();
+  if (env === 'PRODUCTION' || env === 'PRODUCCION') return 'PRODUCCION';
+  return env === 'MOCK' || env === 'BETA' ? env : null;
+}
+
+/** La configuración ausente no declara MOCK ni apunta implícitamente a BETA. */
 export function resolveEndpoint(): string {
-  if (process.env.SUNAT_BILL_SERVICE_URL) {
-    return process.env.SUNAT_BILL_SERVICE_URL;
-  }
-  if (process.env.SUNAT_ENV === 'produccion') {
-    return (
-      process.env.SUNAT_BILL_SERVICE_URL_PRODUCCION ??
-      SUNAT_BILL_SERVICE_URLS.produccion
-    );
-  }
-  return (
-    process.env.SUNAT_BILL_SERVICE_URL_BETA ?? SUNAT_BILL_SERVICE_URLS.beta
-  );
+  if (process.env.SUNAT_BILL_SERVICE_URL) return process.env.SUNAT_BILL_SERVICE_URL;
+  const env = normalizarEntorno(process.env.SUNAT_ENV);
+  if (env === 'PRODUCCION') return process.env.SUNAT_BILL_SERVICE_URL_PRODUCCION ?? SUNAT_BILL_SERVICE_URLS.produccion;
+  if (env === 'BETA') return process.env.SUNAT_BILL_SERVICE_URL_BETA ?? SUNAT_BILL_SERVICE_URLS.beta;
+  return '';
+}
+
+/** Valida el destino antes de enviar secretos. Un entorno no autoriza otro. */
+export function endpointCoherente(env: EntornoSunat | null, endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    if (url.username || url.password || url.hash || url.search) return false;
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (env === 'MOCK') return local && ['http:', 'https:'].includes(url.protocol);
+    if (url.protocol !== 'https:') return false;
+    return (env === 'BETA' && url.hostname === 'e-beta.sunat.gob.pe') ||
+      (env === 'PRODUCCION' && url.hostname === 'e-factura.sunat.gob.pe');
+  } catch { return false; }
 }
 
 export function resolveTimeout(): number {

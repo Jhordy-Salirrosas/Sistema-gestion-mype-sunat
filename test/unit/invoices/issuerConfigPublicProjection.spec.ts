@@ -1,3 +1,4 @@
+import { resolveEndpoint } from '../../../src/modules/sunat/soap/sunatBillTypes';
 import { InvoiceConfigService } from '../../../src/modules/invoices/application/services/invoiceConfigService';
 import { fakeIssuerContext } from '../../fixtures/issuerContext';
 
@@ -12,7 +13,8 @@ describe('D1 public configuration projection and legacy fallback', () => {
     ]),
   };
   const certificates = {
-    getCertificate: jest.fn(() => ({
+    inspectCertificate: jest.fn(() => ({
+      validFrom: new Date('2020-01-01'),
       validTo: new Date('2099-01-01'),
       daysRemaining: 10,
     })),
@@ -38,7 +40,7 @@ describe('D1 public configuration projection and legacy fallback', () => {
     expect(result.endpoint_bill_service).toBe(
       'https://example.invalid/billService',
     );
-    expect(result.endpoint_consult_service).toBe('(sin configurar)');
+    expect(result.endpoint_consult_service).toBeNull();
     expect(result).toMatchObject({
       origen_sol: 'company',
       origen_certificado: 'company',
@@ -47,7 +49,7 @@ describe('D1 public configuration projection and legacy fallback', () => {
     });
     expect(JSON.stringify(result)).not.toContain('obviously-fake');
     expect(JSON.stringify(result)).not.toContain('fake-password');
-    expect(certificates.getCertificate).toHaveBeenLastCalledWith(context);
+    expect(certificates.inspectCertificate).toHaveBeenLastCalledWith(context);
   });
   it.each(['PRODUCTION', 'PRODUCCION', 'BETA', 'MOCK', undefined])(
     'retains the legacy environment when no resolver is injected: %s',
@@ -68,11 +70,11 @@ describe('D1 public configuration projection and legacy fallback', () => {
           ? 'PRODUCCION'
           : value === 'BETA'
             ? 'BETA'
-            : 'MOCK',
+            : value === 'MOCK' ? 'MOCK' : null,
       );
       expect(result.sol_password_configurada).toBe(false);
       expect(result.cert_password_configurada).toBe(false);
-      expect(result.endpoint_bill_service).toBe('(sin configurar)');
+      expect(result.endpoint_bill_service).toBe(resolveEndpoint() || null);
     },
   );
   it('derives consult URL from deployment bill URL and reports a missing SOL password', async () => {
@@ -93,12 +95,12 @@ describe('D1 public configuration projection and legacy fallback', () => {
   });
   it('sanitizes certificate errors and reports missing context groups without using deployment secrets', async () => {
     const context = fakeIssuerContext('a', { sol: null, certificate: null });
-    const getCertificate = jest.fn(() => {
+    const inspectCertificate = jest.fn(() => {
       throw new Error('obviously-fake-sensitive-parser-error');
     });
     const result = await new InvoiceConfigService(
       { listar: async () => [] } as never,
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       { resolve: async () => context } as never,
     ).obtener('a');
     expect(result).toMatchObject({

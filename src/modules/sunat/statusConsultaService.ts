@@ -20,7 +20,7 @@ import { InvoiceStatus } from '../../generated/client/enums';
 import { CdrPersistenceService } from './cdr-persistence.service';
 import { parseCdr } from './soap/cdr.parser';
 import { classifyCdr } from './soap/cdr.classifier';
-import { buildSolUsername } from './soap/sunatBillTypes';
+import { buildSolUsername, endpointCoherente } from './soap/sunatBillTypes';
 import { SunatSoapClient, SunatTransportError } from './soap/sunat-soap.client';
 import { SUNAT_CODE_NO_ENCONTRADO } from './soap/sunatStatusCdrOperation';
 import type { ProcessCdrResult } from './soap/sunatBillTypes';
@@ -148,6 +148,8 @@ export class SunatStatusConsultaService {
         : undefined;
     if (context && context.ruc !== request.rucEmisor)
       throw new Error('ISSUER_IDENTITY_MISMATCH');
+    if (context && !endpointCoherente(context.environment, context.consultEndpoint))
+      return { tipo: 'INCIERTO', motivo: 'ISSUER_ENDPOINT_ENV_MISMATCH' };
     const cliente =
       this.client ??
       new SunatSoapClient({

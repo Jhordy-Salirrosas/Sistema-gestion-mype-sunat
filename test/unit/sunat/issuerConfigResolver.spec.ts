@@ -220,7 +220,7 @@ describe('D1 resolver boundary cases', () => {
           ? 'PRODUCCION'
           : value === 'BETA'
             ? 'BETA'
-            : 'MOCK',
+            : null,
       );
       expect(context.sol?.username).toBe('20000000001FAKE');
       expect(context.certificate).toBeNull();
