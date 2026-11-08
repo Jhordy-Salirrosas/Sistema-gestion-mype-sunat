@@ -46,7 +46,7 @@ SUNAT_BETA_SERIE=F001
 SUNAT_BETA_CORRELATIVO=<correlativo-no-utilizado>
 SUNAT_BETA_LEGAL_NAME=<razon-social-registrada-para-el-RUC>
 SUNAT_SOL_USER=MODDATOS
-SUNAT_SOL_PASSWORD=moddatos
+SUNAT_SOL_PASSWORD=CHANGE_ME
 ```
 
 Ejecuta únicamente bajo demanda:

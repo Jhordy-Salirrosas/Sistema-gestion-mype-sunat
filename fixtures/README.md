@@ -78,8 +78,8 @@ Los archivos se escriben en `fixtures/certs/`, que esta ignorado por git. Para
 usarlos:
 
     RUC_EMISOR=20123456786
-    CERT_PASSWORD=prueba-ta08
-    CERT_BASE64=<contenido de fixtures/certs/certificado-prueba.base64>
+    CERT_PASSWORD=CHANGE_ME
+    CERT_BASE64=CHANGE_ME
 
 ## Las pruebas
 

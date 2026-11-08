@@ -73,3 +73,11 @@ El generador requiere cabecera fiscal explícita, correlativo válido, forma de 
 Los datos de local anexo/ubicación que no consten requieren completar la configuración del emisor, nunca un backfill inventado. No se ha añadido una migración de datos ni se han modificado comprobantes históricos.
 
 La representación PDF toma importes registrados del payload/fila y del detalle, sin recalcular IGV global a partir de valores unitarios. No infiere el tipo de documento del cliente por longitud; omite el QR cuando le faltan datos, y muestra ausencia de nombres/moneda sin inventarlos. Un comprobante final sin su XML original ya no se vuelve a firmar durante la descarga como si fuera el archivo enviado: se informa la pérdida del original sin mutarlo.
+
+## Parte 10: monitor, logs y control de secretos
+
+El monitor usa la inspección de metadatos y calcula su vigencia en vivo: VENCIDO y AUN_NO_VIGENTE son estados críticos evaluados, no ausencia de datos. Los logs de fallo del repositorio Outbox y de alertas no vuelcan objetos/mensajes de error potencialmente sensibles.
+
+El control de secretos revisa contenido además de nombres: claves privadas, patrones de tokens y asignaciones literales de credenciales/certificado/clave de cifrado. Solo informa rutas y categorías, nunca el valor coincidente. Sus límites se explicitan: no certifica ausencia de otros secretos.
+
+No se modifica el alta de empresas de Auth ni se recifran datos históricos: homogeneizar el contrato de credenciales con ese escritor requiere autorización sobre el otro módulo y revisión de los datos en integración. Tampoco se leen credenciales del despliegue.

@@ -8,41 +8,42 @@ describe('D1 context consumers fail closed and preserve the company', () => {
   const context = fakeIssuerContext();
   it('checks the company certificate and scopes DLQ queries to that company', async () => {
     const resolve = jest.fn(async () => context);
-    const getCertificate = jest.fn(() => ({
+    const inspectCertificate = jest.fn(() => ({
+      validFrom: new Date('2020-01-01'),
       validTo: new Date('2099-01-01'),
       daysRemaining: 60,
     }));
     const countDlq = jest.fn(async () => 0),
       countDlqHuerfanos = jest.fn(async () => 0);
     const result = await new InvoiceAlertService(
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       { countDlq, countDlqHuerfanos } as never,
       { resolve } as never,
     ).estado(context.companyId);
     expect(result.certificado.evaluado).toBe(true);
     expect(resolve).toHaveBeenCalledWith(context.companyId);
-    expect(getCertificate).toHaveBeenCalledWith(context);
+    expect(inspectCertificate).toHaveBeenCalledWith(context);
     expect(countDlq).toHaveBeenCalledWith(context.companyId);
     expect(countDlqHuerfanos).toHaveBeenCalledWith(context.companyId);
   });
   it('reports an unusable certificate without substituting a deployment certificate', async () => {
-    const getCertificate = jest.fn(() => {
+    const inspectCertificate = jest.fn(() => {
       throw new Error('fake-cert-unavailable');
     });
     const result = await new InvoiceAlertService(
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       { countDlq: async () => 0, countDlqHuerfanos: async () => 0 } as never,
       { resolve: async () => context } as never,
     ).estado(context.companyId);
     expect(result.certificado.evaluado).toBe(false);
-    expect(getCertificate).toHaveBeenCalledTimes(1);
-    expect(getCertificate).toHaveBeenCalledWith(context);
+    expect(inspectCertificate).toHaveBeenCalledTimes(1);
+    expect(inspectCertificate).toHaveBeenCalledWith(context);
   });
   it('does not hide a fiscal configuration decryption failure behind alerts', async () => {
-    const getCertificate = jest.fn();
+    const inspectCertificate = jest.fn();
     const error = new Error('ISSUER_CONFIG_DECRYPTION_FAILED');
     const service = new InvoiceAlertService(
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       {} as never,
       {
         resolve: async () => {
@@ -51,7 +52,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       } as never,
     );
     await expect(service.estado(context.companyId)).rejects.toBe(error);
-    expect(getCertificate).not.toHaveBeenCalled();
+    expect(inspectCertificate).not.toHaveBeenCalled();
   });
   const download = (options: { saved?: string; error?: Error } = {}) => {
     const row = {

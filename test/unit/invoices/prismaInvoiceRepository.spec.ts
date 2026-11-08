@@ -134,10 +134,14 @@ describe('PrismaInvoiceRepository', () => {
   });
 
   it('lanza InternalServerErrorException si la transacción o el encolado fallan', async () => {
-    queueMock.enqueueInvoiceInTx.mockRejectedValue(new Error('Fallo en cola'));
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    queueMock.enqueueInvoiceInTx.mockRejectedValue(new Error('sensitive-fixture-outbox-error'));
 
     await expect(
       repository.saveWithTransactionalOutbox(invoiceEntity),
     ).rejects.toThrow(InternalServerErrorException);
+    expect(log).toHaveBeenCalledWith('OUTBOX_WRITE_FAILED: no se pudo registrar el comprobante ni su evento');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('sensitive-fixture');
+    log.mockRestore();
   });
 });

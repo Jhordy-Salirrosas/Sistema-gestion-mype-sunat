@@ -99,7 +99,7 @@ describe('TA-69 mensaje de la DLQ', () => {
 
 describe('TA-69 InvoiceAlertService', () => {
   const certificadoFalso = (diasRestantes: number, falla = false) => ({
-    getCertificate: jest.fn(() => {
+    inspectCertificate: jest.fn(() => {
       if (falla) throw new Error('Falta la variable de entorno CERT_BASE64');
       return {
         certificatePem: 'pem',
@@ -218,4 +218,38 @@ describe('TA-69 InvoiceAlertService', () => {
     expect(alerta.gravedad).toBe('OK');
     expect(alerta.huerfanos).toBe(3);
   });
+});
+
+it('el monitor conserva VENCIDO leyendo un certificado real de fixture aunque ya no pueda firmar', async () => {
+  const { fakeIssuerCertificate } = await import('../../fixtures/fakeIssuerCertificate');
+  const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+  const { CertificateService } = await import('../../../src/modules/sunat/certificate.service');
+  const forge = await import('node-forge');
+  const f = fakeIssuerCertificate();
+  f.cert.validity.notBefore = new Date(Date.now() - 10 * 86400000);
+  f.cert.validity.notAfter = new Date(Date.now() - 2 * 86400000);
+  f.cert.sign(f.keys.privateKey, forge.md.sha256.create());
+  const context = fakeIssuerContext('empresa', { certificate: { base64: f.p12(), password: 'obviously-fake-password' } });
+  const cert = new CertificateService();
+  const s = new InvoiceAlertService(cert, {} as never);
+  expect(s.estadoCertificado(context)).toMatchObject({ evaluado: true, estado: 'VENCIDO', gravedad: 'CRITICO', diasRestantes: -2 });
+  expect(() => cert.getCertificate(context)).toThrow(/vencido|vigente/);
+});
+it('el monitor no considera vigente un certificado futuro ni reutiliza días almacenados', async () => {
+ const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+ const service = new InvoiceAlertService({ inspectCertificate: () => ({ validFrom: new Date(Date.now() + 86400000), validTo: new Date(Date.now() + 60 * 86400000), daysRemaining: 999 }) } as never, {} as never);
+ expect(service.estadoCertificado(fakeIssuerContext())).toMatchObject({ evaluado: true, estado: 'AUN_NO_VIGENTE', gravedad: 'CRITICO', diasRestantes: 60 });
+});
+it('distingue un certificado ilegible sin poner el error sensible en la respuesta ni los logs', async () => {
+ const { Logger } = await import('@nestjs/common');
+ const { fakeIssuerContext } = await import('../../fixtures/issuerContext');
+ const log = jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
+ try {
+  const s = new InvoiceAlertService({ inspectCertificate: () => { throw new Error('sensitive-fixture-parser-error'); } } as never, {} as never);
+  const r = s.estadoCertificado(fakeIssuerContext('empresa', { certificate: { base64: 'fake', password: 'fake' } }));
+  expect(r.estado).toBe('INVALIDO');
+  expect(JSON.stringify(r)).not.toContain('sensitive-fixture');
+  expect(JSON.stringify(log.mock.calls)).not.toContain('sensitive-fixture');
+  expect(s.estadoCertificado(fakeIssuerContext('empresa', { certificate: null })).estado).toBe('NO_CONFIGURADO');
+ } finally { log.mockRestore(); }
 });

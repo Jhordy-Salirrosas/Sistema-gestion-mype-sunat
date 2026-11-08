@@ -98,7 +98,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
         });
       }
 
-      console.error('Error al registrar el comprobante:', error);
+      console.error('OUTBOX_WRITE_FAILED: no se pudo registrar el comprobante ni su evento');
 
       throw new InternalServerErrorException({
         code: 'OUTBOX_WRITE_FAILED',
