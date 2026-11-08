@@ -173,7 +173,7 @@ describe('M1 consulta de notas y datos fiscales reales', () => {
         cuotas: [
           null,
           {
-            monto: { toString: () => '59.25' },
+            monto: 59.25,
             vencimiento: '2026-12-07T12:00:00Z',
           },
         ],
@@ -184,7 +184,7 @@ describe('M1 consulta de notas y datos fiscales reales', () => {
       expect(map(datos)).toMatchObject({
         forma_pago: 'Credito',
         cuotas: [
-          { numero: 'Cuota001', monto: 59.25, vencimiento: '2026-12-07' },
+          { numero: null, monto: 59.25, vencimiento: '2026-12-07' },
         ],
         cdr_descripcion: 'Aceptado con observación',
       });
@@ -306,4 +306,12 @@ describe('M1 catálogo de productos para emisión', () => {
     });
     expect(consultas.catalogoProductos).toHaveBeenCalledWith(company);
   });
+});
+
+it('una cuota histórica incompleta no recibe número, monto ni fecha inventados', () => {
+  const r = aListado(fila({ payload_ubl: { formaPago: 'Credito', cuotas: [{}, { numero: 1, monto: '59', vencimiento: 'no consta' }, { numero: 'Cuota003', monto: 59, vencimiento: '2026-12-07T12:00:00Z' }] } }));
+  expect(r.cuotas).toEqual([{ numero: null, monto: null, vencimiento: null }, { numero: null, monto: null, vencimiento: null }, { numero: 'Cuota003', monto: 59, vencimiento: '2026-12-07' }]);
+});
+it('no atribuye datos de la nota al origen que no pudo recuperar', () => {
+  expect(aComprobanteOrigenFallback(fila({ referenced_series_correlative: 'F001-42', referenced_document_type: '01' }))).toMatchObject({ cliente_documento: null, cliente_nombre: null, monto_total: null, moneda: null });
 });

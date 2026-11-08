@@ -92,7 +92,7 @@ export interface CdrDto {
   codigo: string | null;
   descripcion: string | null;
   fecha_respuesta: string | null;
-  observaciones: Array<{ codigo: string | null; texto: string }>;
+  observaciones: Array<{ codigo: string | null; texto: string | null }>;
 }
 
 /** Detalle completo de un comprobante (GET /invoices/:id). */
@@ -151,10 +151,10 @@ export interface ComprobanteDetalleDto extends ComprobanteListadoDto {
 /** Una cuota tal como viajó en el `cac:PaymentTerms` del XML. */
 export interface CuotaEnviadaDto {
   /** `Cuota001`, `Cuota002`…, el `PaymentMeansID` del XML. */
-  numero: string;
-  monto: number;
+  numero: string | null;
+  monto: number | null;
   /** Vencimiento en formato corto (`YYYY-MM-DD`). */
-  vencimiento: string;
+  vencimiento: string | null;
 }
 
 /** Respuesta del reintento de CDR. */

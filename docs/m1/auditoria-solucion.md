@@ -63,3 +63,13 @@ La inspección del certificado es distinta de la autorización para firmar: cons
 El entorno se normaliza en un solo lugar, incluidos PRODUCCION/PRODUCTION y mayúsculas. Si falta, se expone null, sin declarar MOCK ni dirigir implícitamente a BETA. Se comprueba que los hosts efectivos correspondan al entorno antes de transportar credenciales. MOCK solo admite loopback. La configuración pública elimina credenciales y parámetros de las URLs y no declara listo_para_emitir con validación oficial incompleta.
 
 `tipo_comprobante_predeterminado` se calcula desde commercial_profile: MAYORISTA=01, MINORISTA=03, sin perfil=null. La preselección visual sigue dependiendo del repositorio de frontend. La disponibilidad efectiva de las operaciones SOAP de consulta BETA sigue sin verificarse en red.
+
+## Parte 9: proyecciones y regeneración sin datos inventados
+
+Las cuotas históricas incompletas conservan campos null; no se asigna Cuota001 ni se inventa fecha o monto. El origen no recuperado no hereda el cliente ni la moneda de la nota. Los textos desconocidos del CDR quedan null.
+
+El generador requiere cabecera fiscal explícita, correlativo válido, forma de pago registrada para ventas, referencia y motivo de notas, y líneas reales. No rellena F001, 1, PEN, Contado, 10:00 ni Servicio prestado. La hora desconocida se omite. No se presume ubigeo 150101 ni local anexo 0000. Esta limpieza no convierte las comprobaciones internas en validación oficial: los datos obligatorios que falten deberán ser rechazados por esa frontera, que sigue cerrada a envíos externos.
+
+Los datos de local anexo/ubicación que no consten requieren completar la configuración del emisor, nunca un backfill inventado. No se ha añadido una migración de datos ni se han modificado comprobantes históricos.
+
+La representación PDF toma importes registrados del payload/fila y del detalle, sin recalcular IGV global a partir de valores unitarios. No infiere el tipo de documento del cliente por longitud; omite el QR cuando le faltan datos, y muestra ausencia de nombres/moneda sin inventarlos. Un comprobante final sin su XML original ya no se vuelve a firmar durante la descarga como si fuera el archivo enviado: se informa la pérdida del original sin mutarlo.

@@ -10,7 +10,8 @@ import { join } from 'node:path';
 const xml = new UblGeneratorService().generateInvoiceXml({
   rucEmisor: '20601012341', razonSocialEmisor: 'Empresa de prueba',
   tipoComprobante: '01', serie: 'F001', numero: 57,
-  fechaEmision: '2026-10-20', tipoMoneda: 'PEN',
+  fechaEmision: '2026-10-20', tipoMoneda: 'PEN', tipoOperacion: '0101', formaPago: 'Contado',
+  lineas: [{ id: 1, descripcion: 'Producto de prueba', unidad: 'NIU', cantidad: 1, valorUnitario: 1000, afectacion: '10', totalLinea: 1180, igvLinea: 180 }],
   cliente: { tipoDocumento: '6', numeroDocumento: '20100070970', razonSocial: 'Cliente de prueba' },
   montoGravado: 1000, montoIgv: 180, montoTotal: 1180,
 }).replace('</Invoice>', '<ds:Signature/></Invoice>');

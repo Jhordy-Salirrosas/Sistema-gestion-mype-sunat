@@ -556,3 +556,8 @@ describe('M1 precisión decimal e ICBPER desde cantidades', () => {
     expect(() => traducirEmision(formulario({ items: [linea({ afectacion: undefined })] }), emisor, 1)).toThrow(/afectación/);
   });
 });
+it('una línea exportada conserva su afectación y no se reetiqueta como gravada', () => {
+ const r = traducirEmision(formulario({ items: [linea({ afectacion: '40', precioUnitario: 100 })] }), emisor, 1);
+ expect(r.importes).toMatchObject({ gravado: 0, igv: 0, total: 100 });
+ expect(r.lineas[0]).toMatchObject({ afectacion: '40', igvLinea: 0, totalLinea: 100 });
+});

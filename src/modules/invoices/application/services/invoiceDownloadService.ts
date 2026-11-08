@@ -130,6 +130,7 @@ export class InvoiceDownloadService {
     if (esXml) {
       texto = guardado;
     } else {
+      if (['ACEPTADO', 'OBSERVADO', 'ANULADO'].includes(fila.estado)) throw new NotFoundException('XML original no conservado: no se reconstruye un comprobante final como si fuera el enviado a SUNAT');
       texto = this.regenerarXmlFirmado(fila, context);
       // Se persiste para no volver a firmar en cada descarga. El servicio de
       // guardado nunca lanza: si la base falla, se entrega el XML firmado
@@ -200,6 +201,8 @@ export class InvoiceDownloadService {
         fecha_emision: true,
         estado: true,
         currency_code: true,
+        monto_total: true,
+        customer_identity_type: true,
         payload_ubl: true,
         xml_storage_url: true,
         cdr_storage_url: true,
@@ -352,25 +355,25 @@ export class InvoiceDownloadService {
     let gravado = 0;
     let exonerado = 0;
     let inafecto = 0;
+    let igvGuardado = 0;
 
     for (const item of fila.items) {
       const afectacion = item.igv_affectation_type;
       if (gratuitas.has(afectacion)) continue;
 
-      const valor = Number(item.quantity) * Number(item.unit_value);
+      const valor = Number(item.total_amount) - Number(item.igv_amount);
       if (!Number.isFinite(valor)) continue;
 
-      if (afectacion.startsWith('10')) gravado += valor;
+      if (afectacion === '10') { gravado += valor; igvGuardado += Number(item.igv_amount); }
       else if (afectacion.startsWith('2')) exonerado += valor;
       else if (afectacion.startsWith('3') || afectacion.startsWith('4')) {
         inafecto += valor;
       }
     }
 
-    const gravadoR = centimos(gravado);
-    const igv = centimos(gravadoR * 0.18);
-
     const payload = (fila.payload_ubl ?? {}) as Record<string, unknown>;
+    const gravadoR = typeof payload.montoGravado === 'number' ? payload.montoGravado : centimos(gravado);
+    const igv = typeof payload.montoIgv === 'number' ? payload.montoIgv : centimos(igvGuardado);
     const detraccion = Number(payload['montoDetraccion'] ?? 0) || 0;
 
     // El ICBPER es el impuesto a las bolsas plásticas, NO el IGV. Antes se
@@ -378,12 +381,14 @@ export class InvoiceDownloadService {
     // bolsas imprimía "ICBPER 18.00" y el total se iba a S/ 136. El importe real
     // de las bolsas solo existe en el payload cuando se emitieron.
     const icbper = centimos(
-      Number(payload['icbper'] ?? payload['montoIcbper'] ?? 0) || 0,
+      Number(payload['icbper'] ?? payload['montoIcbper'] ?? (Array.isArray(payload.lineas) ? payload.lineas.reduce((s, l) => s + Number(l?.icbperLinea ?? 0), 0) : 0)) || 0,
     );
-    const total = centimos(gravadoR + igv + exonerado + inafecto + icbper);
+    const total = fila.monto_total !== undefined && fila.monto_total !== null ? Number(fila.monto_total) : typeof payload.montoTotal === 'number' ? payload.montoTotal : centimos(gravadoR + igv + exonerado + inafecto + icbper);
+    const tipoDocCliente = fila.customer_identity_type;
+    const hashCpe = typeof payload.hashCpe === 'string' ? payload.hashCpe : /<(?:\w+:)?DigestValue[^>]*>([^<]+)</.exec(fila.xml_storage_url ?? '')?.[1]?.trim();
 
     const fecha = fila.fecha_emision.toISOString().slice(0, 10);
-    const qrBase64 = await this.qr.generarPng({
+    const qrBase64 = tipoDocCliente && fila.customer_identity_number && hashCpe ? await this.qr.generarPng({
       rucEmisor: fila.ruc_emisor,
       tipoComprobante: fila.tipo_comprobante,
       serie: fila.serie,
@@ -391,25 +396,22 @@ export class InvoiceDownloadService {
       igv,
       total,
       fechaEmision: fecha,
-      tipoDocCliente:
-        String(fila.customer_identity_number ?? '').length === 11 ? '6' : '1',
+      tipoDocCliente,
       numDocCliente: fila.customer_identity_number ?? '',
-      hashCpe: String(payload['hashCpe'] ?? ''),
-    });
+      hashCpe,
+    }) : '';
 
     return {
       rucEmisor: fila.ruc_emisor,
-      razonSocialEmisor: String(
-        payload['razonSocialEmisor'] ?? 'EMPRESA EMISORA',
-      ),
+      razonSocialEmisor: typeof payload.razonSocialEmisor === 'string' ? payload.razonSocialEmisor : null,
       direccionEmisor: payload['direccionEmisor'] as string | undefined,
       tipoComprobante: fila.tipo_comprobante,
       serie: fila.serie,
       correlativo: fila.correlativo,
       fechaEmision: fecha,
-      moneda: fila.currency_code ?? 'PEN',
-      clienteRazonSocial: fila.customer_legal_name ?? 'CLIENTE',
-      clienteDocumento: fila.customer_identity_number ?? '',
+      moneda: fila.currency_code ?? null,
+      clienteRazonSocial: fila.customer_legal_name ?? null,
+      clienteDocumento: fila.customer_identity_number ?? null,
       nombreTipo:
         NOMBRE_TIPO[fila.tipo_comprobante] ?? 'COMPROBANTE ELECTRÓNICO',
       lineas,

@@ -71,6 +71,7 @@ function factura(
     fechaEmision: '2026-10-31',
     tipoOperacion: '0101',
     tipoMoneda: 'PEN',
+    formaPago: 'Contado',
     cliente: {
       tipoDocumento: '6',
       numeroDocumento: '20100066603',

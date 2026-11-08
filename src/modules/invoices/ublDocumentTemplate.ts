@@ -89,7 +89,7 @@ ${p.extensiones}
   <cbc:CustomizationID>2.0</cbc:CustomizationID>
   <cbc:ID>${p.documentoId}</cbc:ID>
   <cbc:IssueDate>${p.fecha}</cbc:IssueDate>
-  <cbc:IssueTime>${p.hora}</cbc:IssueTime>
+${p.hora ? `  <cbc:IssueTime>${p.hora}</cbc:IssueTime>\n` : ''}
   <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>${p.notas}
   <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.referenciaNota ? `\n${p.referenciaNota}` : ''}
 ${p.emisor}${p.cliente}${p.mediosPago ? `\n${p.mediosPago}` : ''}

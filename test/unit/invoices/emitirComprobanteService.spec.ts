@@ -781,10 +781,10 @@ describe('Corrección 6 — Comprobante origen colgado de la nota', () => {
       serie: 'F001',
       correlativo: 42,
       numero: 'F001-00000042',
-      cliente_documento: '20100070970',
-      cliente_nombre: 'FERRETERÍA LOS ANDES S.A.C.',
+      cliente_documento: null,
+      cliente_nombre: null,
       monto_total: null,
-      moneda: 'PEN',
+      moneda: null,
     });
   });
 });

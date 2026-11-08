@@ -32,6 +32,9 @@ describe('InvoiceWorkerService - TA-11 Pipeline Worker', () => {
     numero: 42,
     fechaEmision: '2026-10-15',
     tipoMoneda: 'PEN',
+    tipoOperacion: '0101',
+    formaPago: 'Contado',
+    lineas: [{ id: 1, codigo: 'TEST', descripcion: 'Producto de prueba', unidad: 'NIU', cantidad: 1, valorUnitario: 100, precioUnitario: 118, afectacion: '10', totalLinea: 118, igvLinea: 18 }],
     cliente: {
       tipoDocumento: '6',
       numeroDocumento: '20100070970',
