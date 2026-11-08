@@ -80,6 +80,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo(), { esperaMs: 0 });
@@ -120,6 +121,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo(), { esperaMs: 0 });
@@ -147,6 +149,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo(), {
@@ -177,6 +180,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo(), { esperaMs: 0 });
@@ -198,6 +202,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo(), { esperaMs: 0 });
@@ -217,6 +222,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo(), { esperaMs: 0 });
@@ -235,6 +241,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const servicio = new SummaryDispatchService(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
+        { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
       );
 
       const resultado = await servicio.procesar(jobDeEjemplo({ zipBase64: '' }), {

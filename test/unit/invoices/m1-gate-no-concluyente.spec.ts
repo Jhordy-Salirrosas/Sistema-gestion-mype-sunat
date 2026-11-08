@@ -33,9 +33,10 @@ function escenario(documento: string, resultadoXsl = inconcluso, xslReal?: Sunat
   const consumidor = new InvoiceJobConsumer(
     {} as never, { processWithRetry: enviar } as never,
     { invoice: { findUnique: jest.fn(async () => fila), update: jest.fn(async () => ({})) } } as never,
-    {} as never, validar, {} as never, xslReal ?? ({ validar: validarXsl } as never),
+    {} as never, validar, { verifySignature: jest.fn(() => true) } as never, xslReal ?? ({ validar: validarXsl } as never),
     { persistFailure: auditar } as never, {} as never,
-    { guardar: jest.fn(async () => null) } as never,
+    { guardar: jest.fn(async () => 'hash-fixture') } as never,
+    undefined, { resolve: jest.fn(async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService' })) } as never,
   );
   return { consumidor, enviar, auditar, comprobar };
 }

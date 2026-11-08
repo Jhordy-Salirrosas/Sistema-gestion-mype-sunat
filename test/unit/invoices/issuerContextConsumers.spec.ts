@@ -75,11 +75,11 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       { generateInvoiceXml: () => '<Invoice/>' } as never,
       {} as never,
       {} as never,
-      { signXml } as never,
+      { verifySignature: jest.fn(() => true), signXml } as never,
       { guardar } as never,
       { resolve } as never,
     );
-    return { service, findFirst, signXml, guardar, resolve };
+    return { verifySignature: jest.fn(() => true), service, findFirst, signXml, guardar, resolve };
   };
   it('regenerates downloads with the resolved issuer and stores that exact signed XML', async () => {
     const h = download();
@@ -146,7 +146,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
           vistaComunicacionBaja: async () => view,
         } as never,
         { encolar } as never,
-        { signXml } as never,
+        { verifySignature: jest.fn(() => true), signXml } as never,
         {
           company: { findUnique: async () => ({ ruc: context.ruc }) },
         } as never,
@@ -176,7 +176,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
     const service = new SummaryEnvioService(
       { vistaResumenDiario: async () => view } as never,
       { encolar } as never,
-      { signXml } as never,
+      { verifySignature: jest.fn(() => true), signXml } as never,
       { company: { findUnique: async () => ({ ruc: context.ruc }) } } as never,
       {
         resolve: async () => {
@@ -210,7 +210,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
         } as never,
         { generateInvoiceXml: () => '<Invoice/>' } as never,
         { validateInvoiceUbl21: () => ({ isValid: true }) } as never,
-        { signXml } as never,
+        { verifySignature: jest.fn(() => true), signXml } as never,
         { resolve } as never,
       );
       const result = await worker.processInvoiceJob({

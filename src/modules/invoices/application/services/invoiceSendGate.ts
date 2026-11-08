@@ -127,6 +127,10 @@ export async function decidirEnvio(
   validator: SunatXslValidatorService,
   persistence: CdrPersistenceService,
 ): Promise<DecisionCompuerta> {
+  const localMock = esMockLocal(params.context);
+  if (bypassDemoActivo() && !localMock) {
+    throw new ErrorValidacionBloqueada('El bypass XSL solo se permite contra un mock local explícito', 'BYPASS_NO_PERMITIDO');
+  }
   if (bypassDemoActivo()) {
     await registrarOmisionDemo(params, persistence);
     return { bloqueo: null, omitidaPorDemo: true };
@@ -139,6 +143,8 @@ export async function decidirEnvio(
     !resultado.bloqueado && !resultado.valido && !resultado.validadoDeVerdad &&
     resultado.errores.length === 0
   ) {
+    if (!localMock) throw new ErrorValidacionBloqueada(
+      'Validación oficial no disponible: falta validate_utils.xsl; envío real bloqueado', 'VALIDACION_OFICIAL_NO_DISPONIBLE');
     return { bloqueo: null, omitidaPorDemo: false, noConcluyente: true };
   }
 
@@ -149,7 +155,7 @@ export async function decidirEnvio(
     );
   }
 
-  if (resultado.valido) return { bloqueo: null, omitidaPorDemo: false };
+  if (resultado.valido && resultado.validadoDeVerdad !== false) return { bloqueo: null, omitidaPorDemo: false };
 
   const detalle = resultado.errores
     .map((error) => `${error.codigo}: ${error.mensaje}`)
@@ -215,4 +221,13 @@ async function registrarOmisionDemo(
   } catch {
     // Silencio deliberado: ver el comentario de la función.
   }
+}
+
+export function esMockLocal(context?: { environment: string | null; endpoint: string }): boolean {
+  const endpoint = context?.endpoint;
+  let localMock = false;
+  if (context?.environment === 'MOCK' && endpoint) {
+    try { localMock = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(endpoint).hostname); } catch { /* no es un endpoint de pruebas válido */ }
+  }
+  return localMock;
 }

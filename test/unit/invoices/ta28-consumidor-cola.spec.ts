@@ -92,7 +92,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
     { invoice: { findUnique, update } } as never,
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
-    { signXml } as never,
+    { verifySignature: jest.fn(() => true), signXml } as never,
     // TA-58: el consumidor ahora aplica la compuerta XSL antes de enviar.
     // Aqui se devuelve "valido" para que estas pruebas sigan midiendo lo suyo
     // (recarga del payload, firma y empaquetado) y no la compuerta.
@@ -112,7 +112,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
     { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );
 
-  return {
+  return { verifySignature: jest.fn(() => true),
     consumidor,
     registerInvoiceWorker,
     processWithRetry,
@@ -294,7 +294,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
         accountingEntry: { findFirst: jest.fn(async () => null) } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
-      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
       // TA-58: compuerta XSL, aquí siempre "válido".
       {
         validar: jest.fn(async () => ({
@@ -348,7 +348,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
       { invoice: { findUnique, update: jest.fn() } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
-      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null })) } as never,
       { persistFailure: jest.fn() } as never, { registrar } as never,
       { guardar: jest.fn(async () => 'hash') } as never, accounting as never,
@@ -369,7 +369,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
       { invoice: { findUnique, update: jest.fn() } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
-      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null })) } as never,
       { persistFailure: jest.fn() } as never, { registrar } as never,
       { guardar: jest.fn(async () => 'hash') } as never,

@@ -228,12 +228,19 @@ export class SignatureService {
       const sigVal =
         sigValueNode?.textContent || sigValueNode?.firstChild?.nodeValue;
 
-      return Boolean(
-        digest &&
-        sigVal &&
-        digest.trim().length > 0 &&
-        sigVal.trim().length > 0,
-      );
+      if (!digest?.trim() || !sigVal?.trim()) return false;
+      const nodes = doc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'Signature');
+      if (nodes.length !== 1) return false;
+      const certificate = doc.getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'X509Certificate')[0]?.textContent;
+      if (!certificate?.trim()) return false;
+      const verifier = new SignedXml({
+        publicCert: `-----BEGIN CERTIFICATE-----\n${certificate.trim()}\n-----END CERTIFICATE-----`,
+      });
+      verifier.loadSignature(new XMLSerializer().serializeToString(signatureNode));
+      // Una firma del documento completo, sin referencias externas ni firmas parciales.
+      const refs = verifier.getReferences();
+      if (refs.length !== 1 || refs[0].uri !== '') return false;
+      return verifier.checkSignature(signedXml);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Validación de firma fallida: ${message}`);

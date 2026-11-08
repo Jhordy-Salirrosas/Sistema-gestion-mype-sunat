@@ -679,6 +679,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     // Va antes de la compuerta XSL para que la copia exista incluso si el envío
     // se bloquea: el documento firmado ya es un hecho y hay que poder auditarlo.
     const hashGuardado = await this.xmlFirmado.guardar(invoiceId, xml);
+    if (!hashGuardado) throw new ErrorValidacionBloqueada('No se pudo persistir el XML firmado', 'XML_NO_PERSISTIDO');
     if (hashGuardado) {
       this.logger.log(
         `XML firmado de ${invoice.serie}-${invoice.correlativo} guardado (sha256 ${hashGuardado.slice(0, 16)}…)`,
@@ -803,20 +804,25 @@ export class InvoiceJobConsumer implements OnModuleInit {
     return xml;
   }
 
-  /** Firma XMLDSig X.509. Sin certificado configurado el XML viaja sin firmar. */
+  /** Firma XMLDSig X.509. Sin certificado o firma verificable el despacho se bloquea. */
   private firmar(
     invoice: InvoiceRow,
     xml: string,
     context?: IssuerContext,
   ): string {
-    if (xml.includes('<ds:Signature')) return xml;
-    if (context ? !context.certificate : !process.env.CERT_BASE64) {
-      this.logger.warn(
-        `[TA-28] ${invoice.id} viaja SIN firma: CERT_BASE64 no esta configurado`,
-      );
+    if (xml.includes('<ds:Signature')) {
+      if (!this.signature.verifySignature(xml)) throw new Error('Firma XML guardada inválida');
       return xml;
     }
-    return this.signature.signXml(xml, context).signedXml;
+    if (context ? !context.certificate : !process.env.CERT_BASE64) {
+      this.logger.warn(
+        `[TA-28] ${invoice.id} despacho bloqueado: CERT_BASE64 no esta configurado`,
+      );
+      throw new Error('Certificado no configurado: no se permite despachar XML sin firma');
+    }
+    const signed = this.signature.signXml(xml, context).signedXml;
+    if (!this.signature.verifySignature(signed)) throw new Error('Firma XML generada inválida');
+    return signed;
   }
 
   /** Empaqueta en el ZIP con la convencion de nombre que espera SUNAT. */
