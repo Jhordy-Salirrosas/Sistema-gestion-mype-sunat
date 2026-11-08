@@ -1,3 +1,4 @@
+import { InvoiceSunatConsultController } from './infrastructure/controllers/invoiceSunatConsultController';
 import { AtomicInvoiceCreationService } from './application/services/atomicInvoiceCreationService';
 import { IssuerConfigWriter } from './application/services/issuerConfigWriter';
 import { Module } from '@nestjs/common';
@@ -62,6 +63,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    InvoiceSunatConsultController,
     InvoicesController,
     // ORDEN IMPORTANTE. `InvoiceQueryController` declara `GET :id`, que actúa
     // como comodín y se traga cualquier segmento. Nest registra las rutas en el

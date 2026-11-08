@@ -1,3 +1,4 @@
+import { assertCdrReference } from './soap/cdrReferenceGuard';
 import { IssuerConfigResolver } from './issuerConfigResolver';
 /**
  * Orquestacion de TA-03: XML firmado -> peticion SOAP -> CDR -> estado.
@@ -165,6 +166,7 @@ export class SunatBillService {
       }
 
       const cdr = parseCdr(applicationResponse);
+      assertCdrReference(cdr, params);
       const clasificacion = classifyCdr(cdr);
 
       this.logger.log(

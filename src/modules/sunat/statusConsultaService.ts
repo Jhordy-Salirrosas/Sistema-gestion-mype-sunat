@@ -1,3 +1,4 @@
+import { assertCdrReference } from './soap/cdrReferenceGuard';
 import { IssuerConfigResolver } from './issuerConfigResolver';
 /**
  * Recuperación de un envío que quedó en timeout (TA-30).
@@ -215,6 +216,7 @@ export class SunatStatusConsultaService {
     tiempoRespuestaMs: number,
   ): Promise<ProcessCdrResult> {
     const cdr = parseCdr(applicationResponse);
+    assertCdrReference(cdr, request);
     const clasificacion = classifyCdr(cdr);
 
     const estadoAnterior = await this.estadoActual(request.invoiceId);

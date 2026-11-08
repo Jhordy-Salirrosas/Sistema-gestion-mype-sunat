@@ -205,3 +205,12 @@ describe('CdrPersistenceService', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
+it('condiciona las escrituras para impedir degradar finales concurrentes', async () => {
+  const { prisma, llamadas } = createPrismaStub();
+  await new CdrPersistenceService(prisma).persistFailure({ invoiceId: 'i', estadoNuevo: InvoiceStatus.ENVIADO,
+    estadoAnterior: InvoiceStatus.EN_COLA, intento: 1, codigoError: 'TIMEOUT', mensajeError: 'incierto', tiempoRespuestaMs: null });
+  expect(llamadas.invoiceUpdate[0]).toMatchObject({ where: { id: 'i', OR: [
+    { estado: { notIn: [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
+    { estado: InvoiceStatus.ENVIADO },
+  ] } });
+});

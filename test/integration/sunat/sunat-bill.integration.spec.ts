@@ -106,6 +106,12 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
     );
   });
 
+  function serviceForScenario(scenario: string) {
+    return SunatBillService.create(persistence as never, new SunatSoapClient({
+      endpoint: `${baseUrl}/api/v1/mocks/sunat/billService?scenario=${scenario}`,
+    }));
+  }
+
   it('envia el sobre SOAP y procesa un CDR ACEPTADO de punta a punta', async () => {
     const resultado = await service.sendAndProcess(paramsBase);
 
@@ -126,10 +132,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
   });
 
   it('procesa un CDR RECHAZADO (2xxx) sin marcarlo como reintentable', async () => {
-    const resultado = await service.sendAndProcess({
-      ...paramsBase,
-      serie: 'RECHAZADO',
-    });
+    const resultado = await serviceForScenario('RECHAZADO').sendAndProcess(paramsBase);
 
     expect(resultado.responseCode).toBe('2326');
     expect(resultado.estado).toBe(InvoiceStatus.RECHAZADO);
@@ -142,10 +145,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
   });
 
   it('procesa un CDR ACEPTADO CON OBSERVACIONES (codigo 0 + Note)', async () => {
-    const resultado = await service.sendAndProcess({
-      ...paramsBase,
-      serie: 'OBSERVACION',
-    });
+    const resultado = await serviceForScenario('OBSERVACION').sendAndProcess(paramsBase);
 
     expect(resultado.responseCode).toBe('0');
     expect(resultado.clasificacion.kind).toBe('ACEPTADO_CON_OBSERVACIONES');
@@ -155,10 +155,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
   });
 
   it('procesa una EXCEPCION 0100 como error recuperable', async () => {
-    const resultado = await service.sendAndProcess({
-      ...paramsBase,
-      serie: 'EXCEPCION',
-    });
+    const resultado = await serviceForScenario('EXCEPCION').sendAndProcess(paramsBase);
 
     expect(resultado.responseCode).toBe('0100');
     expect(resultado.clasificacion.kind).toBe('EXCEPCION');
@@ -322,7 +319,7 @@ describe('TA-03 - integracion contra el Mock del billService', () => {
   });
 
   it('persiste la observacion 4031 cuando el CDR viene observado', async () => {
-    await service.sendAndProcess({ ...paramsBase, serie: 'OBSERVACION' });
+    await serviceForScenario('OBSERVACION').sendAndProcess(paramsBase);
 
     expect(persistence.persisted).toHaveLength(1);
     const guardado = persistence.persisted[0];
