@@ -466,3 +466,71 @@ describe('traducirEmision — avisos honestos', () => {
     expect(avisos).toHaveLength(0);
   });
 });
+
+describe('M1 desglose de precio final', () => {
+  it('preserva céntimos del precio final al multiplicar cantidades sin acumular el redondeo de base unitaria', () => {
+    const { lineas, importes } = traducirEmision(
+      formulario({
+        items: [linea({ precioUnitario: 10, valorUnitario: 999, cantidad: 3 })],
+      }),
+      emisor,
+      1,
+    );
+    expect(lineas[0]).toMatchObject({
+      precioUnitario: 10,
+      valorUnitario: 8.47,
+      totalLinea: 30,
+      igvLinea: 4.58,
+    });
+    expect(importes).toMatchObject({ gravado: 25.42, igv: 4.58, total: 30 });
+  });
+  it.each(['20', '30'])(
+    'precio final en afectación %s no extrae IGV',
+    (afectacion) => {
+      const { lineas, importes } = traducirEmision(
+        formulario({
+          items: [
+            linea({
+              afectacion,
+              precioUnitario: 118,
+              valorUnitario: 999,
+              cantidad: 2,
+            }),
+          ],
+        }),
+        emisor,
+        1,
+      );
+      expect(lineas[0]).toMatchObject({
+        precioUnitario: 118,
+        valorUnitario: 118,
+        totalLinea: 236,
+        igvLinea: 0,
+      });
+      expect(importes.total).toBe(236);
+      expect(importes.igv).toBe(0);
+    },
+  );
+  it('descuenta sobre la base extraída del precio con IGV', () => {
+    const { lineas, importes } = traducirEmision(
+      formulario({
+        items: [
+          linea({
+            precioUnitario: 118,
+            cantidad: 2,
+            descuento: { codigo: '00', monto: 20 },
+          }),
+        ],
+      }),
+      emisor,
+      1,
+    );
+    expect(lineas[0]).toMatchObject({
+      valorUnitario: 100,
+      precioUnitario: 118,
+      totalLinea: 212.4,
+      igvLinea: 32.4,
+    });
+    expect(importes.total).toBe(212.4);
+  });
+});

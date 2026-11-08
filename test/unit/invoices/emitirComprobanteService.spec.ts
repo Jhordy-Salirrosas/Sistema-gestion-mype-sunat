@@ -845,3 +845,159 @@ describe('Corrección 7 — Bajas y Resúmenes con tipo, estado SUNAT y marca re
     );
   });
 });
+
+describe('M1 permisos antes de reservar correlativo', () => {
+  const credito = () =>
+    factura({
+      forma_pago: 'Credito',
+      fecha_emision: '2026-11-01',
+      cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+    });
+  it.each([
+    {
+      id: 'cliente',
+      has_credit: false,
+      payment_terms: '30_DIAS',
+      is_active: true,
+    },
+    {
+      id: 'cliente',
+      has_credit: null,
+      payment_terms: 'CONTADO',
+      is_active: true,
+    },
+    { id: 'cliente', has_credit: true, is_active: false },
+    null,
+  ])('rechaza crédito sin permiso efectivo: %j', async (partner) => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue(partner);
+    await expect(h.servicio.emitir(credito(), COMPANY_ID)).rejects.toThrow(
+      /crédito habilitado/,
+    );
+    expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(h.repositorio.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+  });
+
+  it('consulta permiso dentro de la empresa y persiste cuotas cuando has_credit es true', async () => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cliente',
+      has_credit: true,
+      is_active: true,
+    });
+    await h.servicio.emitir(credito(), COMPANY_ID);
+    expect(h.prisma.businessPartner.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          company_id: COMPANY_ID,
+          doc_type: '6',
+          doc_number: '20100070970',
+        },
+      }),
+    );
+    expect(h.creadas[0].payload_ubl).toMatchObject({
+      formaPago: 'Credito',
+      cuotas: [
+        expect.objectContaining({ monto: 118, vencimiento: '2026-12-01' }),
+      ],
+    });
+  });
+
+  it.each([false, null, undefined, true])(
+    'rechaza descuento de línea sin cliente activo autorizado (flag %s)',
+    async (allows_discount) => {
+      const h = montar();
+      h.prisma.businessPartner.findFirst.mockResolvedValue({
+        id: 'cliente',
+        allows_discount,
+        is_active: allows_discount === true ? false : true,
+      });
+      const dto = factura();
+      dto.items[0].descuento = { codigo: '00', monto: 10 };
+      await expect(h.servicio.emitir(dto, COMPANY_ID)).rejects.toThrow(
+        /no admite descuento/,
+      );
+      expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+      expect(h.repositorio.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+    },
+  );
+
+  it('descuento de línea autorizado usa base sin IGV del precio final y persiste precio y afectación', async () => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cliente',
+      allows_discount: true,
+      is_active: true,
+    });
+    const dto = factura({
+      items: [
+        {
+          descripcion: 'Producto',
+          codigo: 'SKU',
+          cantidad: 2,
+          valorUnitario: 999,
+          precioUnitario: 118,
+          afectacion: '10',
+          descuento: { codigo: '00', monto: 20 },
+        },
+      ],
+    });
+    await h.servicio.emitir(dto, COMPANY_ID);
+    expect(h.lineasGuardadas[0]).toMatchObject({
+      unit_value: 100,
+      unit_price: 118,
+      igv_amount: 32.4,
+      total_amount: 212.4,
+      igv_affectation_type: '10',
+    });
+    expect(h.stock.validar).toHaveBeenCalledWith(COMPANY_ID, [
+      expect.objectContaining({ codigo: 'SKU', afectacion: '10' }),
+    ]);
+  });
+
+  it('un descuento superior a la base desglosada del precio final se rechaza antes de consultar permisos', async () => {
+    const h = montar();
+    const dto = factura({
+      items: [
+        {
+          descripcion: 'Producto',
+          cantidad: 1,
+          valorUnitario: 999,
+          precioUnitario: 118,
+          afectacion: '10',
+          descuento: { codigo: '00', monto: 101 },
+        },
+      ],
+    });
+    await expect(h.servicio.emitir(dto, COMPANY_ID)).rejects.toThrow(
+      /Descuento inválido/,
+    );
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ has_credit: true }),
+      }),
+    );
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ allows_discount: true }),
+      }),
+    );
+    expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+  });
+
+  it('venta sin crédito ni descuentos no consulta permisos comerciales', async () => {
+    const h = montar();
+    await h.servicio.emitir(factura({ forma_pago: 'Contado' }), COMPANY_ID);
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ has_credit: true }),
+      }),
+    );
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ allows_discount: true }),
+      }),
+    );
+    expect(h.creadas).toHaveLength(1);
+  });
+});

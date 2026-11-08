@@ -265,3 +265,52 @@ describe('D1 issuer configuration write boundary', () => {
     });
   });
 });
+
+describe('M1 perfil comercial persistido y resuelto', () => {
+  const originalEnv = { ...process.env };
+  beforeEach(() => {
+    process.env.ISSUER_CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString(
+      'base64',
+    );
+  });
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it('una actualización sin perfil conserva el existente y null lo elimina explícitamente', async () => {
+    const h = issuerConfigHarness();
+    h.company.commercial_profile = 'MAYORISTA';
+    await h.writer.save(h.company.id, { entorno: 'BETA' });
+    expect(h.company.commercial_profile).toBe('MAYORISTA');
+    await h.writer.save(h.company.id, { perfil_comercial: null });
+    expect(h.company.commercial_profile).toBeNull();
+    expect(
+      (await h.resolver.resolve(h.company.id)).commercialProfile,
+    ).toBeNull();
+  });
+
+  it.each([' mayorista ', 'minorista', 'DESCONOCIDO', null])(
+    'resuelve perfil %s antes de activar configuración propia',
+    async (perfil) => {
+      const h = issuerConfigHarness();
+      h.company.commercial_profile = perfil;
+      const context = await h.resolver.resolve(h.company.id);
+      expect(context.commercialProfile).toBe(
+        perfil?.trim().toUpperCase() === 'MAYORISTA'
+          ? 'MAYORISTA'
+          : perfil === 'minorista'
+            ? 'MINORISTA'
+            : null,
+      );
+      expect(context.source).toBe('deployment');
+    },
+  );
+
+  it('rechaza perfil fuera del dominio sin persistir configuración', async () => {
+    const h = issuerConfigHarness();
+    await expect(
+      h.writer.save(h.company.id, { perfil_comercial: 'DISTRIBUIDOR' }),
+    ).rejects.toThrow('CONFIG_PROFILE_INVALID');
+    expect(h.db.company.update).not.toHaveBeenCalled();
+  });
+});
