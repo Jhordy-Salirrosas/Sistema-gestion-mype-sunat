@@ -17,6 +17,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EmitirComprobanteService } from '../../../src/modules/invoices/application/services/emitirComprobanteService';
+import { aComprobanteOrigenFallback, aListado } from '../../../src/modules/invoices/application/services/invoiceQueryMapper';
 import type { EmitirComprobanteDto } from '../../../src/modules/invoices/application/dto/emitirComprobanteDto';
 
 const COMPANY_ID = '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
@@ -715,5 +716,74 @@ describe('EmitirComprobanteService — fallos de la serie', () => {
       NotFoundException,
     );
     expect(creadas).toHaveLength(0);
+  });
+});
+
+describe('Corrección 6 — Comprobante origen colgado de la nota', () => {
+  it('expone tipo, serie-número, cliente e importe real cuando el comprobante origen existe en la base', () => {
+    const origen = aComprobanteOrigenFallback(
+      {
+        tipo_comprobante: '07',
+        referenced_invoice_id: 'inv-orig-1',
+        referenced_document_type: '01',
+        referenced_series_correlative: 'F001-00000042',
+        customer_identity_number: '20100070970',
+        customer_legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+        currency_code: 'PEN',
+      },
+      {
+        id: 'inv-orig-1',
+        tipo_comprobante: '01',
+        serie: 'F001',
+        correlativo: 42,
+        customer_identity_number: '20100070970',
+        customer_legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+        monto_total: 1180,
+        currency_code: 'PEN',
+      },
+    );
+
+    expect(origen).toEqual({
+      id: 'inv-orig-1',
+      tipo_comprobante: '01',
+      serie: 'F001',
+      correlativo: 42,
+      numero: 'F001-00000042',
+      cliente_documento: '20100070970',
+      cliente_nombre: 'FERRETERÍA LOS ANDES S.A.C.',
+      monto_total: 1180,
+      moneda: 'PEN',
+    });
+  });
+
+  it('deja monto_total en null sin inventarlo cuando la nota solo conserva la referencia textual', () => {
+    const dto = aListado({
+      id: 'nota-1',
+      tipo_comprobante: '07',
+      serie: 'FC01',
+      correlativo: 5,
+      fecha_emision: new Date('2026-11-07T00:00:00.000Z'),
+      estado: 'ACEPTADO' as never,
+      monto_total: 118,
+      currency_code: 'PEN',
+      customer_identity_number: '20100070970',
+      customer_legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+      sunat_response_code: '0',
+      referenced_document_type: '01',
+      referenced_series_correlative: 'F001-00000042',
+      credit_debit_reason_code: '06',
+    });
+
+    expect(dto.comprobante_origen).toEqual({
+      id: null,
+      tipo_comprobante: '01',
+      serie: 'F001',
+      correlativo: 42,
+      numero: 'F001-00000042',
+      cliente_documento: '20100070970',
+      cliente_nombre: 'FERRETERÍA LOS ANDES S.A.C.',
+      monto_total: null,
+      moneda: 'PEN',
+    });
   });
 });

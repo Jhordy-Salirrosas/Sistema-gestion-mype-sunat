@@ -11,6 +11,7 @@ import type {
   CdrDto,
   ComprobanteDetalleDto,
   ComprobanteListadoDto,
+  ComprobanteOrigenNotaDto,
   CuotaEnviadaDto,
   HistorialEstadoDto,
 } from '../dto/invoiceQueryDto';
@@ -33,9 +34,12 @@ export interface FilaListado {
   total_igv?: { toString(): string } | number;
   exempt_operations?: { toString(): string } | number;
   unaffected_operations?: { toString(): string } | number;
+  referenced_invoice_id?: string | null;
+  referenced_document_type?: string | null;
   referenced_series_correlative?: string | null;
   credit_debit_reason_code?: string | null;
   xml_hash_sha256?: string | null;
+  comprobante_origen?: ComprobanteOrigenNotaDto | null;
   payload_ubl?: unknown;
   cdr_sunat?: unknown;
 }
@@ -101,8 +105,79 @@ export function aListado(fila: FilaListado): ComprobanteListadoDto {
     inafecta: numero(fila.unaffected_operations ?? 0),
     documento_afectado: fila.referenced_series_correlative ?? null,
     credit_debit_reason_code: fila.credit_debit_reason_code ?? null,
+    comprobante_origen:
+      fila.comprobante_origen !== undefined
+        ? fila.comprobante_origen
+        : aComprobanteOrigenFallback(fila),
     hash_cpe: fila.xml_hash_sha256 ?? null,
     ...condicionesDePago(fila.payload_ubl),
+  };
+}
+
+/**
+ * Construye el resumen del comprobante origen de una nota (07/08).
+ *
+ * Si se encontró la factura/boleta original en la base de datos de la empresa,
+ * se exponen sus datos reales (tipo, serie, correlativo, número, cliente e
+ * importe total). Si solo existe la referencia textual en la nota, los campos
+ * que no constan en la base van como null (nunca se inventa el importe).
+ */
+export function aComprobanteOrigenFallback(
+  fila: Pick<
+    FilaListado,
+    | 'tipo_comprobante'
+    | 'referenced_invoice_id'
+    | 'referenced_document_type'
+    | 'referenced_series_correlative'
+    | 'customer_identity_number'
+    | 'customer_legal_name'
+    | 'currency_code'
+  >,
+  origenDb?: {
+    id: string;
+    tipo_comprobante: string;
+    serie: string;
+    correlativo: number;
+    customer_identity_number: string | null;
+    customer_legal_name: string | null;
+    monto_total: { toString(): string } | number;
+    currency_code: string;
+  } | null,
+): ComprobanteOrigenNotaDto | null {
+  if (fila.tipo_comprobante !== '07' && fila.tipo_comprobante !== '08') {
+    return null;
+  }
+  if (origenDb) {
+    return {
+      id: origenDb.id,
+      tipo_comprobante: origenDb.tipo_comprobante,
+      serie: origenDb.serie,
+      correlativo: origenDb.correlativo,
+      numero: numeroComprobante(origenDb.serie, origenDb.correlativo),
+      cliente_documento: origenDb.customer_identity_number,
+      cliente_nombre: origenDb.customer_legal_name,
+      monto_total: numero(origenDb.monto_total),
+      moneda: origenDb.currency_code,
+    };
+  }
+  const refNumero = fila.referenced_series_correlative?.trim() ?? '';
+  if (!refNumero) return null;
+  const partes = /^([A-Za-z0-9]+)-(\d+)$/.exec(refNumero);
+  const serie = partes ? partes[1] : null;
+  const correlativo = partes ? Number(partes[2]) : null;
+  return {
+    id: fila.referenced_invoice_id ?? null,
+    tipo_comprobante: fila.referenced_document_type ?? null,
+    serie,
+    correlativo: correlativo !== null && Number.isFinite(correlativo) ? correlativo : null,
+    numero:
+      serie && correlativo !== null && Number.isFinite(correlativo)
+        ? numeroComprobante(serie, correlativo)
+        : refNumero,
+    cliente_documento: fila.customer_identity_number ?? null,
+    cliente_nombre: fila.customer_legal_name ?? null,
+    monto_total: null,
+    moneda: fila.currency_code ?? null,
   };
 }
 
