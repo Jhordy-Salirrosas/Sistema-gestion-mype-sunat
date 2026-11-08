@@ -35,6 +35,9 @@ describe('InventoryTransferService', () => {
       accountingEntry: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      accountingMapping: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn(async (cb) => cb(mockPrisma)),
     };
 
@@ -185,6 +188,10 @@ describe('InventoryTransferService', () => {
         from_warehouse_code: 'ALM-01', to_warehouse_code: 'ALM-02',
         items: [{ total_cost: 200 }],
       });
+      mockPrisma.accountingMapping.findMany.mockResolvedValue([
+        { role_code: 'ALMACEN_DESTINO', account_code: '2011102' },
+        { role_code: 'ALMACEN_ORIGEN', account_code: '2011101' },
+      ]);
 
       await serviceConAsiento.createTransfer(companyId, {
         fromWarehouseCode: 'ALM-01', toWarehouseCode: 'ALM-02', transferNumber: 'TRF-001',
@@ -194,8 +201,8 @@ describe('InventoryTransferService', () => {
       expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
         sourceModule: 'INVENTORY',
         lines: expect.arrayContaining([
-          expect.objectContaining({ accountCode: '20111.02', debitAmount: 200 }),
-          expect.objectContaining({ accountCode: '20111.01', creditAmount: 200 }),
+          expect.objectContaining({ accountCode: '2011102', debitAmount: 200 }),
+          expect.objectContaining({ accountCode: '2011101', creditAmount: 200 }),
         ]),
       }));
     });
