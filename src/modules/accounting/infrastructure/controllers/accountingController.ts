@@ -23,6 +23,7 @@ import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAcco
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { ListAccountingPeriodsUseCase } from '../../application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAccountingPeriodUseCase';
+import { OpenFiscalYearUseCase } from '../../application/use-cases/openFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
@@ -40,6 +41,7 @@ export class AccountingController {
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
     private readonly openPeriodUseCase: OpenAccountingPeriodUseCase,
+    private readonly openFiscalYearUseCase: OpenFiscalYearUseCase,
     private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
     private readonly getLedgerUseCase: GetLedgerUseCase,
     private readonly getTrialBalanceUseCase: GetTrialBalanceUseCase,
@@ -123,6 +125,18 @@ export class AccountingController {
       this.empresaDelToken(currentCompanyId),
       dto.year,
       dto.month,
+    );
+  }
+
+  @Post('periods/year/:year/open')
+  @HttpCode(HttpStatus.CREATED)
+  async openFiscalYear(
+    @Param('year') year: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.openFiscalYearUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      Number(year),
     );
   }
 
