@@ -1,0 +1,1 @@
+ALTER TYPE "NationalPurchaseStatus" ADD VALUE IF NOT EXISTS 'PAGADA';
