@@ -169,6 +169,14 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return rows.map((row) => this.mapPeriod(row));
   }
 
+  async closeFiscalYear(companyId: string, year: number) {
+    await this.prisma.accountingPeriod.updateMany({
+      where: { company_id: companyId, year, status: 'ABIERTO' },
+      data: { status: 'CERRADO', closed_at: new Date() },
+    });
+    return this.findPeriods(companyId);
+  }
+
   async openFiscalYear(companyId: string, year: number) {
     for (let month = 1; month <= 12; month += 1) {
       await this.openPeriod(companyId, year, month);
