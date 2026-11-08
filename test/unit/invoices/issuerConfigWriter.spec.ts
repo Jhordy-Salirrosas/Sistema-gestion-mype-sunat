@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { issuerConfigHarness } from '../../fixtures/issuerConfigHarness';
 import { validateIssuerInput } from '../../../src/modules/invoices/application/services/issuerConfigWriter';
+import { InvoiceConfigService } from '../../../src/modules/invoices/application/services/invoiceConfigService';
 
 describe('D1 issuer configuration write boundary', () => {
   const environment = { ...process.env };
@@ -243,5 +244,24 @@ describe('D1 issuer configuration write boundary', () => {
     });
     expect(h.company.commercial_profile).toBe('MINORISTA');
     expect((await h.resolver.resolve(h.company.id)).commercialProfile).toBe('MINORISTA');
+  });
+
+  it('expone la sección estructurada del certificado digital (archivo, estado y vencimiento) en GET /invoices/config', async () => {
+    const seriesMock = { listar: jest.fn(async () => []) };
+    const configService = new InvoiceConfigService(
+      seriesMock as never,
+      h.certificates as never,
+      h.resolver,
+      h.writer,
+    );
+    const cfg = await configService.obtener(h.company.id);
+    expect(cfg.certificado).toEqual({
+      archivo: 'certificado-20000000001.p12 (custodia despliegue)',
+      configurado: true,
+      estado: 'VIGENTE',
+      vence_el: '2099-01-01',
+      dias_restantes: 60,
+      origen: 'deployment',
+    });
   });
 });
