@@ -30,6 +30,7 @@ model Company {
   // como respaldo para una cuenta distinta. SUNAT rechaza con 3034 si el XML
   // no la trae.
   detraction_account    String?
+  commercial_profile    String?       @db.VarChar(20)
   is_active             Boolean       @default(true)
   inventory_cost_method String        @default("PROMEDIO") // PROMEDIO | FIFO
   created_at            DateTime      @default(now())

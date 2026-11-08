@@ -11,9 +11,12 @@ import { CertificateService } from '../../../sunat/certificate.service';
 import { IssuerConfigEncryption } from '../../../sunat/issuerConfigEncryption';
 import { IssuerConfigResolver } from '../../../sunat/issuerConfigResolver';
 
+export type PerfilComercial = 'MAYORISTA' | 'MINORISTA';
+
 export interface IssuerConfigInput {
   action?: 'save' | 'reset';
   entorno?: 'MOCK' | 'BETA' | 'PRODUCCION';
+  perfil_comercial?: PerfilComercial | null;
   sol_user?: string;
   sol_password?: string;
   cert_base64?: string;
@@ -27,12 +30,14 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
   const limits: Record<string, number> = {
     action: 5,
     entorno: 10,
+    perfil_comercial: 12,
     sol_user: 64,
     sol_password: 256,
     cert_base64: 131072,
     cert_password: 256,
   };
   for (const [key, value] of Object.entries(body)) {
+    if (key === 'perfil_comercial' && value === null) continue;
     if (
       !Object.hasOwn(limits, key) ||
       typeof value !== 'string' ||
@@ -45,6 +50,12 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     throw new BadRequestException('CONFIG_ACTION_INVALID');
   if (input.entorno && !['MOCK', 'BETA', 'PRODUCCION'].includes(input.entorno))
     throw new BadRequestException('CONFIG_ENV_INVALID');
+  if (
+    input.perfil_comercial !== undefined &&
+    input.perfil_comercial !== null &&
+    !['MAYORISTA', 'MINORISTA'].includes(input.perfil_comercial)
+  )
+    throw new BadRequestException('CONFIG_PROFILE_INVALID');
   if (input.action === 'reset' && Object.keys(input).length !== 1)
     throw new BadRequestException('CONFIG_RESET_INVALID');
   return input;
@@ -91,6 +102,10 @@ export class IssuerConfigWriter {
           cert_pass_encrypted: company.cert_pass_encrypted,
           issuer_sol_configured: company.issuer_sol_configured,
           issuer_cert_configured: company.issuer_cert_configured,
+          commercial_profile:
+            input.perfil_comercial !== undefined
+              ? input.perfil_comercial
+              : (company as { commercial_profile?: string | null }).commercial_profile ?? null,
           issuer_environment:
             input.entorno ?? (active ? company.issuer_environment : null),
           issuer_config_activated_at: new Date(),

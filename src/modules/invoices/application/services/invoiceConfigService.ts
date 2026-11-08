@@ -31,6 +31,7 @@ export interface ConfiguracionFiscal {
   sol_password_configurada?: boolean;
   cert_password_configurada?: boolean;
   ruc?: string;
+  perfil_comercial?: 'MAYORISTA' | 'MINORISTA' | null;
   entorno: EntornoFiscal;
   endpoint_bill_service: string;
   endpoint_consult_service: string;
@@ -80,6 +81,7 @@ export class InvoiceConfigService {
         ? Boolean(context.certificate)
         : Boolean(process.env.CERT_PASSWORD),
       ruc: context?.ruc,
+      perfil_comercial: context?.commercialProfile ?? null,
       entorno,
       endpoint_bill_service: this.publicEndpoint(
         context?.endpoint ??

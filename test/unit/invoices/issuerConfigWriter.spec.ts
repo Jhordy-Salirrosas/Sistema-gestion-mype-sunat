@@ -229,4 +229,19 @@ describe('D1 issuer configuration write boundary', () => {
       /^CONFIG_SAVE_FAILED$/,
     );
   });
+
+  it('persiste y resuelve el perfil_comercial (MAYORISTA o MINORISTA) en la configuración del emisor', async () => {
+    await h.writer.save(h.company.id, {
+      entorno: 'BETA',
+      perfil_comercial: 'MAYORISTA',
+    });
+    expect(h.company.commercial_profile).toBe('MAYORISTA');
+    expect((await h.resolver.resolve(h.company.id)).commercialProfile).toBe('MAYORISTA');
+
+    await h.writer.save(h.company.id, {
+      perfil_comercial: 'MINORISTA',
+    });
+    expect(h.company.commercial_profile).toBe('MINORISTA');
+    expect((await h.resolver.resolve(h.company.id)).commercialProfile).toBe('MINORISTA');
+  });
 });
