@@ -49,6 +49,7 @@ describe('Inventory Controllers (Additional Coverage)', () => {
             ],
           },
         ]),
+        payPurchase: jest.fn().mockResolvedValue({ id: 'pur-1', status: 'PAGADA', amount: 1180 }),
         getPurchaseById: jest.fn().mockResolvedValue({
           id: 'pur-1',
           purchase_number: 'COM-001',
@@ -75,6 +76,7 @@ describe('Inventory Controllers (Additional Coverage)', () => {
       await expect(controller.createPurchase({} as any, undefined)).rejects.toThrow(UnauthorizedException);
       await expect(controller.listPurchases(undefined)).rejects.toThrow(UnauthorizedException);
       await expect(controller.getPurchaseById('1', undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.payPurchase('1', {}, undefined)).rejects.toThrow(UnauthorizedException);
     });
 
     it('crea, lista y obtiene compras por ID', async () => {
@@ -87,6 +89,9 @@ describe('Inventory Controllers (Additional Coverage)', () => {
 
       const item = await controller.getPurchaseById('pur-1', companyId);
       expect(item.id).toBe('pur-1');
+
+      const pago = await controller.payPurchase('pur-1', { paymentMethod: 'TRANSFERENCIA' }, companyId);
+      expect(pago.status).toBe('PAGADA');
     });
   });
 
