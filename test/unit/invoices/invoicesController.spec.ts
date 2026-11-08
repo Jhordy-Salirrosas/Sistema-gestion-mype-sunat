@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvoicesController } from '../../../src/modules/invoices/infrastructure/controllers/invoicesController';
-import { CreateInvoiceUseCase } from '../../../src/modules/invoices/application/use-cases/createInvoiceUseCase';
+import { AtomicInvoiceCreationService } from '../../../src/modules/invoices/application/services/atomicInvoiceCreationService';
 import { TOKEN_SERVICE_PORT } from '../../../src/modules/auth/domain/ports/tokenServicePort';
 
 describe('InvoicesController', () => {
@@ -9,7 +9,8 @@ describe('InvoicesController', () => {
   const COMPANY_ID = 'company-test-001';
 
   const mockUseCase = {
-    execute: jest.fn(),
+    create: jest.fn(),
+    emitir: jest.fn(),
   };
 
   const dto = {
@@ -30,13 +31,13 @@ describe('InvoicesController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockUseCase.execute.mockResolvedValue(invoiceResult);
+    mockUseCase.create.mockResolvedValue(invoiceResult);
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [InvoicesController],
       providers: [
         {
-          provide: CreateInvoiceUseCase,
+          provide: AtomicInvoiceCreationService,
           useValue: mockUseCase,
         },
         // AuthGuard (aplicado con @UseGuards en el controlador) inyecta este
@@ -56,10 +57,10 @@ describe('InvoicesController', () => {
   });
 
   it('debe recibir el comprobante y delegar al caso de uso', async () => {
-    const response = await controller.create(dto, COMPANY_ID);
+    const response = await controller.create(dto, COMPANY_ID, 'request-key-00001');
 
     // El tenant viaja como segundo argumento: se extrae del JWT, no del cuerpo.
-    expect(mockUseCase.execute).toHaveBeenCalledWith(dto, COMPANY_ID);
+    expect(mockUseCase.create).toHaveBeenCalledWith(dto, COMPANY_ID, 'request-key-00001');
     expect(response).toEqual({
       id: invoiceResult.id,
       estado: invoiceResult.estado,

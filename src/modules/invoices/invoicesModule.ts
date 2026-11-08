@@ -1,3 +1,4 @@
+import { AtomicInvoiceCreationService } from './application/services/atomicInvoiceCreationService';
 import { IssuerConfigWriter } from './application/services/issuerConfigWriter';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
@@ -76,6 +77,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    AtomicInvoiceCreationService,
     IssuerConfigWriter,
     CreateInvoiceUseCase,
     InvoicesService,

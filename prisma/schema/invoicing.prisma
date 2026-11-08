@@ -117,3 +117,16 @@ model IssuerCertificate {
   @@index([company_id])
   @@map("issuer_certificates")
 }
+
+// Respuesta durable de creación; la misma clave no puede representar otra venta.
+model InvoiceCreationRequest {
+  id          String @id @default(uuid())
+  company_id  String
+  request_key String @db.VarChar(128)
+  fingerprint String @db.VarChar(64)
+  response    Json
+  created_at  DateTime @default(now())
+
+  @@unique([company_id, request_key])
+  @@map("invoice_creation_requests")
+}

@@ -5,14 +5,12 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  Optional,
+  Headers,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
-import { InvoicesService } from '../../application/services/invoicesService';
-import { CreateInvoiceUseCase } from '../../application/use-cases/createInvoiceUseCase';
+import { AtomicInvoiceCreationService } from '../../application/services/atomicInvoiceCreationService';
 import { CreateInvoiceDto } from '../../application/dto/createInvoiceDto';
 import { EmitirComprobanteDto } from '../../application/dto/emitirComprobanteDto';
-import { EmitirComprobanteService } from '../../application/services/emitirComprobanteService';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 
 /**
@@ -39,9 +37,7 @@ import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 @UseGuards(AuthGuard)
 export class InvoicesController {
   constructor(
-    private readonly createInvoiceUseCase: CreateInvoiceUseCase,
-    @Optional() private readonly invoicesService?: InvoicesService,
-    @Optional() private readonly emitirService?: EmitirComprobanteService,
+    private readonly creation: AtomicInvoiceCreationService,
   ) { }
 
   /**
@@ -55,10 +51,9 @@ export class InvoicesController {
   async create(
     @Body() dto: CreateInvoiceDto,
     @CurrentCompany() companyId: string,
+    @Headers('idempotency-key') key?: string,
   ) {
-    const invoice = this.invoicesService
-      ? await this.invoicesService.create(dto, companyId)
-      : await this.createInvoiceUseCase.execute(dto, companyId);
+    const invoice = await this.creation.create(dto, companyId, key);
 
     return {
       id: invoice.id,
@@ -83,14 +78,8 @@ export class InvoicesController {
   async emitir(
     @Body() dto: EmitirComprobanteDto,
     @CurrentCompany() companyId: string,
+    @Headers('idempotency-key') key?: string,
   ) {
-    if (!this.emitirService) {
-      // Sin el servicio no se responde un éxito falso: se dice la verdad.
-      throw new Error(
-        'El servicio de emisión desde pantalla no está instalado en este módulo',
-      );
-    }
-
-    return this.emitirService.emitir(dto, companyId);
+    return this.creation.emitir(dto, companyId, key);
   }
 }
