@@ -16,6 +16,19 @@ import type { InvoiceStatus } from '../../../../generated/client/enums';
 /** Estado tal como lo pinta la tabla del frontend. */
 export type EstadoComprobante = InvoiceStatus;
 
+/** Resumen del comprobante afectado por una nota de crédito o débito (07/08). */
+export interface ComprobanteOrigenNotaDto {
+  id: string | null;
+  tipo_comprobante: string | null;
+  serie: string | null;
+  correlativo: number | null;
+  numero: string;
+  cliente_documento: string | null;
+  cliente_nombre: string | null;
+  monto_total: number | null;
+  moneda: string | null;
+}
+
 /** Un comprobante del listado, con lo justo para la grilla. */
 export interface ComprobanteListadoDto {
   id: string;
@@ -39,8 +52,17 @@ export interface ComprobanteListadoDto {
   inafecta?: number;
   /** Documento afectado, solo en notas de crédito/débito. */
   documento_afectado?: string | null;
+  credit_debit_reason_code?: string | null;
+  /** Datos del comprobante origen en notas de crédito/débito (tipo, serie-número, cliente, importe). */
+  comprobante_origen?: ComprobanteOrigenNotaDto | null;
   /** Huella del XML firmado, para la ficha del comprobante. */
   hash_cpe?: string | null;
+  /** Descripción oficial del CDR si ya se recibió, `null` si aún no existe. */
+  cdr_descripcion?: string | null;
+  /** Forma de pago real del payload UBL (`null` si no se registró). */
+  forma_pago?: 'Contado' | 'Credito' | null;
+  /** Cronograma de pago al crédito del payload UBL. */
+  cuotas?: CuotaEnviadaDto[];
 }
 
 /** Página de resultados. */

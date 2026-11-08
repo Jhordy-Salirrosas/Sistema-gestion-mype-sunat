@@ -177,6 +177,14 @@ export class MasterDataService {
         website: dto.website ?? null,
         roles: (dto.roles ?? []).map((r) => r.toUpperCase()),
         payment_terms: dto.paymentTerms ?? null,
+        has_credit:
+          dto.hasCredit !== undefined
+            ? dto.hasCredit
+            : dto.paymentTerms
+              ? dto.paymentTerms !== 'CONTADO'
+              : null,
+        allows_discount:
+          dto.allowsDiscount !== undefined ? dto.allowsDiscount : null,
         credit_limit: dto.creditLimit ?? null,
         currency_code: (dto.currencyCode ?? 'PEN').toUpperCase(),
       },
@@ -196,6 +204,11 @@ export class MasterDataService {
     if (dto.website !== undefined) data.website = dto.website;
     if (dto.roles !== undefined) data.roles = dto.roles.map((r) => r.toUpperCase());
     if (dto.paymentTerms !== undefined) data.payment_terms = dto.paymentTerms;
+    if (dto.hasCredit !== undefined) data.has_credit = dto.hasCredit;
+    else if (dto.paymentTerms !== undefined) {
+      data.has_credit = dto.paymentTerms ? dto.paymentTerms !== 'CONTADO' : null;
+    }
+    if (dto.allowsDiscount !== undefined) data.allows_discount = dto.allowsDiscount;
     if (dto.creditLimit !== undefined) data.credit_limit = dto.creditLimit;
     if (dto.currencyCode !== undefined) data.currency_code = dto.currencyCode.toUpperCase();
     if (dto.isActive !== undefined) data.is_active = dto.isActive;

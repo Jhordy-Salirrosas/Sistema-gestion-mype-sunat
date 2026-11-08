@@ -19,6 +19,7 @@ export interface IssuerContext {
   readonly endpoint: string;
   readonly consultEndpoint: string;
   readonly timeoutMs: number;
+  readonly commercialProfile?: 'MAYORISTA' | 'MINORISTA' | null;
   readonly sol: Readonly<{ username: string; password: string }> | null;
   readonly certificate: Readonly<{ base64: string; password: string }> | null;
 }
@@ -46,6 +47,7 @@ export function deploymentContext(
     source: 'deployment',
     solSource: 'deployment',
     certificateSource: 'deployment',
+    commercialProfile: null,
     environment,
     endpoint,
     consultEndpoint:
@@ -91,6 +93,7 @@ export class IssuerConfigResolver {
       issuer_sol_configured?: boolean | null;
       issuer_cert_configured?: boolean | null;
       issuer_environment: string | null;
+      commercial_profile?: string | null;
       sol_user: string;
       sol_pass_encrypted: string;
       cert_storage_url: string | null;
@@ -98,8 +101,13 @@ export class IssuerConfigResolver {
     },
     db: Pick<PrismaService, 'issuerCertificate'>,
   ): Promise<IssuerContext> {
+    const rawProfile = company.commercial_profile?.trim().toUpperCase();
+    const commercialProfile: 'MAYORISTA' | 'MINORISTA' | null =
+      rawProfile === 'MAYORISTA' || rawProfile === 'MINORISTA' ? rawProfile : null;
     const fallback = deploymentContext(company.id, company.ruc);
-    if (!company.issuer_config_activated_at) return fallback;
+    if (!company.issuer_config_activated_at) {
+      return commercialProfile ? Object.freeze({ ...fallback, commercialProfile }) : fallback;
+    }
     const hasSol = company.issuer_sol_configured === true;
     if (hasSol && !(company.sol_user && company.sol_pass_encrypted))
       throw new BadRequestException('ISSUER_SOL_GROUP_INCOMPLETE');
@@ -158,6 +166,7 @@ export class IssuerConfigResolver {
       source: 'company',
       solSource: hasSol ? 'company' : 'deployment',
       certificateSource: hasCert ? 'company' : 'deployment',
+      commercialProfile,
       version: company.issuer_config_version ?? '',
       environment: environment as IssuerContext['environment'],
       endpoint,

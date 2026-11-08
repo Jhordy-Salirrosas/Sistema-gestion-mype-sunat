@@ -535,6 +535,50 @@ describe('TA-62 · validación de stock', () => {
       { codigo: 'CLAVO-3', descripcion: 'Clavos', cantidad: 10, unidad: 'KGM' },
     ]);
   });
+
+  it('rechaza emitir con una afectación distinta a la configurada en el producto', async () => {
+    const prismaConAfectacion = {
+      inventoryBalance: {
+        groupBy: jest.fn(async () => [
+          { product_id: 'prod-exo', _sum: { current_stock: 50 } },
+        ]),
+      },
+      inventoryProduct: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'prod-exo',
+            sku: 'ARENA-EXO',
+            description: 'Arena gruesa exonerada',
+            sunat_unit_code: 'MTR',
+            tax_affectation: '20',
+          },
+        ]),
+      },
+    };
+    const validador = new StockValidationService(prismaConAfectacion as never);
+
+    await expect(
+      validador.validar('company-1', [
+        {
+          codigo: 'ARENA-EXO',
+          descripcion: 'Arena gruesa exonerada',
+          cantidad: 5,
+          afectacion: '10',
+        },
+      ]),
+    ).rejects.toThrow(/afectación tributaria del producto ARENA-EXO \(20\)/);
+
+    await expect(
+      validador.validar('company-1', [
+        {
+          codigo: 'ARENA-EXO',
+          descripcion: 'Arena gruesa exonerada',
+          cantidad: 5,
+          afectacion: '20',
+        },
+      ]),
+    ).resolves.toMatchObject({ validados: 1 });
+  });
 });
 
 // ---------------------------------------------------------------------------

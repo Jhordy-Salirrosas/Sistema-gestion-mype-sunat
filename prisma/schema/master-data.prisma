@@ -69,6 +69,8 @@ model BusinessPartner {
   website         String?
   roles           String[] @default([])
   payment_terms   String?  // CONTADO, 30_DIAS, 60_DIAS, CARTA_CREDITO
+  has_credit      Boolean?
+  allows_discount Boolean?
   credit_limit    Decimal? @db.Decimal(14, 2)
   currency_code   String?  @default("PEN")
   is_active       Boolean  @default(true)

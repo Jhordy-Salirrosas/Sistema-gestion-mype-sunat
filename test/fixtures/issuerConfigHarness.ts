@@ -8,6 +8,7 @@ export function issuerConfigHarness() {
     id: 'fake-company',
     ruc: '20000000001',
     legal_name: 'Obviously Fake Issuer',
+    commercial_profile: null as string | null,
     issuer_config_activated_at: null as Date | null,
     issuer_config_version: null as string | null,
     issuer_environment: null as string | null,

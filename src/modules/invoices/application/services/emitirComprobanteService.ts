@@ -142,13 +142,25 @@ export class EmitirComprobanteService {
     // Validar descuentos antes de reservar un correlativo.
     dto.items.forEach((item, i) => {
       const d = item.descuento;
-      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * item.valorUnitario || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
+      const baseUnitaria =
+        typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario)
+          ? (item.afectacion ?? '10').startsWith('10')
+            ? Math.round((item.precioUnitario / 1.18) * 100) / 100
+            : item.precioUnitario
+          : item.valorUnitario;
+      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * baseUnitaria || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
         throw new BadRequestException(`Descuento inválido en la línea ${i + 1}`);
       }
     });
 
     // 2. La nota necesita un comprobante que exista de verdad.
     await this.verificarDocumentoOrigen(dto, companyId);
+
+    // 2b. Venta al crédito con cuotas solo para clientes con crédito en el maestro.
+    await this.validarCreditoCliente(dto, companyId);
+
+    // 2c. Descuentos solo para clientes que admiten descuento en el maestro.
+    await this.validarDescuentoCliente(dto, companyId);
 
     // 3. El stock, antes de reservar correlativo.
     await this.validarStock(dto, companyId);
@@ -488,6 +500,105 @@ export class EmitirComprobanteService {
   }
 
   /**
+   * Verifica que el cliente tenga crédito habilitado en el maestro de terceros
+   * antes de permitir la emisión de una venta al crédito con cuotas.
+   */
+  private async validarCreditoCliente(
+    dto: EmitirComprobanteDto,
+    companyId: string,
+  ): Promise<void> {
+    if (dto.tipo_comprobante !== '01' && dto.tipo_comprobante !== '03') return;
+    if (dto.forma_pago !== 'Credito') return;
+
+    const numero = dto.customer_identity_number?.trim();
+    const tipo =
+      dto.customer_identity_type?.trim() ||
+      (numero?.length === 11 ? '6' : '1');
+    const partner = numero
+      ? ((await this.prisma.businessPartner.findFirst({
+          where: {
+            company_id: companyId,
+            doc_type: tipo,
+            doc_number: numero,
+          },
+          select: {
+            id: true,
+            has_credit: true,
+            payment_terms: true,
+            is_active: true,
+          },
+        })) as {
+          id: string;
+          has_credit?: boolean | null;
+          payment_terms?: string | null;
+          is_active?: boolean;
+        } | null)
+      : null;
+
+    const tieneCredito =
+      partner && partner.is_active !== false
+        ? typeof partner.has_credit === 'boolean'
+          ? partner.has_credit
+          : Boolean(
+              partner.payment_terms && partner.payment_terms !== 'CONTADO',
+            )
+        : false;
+
+    if (!tieneCredito) {
+      throw new BadRequestException(
+        'El cliente no tiene crédito habilitado en el maestro de terceros; no se puede emitir al crédito con cuotas.',
+      );
+    }
+  }
+
+  /**
+   * Verifica que el cliente admita descuento en el maestro de terceros antes
+   * de emitir un comprobante con descuentos de línea o globales.
+   */
+  private async validarDescuentoCliente(
+    dto: EmitirComprobanteDto,
+    companyId: string,
+  ): Promise<void> {
+    if (dto.tipo_comprobante !== '01' && dto.tipo_comprobante !== '03') return;
+    const llevaDescuento =
+      Boolean(dto.descuento_global) ||
+      dto.items.some((item) => Boolean(item.descuento));
+    if (!llevaDescuento) return;
+
+    const numero = dto.customer_identity_number?.trim();
+    const tipo =
+      dto.customer_identity_type?.trim() ||
+      (numero?.length === 11 ? '6' : '1');
+    const partner = numero
+      ? ((await this.prisma.businessPartner.findFirst({
+          where: {
+            company_id: companyId,
+            doc_type: tipo,
+            doc_number: numero,
+          },
+          select: {
+            id: true,
+            allows_discount: true,
+            is_active: true,
+          },
+        })) as {
+          id: string;
+          allows_discount?: boolean | null;
+          is_active?: boolean;
+        } | null)
+      : null;
+
+    const admiteDescuento =
+      partner && partner.is_active !== false && partner.allows_discount === true;
+
+    if (!admiteDescuento) {
+      throw new BadRequestException(
+        'El cliente no admite descuento según el maestro de terceros; no se puede emitir con descuento.',
+      );
+    }
+  }
+
+  /**
    * Valida la cantidad contra el stock disponible.
    *
    * Solo se validan las líneas con código de producto: un servicio no tiene
@@ -504,6 +615,7 @@ export class EmitirComprobanteService {
       descripcion: item.descripcion,
       cantidad: item.cantidad,
       unidad: item.unidad,
+      afectacion: item.afectacion ?? null,
     }));
 
     await this.stock.validar(companyId, items);
@@ -621,7 +733,11 @@ export class EmitirComprobanteService {
         unit_code: (linea.unidad ?? 'NIU').toUpperCase(),
         quantity: linea.cantidad,
         unit_value: linea.valorUnitario,
-        unit_price: linea.precioUnitario ?? linea.valorUnitario * 1.18,
+        unit_price:
+          linea.precioUnitario ??
+          (linea.afectacion.startsWith('10')
+            ? Math.round(linea.valorUnitario * 1.18 * 100) / 100
+            : linea.valorUnitario),
         igv_affectation_type: linea.afectacion,
         igv_amount: linea.igvLinea,
         total_amount: linea.totalLinea,

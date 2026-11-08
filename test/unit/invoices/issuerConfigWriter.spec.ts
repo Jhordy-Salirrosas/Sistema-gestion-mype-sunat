@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { issuerConfigHarness } from '../../fixtures/issuerConfigHarness';
 import { validateIssuerInput } from '../../../src/modules/invoices/application/services/issuerConfigWriter';
+import { InvoiceConfigService } from '../../../src/modules/invoices/application/services/invoiceConfigService';
 
 describe('D1 issuer configuration write boundary', () => {
   const environment = { ...process.env };
@@ -228,5 +229,88 @@ describe('D1 issuer configuration write boundary', () => {
     await expect(h.writer.save(h.company.id, {})).rejects.toThrow(
       /^CONFIG_SAVE_FAILED$/,
     );
+  });
+
+  it('persiste y resuelve el perfil_comercial (MAYORISTA o MINORISTA) en la configuración del emisor', async () => {
+    await h.writer.save(h.company.id, {
+      entorno: 'BETA',
+      perfil_comercial: 'MAYORISTA',
+    });
+    expect(h.company.commercial_profile).toBe('MAYORISTA');
+    expect((await h.resolver.resolve(h.company.id)).commercialProfile).toBe('MAYORISTA');
+
+    await h.writer.save(h.company.id, {
+      perfil_comercial: 'MINORISTA',
+    });
+    expect(h.company.commercial_profile).toBe('MINORISTA');
+    expect((await h.resolver.resolve(h.company.id)).commercialProfile).toBe('MINORISTA');
+  });
+
+  it('expone la sección estructurada del certificado digital (archivo, estado y vencimiento) en GET /invoices/config', async () => {
+    const seriesMock = { listar: jest.fn(async () => []) };
+    const configService = new InvoiceConfigService(
+      seriesMock as never,
+      h.certificates as never,
+      h.resolver,
+      h.writer,
+    );
+    const cfg = await configService.obtener(h.company.id);
+    expect(cfg.certificado).toEqual({
+      archivo: 'certificado-20000000001.p12 (custodia despliegue)',
+      configurado: true,
+      estado: 'VIGENTE',
+      vence_el: '2099-01-01',
+      dias_restantes: 60,
+      origen: 'deployment',
+    });
+  });
+});
+
+describe('M1 perfil comercial persistido y resuelto', () => {
+  const originalEnv = { ...process.env };
+  beforeEach(() => {
+    process.env.ISSUER_CONFIG_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString(
+      'base64',
+    );
+  });
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it('una actualización sin perfil conserva el existente y null lo elimina explícitamente', async () => {
+    const h = issuerConfigHarness();
+    h.company.commercial_profile = 'MAYORISTA';
+    await h.writer.save(h.company.id, { entorno: 'BETA' });
+    expect(h.company.commercial_profile).toBe('MAYORISTA');
+    await h.writer.save(h.company.id, { perfil_comercial: null });
+    expect(h.company.commercial_profile).toBeNull();
+    expect(
+      (await h.resolver.resolve(h.company.id)).commercialProfile,
+    ).toBeNull();
+  });
+
+  it.each([' mayorista ', 'minorista', 'DESCONOCIDO', null])(
+    'resuelve perfil %s antes de activar configuración propia',
+    async (perfil) => {
+      const h = issuerConfigHarness();
+      h.company.commercial_profile = perfil;
+      const context = await h.resolver.resolve(h.company.id);
+      expect(context.commercialProfile).toBe(
+        perfil?.trim().toUpperCase() === 'MAYORISTA'
+          ? 'MAYORISTA'
+          : perfil === 'minorista'
+            ? 'MINORISTA'
+            : null,
+      );
+      expect(context.source).toBe('deployment');
+    },
+  );
+
+  it('rechaza perfil fuera del dominio sin persistir configuración', async () => {
+    const h = issuerConfigHarness();
+    await expect(
+      h.writer.save(h.company.id, { perfil_comercial: 'DISTRIBUIDOR' }),
+    ).rejects.toThrow('CONFIG_PROFILE_INVALID');
+    expect(h.db.company.update).not.toHaveBeenCalled();
   });
 });
