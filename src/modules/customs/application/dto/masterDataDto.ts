@@ -134,6 +134,10 @@ export class CreatePartnerDto {
   hasCredit?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  allowsDiscount?: boolean;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   creditLimit?: number;
@@ -188,6 +192,10 @@ export class UpdatePartnerDto {
   @IsOptional()
   @IsBoolean()
   hasCredit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowsDiscount?: boolean;
 
   @IsOptional()
   @IsNumber()

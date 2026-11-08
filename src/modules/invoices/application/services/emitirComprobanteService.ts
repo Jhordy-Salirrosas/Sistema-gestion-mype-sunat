@@ -153,6 +153,9 @@ export class EmitirComprobanteService {
     // 2b. Venta al crédito con cuotas solo para clientes con crédito en el maestro.
     await this.validarCreditoCliente(dto, companyId);
 
+    // 2c. Descuentos solo para clientes que admiten descuento en el maestro.
+    await this.validarDescuentoCliente(dto, companyId);
+
     // 3. El stock, antes de reservar correlativo.
     await this.validarStock(dto, companyId);
 
@@ -538,6 +541,53 @@ export class EmitirComprobanteService {
     if (!tieneCredito) {
       throw new BadRequestException(
         'El cliente no tiene crédito habilitado en el maestro de terceros; no se puede emitir al crédito con cuotas.',
+      );
+    }
+  }
+
+  /**
+   * Verifica que el cliente admita descuento en el maestro de terceros antes
+   * de emitir un comprobante con descuentos de línea o globales.
+   */
+  private async validarDescuentoCliente(
+    dto: EmitirComprobanteDto,
+    companyId: string,
+  ): Promise<void> {
+    if (dto.tipo_comprobante !== '01' && dto.tipo_comprobante !== '03') return;
+    const llevaDescuento =
+      Boolean(dto.descuento_global) ||
+      dto.items.some((item) => Boolean(item.descuento));
+    if (!llevaDescuento) return;
+
+    const numero = dto.customer_identity_number?.trim();
+    const tipo =
+      dto.customer_identity_type?.trim() ||
+      (numero?.length === 11 ? '6' : '1');
+    const partner = numero
+      ? ((await this.prisma.businessPartner.findFirst({
+          where: {
+            company_id: companyId,
+            doc_type: tipo,
+            doc_number: numero,
+          },
+          select: {
+            id: true,
+            allows_discount: true,
+            is_active: true,
+          },
+        })) as {
+          id: string;
+          allows_discount?: boolean | null;
+          is_active?: boolean;
+        } | null)
+      : null;
+
+    const admiteDescuento =
+      partner && partner.is_active !== false && partner.allows_discount === true;
+
+    if (!admiteDescuento) {
+      throw new BadRequestException(
+        'El cliente no admite descuento según el maestro de terceros; no se puede emitir con descuento.',
       );
     }
   }

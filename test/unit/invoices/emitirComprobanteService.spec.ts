@@ -68,6 +68,7 @@ const montar = (
           null as {
             id: string;
             has_credit?: boolean | null;
+            allows_discount?: boolean | null;
             payment_terms?: string | null;
             is_active?: boolean;
           } | null,
@@ -397,6 +398,48 @@ describe('EmitirComprobanteService — crédito por cliente', () => {
         forma_pago: 'Credito',
         fecha_emision: '2026-11-01',
         cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+      }),
+      COMPANY_ID,
+    );
+
+    expect(resultado.success).toBe(true);
+    expect(creadas).toHaveLength(1);
+  });
+});
+
+describe('EmitirComprobanteService — descuento por cliente', () => {
+  it('rechaza descuentos de línea o globales si el cliente no admite descuento en el maestro', async () => {
+    const { servicio, prisma, series, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-sin-descuento',
+      allows_discount: false,
+      is_active: true,
+    });
+
+    await expect(
+      servicio.emitir(
+        factura({
+          descuento_global: { codigo: '02', monto: 10 },
+        }),
+        COMPANY_ID,
+      ),
+    ).rejects.toThrow(/no admite descuento/);
+
+    expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(creadas).toHaveLength(0);
+  });
+
+  it('permite descuentos cuando el cliente admite descuento en el maestro', async () => {
+    const { servicio, prisma, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-con-descuento',
+      allows_discount: true,
+      is_active: true,
+    });
+
+    const resultado = await servicio.emitir(
+      factura({
+        descuento_global: { codigo: '02', monto: 10 },
       }),
       COMPANY_ID,
     );
