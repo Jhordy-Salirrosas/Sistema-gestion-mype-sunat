@@ -429,3 +429,10 @@ describe('TA-65 · descargas', () => {
     expect(archivo.contenido.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   });
 });
+
+it.each(['<?xml version="1.0"?><ApplicationResponse/>', { rawXml: '<?xml version="1.0"?><ApplicationResponse/>' }])('recupera el CDR conservado históricamente sin inventar uno', async (cdr_sunat) => {
+  const d = servicio(filaComprobante({ cdr_storage_url: null, cdr_sunat }));
+  const archivo = await d.descargas.descargar('emp-1', 'inv-1', 'cdr');
+  expect(archivo.contenido.toString()).toBe('<?xml version="1.0"?><ApplicationResponse/>');
+  expect(d.generateInvoiceXml).not.toHaveBeenCalled();
+});

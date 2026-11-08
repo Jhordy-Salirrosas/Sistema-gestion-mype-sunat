@@ -1,3 +1,4 @@
+import { formatoMoneda, redondearMoneda as centimos } from './money';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { TASA_IGV } from './sunatCatalogs';
 import {
@@ -43,7 +44,6 @@ export type { TotalesCalculados } from './ublTotalesHelper';
 export type { InvoicePayload } from './invoicePayload';
 
 /** Redondeo monetario a dos decimales sin arrastrar error de coma flotante. */
-const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 @Injectable()
 export class UblGeneratorService {
@@ -229,8 +229,8 @@ export class UblGeneratorService {
         '    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>',
         `    <cbc:AllowanceChargeReasonCode listAgencyName="PE:SUNAT" listName="Cargo/descuento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo53">${esc(payload.descuentoGlobal.codigo)}</cbc:AllowanceChargeReasonCode>`,
         `    <cbc:MultiplierFactorNumeric>${(payload.descuentoGlobal.monto / (totales.baseDescuentoGlobal ?? 1)).toFixed(5)}</cbc:MultiplierFactorNumeric>`,
-        `    <cbc:Amount currencyID="${moneda}">${payload.descuentoGlobal.monto.toFixed(2)}</cbc:Amount>`,
-        `    <cbc:BaseAmount currencyID="${moneda}">${(totales.baseDescuentoGlobal ?? 0).toFixed(2)}</cbc:BaseAmount>`,
+        `    <cbc:Amount currencyID="${moneda}">${formatoMoneda(payload.descuentoGlobal.monto)}</cbc:Amount>`,
+        `    <cbc:BaseAmount currencyID="${moneda}">${formatoMoneda(totales.baseDescuentoGlobal ?? 0)}</cbc:BaseAmount>`,
         '  </cac:AllowanceCharge>',
       ].join('\n') : '',
       impuestos,

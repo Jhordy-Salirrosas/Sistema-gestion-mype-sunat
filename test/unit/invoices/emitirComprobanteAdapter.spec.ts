@@ -478,7 +478,7 @@ describe('M1 desglose de precio final', () => {
     );
     expect(lineas[0]).toMatchObject({
       precioUnitario: 10,
-      valorUnitario: 8.47,
+      valorUnitario: 8.4745762712,
       totalLinea: 30,
       igvLinea: 4.58,
     });
@@ -532,5 +532,27 @@ describe('M1 desglose de precio final', () => {
       igvLinea: 32.4,
     });
     expect(importes.total).toBe(212.4);
+  });
+});
+
+describe('M1 precisión decimal e ICBPER desde cantidades', () => {
+  it('preserva precio de seis decimales y la base unitaria en XML sin cambiar céntimos de línea', async () => {
+    const { bloqueLinea } = await import('../../../src/modules/invoices/xmlNodesHelper');
+    const r = traducirEmision(formulario({ items: [linea({ cantidad: 3, precioUnitario: 0.335, valorUnitario: 0 })] }), emisor, 1);
+    expect(r.importes).toMatchObject({ total: 1.01, gravado: 0.86, igv: 0.15 });
+    expect(bloqueLinea(r.lineas[0], 'PEN')).toContain('>0.2838983051</cbc:PriceAmount>');
+    expect(bloqueLinea(r.lineas[0], 'PEN')).toContain('>0.335</cbc:PriceAmount>');
+  });
+  it('calcula tres bolsas a S/ 0.50 sin pedir el importe', async () => {
+    const { bloqueLinea } = await import('../../../src/modules/invoices/xmlNodesHelper');
+    const r = traducirEmision(formulario({ items: [linea({ precioUnitario: 118, cantidadBolsas: 3 })] }), emisor, 1);
+    expect(r.importes).toMatchObject({ total: 119.5, icbper: 1.5 });
+    expect(bloqueLinea(r.lineas[0], 'PEN')).toContain('<cbc:BaseUnitMeasure unitCode="NIU">3</cbc:BaseUnitMeasure>');
+  });
+  it.each([{ cantidadBolsas: 1.5 }, { cantidadBolsas: -1 }, { cantidadBolsas: 2, icbper: 0.5 }, { cantidad: 1.5, icbper: 0.75 }])('rechaza cantidades o importes ICBPER incoherentes %j', (datos) => {
+    expect(() => traducirEmision(formulario({ items: [linea(datos)] }), emisor, 1)).toThrow(/ICBPER/);
+  });
+  it('no convierte una afectación ausente en Gravado', () => {
+    expect(() => traducirEmision(formulario({ items: [linea({ afectacion: undefined })] }), emisor, 1)).toThrow(/afectación/);
   });
 });

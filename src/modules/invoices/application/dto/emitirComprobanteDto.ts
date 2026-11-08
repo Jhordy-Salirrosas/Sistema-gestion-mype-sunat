@@ -31,6 +31,7 @@ import {
   IsIn,
   IsNotEmpty,
   IsNumber,
+  IsInt,
   IsOptional,
   IsPositive,
   IsString,
@@ -146,6 +147,12 @@ export class LineaEmisionDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   icbper?: number;
+
+  /** Cantidad explícita de bolsas entregadas; el servidor calcula S/ 0.50 por bolsa. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  cantidadBolsas?: number;
 }
 
 /**

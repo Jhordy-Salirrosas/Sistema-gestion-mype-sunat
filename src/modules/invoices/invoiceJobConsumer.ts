@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from './money';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -377,7 +378,6 @@ export class InvoiceJobConsumer implements OnModuleInit {
       '36',
     ]);
 
-    const centimos = (n: number): number => Math.round(n * 100) / 100;
     const lineasXml = payload.lineas ?? (payload.linea ? [payload.linea] : []);
     const descuentos = lineasXml
       .flatMap((linea) => linea.descuentos ?? [])
@@ -639,13 +639,13 @@ export class InvoiceJobConsumer implements OnModuleInit {
       payloadIgv ??
       (totalIgv && totalIgv > 0
         ? totalIgv
-        : Math.round((total - total / 1.18) * 100) / 100);
+        : centimos(total - total / 1.18));
     const base =
       payloadBase && payloadBase > 0
         ? payloadBase
         : taxable && taxable > 0
           ? taxable
-          : Math.round((total - igv) * 100) / 100;
+          : centimos(total - igv);
 
     await this.accounting.execute({
       companyId: invoice.company_id,

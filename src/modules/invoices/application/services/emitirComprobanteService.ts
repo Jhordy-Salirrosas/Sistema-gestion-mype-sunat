@@ -1,3 +1,4 @@
+import { multiplicarMoneda } from '../../money';
 import { verificarOrigenAceptado } from './creditNoteBalanceGuard';
 /**
  * Emisión de un comprobante desde la PANTALLA (M1, corrección del docente).
@@ -140,19 +141,7 @@ export class EmitirComprobanteService {
       { tipoComprobante: dto.tipo_comprobante, importeTotal: calculoPrevio.importes.total },
     );
 
-    // Validar descuentos antes de reservar un correlativo.
-    dto.items.forEach((item, i) => {
-      const d = item.descuento;
-      const baseUnitaria =
-        typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario)
-          ? (item.afectacion ?? '10').startsWith('10')
-            ? Math.round((item.precioUnitario / 1.18) * 100) / 100
-            : item.precioUnitario
-          : item.valorUnitario;
-      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * baseUnitaria || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
-        throw new BadRequestException(`Descuento inválido en la línea ${i + 1}`);
-      }
-    });
+    // Los descuentos ya fueron validados por la liquidación decimal previa.
 
     // 2. La nota necesita un comprobante que exista de verdad.
     await this.verificarDocumentoOrigen(dto, companyId);
@@ -727,7 +716,7 @@ export class EmitirComprobanteService {
         unit_price:
           linea.precioUnitario ??
           (linea.afectacion.startsWith('10')
-            ? Math.round(linea.valorUnitario * 1.18 * 100) / 100
+            ? multiplicarMoneda(linea.valorUnitario, 1.18)
             : linea.valorUnitario),
         igv_affectation_type: linea.afectacion,
         igv_amount: linea.igvLinea,

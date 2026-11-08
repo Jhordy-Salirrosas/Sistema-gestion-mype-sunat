@@ -384,3 +384,10 @@ describe('TA-28 InvoiceJobConsumer', () => {
     expect(d.consumidor.hashDelXml('abc')).toHaveLength(64);
   });
 });
+
+it('no propaga un fallo al marcar ERROR_RED cuando otro worker finalizó concurrentemente', async () => {
+  const d = crearDobles(null);
+  d.update.mockRejectedValueOnce(new Error('registro ya finalizado'));
+  await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).resolves.toBeNull();
+  expect(d.processWithRetry).not.toHaveBeenCalled();
+});

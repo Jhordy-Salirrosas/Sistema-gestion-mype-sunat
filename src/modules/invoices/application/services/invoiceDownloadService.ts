@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from '../../money';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -366,7 +367,6 @@ export class InvoiceDownloadService {
       }
     }
 
-    const centimos = (n: number): number => Math.round(n * 100) / 100;
     const gravadoR = centimos(gravado);
     const igv = centimos(gravadoR * 0.18);
 

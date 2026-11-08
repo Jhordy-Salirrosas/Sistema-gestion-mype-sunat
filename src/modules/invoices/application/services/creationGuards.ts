@@ -37,7 +37,7 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
       if (p.codigoDetraccion && !l.codigoDetraccion) throw new BadRequestException('La afectación SPOT debe constar por línea');
       return { codigo: l.codigo, descripcion: l.descripcion, cantidad: l.cantidad,
         precioUnitario: l.precioUnitario, valorUnitario: l.valorUnitario, unidad: l.unidad,
-        afectacion: l.afectacion, descuento: l.descuentos?.[0], icbper: l.icbperLinea,
+        afectacion: l.afectacion, descuento: l.descuentos?.[0], icbper: l.icbperLinea, cantidadBolsas: l.cantidadBolsas,
         codigoDetraccion: l.codigoDetraccion };
     }),
   };

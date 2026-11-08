@@ -1,3 +1,4 @@
+import { formatoMoneda, formatoUnitario, multiplicarMoneda } from './money';
 /**
  * Constructores de nodos XML para el generador UBL 2.1 (M1).
  *
@@ -23,7 +24,7 @@ export const esc = (valor: string | number): string =>
     .replace(/'/g, '&apos;');
 
 /** Formatea un importe con dos decimales. */
-export const dinero = (importe: number): string => importe.toFixed(2);
+export const dinero = (importe: number): string => formatoMoneda(importe);
 
 /** Bloque de extensiones UBL donde se aloja la firma digital. */
 export const bloqueUblExtensions = (): string => `  <ext:UBLExtensions>
@@ -61,6 +62,7 @@ export interface LineaDetalle {
    * su propio `TaxTotal`.
    */
   icbperLinea?: number;
+  cantidadBolsas?: number;
 }
 
 /** Nombres del Catálogo 05 para el `TaxScheme` de la línea. */
@@ -160,7 +162,7 @@ export const bloqueLinea = (
 
   // Base de la línea sin IGV, ya con los descuentos aplicados.
   const descuentos = l.descuentos ?? [];
-  const baseBruta = Math.round(l.cantidad * l.valorUnitario * 100) / 100;
+  const baseBruta = multiplicarMoneda(l.cantidad, l.valorUnitario);
   const neto = gratuita ? 0 : l.totalLinea - l.igvLinea;
 
   // Regla 3278: la gratuita se declara a precio cero con tipo '02'.
@@ -187,7 +189,9 @@ export const bloqueLinea = (
     (l.icbperLinea ?? 0) > 0
       ? `
       <cac:TaxSubtotal>
-        <cbc:TaxAmount currencyID="${moneda}">${dinero(l.icbperLinea ?? 0)}</cbc:TaxAmount>
+        <cbc:TaxAmount currencyID="${moneda}">${dinero(l.icbperLinea ?? 0)}</cbc:TaxAmount>${l.cantidadBolsas !== undefined ? `
+        <cbc:BaseUnitMeasure unitCode="NIU">${l.cantidadBolsas}</cbc:BaseUnitMeasure>
+        <cbc:PerUnitAmount currencyID="${moneda}">0.50</cbc:PerUnitAmount>` : ''}
         <cac:TaxCategory>
           <cbc:ID schemeID="UN/ECE 5305">S</cbc:ID>
           <cac:TaxScheme>
@@ -221,7 +225,7 @@ export const bloqueLinea = (
     <cbc:LineExtensionAmount currencyID="${moneda}">${dinero(neto)}</cbc:LineExtensionAmount>
     <cac:PricingReference>
       <cac:AlternativeConditionPrice>
-        <cbc:PriceAmount currencyID="${moneda}">${dinero(precioXml)}</cbc:PriceAmount>
+        <cbc:PriceAmount currencyID="${moneda}">${formatoUnitario(precioXml)}</cbc:PriceAmount>
         <cbc:PriceTypeCode>${tipoPrecio}</cbc:PriceTypeCode>
       </cac:AlternativeConditionPrice>
     </cac:PricingReference>
@@ -235,7 +239,7 @@ ${categoriaLinea(l.afectacion, tributo)}
     </cac:TaxTotal>
 ${raiz !== 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}${item}
     <cac:Price>
-      <cbc:PriceAmount currencyID="${moneda}">${dinero(gratuita ? 0 : l.valorUnitario)}</cbc:PriceAmount>
+      <cbc:PriceAmount currencyID="${moneda}">${formatoUnitario(gratuita ? 0 : l.valorUnitario)}</cbc:PriceAmount>
     </cac:Price>
   </cac:${raiz}Line>`;
 };
