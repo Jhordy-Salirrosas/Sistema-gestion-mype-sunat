@@ -29,6 +29,7 @@ export interface ItemAValidar {
   descripcion: string;
   cantidad: number;
   unidad?: string;
+  afectacion?: string | null;
 }
 
 /** Resultado de la validación de stock. */
@@ -95,7 +96,13 @@ export class StockValidationService {
 
     const productos = await this.prisma.inventoryProduct.findMany({
       where: { company_id: companyId, sku: { in: codigos }, is_active: true },
-      select: { id: true, sku: true, description: true, sunat_unit_code: true },
+      select: {
+        id: true,
+        sku: true,
+        description: true,
+        sunat_unit_code: true,
+        tax_affectation: true,
+      },
     });
 
     const stockPorSku = this.mapaDeStock(productos, saldos);
@@ -113,6 +120,16 @@ export class StockValidationService {
           `El producto ${codigo} no está en el inventario: no se validó su stock`,
         );
         continue;
+      }
+
+      if (
+        entrada.taxAffectation &&
+        item.afectacion?.trim() &&
+        item.afectacion.trim() !== entrada.taxAffectation
+      ) {
+        throw new BadRequestException(
+          `La afectación tributaria del producto ${codigo} (${entrada.taxAffectation}) viene de su configuración y no coincide con la enviada (${item.afectacion.trim()}).`,
+        );
       }
 
       if (item.cantidad > entrada.stock) {
@@ -153,9 +170,18 @@ export class StockValidationService {
       sku: string;
       description: string;
       sunat_unit_code: string;
+      tax_affectation?: string | null;
     }>,
     saldos: Array<{ product_id: string; _sum: { current_stock: unknown } }>,
-  ): Map<string, { descripcion: string; stock: number; unidad: string }> {
+  ): Map<
+    string,
+    {
+      descripcion: string;
+      stock: number;
+      unidad: string;
+      taxAffectation: string | null;
+    }
+  > {
     const totalPorProducto = new Map<string, number>();
     for (const saldo of saldos) {
       const valor = Number(saldo._sum.current_stock ?? 0);
@@ -164,13 +190,19 @@ export class StockValidationService {
 
     const mapa = new Map<
       string,
-      { descripcion: string; stock: number; unidad: string }
+      {
+        descripcion: string;
+        stock: number;
+        unidad: string;
+        taxAffectation: string | null;
+      }
     >();
     for (const producto of productos) {
       mapa.set(producto.sku, {
         descripcion: producto.description,
         stock: totalPorProducto.get(producto.id) ?? 0,
         unidad: producto.sunat_unit_code,
+        taxAffectation: producto.tax_affectation?.trim() || null,
       });
     }
     return mapa;

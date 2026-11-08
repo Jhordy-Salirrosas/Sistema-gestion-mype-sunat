@@ -609,6 +609,7 @@ export class EmitirComprobanteService {
       descripcion: item.descripcion,
       cantidad: item.cantidad,
       unidad: item.unidad,
+      afectacion: item.afectacion ?? null,
     }));
 
     await this.stock.validar(companyId, items);
