@@ -62,7 +62,17 @@ const montar = (
   const actualizaciones: Array<Record<string, unknown>> = [];
 
   const prisma = {
-    businessPartner: { findFirst: jest.fn(async () => null as { id: string } | null) },
+    businessPartner: {
+      findFirst: jest.fn(
+        async () =>
+          null as {
+            id: string;
+            has_credit?: boolean | null;
+            payment_terms?: string | null;
+            is_active?: boolean;
+          } | null,
+      ),
+    },
     partnerTaxStatus: { findFirst: jest.fn(async () => null as { value: boolean } | null) },
     company: {
       findUnique: jest.fn(async () => ({
@@ -345,6 +355,54 @@ describe('EmitirComprobanteService — descuento global', () => {
     await expect(servicio.emitir(factura({ descuento_global: { codigo: '02', monto: 101 } }), COMPANY_ID)).rejects.toThrow(/excede su base/);
     expect(series.reservarCorrelativo).not.toHaveBeenCalled();
     expect(creadas).toHaveLength(0);
+  });
+});
+
+describe('EmitirComprobanteService — crédito por cliente', () => {
+  it('rechaza venta al crédito con cuotas si el cliente no tiene crédito en el maestro', async () => {
+    const { servicio, prisma, series, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-contado',
+      has_credit: false,
+      payment_terms: 'CONTADO',
+      is_active: true,
+    });
+
+    await expect(
+      servicio.emitir(
+        factura({
+          forma_pago: 'Credito',
+          fecha_emision: '2026-11-01',
+          cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+        }),
+        COMPANY_ID,
+      ),
+    ).rejects.toThrow(/crédito habilitado en el maestro/);
+
+    expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(creadas).toHaveLength(0);
+  });
+
+  it('permite venta al crédito con cuotas cuando el cliente tiene crédito habilitado en el maestro', async () => {
+    const { servicio, prisma, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-credito',
+      has_credit: true,
+      payment_terms: '30_DIAS',
+      is_active: true,
+    });
+
+    const resultado = await servicio.emitir(
+      factura({
+        forma_pago: 'Credito',
+        fecha_emision: '2026-11-01',
+        cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+      }),
+      COMPANY_ID,
+    );
+
+    expect(resultado.success).toBe(true);
+    expect(creadas).toHaveLength(1);
   });
 });
 

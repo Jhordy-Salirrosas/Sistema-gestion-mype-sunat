@@ -150,6 +150,9 @@ export class EmitirComprobanteService {
     // 2. La nota necesita un comprobante que exista de verdad.
     await this.verificarDocumentoOrigen(dto, companyId);
 
+    // 2b. Venta al crédito con cuotas solo para clientes con crédito en el maestro.
+    await this.validarCreditoCliente(dto, companyId);
+
     // 3. El stock, antes de reservar correlativo.
     await this.validarStock(dto, companyId);
 
@@ -484,6 +487,58 @@ export class EmitirComprobanteService {
         `No se pudo leer la cuenta de detracción de la empresa ${companyId}: ${mensaje}`,
       );
       return null;
+    }
+  }
+
+  /**
+   * Verifica que el cliente tenga crédito habilitado en el maestro de terceros
+   * antes de permitir la emisión de una venta al crédito con cuotas.
+   */
+  private async validarCreditoCliente(
+    dto: EmitirComprobanteDto,
+    companyId: string,
+  ): Promise<void> {
+    if (dto.tipo_comprobante !== '01' && dto.tipo_comprobante !== '03') return;
+    if (dto.forma_pago !== 'Credito') return;
+
+    const numero = dto.customer_identity_number?.trim();
+    const tipo =
+      dto.customer_identity_type?.trim() ||
+      (numero?.length === 11 ? '6' : '1');
+    const partner = numero
+      ? ((await this.prisma.businessPartner.findFirst({
+          where: {
+            company_id: companyId,
+            doc_type: tipo,
+            doc_number: numero,
+          },
+          select: {
+            id: true,
+            has_credit: true,
+            payment_terms: true,
+            is_active: true,
+          },
+        })) as {
+          id: string;
+          has_credit?: boolean | null;
+          payment_terms?: string | null;
+          is_active?: boolean;
+        } | null)
+      : null;
+
+    const tieneCredito =
+      partner && partner.is_active !== false
+        ? typeof partner.has_credit === 'boolean'
+          ? partner.has_credit
+          : Boolean(
+              partner.payment_terms && partner.payment_terms !== 'CONTADO',
+            )
+        : false;
+
+    if (!tieneCredito) {
+      throw new BadRequestException(
+        'El cliente no tiene crédito habilitado en el maestro de terceros; no se puede emitir al crédito con cuotas.',
+      );
     }
   }
 
