@@ -17,6 +17,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EmitirComprobanteService } from '../../../src/modules/invoices/application/services/emitirComprobanteService';
+import { aComprobanteOrigenFallback, aListado } from '../../../src/modules/invoices/application/services/invoiceQueryMapper';
+import { InvoiceSummaryService } from '../../../src/modules/invoices/application/services/invoiceSummaryService';
 import type { EmitirComprobanteDto } from '../../../src/modules/invoices/application/dto/emitirComprobanteDto';
 
 const COMPANY_ID = '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
@@ -62,7 +64,18 @@ const montar = (
   const actualizaciones: Array<Record<string, unknown>> = [];
 
   const prisma = {
-    businessPartner: { findFirst: jest.fn(async () => null as { id: string } | null) },
+    businessPartner: {
+      findFirst: jest.fn(
+        async () =>
+          null as {
+            id: string;
+            has_credit?: boolean | null;
+            allows_discount?: boolean | null;
+            payment_terms?: string | null;
+            is_active?: boolean;
+          } | null,
+      ),
+    },
     partnerTaxStatus: { findFirst: jest.fn(async () => null as { value: boolean } | null) },
     company: {
       findUnique: jest.fn(async () => ({
@@ -348,6 +361,96 @@ describe('EmitirComprobanteService — descuento global', () => {
   });
 });
 
+describe('EmitirComprobanteService — crédito por cliente', () => {
+  it('rechaza venta al crédito con cuotas si el cliente no tiene crédito en el maestro', async () => {
+    const { servicio, prisma, series, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-contado',
+      has_credit: false,
+      payment_terms: 'CONTADO',
+      is_active: true,
+    });
+
+    await expect(
+      servicio.emitir(
+        factura({
+          forma_pago: 'Credito',
+          fecha_emision: '2026-11-01',
+          cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+        }),
+        COMPANY_ID,
+      ),
+    ).rejects.toThrow(/crédito habilitado en el maestro/);
+
+    expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(creadas).toHaveLength(0);
+  });
+
+  it('permite venta al crédito con cuotas cuando el cliente tiene crédito habilitado en el maestro', async () => {
+    const { servicio, prisma, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-credito',
+      has_credit: true,
+      payment_terms: '30_DIAS',
+      is_active: true,
+    });
+
+    const resultado = await servicio.emitir(
+      factura({
+        forma_pago: 'Credito',
+        fecha_emision: '2026-11-01',
+        cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+      }),
+      COMPANY_ID,
+    );
+
+    expect(resultado.success).toBe(true);
+    expect(creadas).toHaveLength(1);
+  });
+});
+
+describe('EmitirComprobanteService — descuento por cliente', () => {
+  it('rechaza descuentos de línea o globales si el cliente no admite descuento en el maestro', async () => {
+    const { servicio, prisma, series, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-sin-descuento',
+      allows_discount: false,
+      is_active: true,
+    });
+
+    await expect(
+      servicio.emitir(
+        factura({
+          descuento_global: { codigo: '02', monto: 10 },
+        }),
+        COMPANY_ID,
+      ),
+    ).rejects.toThrow(/no admite descuento/);
+
+    expect(series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(creadas).toHaveLength(0);
+  });
+
+  it('permite descuentos cuando el cliente admite descuento en el maestro', async () => {
+    const { servicio, prisma, creadas } = montar();
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cli-con-descuento',
+      allows_discount: true,
+      is_active: true,
+    });
+
+    const resultado = await servicio.emitir(
+      factura({
+        descuento_global: { codigo: '02', monto: 10 },
+      }),
+      COMPANY_ID,
+    );
+
+    expect(resultado.success).toBe(true);
+    expect(creadas).toHaveLength(1);
+  });
+});
+
 describe('EmitirComprobanteService — stock antes que correlativo', () => {
   // El orden importa: un número reservado por una venta que no se puede emitir
   // queda quemado para siempre en la serie.
@@ -614,5 +717,287 @@ describe('EmitirComprobanteService — fallos de la serie', () => {
       NotFoundException,
     );
     expect(creadas).toHaveLength(0);
+  });
+});
+
+describe('Corrección 6 — Comprobante origen colgado de la nota', () => {
+  it('expone tipo, serie-número, cliente e importe real cuando el comprobante origen existe en la base', () => {
+    const origen = aComprobanteOrigenFallback(
+      {
+        tipo_comprobante: '07',
+        referenced_invoice_id: 'inv-orig-1',
+        referenced_document_type: '01',
+        referenced_series_correlative: 'F001-00000042',
+        customer_identity_number: '20100070970',
+        customer_legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+        currency_code: 'PEN',
+      },
+      {
+        id: 'inv-orig-1',
+        tipo_comprobante: '01',
+        serie: 'F001',
+        correlativo: 42,
+        customer_identity_number: '20100070970',
+        customer_legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+        monto_total: 1180,
+        currency_code: 'PEN',
+      },
+    );
+
+    expect(origen).toEqual({
+      id: 'inv-orig-1',
+      tipo_comprobante: '01',
+      serie: 'F001',
+      correlativo: 42,
+      numero: 'F001-00000042',
+      cliente_documento: '20100070970',
+      cliente_nombre: 'FERRETERÍA LOS ANDES S.A.C.',
+      monto_total: 1180,
+      moneda: 'PEN',
+    });
+  });
+
+  it('deja monto_total en null sin inventarlo cuando la nota solo conserva la referencia textual', () => {
+    const dto = aListado({
+      id: 'nota-1',
+      tipo_comprobante: '07',
+      serie: 'FC01',
+      correlativo: 5,
+      fecha_emision: new Date('2026-11-07T00:00:00.000Z'),
+      estado: 'ACEPTADO' as never,
+      monto_total: 118,
+      currency_code: 'PEN',
+      customer_identity_number: '20100070970',
+      customer_legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+      sunat_response_code: '0',
+      referenced_document_type: '01',
+      referenced_series_correlative: 'F001-00000042',
+      credit_debit_reason_code: '06',
+    });
+
+    expect(dto.comprobante_origen).toEqual({
+      id: null,
+      tipo_comprobante: '01',
+      serie: 'F001',
+      correlativo: 42,
+      numero: 'F001-00000042',
+      cliente_documento: '20100070970',
+      cliente_nombre: 'FERRETERÍA LOS ANDES S.A.C.',
+      monto_total: null,
+      moneda: 'PEN',
+    });
+  });
+});
+
+describe('Corrección 7 — Bajas y Resúmenes con tipo, estado SUNAT y marca reenviable', () => {
+  it('expone id, tipoComprobante, estado y reenviable en las filas de resumen diario y comunicación de baja', async () => {
+    const prismaMock = {
+      company: {
+        findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'EMPRESA S.A.C.' })),
+      },
+      invoice: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'inv-red-1',
+            serie: 'B001',
+            correlativo: 10,
+            tipo_comprobante: '03',
+            fecha_emision: new Date('2026-11-07T00:00:00.000Z'),
+            estado: 'ERROR_RED',
+            monto_total: 118,
+            customer_identity_type: '1',
+            customer_identity_number: '12345678',
+            total_igv: 18,
+          },
+          {
+            id: 'inv-ok-2',
+            serie: 'B001',
+            correlativo: 11,
+            tipo_comprobante: '03',
+            fecha_emision: new Date('2026-11-07T00:00:00.000Z'),
+            estado: 'ACEPTADO',
+            monto_total: 236,
+            customer_identity_type: '1',
+            customer_identity_number: '87654321',
+            total_igv: 36,
+          },
+        ]),
+      },
+    };
+    const summarySvc = new InvoiceSummaryService(prismaMock as never);
+    const vista = await summarySvc.vistaResumenDiario(COMPANY_ID, '2026-11-07', 1);
+    expect(vista.lineas).toHaveLength(2);
+    expect(vista.lineas[0]).toEqual(
+      expect.objectContaining({
+        id: 'inv-red-1',
+        tipoComprobante: '03',
+        estado: 'ERROR_RED',
+        reenviable: true,
+      }),
+    );
+    expect(vista.lineas[1]).toEqual(
+      expect.objectContaining({
+        id: 'inv-ok-2',
+        tipoComprobante: '03',
+        estado: 'ACEPTADO',
+        reenviable: false,
+      }),
+    );
+  });
+});
+
+describe('M1 permisos antes de reservar correlativo', () => {
+  const credito = () =>
+    factura({
+      forma_pago: 'Credito',
+      fecha_emision: '2026-11-01',
+      cuotas: [{ monto: 118, vencimiento: '2026-12-01' }],
+    });
+  it.each([
+    {
+      id: 'cliente',
+      has_credit: false,
+      payment_terms: '30_DIAS',
+      is_active: true,
+    },
+    {
+      id: 'cliente',
+      has_credit: null,
+      payment_terms: 'CONTADO',
+      is_active: true,
+    },
+    { id: 'cliente', has_credit: true, is_active: false },
+    null,
+  ])('rechaza crédito sin permiso efectivo: %j', async (partner) => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue(partner);
+    await expect(h.servicio.emitir(credito(), COMPANY_ID)).rejects.toThrow(
+      /crédito habilitado/,
+    );
+    expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+    expect(h.repositorio.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+  });
+
+  it('consulta permiso dentro de la empresa y persiste cuotas cuando has_credit es true', async () => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cliente',
+      has_credit: true,
+      is_active: true,
+    });
+    await h.servicio.emitir(credito(), COMPANY_ID);
+    expect(h.prisma.businessPartner.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          company_id: COMPANY_ID,
+          doc_type: '6',
+          doc_number: '20100070970',
+        },
+      }),
+    );
+    expect(h.creadas[0].payload_ubl).toMatchObject({
+      formaPago: 'Credito',
+      cuotas: [
+        expect.objectContaining({ monto: 118, vencimiento: '2026-12-01' }),
+      ],
+    });
+  });
+
+  it.each([false, null, undefined, true])(
+    'rechaza descuento de línea sin cliente activo autorizado (flag %s)',
+    async (allows_discount) => {
+      const h = montar();
+      h.prisma.businessPartner.findFirst.mockResolvedValue({
+        id: 'cliente',
+        allows_discount,
+        is_active: allows_discount === true ? false : true,
+      });
+      const dto = factura();
+      dto.items[0].descuento = { codigo: '00', monto: 10 };
+      await expect(h.servicio.emitir(dto, COMPANY_ID)).rejects.toThrow(
+        /no admite descuento/,
+      );
+      expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+      expect(h.repositorio.saveWithTransactionalOutbox).not.toHaveBeenCalled();
+    },
+  );
+
+  it('descuento de línea autorizado usa base sin IGV del precio final y persiste precio y afectación', async () => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'cliente',
+      allows_discount: true,
+      is_active: true,
+    });
+    const dto = factura({
+      items: [
+        {
+          descripcion: 'Producto',
+          codigo: 'SKU',
+          cantidad: 2,
+          valorUnitario: 999,
+          precioUnitario: 118,
+          afectacion: '10',
+          descuento: { codigo: '00', monto: 20 },
+        },
+      ],
+    });
+    await h.servicio.emitir(dto, COMPANY_ID);
+    expect(h.lineasGuardadas[0]).toMatchObject({
+      unit_value: 100,
+      unit_price: 118,
+      igv_amount: 32.4,
+      total_amount: 212.4,
+      igv_affectation_type: '10',
+    });
+    expect(h.stock.validar).toHaveBeenCalledWith(COMPANY_ID, [
+      expect.objectContaining({ codigo: 'SKU', afectacion: '10' }),
+    ]);
+  });
+
+  it('un descuento superior a la base desglosada del precio final se rechaza antes de consultar permisos', async () => {
+    const h = montar();
+    const dto = factura({
+      items: [
+        {
+          descripcion: 'Producto',
+          cantidad: 1,
+          valorUnitario: 999,
+          precioUnitario: 118,
+          afectacion: '10',
+          descuento: { codigo: '00', monto: 101 },
+        },
+      ],
+    });
+    await expect(h.servicio.emitir(dto, COMPANY_ID)).rejects.toThrow(
+      /Descuento inválido/,
+    );
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ has_credit: true }),
+      }),
+    );
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ allows_discount: true }),
+      }),
+    );
+    expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+  });
+
+  it('venta sin crédito ni descuentos no consulta permisos comerciales', async () => {
+    const h = montar();
+    await h.servicio.emitir(factura({ forma_pago: 'Contado' }), COMPANY_ID);
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ has_credit: true }),
+      }),
+    );
+    expect(h.prisma.businessPartner.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ allows_discount: true }),
+      }),
+    );
+    expect(h.creadas).toHaveLength(1);
   });
 });

@@ -13,6 +13,16 @@ import { InvoiceSeriesService, type SerieFiscal } from './invoiceSeriesService';
 /** Entornos de SUNAT reconocidos. */
 export type EntornoFiscal = 'MOCK' | 'BETA' | 'PRODUCCION';
 
+/** Resumen directo del certificado digital (.PFX / .P12) para la pantalla de Configuración. */
+export interface EstadoCertificadoConfiguracion {
+  archivo: string | null;
+  configurado: boolean;
+  estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'NO_CONFIGURADO';
+  vence_el: string | null;
+  dias_restantes: number | null;
+  origen: 'company' | 'deployment';
+}
+
 /** Estado de un punto de configuración. */
 export interface EstadoConfiguracion {
   clave: string;
@@ -31,9 +41,11 @@ export interface ConfiguracionFiscal {
   sol_password_configurada?: boolean;
   cert_password_configurada?: boolean;
   ruc?: string;
+  perfil_comercial?: 'MAYORISTA' | 'MINORISTA' | null;
   entorno: EntornoFiscal;
   endpoint_bill_service: string;
   endpoint_consult_service: string;
+  certificado: EstadoCertificadoConfiguracion;
   checklist: EstadoConfiguracion[];
   /** true solo si todos los puntos obligatorios están configurados. */
   listo_para_emitir: boolean;
@@ -62,10 +74,12 @@ export class InvoiceConfigService {
     const entorno = context?.environment ?? this.entorno();
     const listado = await this.series.listar(companyId);
 
+    const { punto: puntoCertificado, resumen: resumenCertificado } =
+      this.evaluarCertificado(context);
     const checklist: EstadoConfiguracion[] = [
       this.chequeoEntorno(entorno),
       this.chequeoUsuarioSol(context),
-      this.chequeoCertificado(context),
+      puntoCertificado,
       this.chequeoSeries(listado),
     ];
 
@@ -80,6 +94,7 @@ export class InvoiceConfigService {
         ? Boolean(context.certificate)
         : Boolean(process.env.CERT_PASSWORD),
       ruc: context?.ruc,
+      perfil_comercial: context?.commercialProfile ?? null,
       entorno,
       endpoint_bill_service: this.publicEndpoint(
         context?.endpoint ??
@@ -89,6 +104,7 @@ export class InvoiceConfigService {
         context?.consultEndpoint ??
           this.endpoint('SUNAT_CONSULT_SERVICE_URL', '/billConsultService'),
       ),
+      certificado: resumenCertificado,
       checklist,
       listo_para_emitir: checklist
         .filter((punto) => punto.obligatorio)
@@ -185,32 +201,65 @@ export class InvoiceConfigService {
    * cuando el certificado no es vigente; ese mismo error se convierte aquí en
    * el motivo legible del punto del checklist.
    */
-  private chequeoCertificado(context?: IssuerContext): EstadoConfiguracion {
+  private evaluarCertificado(context?: IssuerContext): {
+    punto: EstadoConfiguracion;
+    resumen: EstadoCertificadoConfiguracion;
+  } {
     const base = {
       clave: 'certificado_x509',
       descripcion: 'Certificado digital para firmar el XML',
       obligatorio: true,
     };
+    const origen: 'company' | 'deployment' =
+      context?.certificateSource === 'company' ? 'company' : 'deployment';
 
     let leido: ValidatedCertificate;
     try {
       leido = this.certificado.getCertificate(context);
-    } catch (error) {
+    } catch {
       const mensaje = 'Certificado no utilizable';
       this.logger.warn(`[TA-60] Certificado no utilizable: ${mensaje}`);
-      return { ...base, configurado: false, detalle: mensaje };
+      return {
+        punto: { ...base, configurado: false, detalle: mensaje },
+        resumen: {
+          archivo: null,
+          configurado: false,
+          estado: 'NO_CONFIGURADO',
+          vence_el: null,
+          dias_restantes: null,
+          origen,
+        },
+      };
     }
 
     const vence = leido.validTo.toISOString().slice(0, 10);
+    const dias = leido.daysRemaining;
+    const estado =
+      dias < 0 ? 'VENCIDO' : dias <= 30 ? 'POR_VENCER' : 'VIGENTE';
     const aviso =
-      leido.daysRemaining <= 30
-        ? ` (¡vence en ${leido.daysRemaining} días!)`
-        : ` (${leido.daysRemaining} días restantes)`;
+      dias <= 30
+        ? ` (¡vence en ${dias} días!)`
+        : ` (${dias} días restantes)`;
+    const rucArchivo = leido.issuerRuc || context?.ruc || 'emisor';
+    const archivo =
+      origen === 'company'
+        ? `certificado-${rucArchivo}.p12 (custodia empresa)`
+        : `certificado-${rucArchivo}.p12 (custodia despliegue)`;
 
     return {
-      ...base,
-      configurado: true,
-      detalle: `Vigente hasta ${vence}${aviso}`,
+      punto: {
+        ...base,
+        configurado: estado !== 'VENCIDO',
+        detalle: `Vigente hasta ${vence}${aviso}`,
+      },
+      resumen: {
+        archivo,
+        configurado: estado !== 'VENCIDO',
+        estado,
+        vence_el: vence,
+        dias_restantes: dias,
+        origen,
+      },
     };
   }
 

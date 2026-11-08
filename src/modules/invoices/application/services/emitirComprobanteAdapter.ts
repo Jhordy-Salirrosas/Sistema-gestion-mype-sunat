@@ -116,8 +116,33 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   const afectacion = item.afectacion ?? '10';
   const unidad = (item.unidad ?? 'NIU').toUpperCase();
   const cantidad = item.cantidad;
-  const valorVentaBruto = centimos(cantidad * item.valorUnitario);
   const gratuita = esGratuita(afectacion);
+  const gravada = !gratuita && tributoDe(afectacion) === '1000';
+  const tienePrecioConIgv =
+    typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario);
+
+  // Cuando llega `precioUnitario` (precio final con IGV incluido digitado en la venta),
+  // jamás se trata como base sin impuesto: en operaciones gravadas se desglosa la base
+  // dividiendo entre (1 + TASA_IGV) y el total de la línea preserva el precio con IGV.
+  const precioUnitarioEfectivo = tienePrecioConIgv
+    ? centimos(item.precioUnitario!)
+    : gravada
+      ? centimos(item.valorUnitario * (1 + TASA_IGV))
+      : centimos(item.valorUnitario ?? 0);
+
+  const valorUnitarioEfectivo = tienePrecioConIgv
+    ? gravada
+      ? centimos(item.precioUnitario! / (1 + TASA_IGV))
+      : centimos(item.precioUnitario!)
+    : centimos(item.valorUnitario ?? 0);
+
+  const totalBrutoConIgv = tienePrecioConIgv
+    ? centimos(cantidad * item.precioUnitario!)
+    : null;
+  const valorVentaBruto =
+    tienePrecioConIgv && gravada
+      ? centimos(totalBrutoConIgv! / (1 + TASA_IGV))
+      : centimos(cantidad * valorUnitarioEfectivo);
 
   // Regla 3278: una gratuita lleva LineExtensionAmount en 0 y su precio
   // unitario en cero. Declarar importe en una transferencia gratuita haría
@@ -127,8 +152,14 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     throw new BadRequestException(`Descuento inválido en la línea ${indice + 1}`);
   }
   const valorVenta = gratuita ? 0 : centimos(valorVentaBruto - (descuento?.codigo === '00' ? descuento.monto : 0));
-  const igv = !gratuita && tributoDe(afectacion) === '1000'
-    ? centimos(valorVenta * TASA_IGV)
+  const totalLineaSinDescuento =
+    !gratuita && tienePrecioConIgv && !descuento
+      ? totalBrutoConIgv!
+      : null;
+  const igv = gravada
+    ? totalLineaSinDescuento !== null
+      ? centimos(totalLineaSinDescuento - valorVenta)
+      : centimos(valorVenta * TASA_IGV)
     : 0;
 
   /**
@@ -149,10 +180,10 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     codigo: item.codigo?.trim() || undefined,
     unidad,
     cantidad,
-    valorUnitario: item.valorUnitario,
-    precioUnitario: centimos(item.valorUnitario * (1 + TASA_IGV)),
+    valorUnitario: valorUnitarioEfectivo,
+    precioUnitario: precioUnitarioEfectivo,
     afectacion,
-    totalLinea: centimos(valorVenta + igv),
+    totalLinea: totalLineaSinDescuento !== null ? totalLineaSinDescuento : centimos(valorVenta + igv),
     igvLinea: igv,
     descuentos: descuento ? [{ codigo: descuento.codigo, monto: descuento.monto }] : undefined,
     icbperLinea: item.icbper && item.icbper > 0 ? centimos(item.icbper) : undefined,

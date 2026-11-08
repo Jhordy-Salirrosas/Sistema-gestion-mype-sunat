@@ -130,6 +130,14 @@ export class CreatePartnerDto {
   paymentTerms?: string;
 
   @IsOptional()
+  @IsBoolean()
+  hasCredit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowsDiscount?: boolean;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   creditLimit?: number;
@@ -180,6 +188,14 @@ export class UpdatePartnerDto {
   @IsOptional()
   @IsString()
   paymentTerms?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  hasCredit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowsDiscount?: boolean;
 
   @IsOptional()
   @IsNumber()

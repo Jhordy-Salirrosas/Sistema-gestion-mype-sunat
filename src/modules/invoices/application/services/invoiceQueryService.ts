@@ -19,8 +19,10 @@ import type {
 } from '../dto/invoiceQueryDto';
 import { construirWhere, normalizarPaginacion } from './invoiceQueryFilters';
 import {
+  aComprobanteOrigenFallback,
   aDetalle,
   aListado,
+  numeroComprobante,
   type FilaDetalle,
   type FilaListado,
 } from './invoiceQueryMapper';
@@ -46,8 +48,13 @@ const SELECT_LISTADO = {
   total_igv: true,
   exempt_operations: true,
   unaffected_operations: true,
+  referenced_invoice_id: true,
+  referenced_document_type: true,
   referenced_series_correlative: true,
+  credit_debit_reason_code: true,
   xml_hash_sha256: true,
+  payload_ubl: true,
+  cdr_sunat: true,
 } as const;
 
 /** Proyección del detalle: la del listado más ficha, CDR e historial. */
@@ -100,6 +107,62 @@ export class InvoiceQueryService {
     @Inject(QueueService) private readonly queue: QueueService,
   ) {}
 
+  /** Catálogo de productos con stock y afectación tributaria para emisión M1. */
+  async catalogoProductos(companyId: string) {
+    const [productos, saldos] = await Promise.all([
+      this.prisma.inventoryProduct.findMany({
+        where: { company_id: companyId, is_active: true },
+        select: {
+          id: true,
+          sku: true,
+          description: true,
+          sunat_unit_code: true,
+          tax_affectation: true,
+        },
+        orderBy: { sku: 'asc' },
+      }),
+      this.prisma.inventoryBalance.findMany({
+        where: { company_id: companyId },
+        select: {
+          product_id: true,
+          current_stock: true,
+          average_unit_cost: true,
+        },
+      }),
+    ]);
+
+    const stockPorProducto = new Map<
+      string,
+      { stock: number; costo: number }
+    >();
+    for (const s of saldos) {
+      const actual = stockPorProducto.get(s.product_id) ?? {
+        stock: 0,
+        costo: 0,
+      };
+      const stock = Number(s.current_stock ?? 0);
+      const costo = Number(s.average_unit_cost ?? 0);
+      stockPorProducto.set(s.product_id, {
+        stock: actual.stock + (Number.isFinite(stock) ? stock : 0),
+        costo: Number.isFinite(costo) && costo > 0 ? costo : actual.costo,
+      });
+    }
+
+    return {
+      balances: productos.map((p) => {
+        const s = stockPorProducto.get(p.id) ?? { stock: 0, costo: 0 };
+        return {
+          sku: p.sku,
+          description: p.description,
+          sunatUnitCode: p.sunat_unit_code,
+          taxAffectation: p.tax_affectation?.trim() || null,
+          currentStock: s.stock,
+          averageUnitCost: s.costo,
+        };
+      }),
+    };
+  }
+
   /** Listado paginado con filtros por estado, tipo, serie y fechas. */
   async listar(
     companyId: string,
@@ -124,8 +187,13 @@ export class InvoiceQueryService {
       this.prisma.invoice.count({ where }),
     ]);
 
+    const filasConOrigen = await this.adjuntarComprobantesOrigen(
+      companyId,
+      filas as FilaListado[],
+    );
+
     return {
-      data: (filas as FilaListado[]).map(aListado),
+      data: filasConOrigen.map(aListado),
       total,
       page: paginacion.page,
       page_size: paginacion.page_size,
@@ -147,7 +215,100 @@ export class InvoiceQueryService {
       });
     }
 
-    return aDetalle(fila as FilaDetalle);
+    const [filaConOrigen] = await this.adjuntarComprobantesOrigen(companyId, [
+      fila as FilaDetalle,
+    ]);
+    return aDetalle(filaConOrigen as FilaDetalle);
+  }
+
+  /**
+   * Resuelve los comprobantes origen de las notas (07/08) dentro de la empresa.
+   */
+  private async adjuntarComprobantesOrigen<T extends FilaListado>(
+    companyId: string,
+    filas: T[],
+  ): Promise<T[]> {
+    const notas = filas.filter(
+      (f) => f.tipo_comprobante === '07' || f.tipo_comprobante === '08',
+    );
+    if (notas.length === 0) return filas;
+
+    const idsOrigen = Array.from(
+      new Set(
+        notas
+          .map((n) => n.referenced_invoice_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const paresSerieCorr = notas
+      .filter((n) => !n.referenced_invoice_id && n.referenced_series_correlative)
+      .map((n) => {
+        const m = /^([A-Za-z0-9]+)-(\d+)$/.exec(
+          n.referenced_series_correlative!.trim(),
+        );
+        return m ? { serie: m[1], correlativo: Number(m[2]) } : null;
+      })
+      .filter(
+        (p): p is { serie: string; correlativo: number } =>
+          p !== null && Number.isFinite(p.correlativo),
+      );
+
+    const condicionesOr: Array<Record<string, unknown>> = [];
+    if (idsOrigen.length > 0) {
+      condicionesOr.push({ id: { in: idsOrigen } });
+    }
+    for (const par of paresSerieCorr) {
+      condicionesOr.push({ serie: par.serie, correlativo: par.correlativo });
+    }
+
+    const origenes =
+      condicionesOr.length > 0 && typeof this.prisma.invoice?.findMany === 'function'
+        ? await this.prisma.invoice.findMany({
+            where: {
+              company_id: companyId,
+              OR: condicionesOr,
+            },
+            select: {
+              id: true,
+              tipo_comprobante: true,
+              serie: true,
+              correlativo: true,
+              customer_identity_number: true,
+              customer_legal_name: true,
+              monto_total: true,
+              currency_code: true,
+            },
+          })
+        : [];
+
+    const porId = new Map(origenes.map((o) => [o.id, o]));
+    const porNumero = new Map(
+      origenes.map((o) => [
+        numeroComprobante(o.serie, o.correlativo).toUpperCase(),
+        o,
+      ]),
+    );
+    const porSerieCorrCorto = new Map(
+      origenes.map((o) => [(o.serie + '-' + String(o.correlativo)).toUpperCase(), o]),
+    );
+
+    return filas.map((fila) => {
+      if (fila.tipo_comprobante !== '07' && fila.tipo_comprobante !== '08') {
+        return { ...fila, comprobante_origen: null };
+      }
+      const refNum = fila.referenced_series_correlative?.trim().toUpperCase() ?? '';
+      const origenDb =
+        (fila.referenced_invoice_id
+          ? porId.get(fila.referenced_invoice_id)
+          : undefined) ??
+        (refNum ? porNumero.get(refNum) ?? porSerieCorrCorto.get(refNum) : undefined) ??
+        null;
+
+      return {
+        ...fila,
+        comprobante_origen: aComprobanteOrigenFallback(fila, origenDb),
+      };
+    });
   }
 
   /**

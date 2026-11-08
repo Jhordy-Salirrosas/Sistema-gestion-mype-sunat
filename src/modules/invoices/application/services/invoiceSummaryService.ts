@@ -50,12 +50,18 @@ export interface EnvioAgregado {
 }
 
 /** Detalle de un comprobante dentro de la vista previa. */
+/** Estados en los que el comprobante nunca llegó a SUNAT y admite reenvío. */
+export const ESTADOS_REENVIABLES_SUNAT = ['PENDIENTE', 'EN_COLA', 'ERROR_RED'] as const;
+
 export interface LineaVista {
+  id: string;
   serie: string;
   correlativo: number;
   tipoComprobante: string;
   fechaEmision: string;
   estado: string;
+  /** `true` cuando el comprobante nunca llegó a SUNAT y puede reenviarse desde la fila. */
+  reenviable: boolean;
   total: number;
   incluido: boolean;
   /** Motivo por el que no entra, cuando no entra. */
@@ -239,6 +245,7 @@ export class InvoiceSummaryService {
   /** Convierte una fila de la base a la vista con su motivo de exclusión. */
   private aAgregado(
     fila: {
+      id?: string;
       serie: string;
       correlativo: number;
       tipo_comprobante: string;
@@ -271,11 +278,13 @@ export class InvoiceSummaryService {
     }
 
     return {
+      id: fila.id ?? `${fila.serie}-${fila.correlativo}`,
       serie: fila.serie,
       correlativo: fila.correlativo,
       tipoComprobante: fila.tipo_comprobante,
       fechaEmision,
       estado: fila.estado,
+      reenviable: (ESTADOS_REENVIABLES_SUNAT as readonly string[]).includes(fila.estado),
       total: r2(Number(fila.monto_total ?? 0)),
       incluido: motivoExclusion === '',
       motivoExclusion,

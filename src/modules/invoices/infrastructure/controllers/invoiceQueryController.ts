@@ -99,6 +99,17 @@ export class InvoiceQueryController {
   }
 
   /**
+   * GET /api/v1/invoices/products
+   *
+   * Catálogo de productos con su unidad, stock, costo promedio y afectación
+   * tributaria (Catálogo 07) configurada en el producto.
+   */
+  @Get('products')
+  catalogoProductos(@CurrentCompany() companyId: string) {
+    return this.consultas.catalogoProductos(companyId);
+  }
+
+  /**
    * GET /api/v1/invoices/resumenes/diario?fecha=YYYY-MM-DD
    *
    * Vista previa del resumen diario de boletas (RC): qué entra, qué queda
