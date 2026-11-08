@@ -91,3 +91,61 @@ it.each([null, { tipoComprobante: '03' }, { formaPago: undefined }, { tipoMoneda
     const dto = raw(); dto.payload_ubl = change === null ? null as any : { ...dto.payload_ubl, ...change } as any;
     expect(() => fiscalToEmission(dto as never)).toThrow();
   });
+
+it.each([
+ { items: null }, { items: [null] }, { items: [[]] },
+ { items: [{ codigo: 'SERV', descripcion: null, precioUnitario: 118, cantidad: 1 }] },
+ { cuotas: 1 }, { cuotas: [null] }, { descuento_global: [] },
+])('rechaza estructura inválida con 400 antes de consultar maestros: %j', async (changes) => {
+ const h = harness();
+ await expect(h.run({ ...base(), ...changes })).rejects.toMatchObject({ status: 400 });
+ expect(h.tx.inventoryProduct.findMany).not.toHaveBeenCalled();
+});
+it('no ignora un objeto de descuentos mal formado de la ruta fiscal', () => {
+ const dto = raw(); (dto.payload_ubl.lineas[0] as any).descuentos = { codigo: '00', monto: 10 };
+ expect(() => fiscalToEmission(dto as never)).toThrow(/descuentos/);
+});
+it('la ruta fiscal conserva montos y fechas de cuotas UBL numeradas y acepta su precisión unitaria', async () => {
+ const dto = raw() as any; Object.assign(dto, { customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente' });
+ dto.payload_ubl.formaPago = 'Credito'; dto.payload_ubl.cuotas = [{ numero: 'Cuota001', monto: 30, vencimiento: '2026-12-01' }];
+ Object.assign(dto.payload_ubl.lineas[0], { precioUnitario: 10, valorUnitario: 8.4745762712, cantidad: 3 });
+ const r = await harness().run(fiscalToEmission(dto));
+ expect(r.cuotas).toEqual([{ monto: 30, vencimiento: '2026-12-01' }]);
+});
+it.each([1, [null], [{ numero: 'Cuota099', monto: 118, vencimiento: '2026-12-01' }]])('rechaza cronograma fiscal mal formado %j', (cuotas) => {
+ const dto = raw() as any; dto.payload_ubl.cuotas = cuotas;
+ expect(() => fiscalToEmission(dto)).toThrow(/cuota|cronograma/i);
+});
+it('exige precio final aun cuando llegue una base unitaria válida y rechaza nombres en blanco', async () => {
+ const h = harness(); const dto = base() as any;
+ dto.items[0].precioUnitario = undefined; dto.items[0].valorUnitario = 100;
+ await expect(h.run(dto)).rejects.toThrow('precio unitario con IGV');
+ await expect(h.run({ ...base(), customer_legal_name: '  ' })).rejects.toMatchObject({ status: 400 });
+});
+it('una nota sin forma de pago conserva ausencia y controla el adquirente aunque no tenga identidad', async () => {
+ const h = harness();
+ await expect(h.run({ ...note(), forma_pago: undefined })).resolves.toMatchObject({ forma_pago: undefined });
+ h.origin.customer_identity_number = null as any; h.origin.customer_identity_type = null as any;
+ await expect(h.run({ ...note(), customer_identity_number: undefined, customer_identity_type: undefined })).resolves.toMatchObject({ referenced_invoice_id: 'origin' });
+});
+it('coteja también el tipo y el nombre del adquirente fiscal', () => {
+ const dto = raw() as any; Object.assign(dto, { customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente' });
+ dto.payload_ubl.cliente = { numeroDocumento: '20100070970', tipoDocumento: '6', razonSocial: 'Cliente' };
+ expect(() => fiscalToEmission(dto)).not.toThrow();
+ for (const change of [{ tipoDocumento: '1' }, { razonSocial: 'Otro cliente' }]) {
+   const copy = structuredClone(dto); Object.assign(copy.payload_ubl.cliente, change);
+   expect(() => fiscalToEmission(copy)).toThrow('adquirente');
+ }
+});
+it.each([{ cuotas: [[]] }, { cuotas: [1] }])('rechaza cuota fiscal que no es objeto %j', ({ cuotas }) => {
+ const dto = raw() as any; dto.payload_ubl.cuotas = cuotas;
+ expect(() => fiscalToEmission(dto)).toThrow('Cuota fiscal inválida');
+});
+it('traduce una cuota fiscal sin etiqueta sin inventar su monto ni su fecha', () => {
+ const dto = raw() as any; dto.payload_ubl.cuotas = [{ monto: 118, vencimiento: '2026-12-01' }];
+ expect(fiscalToEmission(dto).cuotas).toEqual([{ monto: 118, vencimiento: '2026-12-01' }]);
+});
+it.each([{ fecha_emision: '2026-02-31' }, { cuotas: [{ monto: 118, vencimiento: '2026-02-31' }] }])('rechaza fechas imposibles antes de evaluar vigencia fiscal %j', async (changes) => {
+ const h = harness(); await expect(h.run({ ...base(), ...changes })).rejects.toMatchObject({ status: 400 });
+ expect(h.tx.inventoryProduct.findMany).not.toHaveBeenCalled();
+});

@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { formatoMoneda, formatoUnitario, multiplicarMoneda } from './money';
 /**
  * Constructores de nodos XML para el generador UBL 2.1 (M1).
@@ -156,9 +157,10 @@ export const bloqueLinea = (
   raiz: 'Invoice' | 'CreditNote' | 'DebitNote' = 'Invoice',
 ): string => {
   const unidad = l.unidad ?? 'NIU';
-  const precio = l.precioUnitario ?? l.valorUnitario * 1.18;
+  const tributo = typeof l.afectacion === 'string' ? tributoDeAfectacion(l.afectacion) : null;
+  if (!tributo) throw new BadRequestException('La línea requiere afectación tributaria registrada; no se presume Gravado');
   const gratuita = esAfectacionGratuita(l.afectacion);
-  const tributo = tributoDeAfectacion(l.afectacion) ?? '1000';
+  const precio = l.precioUnitario ?? (tributo === '1000' && !gratuita ? l.valorUnitario * 1.18 : l.valorUnitario);
 
   // Base de la línea sin IGV, ya con los descuentos aplicados.
   const descuentos = l.descuentos ?? [];

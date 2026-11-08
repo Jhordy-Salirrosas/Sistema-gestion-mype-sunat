@@ -42,3 +42,15 @@ it('conserva establecimiento conocido aun cuando no consta una dirección y no i
  const xml = bloqueEmisor({ ruc: '20000000001', razonSocial: 'EMISOR', direccion: 'Dirección registrada' });
  expect(xml).not.toContain('150101');
 });
+it.each([undefined, null, '99'])('la regeneración tampoco convierte afectación %s en Gravado', async (afectacion) => {
+ const { bloqueLinea } = await import('../../../src/modules/invoices/xmlNodesHelper');
+ const l = { ...payload().lineas![0], afectacion } as any;
+ expect(() => bloqueLinea(l, 'PEN')).toThrow(/afectación tributaria registrada/);
+});
+it.each(['20', '30', '40'])('un precio ausente en afectación %s no agrega IGV al reconstruir desde la base registrada', async (afectacion) => {
+ const { bloqueLinea } = await import('../../../src/modules/invoices/xmlNodesHelper');
+ const l = { ...payload().lineas![0], afectacion, precioUnitario: undefined, igvLinea: 0, totalLinea: 100 };
+ const xml = bloqueLinea(l, 'PEN');
+ expect(xml).toContain('<cbc:PriceAmount currencyID="PEN">100.00</cbc:PriceAmount>');
+ expect(xml).not.toContain('>118.00</cbc:PriceAmount>');
+});

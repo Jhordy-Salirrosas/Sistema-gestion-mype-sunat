@@ -97,3 +97,17 @@ El consumidor activo permanece InvoiceJobConsumer: recarga el documento persisti
 5. Completar datos reales de ubicación/local del emisor donde no consten; decidir expresamente el tratamiento de OBSERVADO como origen de notas si se cambia la política vigente. No se rellena ningún dato histórico con un valor típico.
 6. Frontend (otro repo): conservar Idempotency-Key por solicitud y consumir campos nuevos/nullable, perfil comercial y estados estructurados. La visualización y la preselección no son auditables aquí.
 7. Sistema desplegado: consulta SOL de un comprobante existente, certificado del despliegue y contraste pantalla/GET. Los sondeos HEAD de frontend, Render y WSDL BETA continuaron bloqueados por el proxy CONNECT 403. No se emitió ni se reenvió ningún comprobante.
+
+## Parte 12: validación común de la estructura de entrada
+
+Se aplica el mismo DTO anidado a ambas rutas dentro de la fachada, antes de leer maestros/reservar correlativos. Se rechazan objetos o arreglos mal formados de líneas, descuentos y cuotas con 400, sin persistencia ni eventos. Las cuotas UBL numeradas se traducen al contrato común sin perder monto/fecha, y se rechaza numeración contradictoria. El contrato admite las diez cifras de base unitaria que genera el backend.
+
+Las pruebas nuevas fallaron antes del cambio (TypeError sin clasificación 400 o lectura de maestros antes de rechazar) y cubren ahora el rechazo temprano. No se añaden reglas tributarias ni decisiones SPOT.
+
+También se elimina el respaldo Gravado del constructor de líneas XML, incluida la regeneración: una afectación ausente/inválida bloquea con error explícito. Un precio reconstruido desde una base registrada de operación exonerada, inafecta o exportada no recibe un IGV supuesto.
+
+Se alinea el código 37 (retiro a trabajadores) con la gratuidad que declara el propio catálogo. Las listas de liquidación/representación/puente de M1 no lo cuentan como venta onerosa; se prueba total cero y PriceTypeCode 02. No se modifica la selección de base SPOT ni código de Inventario/Contabilidad.
+
+## Validación de cierre
+
+Suite completa: 231 suites aprobadas, 2030 pruebas aprobadas, 20 omitidas en suites optativas BETA/BD. Build Nest, lint de M1/SUNAT y escáner de secretos aprobados. Cobertura global: sentencias 93.39%, ramas 80.13%, funciones 89.36%, líneas 93.98%. Ningún servicio M1 modificado redujo cobertura en su parte; creationGuards queda en 100% de sentencias, funciones y ramas. La cobertura local no acredita conectividad ni autenticación SUNAT real.

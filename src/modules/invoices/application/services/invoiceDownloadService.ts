@@ -341,6 +341,7 @@ export class InvoiceDownloadService {
       '34',
       '35',
       '36',
+      '37',
     ]);
 
     const lineas: LineaImpresa[] = fila.items.map((item) => ({

@@ -1,6 +1,8 @@
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../../../generated/client/client';
-import type { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
+import { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
@@ -23,16 +25,23 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
     p.cliente.tipoDocumento !== dto.customer_identity_type || p.cliente.razonSocial !== dto.customer_legal_name)) {
     throw new BadRequestException('El adquirente del payload no coincide con la cabecera');
   }
+  if (p.cuotas != null && !Array.isArray(p.cuotas)) throw new BadRequestException('Las cuotas fiscales deben ser un arreglo');
+  const cuotas = p.cuotas?.map((c: any, i: number) => {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) throw new BadRequestException('Cuota fiscal inválida');
+    if (c.numero !== undefined && c.numero !== `Cuota${String(i + 1).padStart(3, '0')}`) throw new BadRequestException('La numeración del cronograma no coincide con sus cuotas');
+    return { monto: c.monto, vencimiento: c.vencimiento };
+  });
   return {
     tipo_comprobante: dto.tipo_comprobante as EmitirComprobanteDto['tipo_comprobante'], serie: dto.serie,
     fecha_emision: dto.fecha_emision, customer_identity_type: dto.customer_identity_type,
     customer_identity_number: dto.customer_identity_number, customer_legal_name: dto.customer_legal_name!,
-    forma_pago: p.formaPago, cuotas: p.cuotas, descuento_global: p.descuentoGlobal,
+    forma_pago: p.formaPago, cuotas, descuento_global: p.descuentoGlobal,
     medio_pago_detraccion: p.medioPagoDetraccion, cuenta_banco_nacion: p.cuentaBancoNacion,
     documento_afectado: p.documentoAfectado, referenced_invoice_id: dto.referenced_invoice_id,
     codigo_motivo_nota: p.codigoMotivoNota, descripcion_motivo_nota: p.descripcionMotivoNota,
     items: p.lineas.map((l: any) => {
       if (!l || typeof l !== 'object') throw new BadRequestException('Línea fiscal inválida');
+      if (l.descuentos !== undefined && l.descuentos !== null && !Array.isArray(l.descuentos)) throw new BadRequestException('La lista de descuentos de línea debe ser un arreglo');
       if ((l.descuentos?.length ?? 0) > 1) throw new BadRequestException('Una línea admite un descuento explícito');
       if (p.codigoDetraccion && !l.codigoDetraccion) throw new BadRequestException('La afectación SPOT debe constar por línea');
       return { codigo: l.codigo, descripcion: l.descripcion, cantidad: l.cantidad,
@@ -45,13 +54,13 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
 
 export async function prepareCreation(tx: Prisma.TransactionClient, input: EmitirComprobanteDto,
   companyId: string): Promise<EmitirComprobanteDto> {
+  const validable = plainToInstance(EmitirComprobanteDto, input);
+  const errors = validateSync(validable, { whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true, validationError: { target: false, value: false } });
+  if (errors.length) throw new BadRequestException({ code: 'EMISSION_INPUT_INVALID', message: 'Datos de emisión inválidos', campos: errors.map((e) => e.property) });
   const dto = structuredClone(input);
-  if (!dto.customer_legal_name?.trim()) throw new BadRequestException('Indique el nombre del adquirente');
-  if (!['01', '03', '07', '08'].includes(dto.tipo_comprobante)) throw new BadRequestException('Tipo de comprobante no permitido');
   if (!['Contado', 'Credito'].includes(dto.forma_pago as string) && ['01', '03'].includes(dto.tipo_comprobante)) {
     throw new BadRequestException('Indique la forma de pago; no se presume Contado');
   }
-  if (!dto.items?.length) throw new BadRequestException('El comprobante requiere líneas reales');
   const codigos = dto.items.map((l) => l.codigo?.trim());
   if (codigos.some((c) => !c)) throw new BadRequestException('Cada producto o servicio debe estar registrado con código y afectación');
   const productos = await tx.inventoryProduct.findMany({ where: {
@@ -66,7 +75,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     }
     if (l.afectacion && l.afectacion !== afectacion) throw new BadRequestException('No puede alterar la afectación del producto');
     if (l.unidad && l.unidad !== producto.sunat_unit_code) throw new BadRequestException('No puede alterar la unidad del producto');
-    if (!Number.isFinite(l.precioUnitario) || l.precioUnitario! < 0 || !Number.isFinite(l.cantidad) || l.cantidad <= 0) {
+    if (!Number.isFinite(l.precioUnitario)) {
       throw new BadRequestException('Indique precio unitario con IGV y cantidad válidos');
     }
     l.afectacion = afectacion;

@@ -376,6 +376,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       '34',
       '35',
       '36',
+      '37',
     ]);
 
     const lineasXml = payload.lineas ?? (payload.linea ? [payload.linea] : []);

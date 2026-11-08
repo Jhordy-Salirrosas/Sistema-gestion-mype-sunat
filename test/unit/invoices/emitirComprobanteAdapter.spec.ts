@@ -561,3 +561,13 @@ it('una línea exportada conserva su afectación y no se reetiqueta como gravada
  expect(r.importes).toMatchObject({ gravado: 0, igv: 0, total: 100 });
  expect(r.lineas[0]).toMatchObject({ afectacion: '40', igvLinea: 0, totalLinea: 100 });
 });
+it('el retiro a trabajadores 37 hereda la gratuidad declarada por el catálogo y no crea una venta', async () => {
+ const { UblGeneratorService } = await import('../../../src/modules/invoices/ublGeneratorService');
+ const { esAfectacionGratuita } = await import('../../../src/modules/invoices/sunatCatalogsQuery');
+ const r = traducirEmision(formulario({ forma_pago: 'Contado', items: [linea({ afectacion: '37', precioUnitario: 118 })] }), emisor, 1);
+ expect(esAfectacionGratuita('37')).toBe(true);
+ expect(r.importes).toMatchObject({ gravado: 0, igv: 0, inafecto: 0, total: 0 });
+ const xml = new UblGeneratorService().generateInvoiceXml(r.dto.payload_ubl as never);
+ expect(xml).toContain('<cbc:PriceTypeCode>02</cbc:PriceTypeCode>');
+ expect(xml).toContain('<cbc:PayableAmount currencyID="PEN">0.00</cbc:PayableAmount>');
+});

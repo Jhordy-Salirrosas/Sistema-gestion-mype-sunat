@@ -82,7 +82,7 @@ export const CATALOGO_07_AFECTACION = {
 export const AFECTACIONES_GRATUITAS: readonly string[] = [
   '11', '12', '13', '14', '15', '16',
   '21',
-  '31', '32', '33', '34', '35', '36',
+  '31', '32', '33', '34', '35', '36', '37',
 ];
 
 /**
