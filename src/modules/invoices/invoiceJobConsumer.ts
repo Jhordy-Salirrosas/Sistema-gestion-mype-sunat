@@ -58,6 +58,11 @@ import { InvoiceAccountingBridgeService } from './application/services/invoiceAc
 import type { FacturaParaPuente } from './application/services/invoiceAccountingBridgeService';
 import { SignedXmlStorageService } from './application/services/signedXmlStorageService';
 
+const ESTADOS_FINALES: InvoiceStatus[] = [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO,
+  InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO];
+
+class ComprobanteFinalizado extends Error {}
+
 /** Payload que viaja en la cola: solo identifica el comprobante. */
 export interface InvoiceJobPayload {
   invoice_id: string;
@@ -172,6 +177,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
     try {
       aprobado = await this.preparar(invoiceId);
     } catch (error) {
+      // Una reentrega de la cola es un no-op, nunca un fallo de preparación.
+      if (error instanceof ComprobanteFinalizado) return null;
       if (error instanceof ErrorValidacionBloqueada) {
         return this.bloqueoDeInfraestructura(invoiceId, error);
       }
@@ -761,14 +768,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
       throw new Error(`Comprobante ${invoiceId} no existe en la base de datos`);
     }
 
-    const finales: InvoiceStatus[] = [
-      InvoiceStatus.ACEPTADO,
-      InvoiceStatus.OBSERVADO,
-      InvoiceStatus.RECHAZADO,
-      InvoiceStatus.ANULADO,
-    ];
-    if (finales.includes(invoice.estado)) {
-      throw new Error(
+    if (ESTADOS_FINALES.includes(invoice.estado)) {
+      throw new ComprobanteFinalizado(
         `Comprobante ${invoiceId} ya tiene estado final ${invoice.estado}: no se reenvia`,
       );
     }
@@ -845,7 +846,11 @@ export class InvoiceJobConsumer implements OnModuleInit {
     estado: InvoiceStatus,
   ): Promise<void> {
     await this.prisma.invoice
-      .update({ where: { id: invoiceId }, data: { estado } })
+      .update({
+        // También protege la carrera: otro worker pudo concluir tras la lectura.
+        where: { id: invoiceId, estado: { notIn: ESTADOS_FINALES } },
+        data: { estado },
+      })
       .catch(() => null);
   }
 }

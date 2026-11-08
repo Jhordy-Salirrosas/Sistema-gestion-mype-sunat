@@ -234,6 +234,26 @@ describe('TA-28 InvoiceJobConsumer', () => {
     expect(d.processWithRetry).not.toHaveBeenCalled();
   });
 
+  it.each([InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO,
+    InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO])(
+    'una reentrega preserva %s sin firmar, enviar ni escribir', async (estado) => {
+      const d = crearDobles({ ...COMPROBANTE, estado });
+      expect(await d.consumidor.procesar({ invoice_id: 'inv-1' })).toBeNull();
+      expect(d.update).not.toHaveBeenCalled();
+      expect(d.signXml).not.toHaveBeenCalled();
+      expect(d.processWithRetry).not.toHaveBeenCalled();
+    },
+  );
+
+  it('condiciona el fallo de preparación para no sobrescribir un estado final concurrente', async () => {
+    const d = crearDobles(null);
+    await d.consumidor.procesar({ invoice_id: 'inv-1' });
+    expect(d.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'inv-1', estado: { notIn: [InvoiceStatus.ACEPTADO,
+        InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
+    }));
+  });
+
   it('deja ERROR_RED si el comprobante no se puede preparar', async () => {
     const d = crearDobles(null);
     const resultado = await d.consumidor.procesar({ invoice_id: 'inv-1' });
