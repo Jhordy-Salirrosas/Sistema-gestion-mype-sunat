@@ -4,7 +4,7 @@ import { PrismaService } from '../../../../database/prismaService';
 import { Prisma } from '../../../../generated/client/client';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
 import { PrismaInvoiceRepository } from '../../infrastructure/persistence/prismaInvoiceRepository';
-import { CreateInvoiceUseCase } from '../use-cases/createInvoiceUseCase';
+import { fiscalToEmission, prepareCreation } from './creationGuards';
 import { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import { EmitirComprobanteService, type ResultadoEmision } from './emitirComprobanteService';
@@ -29,21 +29,27 @@ export class AtomicInvoiceCreationService {
 
   create(dto: CreateInvoiceDto, companyId: string, key?: string): Promise<InvoicePersistenceResult> {
     return this.execute('fiscal', dto, companyId, key, async (tx) => {
-      const scoped = tx as unknown as PrismaService;
-      return new CreateInvoiceUseCase(
-        new PrismaInvoiceRepository(this.prisma, this.queue).inTransaction(tx), new InvoiceSeriesService(scoped),
-      ).execute(dto, companyId);
+      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ruc: true } });
+      if (!company || company.ruc !== dto.ruc_emisor) throw new BadRequestException('ISSUER_IDENTITY_MISMATCH');
+      const result = await this.runEmission(tx, fiscalToEmission(dto), companyId);
+      if (result.monto_total !== dto.monto_total) throw new BadRequestException('El total fiscal no coincide con la liquidación del servidor');
+      const created = await tx.invoice.findUniqueOrThrow({ where: { id: result.id },
+        select: { id: true, estado: true, created_at: true } });
+      return created;
     });
   }
 
   emitir(dto: EmitirComprobanteDto, companyId: string, key?: string): Promise<ResultadoEmision> {
-    return this.execute('pantalla', dto, companyId, key, async (tx) => {
-      const scoped = tx as unknown as PrismaService;
-      return new EmitirComprobanteService(scoped, new InvoiceSeriesService(scoped),
-        new StockValidationService(scoped), new InvoiceNoteService(scoped),
-        new PrismaInvoiceRepository(this.prisma, this.queue).inTransaction(tx),
-      ).emitir(structuredClone(dto), companyId);
-    });
+    return this.execute('pantalla', dto, companyId, key, (tx) => this.runEmission(tx, dto, companyId));
+  }
+
+  private async runEmission(tx: Prisma.TransactionClient, dto: EmitirComprobanteDto, companyId: string) {
+    const validated = await prepareCreation(tx, dto, companyId);
+    const scoped = tx as unknown as PrismaService;
+    return new EmitirComprobanteService(scoped, new InvoiceSeriesService(scoped),
+      new StockValidationService(scoped), new InvoiceNoteService(scoped),
+      new PrismaInvoiceRepository(this.prisma, this.queue).inTransaction(tx),
+    ).emitir(validated, companyId);
   }
 
   private async execute<T>(route: string, dto: unknown, companyId: string, key: string | undefined,

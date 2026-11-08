@@ -57,6 +57,7 @@ describe('M1 afectación del producto durante emisión', () => {
         description: true,
         sunat_unit_code: true,
         tax_affectation: true,
+        is_inventory: true,
       },
     });
     expect(
