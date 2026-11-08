@@ -191,4 +191,12 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
     await expect(repository.openFiscalYear('c1', 2026)).resolves.toEqual([]);
     expect(prismaMock.accountingPeriod.upsert).toHaveBeenCalledTimes(12);
   });
+
+  it('cierra los períodos abiertos del año fiscal', async () => {
+    prismaMock.accountingPeriod.updateMany = jest.fn().mockResolvedValue({ count: 12 });
+    prismaMock.accountingPeriod.findMany.mockResolvedValue([]);
+    prismaMock.accountingEntry.groupBy.mockResolvedValue([]);
+    await expect(repository.closeFiscalYear('c1', 2026)).resolves.toEqual([]);
+    expect(prismaMock.accountingPeriod.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ year: 2026, status: 'ABIERTO' }) }));
+  });
 });
