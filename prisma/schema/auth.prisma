@@ -55,6 +55,7 @@ model Company {
   sire_proposals        SireProposal[]
   sire_report_uploads   SireReportUpload[]
   sire_periods          SirePeriod[]
+  sire_period_queries   SirePeriodQuery[]
   sire_reconciliations  SireReconciliation[]
   accounting_entries    AccountingEntry[]
   accounting_periods    AccountingPeriod[]

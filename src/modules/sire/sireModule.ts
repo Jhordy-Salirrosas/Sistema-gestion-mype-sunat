@@ -36,15 +36,23 @@ import { MockSireSunatGateway } from './infrastructure/sunat/mockSireSunatGatewa
 import { AcceptSireProposalUseCase } from './application/use-cases/acceptSireProposalUseCase';
 import { RestoreSireRecordUseCase } from './application/use-cases/restoreSireRecordUseCase';
 import { selectSireSunatGateway } from './infrastructure/sunat/sireGatewaySelector';
+import { ManualSireConsultationController } from './infrastructure/controllers/manualSireConsultationController';
+import { SimulateManualSireConsultationUseCase } from './application/use-cases/simulateManualSireConsultationUseCase';
+import { SireReadOnlyPeriodsController } from './infrastructure/controllers/sireReadOnlyPeriodsController';
+import { SireReadOnlyPeriodsClient } from './infrastructure/sunat/sireReadOnlyPeriodsClient';
+import { QueueModule } from '../resilience/infrastructure/queue/queueModule';
+import { SirePeriodsJobConsumer } from './infrastructure/queue/sirePeriodsJobConsumer';
 
 @Module({
-  imports: [AuthModule, ResilienceStateModule],
+  imports: [AuthModule, QueueModule, ResilienceStateModule],
   controllers: [
     SireDashboardMetricsController,
     SireMetricsCompatibilityController,
     SireResilienceMetricsCompatibilityController,
     LegacySireMetricsController,
     SireController,
+    ManualSireConsultationController,
+    SireReadOnlyPeriodsController,
   ],
   providers: [
     ReconcileSireUseCase,
@@ -65,6 +73,9 @@ import { selectSireSunatGateway } from './infrastructure/sunat/sireGatewaySelect
     SireTicketManagerService,
     AcceptSireProposalUseCase,
     RestoreSireRecordUseCase,
+    SimulateManualSireConsultationUseCase,
+    SireReadOnlyPeriodsClient,
+    SirePeriodsJobConsumer,
     PrismaSireRepository,
     SireTxtParserAdapter,
     SireTxtWriterAdapter,
