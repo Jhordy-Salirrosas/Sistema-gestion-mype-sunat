@@ -6,6 +6,7 @@ import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/app
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/openAccountingPeriodUseCase';
+import { OpenFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/openFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
@@ -22,6 +23,7 @@ describe('AccountingController', () => {
   let listPeriodsUseCase: jest.Mocked<ListAccountingPeriodsUseCase>;
   let openPeriodUseCase: jest.Mocked<OpenAccountingPeriodUseCase>;
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
+  let openFiscalYearUseCase: jest.Mocked<OpenFiscalYearUseCase>;
   let getLedgerUseCase: jest.Mocked<GetLedgerUseCase>;
   let getTrialBalanceUseCase: jest.Mocked<GetTrialBalanceUseCase>;
   let getIncomeStatementUseCase: jest.Mocked<GetIncomeStatementUseCase>;
@@ -56,6 +58,9 @@ describe('AccountingController', () => {
     closePeriodUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<CloseAccountingPeriodUseCase>;
+    openFiscalYearUseCase = {
+      execute: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<OpenFiscalYearUseCase>;
 
     getLedgerUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetLedgerUseCase>;
     getTrialBalanceUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetTrialBalanceUseCase>;
@@ -78,6 +83,7 @@ describe('AccountingController', () => {
       listAccountsUseCase,
       listPeriodsUseCase,
       openPeriodUseCase,
+      openFiscalYearUseCase,
       closePeriodUseCase,
       getLedgerUseCase,
       getTrialBalanceUseCase,
@@ -243,5 +249,11 @@ describe('AccountingController', () => {
 
     await expect(controller.getIncomeStatement('comp-1', '2026-11')).resolves.toBe(statement);
     expect(getIncomeStatementUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
+  });
+
+  it('abre el año fiscal de la empresa del token', async () => {
+    openFiscalYearUseCase.execute.mockResolvedValue([]);
+    await expect(controller.openFiscalYear('2026', 'comp-1')).resolves.toEqual([]);
+    expect(openFiscalYearUseCase.execute).toHaveBeenCalledWith('comp-1', 2026);
   });
 });

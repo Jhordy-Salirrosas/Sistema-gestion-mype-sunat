@@ -13,7 +13,7 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
         findUnique: jest.fn(),
         upsert: jest.fn(),
       },
-      accountingEntry: { findMany: jest.fn() },
+      accountingEntry: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
     };
     repository = new PrismaAccountingRepository(prismaMock as unknown as PrismaService);
   });
@@ -182,5 +182,13 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
       { accountCode: '1211', accountName: 'CxC', debit: 118, credit: 0 },
       { accountCode: '7011', accountName: 'Ventas', debit: 0, credit: 118 },
     ]);
+  });
+
+  it('abre los doce meses del año fiscal', async () => {
+    prismaMock.accountingPeriod.upsert.mockResolvedValue({});
+    prismaMock.accountingPeriod.findMany.mockResolvedValue([]);
+    prismaMock.accountingEntry.groupBy.mockResolvedValue([]);
+    await expect(repository.openFiscalYear('c1', 2026)).resolves.toEqual([]);
+    expect(prismaMock.accountingPeriod.upsert).toHaveBeenCalledTimes(12);
   });
 });
