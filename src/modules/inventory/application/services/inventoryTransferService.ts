@@ -230,6 +230,14 @@ export class InventoryTransferService {
         where: { company_id: companyId, source_reference_id: transfer.id },
       });
       if (existente) return;
+
+      const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+        where: { company_id: companyId, process_code: 'TRANSFERENCIA', is_active: true },
+      })) ?? [];
+      const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+      const cuentaDestino = roles.get('ALMACEN_DESTINO') || '20111.02';
+      const cuentaOrigen = roles.get('ALMACEN_ORIGEN') || '20111.01';
+
       await this.accounting.execute({
         companyId,
         period: transfer.transfer_date.toISOString().slice(0, 7),
@@ -241,14 +249,14 @@ export class InventoryTransferService {
         lines: [
           {
             lineOrder: 1,
-            accountCode: '20111.02',
+            accountCode: cuentaDestino,
             accountName: `Mercaderías Almacén ${transfer.to_warehouse_code}`,
             debitAmount: valor,
             creditAmount: 0,
           },
           {
             lineOrder: 2,
-            accountCode: '20111.01',
+            accountCode: cuentaOrigen,
             accountName: `Mercaderías Almacén ${transfer.from_warehouse_code}`,
             debitAmount: 0,
             creditAmount: valor,
