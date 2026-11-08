@@ -86,6 +86,18 @@ describe('TA-68 · asiento de venta según el PCGE', () => {
     });
   });
 
+  it('usa las cuentas configuradas por el mapeador de ventas', () => {
+    const lineas = lineasAsientoVenta({
+      ...VENTA_GRAVADA,
+      cuentas: {
+        porCobrar: { codigo: '121210', nombre: 'CxC configurada' },
+        gravada: { codigo: '701210', nombre: 'Venta configurada' },
+        igv: { codigo: '401110', nombre: 'IGV configurado' },
+      },
+    });
+    expect(lineas.map((l) => l.accountCode)).toEqual(['121210', '701210', '401110']);
+  });
+
   it('el asiento cuadra: debe igual a haber', () => {
     const lineas = lineasAsientoVenta(VENTA_GRAVADA);
     expect(balanceAsiento(lineas).cuadra).toBe(true);

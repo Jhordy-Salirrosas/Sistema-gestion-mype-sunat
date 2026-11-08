@@ -212,7 +212,22 @@ export class InvoiceAccountingBridgeService {
     const descuento = Math.round(
       (i.gravado + i.igv + i.exonerado + i.inafecto + i.icbper - i.total) * 100,
     ) / 100;
-    const datos = { ...i, descuento: descuento > 0 ? descuento : 0 };
+    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
+    })) ?? [];
+    const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+    const cuentas = {
+      ...(roles.get('CXC') ? { porCobrar: { codigo: roles.get('CXC')!, nombre: 'Cuentas por cobrar' } } : {}),
+      ...(roles.get('IGV') ? { igv: { codigo: roles.get('IGV')!, nombre: 'IGV - Cuenta propia' } } : {}),
+      ...(roles.get('VENTA_GRAVADA') ? { gravada: { codigo: roles.get('VENTA_GRAVADA')!, nombre: 'Ventas gravadas' } } : {}),
+      ...(roles.get('VENTA_EXONERADA') ? { exonerada: { codigo: roles.get('VENTA_EXONERADA')!, nombre: 'Ventas exoneradas' } } : {}),
+      ...(roles.get('VENTA_INAFECTA') ? { inafecta: { codigo: roles.get('VENTA_INAFECTA')!, nombre: 'Ventas inafectas' } } : {}),
+      ...(roles.get('ICBPER') ? { icbper: { codigo: roles.get('ICBPER')!, nombre: 'ICBPER por pagar' } } : {}),
+      ...(roles.get('DETRACCION') ? { detraccion: { codigo: roles.get('DETRACCION')!, nombre: 'Cuentas por cobrar - detracciones' } } : {}),
+      ...(roles.get('RETENCION') ? { porCobrarRetenido: { codigo: roles.get('RETENCION')!, nombre: 'IGV - Retenciones' } } : {}),
+      ...(roles.get('DESCUENTO') ? { descuento: { codigo: roles.get('DESCUENTO')!, nombre: 'Descuentos concedidos' } } : {}),
+    };
+    const datos = { ...i, descuento: descuento > 0 ? descuento : 0, cuentas };
     const lineas = factura.tipoComprobante === '07'
       ? lineasAsientoNotaCredito(datos)
       : lineasAsientoVenta(datos);

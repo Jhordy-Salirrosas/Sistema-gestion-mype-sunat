@@ -49,6 +49,8 @@ export const CUENTAS_VENTA = {
 } as const;
 
 /** Importes de un comprobante necesarios para asentar la venta. */
+export type CuentasVentaOverride = Partial<Record<keyof typeof CUENTAS_VENTA, { codigo: string; nombre: string }>>;
+
 export interface DatosAsientoVenta {
   /** Base de las operaciones gravadas (sin IGV). */
   gravado: number;
@@ -67,6 +69,8 @@ export interface DatosAsientoVenta {
   descuentoNoAfecto?: number;
   /** Descuento 01/03 que no reduce la base del IGV. */
   descuento?: number;
+  /** Cuentas configuradas por el mapeador contable. */
+  cuentas?: CuentasVentaOverride;
 }
 
 /** Redondea a céntimos sin arrastrar error de coma flotante. */
@@ -86,6 +90,11 @@ const linea = (
   debitAmount: r2(debe),
   creditAmount: r2(haber),
 });
+
+const cuenta = (
+  datos: DatosAsientoVenta,
+  key: keyof typeof CUENTAS_VENTA,
+): { codigo: string; nombre: string } => datos.cuentas?.[key] ?? CUENTAS_VENTA[key];
 
 /**
  * Construye las líneas del asiento de una venta.
@@ -111,37 +120,37 @@ export const lineasAsientoVenta = (
   const porCobrar = r2(total - detraccion - retencion);
 
   if (porCobrar > 0) {
-    lineas.push(linea(CUENTAS_VENTA.porCobrar, porCobrar, 0));
+    lineas.push(linea(cuenta(datos, 'porCobrar'), porCobrar, 0));
   }
   if (descuento > 0) {
-    lineas.push(linea(CUENTAS_VENTA.descuento, descuento, 0));
+    lineas.push(linea(cuenta(datos, 'descuento'), descuento, 0));
   }
   // La detracción la deposita el cliente en el Banco de la Nación: sigue siendo
   // una cuenta por cobrar del proveedor, pero por otra vía.
   if (detraccion > 0) {
-    lineas.push(linea(CUENTAS_VENTA.detraccion, detraccion, 0));
+    lineas.push(linea(cuenta(datos, 'detraccion'), detraccion, 0));
   }
   // La retención la entera el cliente al fisco: es un saldo a favor suyo, no
   // dinero que vaya a llegar a la cuenta del proveedor.
   if (retencion > 0) {
-    lineas.push(linea(CUENTAS_VENTA.porCobrarRetenido, retencion, 0));
+    lineas.push(linea(cuenta(datos, 'porCobrarRetenido'), retencion, 0));
   }
 
   // Bases y tributos del haber.
   if (datos.gravado > 0) {
-    lineas.push(linea(CUENTAS_VENTA.gravada, 0, datos.gravado));
+    lineas.push(linea(cuenta(datos, 'gravada'), 0, datos.gravado));
   }
   if (datos.exonerado > 0) {
-    lineas.push(linea(CUENTAS_VENTA.exonerada, 0, datos.exonerado));
+    lineas.push(linea(cuenta(datos, 'exonerada'), 0, datos.exonerado));
   }
   if (datos.inafecto > 0) {
-    lineas.push(linea(CUENTAS_VENTA.inafecta, 0, datos.inafecto));
+    lineas.push(linea(cuenta(datos, 'inafecta'), 0, datos.inafecto));
   }
   if (datos.igv > 0) {
-    lineas.push(linea(CUENTAS_VENTA.igv, 0, datos.igv));
+    lineas.push(linea(cuenta(datos, 'igv'), 0, datos.igv));
   }
   if (icbper > 0) {
-    lineas.push(linea(CUENTAS_VENTA.icbper, 0, icbper));
+    lineas.push(linea(cuenta(datos, 'icbper'), 0, icbper));
   }
 
   // El orden es el de presentación contable: primero los cargos y después los
