@@ -26,7 +26,6 @@ import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCa
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
 import { InvoiceJobConsumer } from './invoiceJobConsumer';
-import { InvoiceWorkerService } from './invoiceWorkerService';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
@@ -92,7 +91,6 @@ import { InventoryModule } from '../inventory/inventoryModule';
       useClass: PrismaInvoiceRepository,
     },
     PrismaInvoiceRepository,
-    InvoiceWorkerService,
     InvoiceJobConsumer,
     UblGeneratorService,
     XsdValidatorService,
@@ -140,7 +138,6 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadService,
     InvoiceMetricsService,
     INVOICE_REPOSITORY_PORT,
-    InvoiceWorkerService,
     UblGeneratorService,
     XsdValidatorService,
     SunatXslValidatorService,

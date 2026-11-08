@@ -81,3 +81,19 @@ El monitor usa la inspección de metadatos y calcula su vigencia en vivo: VENCID
 El control de secretos revisa contenido además de nombres: claves privadas, patrones de tokens y asignaciones literales de credenciales/certificado/clave de cifrado. Solo informa rutas y categorías, nunca el valor coincidente. Sus límites se explicitan: no certifica ausencia de otros secretos.
 
 No se modifica el alta de empresas de Auth ni se recifran datos históricos: homogeneizar el contrato de credenciales con ese escritor requiere autorización sobre el otro módulo y revisión de los datos en integración. Tampoco se leen credenciales del despliegue.
+
+## Parte 11: retirada del pipeline obsoleto
+
+Se retira InvoiceWorkerService y su helper de auditoría. Solo lo registraba/exportaba InvoicesModule; no había consumidores en las rutas ni en otros módulos. Ese pipeline heredado declaraba PROCESADO/FALLIDO/FALLIDO_DLQ como si fueran estados persistibles, aceptaba un payload del job y ocultaba fallos de actualización. No implementaba un envío SOAP real ni una DLQ durable.
+
+El consumidor activo permanece InvoiceJobConsumer: recarga el documento persistido, conserva estados finales y exige las compuertas de validación/firma. Se eliminan seis casos exclusivos del código retirado; las pruebas del consumidor activo y de ambas rutas de creación siguen ejecutándose. Ningún endpoint público se elimina.
+
+## Pendientes de integración y decisiones
+
+1. Emma: aplicar manualmente 20261108210000_m1_creation_requests y 20261108211000_m1_note_origin_integrity; revisar históricos y validar constraints sin inventar referencias. Luego probar contención/rollback con PostgreSQL real. Ninguna migración fue aplicada durante este trabajo.
+2. Resiliencia: API transaccional y envío durable RC/RA con ticket/CDR, reintentos tras resultado incierto y movimiento atómico a DLQ. Contabilidad: unicidad entre escritores contables. No se modificaron estos módulos.
+3. Validador oficial: obtener/integrar esquemas y dependencias completos; sin ello BETA/PRODUCCIÓN permanecen bloqueados. Catálogo 53/04 requiere el flujo de anticipos; no se habilita como descuento genérico.
+4. Jhordy: definir normativamente la base SPOT de operaciones mixtas. Se conserva la selección de base existente, sin cambiar tasas; la política monetaria común usa redondeo decimal.
+5. Completar datos reales de ubicación/local del emisor donde no consten; decidir expresamente el tratamiento de OBSERVADO como origen de notas si se cambia la política vigente. No se rellena ningún dato histórico con un valor típico.
+6. Frontend (otro repo): conservar Idempotency-Key por solicitud y consumir campos nuevos/nullable, perfil comercial y estados estructurados. La visualización y la preselección no son auditables aquí.
+7. Sistema desplegado: consulta SOL de un comprobante existente, certificado del despliegue y contraste pantalla/GET. Los sondeos HEAD de frontend, Render y WSDL BETA continuaron bloqueados por el proxy CONNECT 403. No se emitió ni se reenvió ningún comprobante.

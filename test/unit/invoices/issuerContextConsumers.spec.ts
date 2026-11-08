@@ -2,7 +2,6 @@ import { fakeIssuerContext } from '../../fixtures/issuerContext';
 import { InvoiceAlertService } from '../../../src/modules/invoices/application/services/invoiceAlertService';
 import { InvoiceDownloadService } from '../../../src/modules/invoices/application/services/invoiceDownloadService';
 import { SummaryEnvioService } from '../../../src/modules/invoices/application/services/summaryEnvioService';
-import { InvoiceWorkerService } from '../../../src/modules/invoices/invoiceWorkerService';
 
 describe('D1 context consumers fail closed and preserve the company', () => {
   const context = fakeIssuerContext();
@@ -191,40 +190,4 @@ describe('D1 context consumers fail closed and preserve the company', () => {
     expect(signXml).not.toHaveBeenCalled();
     expect(encolar).not.toHaveBeenCalled();
   });
-  it.each(['success', 'missing-invoice', 'decrypt-error'])(
-    'resolves the worker issuer from its persisted invoice: %s',
-    async (mode) => {
-      const findUnique = jest.fn(async () =>
-        mode === 'missing-invoice' ? null : { company_id: context.companyId },
-      );
-      const signXml = jest.fn(() => ({ signedXml: '<fake-signed/>' }));
-      const resolve = jest.fn(async (id: string) => {
-        if (!id) throw new Error('ISSUER_COMPANY_REQUIRED');
-        if (mode === 'decrypt-error')
-          throw new Error('ISSUER_CONFIG_DECRYPTION_FAILED');
-        return context;
-      });
-      const worker = new InvoiceWorkerService(
-        {
-          invoice: { findUnique, update: async () => ({}) },
-          transactionHistory: { create: async () => ({}) },
-        } as never,
-        { generateInvoiceXml: () => '<Invoice/>' } as never,
-        { validateInvoiceUbl21: () => ({ isValid: true }) } as never,
-        { verifySignature: jest.fn(() => true), signXml } as never,
-        { resolve } as never,
-      );
-      const result = await worker.processInvoiceJob({
-        invoiceId: 'fake-invoice',
-        payload: {} as never,
-      });
-      expect(resolve).toHaveBeenCalledWith(
-        mode === 'missing-invoice' ? '' : context.companyId,
-      );
-      expect(result.success).toBe(mode === 'success');
-      if (mode === 'success')
-        expect(signXml).toHaveBeenCalledWith('<Invoice/>', context);
-      else expect(signXml).not.toHaveBeenCalled();
-    },
-  );
 });
