@@ -148,11 +148,32 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
   }
 
   async findPeriods(companyId: string) {
+    // Los asientos pueden existir antes de abrir el período manualmente.
+    // Se materializan para que Períodos y Libro Diario no se contradigan.
+    const usados = await this.prisma.accountingEntry.groupBy({
+      by: ['period'],
+      where: { company_id: companyId },
+    });
+    for (const { period } of usados) {
+      const [year, month] = period.split('-').map(Number);
+      await this.prisma.accountingPeriod.upsert({
+        where: { company_id_period: { company_id: companyId, period } },
+        update: {},
+        create: { company_id: companyId, period, year, month, status: 'ABIERTO' },
+      });
+    }
     const rows = await this.prisma.accountingPeriod.findMany({
       where: { company_id: companyId },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
     return rows.map((row) => this.mapPeriod(row));
+  }
+
+  async openFiscalYear(companyId: string, year: number) {
+    for (let month = 1; month <= 12; month += 1) {
+      await this.openPeriod(companyId, year, month);
+    }
+    return this.findPeriods(companyId);
   }
 
   async findPeriod(companyId: string, period: string) {
