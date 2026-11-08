@@ -8,6 +8,7 @@ import { RegisterInvoiceAccountingEntryUseCase } from './application/use-cases/r
 import { ListAccountingAccountsUseCase } from './application/use-cases/listAccountingAccountsUseCase';
 import { ListAccountingPeriodsUseCase } from './application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from './application/use-cases/openAccountingPeriodUseCase';
+import { OpenFiscalYearUseCase } from './application/use-cases/openFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from './application/use-cases/closeAccountingPeriodUseCase';
 import { GetLedgerUseCase } from './application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from './application/use-cases/getTrialBalanceUseCase';
@@ -29,6 +30,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     ListAccountingAccountsUseCase,
     ListAccountingPeriodsUseCase,
     OpenAccountingPeriodUseCase,
+    OpenFiscalYearUseCase,
     CloseAccountingPeriodUseCase,
     GetLedgerUseCase,
     GetTrialBalanceUseCase,
@@ -47,6 +49,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     ListAccountingAccountsUseCase,
     ListAccountingPeriodsUseCase,
     OpenAccountingPeriodUseCase,
+    OpenFiscalYearUseCase,
     CloseAccountingPeriodUseCase,
     GetLedgerUseCase,
     GetTrialBalanceUseCase,

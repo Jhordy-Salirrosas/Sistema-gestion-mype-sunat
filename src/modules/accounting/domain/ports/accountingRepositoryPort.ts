@@ -20,6 +20,7 @@ export interface IAccountingRepositoryPort {
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;
   openPeriod(companyId: string, year: number, month: number): Promise<AccountingPeriodEntity>;
+  openFiscalYear(companyId: string, year: number): Promise<AccountingPeriodEntity[]>;
   closePeriod(companyId: string, period: string): Promise<AccountingPeriodEntity>;
   /** Movimientos de una cuenta en un período. */
   findLedgerMovements(companyId: string, period: string, accountCode: string): Promise<LedgerMovement[]>;
