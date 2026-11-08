@@ -47,7 +47,10 @@ const SELECT_LISTADO = {
   exempt_operations: true,
   unaffected_operations: true,
   referenced_series_correlative: true,
+  credit_debit_reason_code: true,
   xml_hash_sha256: true,
+  payload_ubl: true,
+  cdr_sunat: true,
 } as const;
 
 /** Proyección del detalle: la del listado más ficha, CDR e historial. */

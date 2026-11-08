@@ -39,8 +39,15 @@ export interface ComprobanteListadoDto {
   inafecta?: number;
   /** Documento afectado, solo en notas de crédito/débito. */
   documento_afectado?: string | null;
+  credit_debit_reason_code?: string | null;
   /** Huella del XML firmado, para la ficha del comprobante. */
   hash_cpe?: string | null;
+  /** Descripción oficial del CDR si ya se recibió, `null` si aún no existe. */
+  cdr_descripcion?: string | null;
+  /** Forma de pago real del payload UBL (`null` si no se registró). */
+  forma_pago?: 'Contado' | 'Credito' | null;
+  /** Cronograma de pago al crédito del payload UBL. */
+  cuotas?: CuotaEnviadaDto[];
 }
 
 /** Página de resultados. */

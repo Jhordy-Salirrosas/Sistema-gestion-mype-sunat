@@ -34,7 +34,10 @@ export interface FilaListado {
   exempt_operations?: { toString(): string } | number;
   unaffected_operations?: { toString(): string } | number;
   referenced_series_correlative?: string | null;
+  credit_debit_reason_code?: string | null;
   xml_hash_sha256?: string | null;
+  payload_ubl?: unknown;
+  cdr_sunat?: unknown;
 }
 
 /** Fila del detalle: la del listado más los campos de la ficha. */
@@ -77,6 +80,7 @@ export function numeroComprobante(serie: string, correlativo: number): string {
 }
 
 export function aListado(fila: FilaListado): ComprobanteListadoDto {
+  const cdr = aCdr(fila.cdr_sunat);
   return {
     id: fila.id,
     tipo_comprobante: fila.tipo_comprobante,
@@ -90,12 +94,15 @@ export function aListado(fila: FilaListado): ComprobanteListadoDto {
     cliente_documento: fila.customer_identity_number,
     cliente_nombre: fila.customer_legal_name,
     cdr_codigo: fila.sunat_response_code,
+    cdr_descripcion: cdr?.descripcion ?? null,
     base_imponible: numero(fila.taxable_operations ?? 0),
     total_igv: numero(fila.total_igv ?? 0),
     exonerada: numero(fila.exempt_operations ?? 0),
     inafecta: numero(fila.unaffected_operations ?? 0),
     documento_afectado: fila.referenced_series_correlative ?? null,
+    credit_debit_reason_code: fila.credit_debit_reason_code ?? null,
     hash_cpe: fila.xml_hash_sha256 ?? null,
+    ...condicionesDePago(fila.payload_ubl),
   };
 }
 

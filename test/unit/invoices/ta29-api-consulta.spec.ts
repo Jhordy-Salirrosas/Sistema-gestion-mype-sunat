@@ -146,7 +146,7 @@ describe('TA-29 - mapeo al contrato del frontend (criterio 5)', () => {
     expect(typeof dto.monto_total).toBe('number');
   });
 
-  it('devuelve las claves que espera la grilla', () => {
+  it('devuelve las claves que espera la grilla y forma_pago null cuando falta', () => {
     const dto = aListado(filaListado());
     expect(dto).toEqual(
       expect.objectContaining({
@@ -155,8 +155,26 @@ describe('TA-29 - mapeo al contrato del frontend (criterio 5)', () => {
         estado: 'ACEPTADO',
         cliente_documento: '20100070970',
         cliente_nombre: 'CLIENTE SAC',
+        forma_pago: null,
+        cuotas: [],
+        cdr_descripcion: null,
       }),
     );
+  });
+
+  it('el listado propaga forma_pago, cuotas y cdr_descripcion reales desde la base', () => {
+    const dto = aListado(
+      filaListado({
+        payload_ubl: {
+          formaPago: 'Credito',
+          cuotas: [{ numero: 'Cuota001', monto: 118, vencimiento: '2026-11-30' }],
+        },
+        cdr_sunat: { responseCode: '0', description: 'La Factura numero F001-00000007, ha sido aceptada' },
+      }),
+    );
+    expect(dto.forma_pago).toBe('Credito');
+    expect(dto.cuotas).toEqual([{ numero: 'Cuota001', monto: 118, vencimiento: '2026-11-30' }]);
+    expect(dto.cdr_descripcion).toBe('La Factura numero F001-00000007, ha sido aceptada');
   });
 
   it('aplana el CDR guardado en la base', () => {
