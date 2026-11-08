@@ -142,7 +142,13 @@ export class EmitirComprobanteService {
     // Validar descuentos antes de reservar un correlativo.
     dto.items.forEach((item, i) => {
       const d = item.descuento;
-      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * item.valorUnitario || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
+      const baseUnitaria =
+        typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario)
+          ? (item.afectacion ?? '10').startsWith('10')
+            ? Math.round((item.precioUnitario / 1.18) * 100) / 100
+            : item.precioUnitario
+          : item.valorUnitario;
+      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * baseUnitaria || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
         throw new BadRequestException(`Descuento inválido en la línea ${i + 1}`);
       }
     });
@@ -727,7 +733,11 @@ export class EmitirComprobanteService {
         unit_code: (linea.unidad ?? 'NIU').toUpperCase(),
         quantity: linea.cantidad,
         unit_value: linea.valorUnitario,
-        unit_price: linea.precioUnitario ?? linea.valorUnitario * 1.18,
+        unit_price:
+          linea.precioUnitario ??
+          (linea.afectacion.startsWith('10')
+            ? Math.round(linea.valorUnitario * 1.18 * 100) / 100
+            : linea.valorUnitario),
         igv_affectation_type: linea.afectacion,
         igv_amount: linea.igvLinea,
         total_amount: linea.totalLinea,

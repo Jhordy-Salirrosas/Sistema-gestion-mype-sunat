@@ -118,6 +118,43 @@ describe('traducirEmision — liquidación de impuestos', () => {
     expect(importes.total).toBe(118);
   });
 
+  it('desglosa base e IGV cuando la línea recibe precioUnitario con IGV incluido sin tratarlo como base sin impuesto', () => {
+    const { importes, lineas } = traducirEmision(
+      formulario({
+        items: [
+          linea({ cantidad: 1, precioUnitario: 118, valorUnitario: 84.75, afectacion: '10' }),
+        ],
+      }),
+      emisor,
+      1,
+    );
+
+    expect(importes.gravado).toBe(100);
+    expect(importes.igv).toBe(18);
+    expect(importes.total).toBe(118);
+    expect(lineas[0].valorUnitario).toBe(100);
+    expect(lineas[0].precioUnitario).toBe(118);
+    expect(lineas[0].totalLinea).toBe(118);
+  });
+
+  it('en línea exonerada o inafecta con precioUnitario el precio final coincide con el valor sin agregar IGV', () => {
+    const { importes, lineas } = traducirEmision(
+      formulario({
+        items: [
+          linea({ cantidad: 2, precioUnitario: 50, valorUnitario: 50, afectacion: '20' }),
+        ],
+      }),
+      emisor,
+      1,
+    );
+
+    expect(importes.exonerado).toBe(100);
+    expect(importes.igv).toBe(0);
+    expect(importes.total).toBe(100);
+    expect(lineas[0].valorUnitario).toBe(50);
+    expect(lineas[0].precioUnitario).toBe(50);
+  });
+
   it('suma varias líneas gravadas', () => {
     const { importes } = traducirEmision(
       formulario({

@@ -114,10 +114,17 @@ export class LineaEmisionDto {
   @IsPositive()
   cantidad: number;
 
-  /** Valor unitario SIN IGV. */
+  /** Valor unitario SIN IGV (opcional cuando se envía precioUnitario con IGV). */
+  @ValidateIf((o: LineaEmisionDto) => o.precioUnitario === undefined || o.valorUnitario !== undefined)
   @IsNumber({ maxDecimalPlaces: 6 })
   @Min(0)
   valorUnitario: number;
+
+  /** Precio unitario final CON IGV incluido digitado en la venta. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(0)
+  precioUnitario?: number;
 
   @IsOptional()
   @IsIn(AFECTACIONES_GRILLA as unknown as string[])
