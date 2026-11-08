@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { EmitirComprobanteService } from '../../../src/modules/invoices/application/services/emitirComprobanteService';
 import { aComprobanteOrigenFallback, aListado } from '../../../src/modules/invoices/application/services/invoiceQueryMapper';
+import { InvoiceSummaryService } from '../../../src/modules/invoices/application/services/invoiceSummaryService';
 import type { EmitirComprobanteDto } from '../../../src/modules/invoices/application/dto/emitirComprobanteDto';
 
 const COMPANY_ID = '5eaccb4e-a6ec-4f23-9909-85fe7fc9e879';
@@ -785,5 +786,62 @@ describe('Corrección 6 — Comprobante origen colgado de la nota', () => {
       monto_total: null,
       moneda: 'PEN',
     });
+  });
+});
+
+describe('Corrección 7 — Bajas y Resúmenes con tipo, estado SUNAT y marca reenviable', () => {
+  it('expone id, tipoComprobante, estado y reenviable en las filas de resumen diario y comunicación de baja', async () => {
+    const prismaMock = {
+      company: {
+        findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'EMPRESA S.A.C.' })),
+      },
+      invoice: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'inv-red-1',
+            serie: 'B001',
+            correlativo: 10,
+            tipo_comprobante: '03',
+            fecha_emision: new Date('2026-11-07T00:00:00.000Z'),
+            estado: 'ERROR_RED',
+            monto_total: 118,
+            customer_identity_type: '1',
+            customer_identity_number: '12345678',
+            total_igv: 18,
+          },
+          {
+            id: 'inv-ok-2',
+            serie: 'B001',
+            correlativo: 11,
+            tipo_comprobante: '03',
+            fecha_emision: new Date('2026-11-07T00:00:00.000Z'),
+            estado: 'ACEPTADO',
+            monto_total: 236,
+            customer_identity_type: '1',
+            customer_identity_number: '87654321',
+            total_igv: 36,
+          },
+        ]),
+      },
+    };
+    const summarySvc = new InvoiceSummaryService(prismaMock as never);
+    const vista = await summarySvc.vistaResumenDiario(COMPANY_ID, '2026-11-07', 1);
+    expect(vista.lineas).toHaveLength(2);
+    expect(vista.lineas[0]).toEqual(
+      expect.objectContaining({
+        id: 'inv-red-1',
+        tipoComprobante: '03',
+        estado: 'ERROR_RED',
+        reenviable: true,
+      }),
+    );
+    expect(vista.lineas[1]).toEqual(
+      expect.objectContaining({
+        id: 'inv-ok-2',
+        tipoComprobante: '03',
+        estado: 'ACEPTADO',
+        reenviable: false,
+      }),
+    );
   });
 });
