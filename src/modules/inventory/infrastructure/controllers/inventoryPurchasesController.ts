@@ -13,6 +13,7 @@ import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InventoryPurchaseService } from '../../application/services/inventoryPurchaseService';
 import { CreateNationalPurchaseDto } from '../../application/dto/nationalPurchaseDto';
+import { PayPurchaseDto } from '../../application/dto/payPurchaseDto';
 
 @Controller('api/v1/inventory/purchases')
 @UseGuards(AuthGuard)
@@ -29,6 +30,17 @@ export class InventoryPurchasesController {
       throw new UnauthorizedException('Identificador de empresa requerido.');
     }
     return this.purchaseService.createPurchase(companyId, dto);
+  }
+
+  @Post(':id/pay')
+  @HttpCode(HttpStatus.OK)
+  async payPurchase(
+    @Param('id') id: string,
+    @Body() dto: PayPurchaseDto,
+    @CurrentCompany() companyId?: string,
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.purchaseService.payPurchase(companyId, id, dto);
   }
 
   @Get()
