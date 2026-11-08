@@ -265,6 +265,7 @@ model InventoryAdjustmentItem {
 
 enum NationalPurchaseStatus {
   REGISTRADA
+  PAGADA
   ANULADA
 }
 

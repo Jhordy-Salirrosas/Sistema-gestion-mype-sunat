@@ -309,6 +309,61 @@ export class InventoryPurchaseService {
     return result;
   }
 
+  /** Registra el pago de una compra y su asiento CxP contra caja/banco. */
+  async payPurchase(companyId: string, id: string, dto: { amount?: number; paymentDate?: string; paymentMethod?: string; bankName?: string }) {
+    const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id, company_id: companyId }, include: { items: true } });
+    if (!purchase) throw new NotFoundException('Compra no encontrada.');
+    if (purchase.status === 'ANULADA') throw new BadRequestException('La compra está anulada.');
+    if (purchase.status === 'PAGADA') throw new BadRequestException('La compra ya está pagada.');
+
+    const monto = Number(dto.amount ?? purchase.total_amount);
+    if (!(monto > 0) || monto > Number(purchase.total_amount)) throw new BadRequestException('El monto del pago no es válido.');
+    const fecha = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
+    const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.treasuryMovement.create({
+        data: {
+          company_id: companyId,
+          movement_date: fecha,
+          direction: 'EGRESO',
+          document_reference: `${purchase.document_serial}-${purchase.document_number}`,
+          counterpart_name: purchase.supplier_name,
+          concept: `Pago compra ${purchase.purchase_number}`,
+          amount: monto,
+          source_module: 'PURCHASES',
+          source_reference_id: purchase.purchase_number,
+          payment_method: metodo,
+          bank_name: dto.bankName ?? null,
+        },
+      });
+      await tx.nationalPurchase.update({ where: { id }, data: { status: 'PAGADA' } });
+    });
+
+    if (this.accounting) {
+      const mappings = (await (this.prisma as any).accountingMapping?.findMany({ where: { company_id: companyId, process_code: 'COMPRA', is_active: true } })) ?? [];
+      const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+      const cxp = roles.get('CXP') || '421';
+      const caja = metodo === 'EFECTIVO' ? (roles.get('CAJA') || '101') : (roles.get('BANCO') || '1041');
+      const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      await this.accounting.execute({
+        companyId,
+        period: periodo,
+        entryDate: fecha.toISOString(),
+        glosa: `Pago compra ${purchase.purchase_number} · ${purchase.supplier_name}`,
+        sourceModule: 'PURCHASES',
+        sourceReferenceId: `PAGO-${purchase.purchase_number}`,
+        idempotencyKey: `purchase-payment:${purchase.purchase_number}`,
+        lines: [
+          { lineOrder: 1, accountCode: cxp, accountName: 'Cuentas por pagar comerciales', debitAmount: monto, creditAmount: 0 },
+          { lineOrder: 2, accountCode: caja, accountName: metodo === 'EFECTIVO' ? 'Caja' : 'Cuenta corriente', debitAmount: 0, creditAmount: monto },
+        ],
+      });
+    }
+
+    return { id, status: 'PAGADA', amount: monto, paymentMethod: metodo };
+  }
+
   /** Asiento de compra PCGE: Naturaleza (60/40/42) y Destino al almacén (20/61). */
   private async registrarAsientoCompra(
     companyId: string,

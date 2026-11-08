@@ -17,7 +17,10 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         findFirst: jest.fn(),
         create: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
       },
+      treasuryMovement: { create: jest.fn() },
+      accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
       businessPartner: {
         findFirst: jest.fn(),
       },
@@ -277,6 +280,25 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         expect.objectContaining({ accountCode: '42121', creditAmount: 590 }),
         expect.objectContaining({ accountCode: '20111', debitAmount: 500 }),
         expect.objectContaining({ accountCode: '61111', creditAmount: 500 }),
+      ]),
+    }));
+  });
+
+  it('registra el pago de una compra con asiento CxP contra banco', async () => {
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const serviceConPago = new InventoryPurchaseService(mockPrisma, accounting as never);
+    mockPrisma.nationalPurchase.findFirst.mockResolvedValue({
+      id: 'p1', company_id: companyId, purchase_number: 'COM-1', status: 'REGISTRADA',
+      supplier_name: 'Proveedor', document_serial: 'F001', document_number: '1', total_amount: 118,
+    });
+    mockPrisma.nationalPurchase.update.mockResolvedValue({});
+    mockPrisma.treasuryMovement.create.mockResolvedValue({});
+    await expect(serviceConPago.payPurchase(companyId, 'p1', { paymentMethod: 'TRANSFERENCIA' })).resolves.toMatchObject({ status: 'PAGADA', amount: 118 });
+    expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sourceReferenceId: 'PAGO-COM-1',
+      lines: expect.arrayContaining([
+        expect.objectContaining({ accountCode: '421', debitAmount: 118 }),
+        expect.objectContaining({ accountCode: '1041', creditAmount: 118 }),
       ]),
     }));
   });
