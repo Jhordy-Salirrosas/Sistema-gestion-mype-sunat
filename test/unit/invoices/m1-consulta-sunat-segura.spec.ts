@@ -18,3 +18,10 @@ it('un documento de otra empresa no llega a SUNAT', async () => {
   await expect(controller.consultar('otra', 'i')).rejects.toThrow('no encontrado');
   expect(consultar).not.toHaveBeenCalled();
 });
+
+it('expone el mensaje real del CDR recuperado para el detalle, sin invocar transporte de envío', async () => {
+  const consultar = jest.fn(async () => ({ tipo: 'RECUPERADO', resultado: { estado: 'ACEPTADO', responseCode: '0', cdr: { referenceId: 'F001-60', description: 'Factura aceptada por SUNAT' } } }));
+  const controller = new InvoiceSunatConsultController({ invoice: { findFirst: async () => invoice } } as never, { consultar } as never);
+  expect(await controller.consultar('empresa', 'i')).toEqual({ tipo: 'RECUPERADO', estado: 'ACEPTADO', codigo: '0', mensaje: 'Factura aceptada por SUNAT', referencia: 'F001-60' });
+  expect(consultar).toHaveBeenCalledTimes(1);
+});

@@ -9,7 +9,10 @@ import { SunatXslValidatorService } from '../../../src/modules/invoices/applicat
 describe('TA-70: ejecución real del SFS', () => {
   const factura = () => readFileSync('test/fixtures/sfs/factura.xml', 'utf8');
   const python = process.env.SUNAT_SFS_PYTHON;
+  const timeout = process.env.SUNAT_SFS_TIMEOUT_MS;
   afterEach(() => {
+    if (timeout === undefined) delete process.env.SUNAT_SFS_TIMEOUT_MS;
+    else process.env.SUNAT_SFS_TIMEOUT_MS = timeout;
     if (python === undefined) delete process.env.SUNAT_SFS_PYTHON;
     else process.env.SUNAT_SFS_PYTHON = python;
   });
@@ -91,8 +94,9 @@ describe('TA-70: ejecución real del SFS', () => {
       writeFileSync(slow, '#!/usr/bin/env python3\nimport time\ntime.sleep(30)\n');
       chmodSync(slow, 0o700);
       process.env.SUNAT_SFS_PYTHON = slow;
+      process.env.SUNAT_SFS_TIMEOUT_MS = '100';
       const inicio = Date.now();
-      expect(await servicio.validar(factura(), '01')).toMatchObject({ valido: false, bloqueado: true, validadoDeVerdad: false, motivoBloqueo: 'Ejecutor SFS excedió 2000 ms' });
+      expect(await servicio.validar(factura(), '01')).toMatchObject({ valido: false, bloqueado: true, validadoDeVerdad: false, motivoBloqueo: 'Ejecutor SFS excedió 100 ms' });
       expect(Date.now() - inicio).toBeLessThan(4000);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
