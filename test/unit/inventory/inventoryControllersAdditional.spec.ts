@@ -94,6 +94,8 @@ describe('Inventory Controllers (Additional Coverage)', () => {
 
       const pago = await controller.payPurchase('pur-1', { paymentMethod: 'TRANSFERENCIA' }, companyId);
       expect(pago.status).toBe('PAGADA');
+
+      await expect(controller.listPayments('pur-1', companyId)).resolves.toEqual([]);
     });
   });
 
