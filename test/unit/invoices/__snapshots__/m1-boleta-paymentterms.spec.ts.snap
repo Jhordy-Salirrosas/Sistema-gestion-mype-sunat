@@ -1,0 +1,43 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`SPOT conserva byte a byte PaymentMeans y PaymentTerms de detracción de la base 1`] = `
+{
+  "detraccion": "  <cac:PaymentTerms>
+    <cbc:ID>Detraccion</cbc:ID>
+    <cbc:PaymentMeansID>012</cbc:PaymentMeansID>
+    <cbc:Amount currencyID="PEN">141.60</cbc:Amount>
+  </cac:PaymentTerms>",
+  "medio": "  <cac:PaymentMeans>
+    <cbc:ID>Detraccion</cbc:ID>
+    <cbc:PaymentMeansCode>999</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>00019123456</cbc:ID>
+    </cac:PayeeFinancialAccount>
+  </cac:PaymentMeans>",
+}
+`;
+
+exports[`factura crédito=false conserva FormaPago idéntico a la base 1`] = `
+[
+  "  <cac:PaymentTerms>
+    <cbc:ID>FormaPago</cbc:ID>
+    <cbc:PaymentMeansID>Contado</cbc:PaymentMeansID>
+  </cac:PaymentTerms>",
+]
+`;
+
+exports[`factura crédito=true conserva FormaPago idéntico a la base 1`] = `
+[
+  "  <cac:PaymentTerms>
+    <cbc:ID>FormaPago</cbc:ID>
+    <cbc:PaymentMeansID>Credito</cbc:PaymentMeansID>
+    <cbc:Amount currencyID="PEN">17.70</cbc:Amount>
+  </cac:PaymentTerms>",
+  "  <cac:PaymentTerms>
+    <cbc:ID>FormaPago</cbc:ID>
+    <cbc:PaymentMeansID>Cuota001</cbc:PaymentMeansID>
+    <cbc:Amount currencyID="PEN">17.70</cbc:Amount>
+    <cbc:PaymentDueDate>2026-12-09</cbc:PaymentDueDate>
+  </cac:PaymentTerms>",
+]
+`;
