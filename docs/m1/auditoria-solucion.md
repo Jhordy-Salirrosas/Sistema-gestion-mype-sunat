@@ -872,3 +872,78 @@ aprobadas. Build de ambos repos y lint de los archivos modificados aprobados
 tras reinicio, conservando identificador y miembros. Los fallos previsibles de
 contexto se registran sanitizados y quedan visibles como bloqueo/revisión.
 La migración no se aplicó a bases compartidas. Sin llamadas reales a SUNAT.
+
+### 2B — RC sin competir con despacho individual
+
+Se abre RC con la misma reserva, artefacto firmado, compuerta XSD+XSL, cola,
+ticket y finalización durable de 2A. Solo entra PENDIENTE con incertidumbre
+explícitamente falsa, RUC coherente, plazo válido y detalle fiscal verificable.
+EN_COLA, PROCESANDO, ENVIADO, ERROR_RED, incertidumbre true/null, informados y
+miembros de agregados activos quedan visibles como excluidos. Por tanto las
+boletas que hoy se emiten por el canal individual NO se vuelven a informar por
+RC. No se añade un canal nuevo de creación de boletas.
+
+El consumidor individual M1 y la reserva RC toman el mismo bloqueo transaccional
+por empresa: si gana RC el job individual no despacha; si gana el individual,
+PENDIENTE pasa a PROCESANDO y RC lo excluye. Se conservan ERROR_RED/ENVIADO y la
+marca null histórica para que la conciliación individual existente siga
+reconociendo incertidumbre. Resiliencia solo se usa por sus interfaces, sin
+modificar sus archivos. La recuperación de RESERVED también reconstruye RC
+con los mismos miembros e identificador, no una selección nueva del día.
+
+XML RC: ordinales, emisor UBL 2.0 completo, PaidAmount antes de InstructionID,
+Catálogo 11 (01/02/03/04/05) desde afectaciones persistidas, tributos separados,
+referencia de notas a boletas y descuentos fiscales 02. Sin detalle/referencia
+real o si el total no concuerda, se excluye y se explica; no se inventa GRAVADA.
+La hoja oficial exige TaxTotal IGV aun en gratuitas/exoneradas: se declara IGV
+cero junto al tributo real. La hoja solo admite AllowanceCharge con indicador
+true (cargo); por eso los descuentos no afectos 03/01 no se disfrazan de cargos:
+se mantienen bases fiscales y total cobrado reales, sin AllowanceCharge falso.
+La discrepancia de su fórmula antigua 4027 es observación no bloqueante cuando
+corresponde; no se modifica ni se debilita la hoja oficial.
+
+Un CDR aceptado y cotejado de RC actualiza los miembros a ACEPTADO y publica el
+trabajo contable por enqueueInvoiceInTx en la MISMA transacción que el resultado
+del agregado. La reentrega individual final completa el puente existente sin
+sendBill. Si falla esa publicación, rollback; el reintento retoma getStatus con
+el ticket persistido. Sin cambios de Contabilidad ni tablas adicionales.
+
+Front: RC conserva confirmación, motivo literal y resultado en cola; Monitor
+muestra ambos tipos y permite consultar solo tickets existentes. Un false
+explícito de reenviable se respeta; la vista no ofrece reenvío individual de
+miembros reservados/inciertos. Error de transporte no afirma que SUNAT no lo vio.
+La explicación de RC vacío incluye exclusiones reales, no atribuye CDR a todos.
+
+Pruebas: XML firmado con certificado ficticio y SFS real para gravado, mixto,
+exonerado, inafecto, exportación, gratuito, ICBPER, NC/ND con referencia y
+descuentos; snapshots de orden y contenido. PostgreSQL local: carrera de ambos
+canales, estados excluidos, recuperación de reserva, incertidumbre sin reenvío,
+aislamiento y rollback contable seguido de consulta de ticket sin segundo envío.
+
+Resto operativo deliberado: un sendSummary incierto SIN ticket queda UNCERTAIN
+visible y requiere conciliación externa por el equipo; getStatus necesita un
+ticket y el protocolo no ofrece aquí una consulta segura por identificador.
+Nunca se libera automáticamente esa reserva ni se vuelve a enviar a ciegas.
+Los documentos con RUC histórico/credenciales ajenas continúan bloqueados.
+La migración aditiva sigue pendiente de aplicación compartida por Emma; durante
+esta construcción solo se aplicó al PostgreSQL local nuevo y desechable.
+
+Checksum SHA-256 de la única migración generada
+`20261110000000_m1_invoice_aggregates/migration.sql`:
+`28a4df36738f93b6cdcd91b0230414603dba63754ec84c04565e92aede723b67`.
+La recuperación se aísla por registro: una empresa con contexto bloqueado no
+impide recuperar las siguientes. En una carrera perdida de RC la relectura
+puede devolver HTTP 400 «Los miembros reservados ya no son elegibles para RC»;
+no hay publicación ni reserva residual en ese caso.
+
+Cierre de verificación back 2B: 252 suites / 2222 pruebas aprobadas, 6 snapshots;
+3 suites / 18 pruebas omitidas por sus condiciones existentes. Build y lint
+aprobados (único aviso heredado en prueba de Contabilidad, archivo sin cambios).
+El contenedor PostgreSQL 16 y su volumen desechable fueron eliminados al acabar.
+Ninguna prueba de esta entrega llama realmente a SUNAT; SOAP y cola se simulan,
+con persistencia transaccional real local en la integración de agregados.
+Front 2B: 99 archivos / 785 pruebas aprobadas; build y lint de archivos modificados
+aprobados. Entrega front por la rama `ferry/m1-bajas-resumenes-envio` del back,
+con FERRY.md y rutas exactas; no se empuja al repositorio front. Bases verificadas:
+back af5f4fb2, front 204d3da6. Entrega back `fix/m1-bajas-resumenes-envio`.
+Un commit de construcción por parte (2A y 2B); sin PR, fusiones ni despliegue.

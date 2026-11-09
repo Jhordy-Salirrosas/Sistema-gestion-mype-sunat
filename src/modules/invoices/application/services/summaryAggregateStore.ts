@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
+import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
 import { PrismaService } from '../../../../database/prismaService';
 import { Prisma, type InvoiceAggregate } from '../../../../generated/client/client';
 import { parseCdr } from '../../../sunat/soap/cdr.parser';
@@ -19,7 +20,7 @@ const normalizeNumber = (s: string) => s.replace(/-(0*)(\d+)$/, (_, _zero, n) =>
 
 @Injectable()
 export class SummaryAggregateStore {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly queue: QueueService) {}
 
   async reservar(companyId: string, kind: AggregateKind, fecha: string, selection: SeleccionBaja[], context: IssuerContext,
     preview: (tx: Prisma.TransactionClient, correlativo: number, excludeId?: string) => Promise<VistaPrevia>): Promise<{ row: InvoiceAggregate; vista?: VistaPrevia }> {
@@ -42,7 +43,7 @@ export class SummaryAggregateStore {
       vista.xml = vista.xml.replace(/(<cbc:ID>)[^<]*(<\/cbc:ID>)/, `$1${identifier}$2`).replace(/(<cbc:IssueDate>)[^<]*(<\/cbc:IssueDate>)/, `$1${existing?.generation_date ?? today}$2`);
       const members = vista.lineas.filter(l => l.incluido).map(l => ({ id: l.id, serie: l.serie, correlativo: l.correlativo, tipoComprobante: l.tipoComprobante,
         ...(kind === 'RA' ? { motivo: selection.find(s => s.id === l.id)?.motivo } : {}) }));
-      if (!members.length || (kind === 'RA' && members.length !== selection.length)) throw new BadRequestException('Selección de baja no elegible o ajena a la empresa');
+      if (!members.length || members.length !== selection.length) throw new BadRequestException('Selección de baja no elegible o ajena a la empresa');
       const active = await tx.invoiceAggregate.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(existing ? { id: { not: existing.id } } : {}) } });
       if (active.some(a => membersOf(a).some(m => members.some(n => n.id === m.id)))) throw new ConflictException('SUMMARY_MEMBER_ALREADY_RESERVED');
       const row = existing ?? await tx.invoiceAggregate.create({ data: { company_id: companyId, kind, identifier, fingerprint,
@@ -122,6 +123,13 @@ export class SummaryAggregateStore {
       if (accepted && row.kind === 'RA') {
         const updated = await tx.invoice.updateMany({ where: { company_id: row.company_id, id: { in: snapshot.map(m => m.id) }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } }, data: { estado: 'ANULADO' } });
         if (updated.count !== snapshot.length) throw new Error('SUMMARY_MEMBER_STATE_CHANGED');
+      }
+      if (accepted && row.kind === 'RC') {
+        const updated = await tx.invoice.updateMany({ where: { company_id: row.company_id, id: { in: snapshot.map(m => m.id) }, estado: 'PENDIENTE', transport_uncertain: false }, data: { estado: 'ACEPTADO' } });
+        if (updated.count !== snapshot.length) throw new Error('SUMMARY_MEMBER_STATE_CHANGED');
+        // La reentrega de un comprobante final solo completa el puente contable;
+        // la publicación transaccional impide perder ese trabajo tras el CDR.
+        for (const member of snapshot) if (!await this.queue.enqueueInvoiceInTx(tx, member.id)) throw new Error('SUMMARY_ACCOUNTING_ENQUEUE_FAILED');
       }
       return tx.invoiceAggregate.update({ where: { id: row.id }, data: { state: accepted ? 'ACCEPTED' : 'REJECTED', transport_uncertain: false, error: accepted ? null : cdr.description,
         result: { codigo: cdr.responseCode, mensaje: cdr.description, referencia: cdr.referenceId, status, contenido, xml: cdr.rawXml } as Prisma.InputJsonValue } });

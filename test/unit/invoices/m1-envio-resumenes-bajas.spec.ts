@@ -10,7 +10,7 @@ function harness() {
   const despacho = { encolar: jest.fn(async () => 'job' as string | null) };
   const firma = { signXml: jest.fn((xml: string) => ({ signedXml: xml + '<!--firmado-->' })) };
   const gate = { validar: jest.fn(async () => undefined) };
-  const svc = new SummaryEnvioService({} as never, despacho as never, firma as never, { resolve: async () => context } as never, store as never, gate as never);
+  const svc = new SummaryEnvioService({ vistaResumenDiario: async () => ({ lineas: [] }) } as never, despacho as never, firma as never, { resolve: async () => context } as never, store as never, gate as never);
   return { row, view, context, store, despacho, firma, gate, svc };
 }
 it('sin selección explícita no hay reserva, firma ni cola', async () => {
@@ -57,6 +57,14 @@ it('reserva incierta no se vuelve a enviar por HTTP', async () => {
   const h = harness(); h.row.state = 'UNCERTAIN';
   expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: false, motivo: expect.stringContaining('UNCERTAIN') }); expect(h.despacho.encolar).not.toHaveBeenCalled();
 });
-it('RC sigue cerrado hasta la parte 2B', async () => {
+it('RC vacío no reserva ni publica', async () => {
   const h = harness(); expect(await h.svc.enviarResumenDiario('empresa', '2026-11-09')).toMatchObject({ enviado: false }); expect(h.despacho.encolar).not.toHaveBeenCalled();
+});
+
+it('una reserva fallida no impide recuperar las de otras empresas', async () => {
+  const h=harness();
+  h.store.pendientes.mockResolvedValue([{...h.row,state:'PREPARED',identifier:'RC-first'}, {...h.row,state:'PREPARED',identifier:'RC-second'}] as never);
+  h.gate.validar.mockRejectedValueOnce(new Error('Contexto no disponible'));
+  await h.svc.recuperar(); expect(h.despacho.encolar).toHaveBeenCalledTimes(1);
+  expect(h.despacho.encolar).toHaveBeenCalledWith(expect.objectContaining({identificador:'RC-second'}));
 });

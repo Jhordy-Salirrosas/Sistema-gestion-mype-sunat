@@ -37,7 +37,9 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
     this.recovering = true;
     try {
       for (const row of await this.store.pendientes()) {
-        if (row.state === 'RESERVED' && row.kind === 'RA') {
+        try {
+        if (row.state === 'RESERVED') {
+          if (row.kind === 'RC') { await this.enviarResumenDiario(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: '' }))); continue; }
           await this.enviarComunicacionBaja(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: m.motivo ?? 'Anulación de la operación' })));
           continue;
         }
@@ -46,12 +48,24 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
         await this.gate.validar(row.xml ?? '', row.kind as 'RA' | 'RC', context, row.identifier);
         const jobId = await this.despacho.encolar(this.job(row));
         if (jobId) await this.store.encolado(row.id, jobId);
+        } catch (error) { const d = detalleErrorConsulta(error); this.logger.error(`Recuperación ${row.identifier}: ${d.nombre}: ${d.mensaje}`); }
       }
     } catch (error) { const d = detalleErrorConsulta(error); this.logger.error(`Recuperación agregados: ${d.nombre}: ${d.mensaje}`); }
     finally { this.recovering = false; }
   }
-  async enviarResumenDiario(_companyId: string, _fecha: string): Promise<ResultadoEnvioAgregado> {
-    return { enviado: false, identificador: '', jobId: null, incluidos: 0, motivo: 'RC pendiente de la parte 2B; no se abre despacho sin compuerta completa' };
+  async enviarResumenDiario(companyId: string, fecha: string, selection?: SeleccionBaja[]): Promise<ResultadoEnvioAgregado> {
+    try {
+      if (!selection) {
+        const preview = await this.resumenes.vistaResumenDiario(companyId, fecha);
+        selection = preview.lineas.filter(l => l.incluido).map(l => ({ id: l.id, motivo: '' }));
+      }
+      if (!selection.length) return { enviado: false, identificador: '', jobId: null, incluidos: 0, motivo: 'No hay documentos elegibles: revise exclusiones de la vista previa' };
+      return await this.prepararBaja(companyId, fecha, selection, 'RC');
+    } catch (error) {
+      if (error instanceof HttpException && error.getStatus() < 500) throw error;
+      const d = detalleErrorConsulta(error); this.logger.error(`Preparación RC: ${d.nombre}: ${d.mensaje}`);
+      return { enviado: false, identificador: '', jobId: null, incluidos: 0, motivo: d.mensaje };
+    }
   }
   async enviarComunicacionBaja(companyId: string, fecha: string, input?: unknown): Promise<ResultadoEnvioAgregado> {
     const selection = seleccionBaja(input);
@@ -62,10 +76,10 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
       return { enviado: false, identificador: '', jobId: null, incluidos: 0, motivo: d.mensaje };
     }
   }
-  private async prepararBaja(companyId: string, fecha: string, selection: SeleccionBaja[]): Promise<ResultadoEnvioAgregado> {
+  private async prepararBaja(companyId: string, fecha: string, selection: SeleccionBaja[], kind: 'RA' | 'RC' = 'RA'): Promise<ResultadoEnvioAgregado> {
     const context = await this.issuerConfig.resolve(companyId);
-    const { row, vista } = await this.store.reservar(companyId, 'RA', fecha, selection, context,
-      (tx, n, excludeId) => this.resumenes.vistaComunicacionBaja(companyId, fecha, n, selection, tx, excludeId));
+    const { row, vista } = await this.store.reservar(companyId, kind, fecha, selection, context,
+      (tx, n, excludeId) => kind === 'RA' ? this.resumenes.vistaComunicacionBaja(companyId, fecha, n, selection, tx, excludeId) : this.resumenes.vistaResumenDiario(companyId, fecha, n, selection, tx, excludeId));
     const result = { enviado: false, identificador: row.identifier, jobId: row.job_id, incluidos: membersOf(row).length, motivo: null as string | null };
     if (['SENDING', 'POLLING', 'UNCERTAIN', 'ACCEPTED', 'REJECTED', 'REVIEW'].includes(row.state)) return { ...result, motivo: `Envío ya reservado: ${row.state}; consulte el Monitor` };
     if (row.state === 'QUEUED') return { ...result, enviado: true };
@@ -73,10 +87,10 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
       let prepared = row;
       if (vista) {
         const signed = this.firma.signXml(vista.xml!, context).signedXml;
-        await this.gate.validar(signed, 'RA', context, row.identifier);
+        await this.gate.validar(signed, kind, context, row.identifier);
         const zip = new AdmZip(); zip.addFile(`${context.ruc}-${row.identifier}.xml`, Buffer.from(signed));
         prepared = await this.store.artefacto(row, signed, zip.toBuffer().toString('base64'));
-      } else await this.gate.validar(row.xml ?? '', 'RA', context, row.identifier);
+      } else await this.gate.validar(row.xml ?? '', kind, context, row.identifier);
       if (!['PREPARED', 'RESERVED', 'BLOCKED'].includes(prepared.state)) return { ...result, enviado: prepared.state === 'QUEUED', jobId: prepared.job_id, motivo: `Envío ya reservado: ${prepared.state}` };
       const jobId = await this.despacho.encolar(this.job(prepared));
       if (!jobId) return { ...result, motivo: 'La cola no aceptó el envío; reserva y XML conservados para recuperación' };

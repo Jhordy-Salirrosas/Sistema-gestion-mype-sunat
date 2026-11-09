@@ -1,3 +1,4 @@
+import { claimIndividualSummaryChannel } from '../../../src/modules/invoices/application/services/summaryIndividualClaim';
 import { randomUUID } from 'node:crypto';
 import AdmZip from 'adm-zip';
 import { PrismaService } from '../../../src/database/prismaService';
@@ -28,7 +29,7 @@ suite('M1 agregados: reserva durable, identidad y transacción real', () => {
     await db.invoiceAggregate.deleteMany({ where: { company_id: { in: [company, other] } } });
     await db.transactionHistory.deleteMany({ where: { company_id: company } });
     await db.invoice.deleteMany({ where: { company_id: { in: [company, other] } } });
-    store = new SummaryAggregateStore(db); view = new InvoiceSummaryService(db);
+    store = new SummaryAggregateStore(db, { enqueueInvoiceInTx: jest.fn(async () => 'accounting-job') } as never); view = new InvoiceSummaryService(db);
     const fake = fakeIssuerCertificate();
     const signature = new SignatureService({ getCertificate: () => ({ certificatePem: fake.pem, privateKeyPem: fake.privateKeyPem }) } as never);
     const resolver = { resolve: async (id: string) => ({ companyId: id, ruc: id === company ? ruc : '20000000002', environment: 'BETA', endpoint: 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService', sol: { username: 'FAKE', password: 'fake' }, certificate: { base64: 'fake', password: 'fake' } }) };
@@ -137,6 +138,79 @@ suite('M1 agregados: reserva durable, identidad y transacción real', () => {
     await db.invoiceAggregate.update({ where: { id: row.id }, data: { updated_at: new Date(Date.now() - 90_000) } });
     await envio.recuperar(); expect((await store.cargar(company, row.identifier)).state).toBe('QUEUED');
     expect(await db.invoiceAggregate.count({ where: { company_id: company } })).toBe(1);
+  });
+
+  async function boleta(n = 1, state: 'PENDIENTE' | 'EN_COLA' | 'ERROR_RED' | 'ACEPTADO' = 'PENDIENTE', uncertain = false) {
+    return db.invoice.create({data:{ company_id: company, ruc_emisor:ruc, tipo_comprobante:'03',serie:'B001',correlativo:n, fecha_emision:new Date(date()+'T12:00:00Z'), estado:state, transport_uncertain:uncertain, monto_total:118,total_igv:18,customer_identity_type:'6',customer_identity_number:'20100070970',payload_ubl:{lineas:[{ id:1,descripcion:'Ficticio',cantidad:1,valorUnitario:100,totalLinea:118,igvLinea:18,afectacion:'10' }]}}});
+  }
+  async function preparedRC() {
+    const i = await boleta(); const result = await envio.enviarResumenDiario(company,date());
+    expect(result.enviado).toBe(true); const row = await store.cargar(company,result.identificador);
+    return {i,row,job:{tipo:'RESUMEN_DIARIO' as const, identificador:row.identifier,companyId:company,fileName:'',zipBase64:''}};
+  }
+  it('RC excluye canal individual en curso, incertidumbre, aceptados y datos fiscales ausentes', async () => {
+    const eligible=await boleta(); await boleta(2,'EN_COLA'); await boleta(3,'ERROR_RED'); await boleta(4,'PENDIENTE',true); await boleta(5,'ACEPTADO');
+    const missing=await boleta(6); await db.invoice.update({where:{id:missing.id},data:{payload_ubl:{}}});
+    const result=await view.vistaResumenDiario(company,date());
+    expect(result.lineas.filter(l=>l.incluido).map(l=>l.id)).toEqual([eligible.id]);
+    expect(result.lineas.every(l=>!l.reenviable)).toBe(true);
+  });
+  it('reserva RC gana al job individual: el job no puede despachar', async () => {
+    const {i}=await preparedRC(); expect(await claimIndividualSummaryChannel(db,i.id)).toBe(false);
+    expect((await view.vistaResumenDiario(company,date())).envio.lineas).toBe(0);
+  });
+  it('reclamación individual gana a RC: el agregado no toma el comprobante', async () => {
+    const i=await boleta(); expect(await claimIndividualSummaryChannel(db,i.id)).toBe(true);
+    expect((await envio.enviarResumenDiario(company,date())).enviado).toBe(false);
+    expect(await db.invoiceAggregate.count({where:{company_id:company}})).toBe(0);
+  });
+  it('RC aceptado persiste miembros y trabajo contable en la transacción; reintenta solo ticket', async () => {
+    const {i,row,job}=await preparedRC();
+    const enqueue=store['queue'].enqueueInvoiceInTx as jest.Mock;
+    enqueue.mockResolvedValueOnce(null);
+    soap.getStatus.mockResolvedValue({statusCode:'0',enProceso:false,contenido:cdr(row.identifier)});
+    await dispatch.procesar(job,{maxConsultas:0});
+    expect((await db.invoice.findUniqueOrThrow({where:{id:i.id}})).estado).toBe('PENDIENTE');
+    expect((await store.cargar(company,row.identifier)).state).toBe('POLLING');
+    enqueue.mockResolvedValue('accounting-job'); await dispatch.procesar(job,{maxConsultas:0});
+    expect(soap.sendSummary).toHaveBeenCalledTimes(1);
+    expect((await db.invoice.findUniqueOrThrow({where:{id:i.id}})).estado).toBe('ACEPTADO');
+    expect((await store.cargar(company,row.identifier)).state).toBe('ACCEPTED');
+    expect(enqueue).toHaveBeenLastCalledWith(expect.objectContaining({invoice:expect.anything()}),i.id);
+    expect(await claimIndividualSummaryChannel(db,i.id)).toBe(true);
+  });
+  it('RC reservado recupera los mismos miembros y el mismo identificador tras reinicio', async () => {
+    const i=await boleta(); const sel=[{id:i.id,motivo:''}];
+    const {row}=await store.reservar(company,'RC',date(),sel,{companyId:company,ruc,environment:'BETA'} as never,(tx,n,id)=>view.vistaResumenDiario(company,date(),n,sel,tx,id));
+    await db.invoiceAggregate.update({where:{id:row.id},data:{updated_at:new Date(Date.now()-90_000)}});
+    await envio.recuperar(); expect((await store.cargar(company,row.identifier)).state).toBe('QUEUED');
+    expect(await db.invoiceAggregate.count({where:{company_id:company}})).toBe(1);
+  });
+  it('RC no publica tras timeout incierto sin ticket ni expone otra empresa', async () => {
+    const {row,job}=await preparedRC(); soap.sendSummary.mockRejectedValue(new Error('timeout simulado'));
+    await dispatch.procesar(job,{maxConsultas:0}); await dispatch.procesar(job,{maxConsultas:0});
+    expect(soap.sendSummary).toHaveBeenCalledTimes(1); expect((await store.cargar(company,row.identifier)).transport_uncertain).toBe(true);
+    await expect(store.cargar(other,row.identifier)).rejects.toThrow('SUMMARY_NOT_FOUND');
+  });
+
+  it('la carrera RC/individual tiene un solo ganador', async () => {
+    const i=await boleta();
+    const [individual, rc]=await Promise.allSettled([claimIndividualSummaryChannel(db,i.id),envio.enviarResumenDiario(company,date())]);
+    expect(individual.status).toBe('fulfilled');
+    const claimed = individual.status === 'fulfilled' && individual.value;
+    if (rc.status === 'rejected') {
+      // La vista era elegible antes del bloqueo: al ganar el individual,
+      // la relectura transaccional devuelve el HTTP 400 deliberado.
+      expect(rc.reason.getStatus()).toBe(400);
+      expect(rc.reason.message).toContain('ya no son elegibles');
+      expect(claimed).toBe(true);
+    } else expect(Number(claimed)+Number(rc.value.enviado)).toBe(1);
+    expect(await db.invoiceAggregate.count({where:{company_id:company}})).toBe(claimed ? 0 : 1);
+  });
+  it('reclamación individual conserva ERROR_RED/null para conciliación histórica', async () => {
+    const i=await boleta(1,'ERROR_RED'); await db.invoice.update({where:{id:i.id},data:{transport_uncertain:null}});
+    expect(await claimIndividualSummaryChannel(db,i.id)).toBe(true);
+    expect(await db.invoice.findUniqueOrThrow({where:{id:i.id}})).toMatchObject({estado:'ERROR_RED',transport_uncertain:null});
   });
 
 });

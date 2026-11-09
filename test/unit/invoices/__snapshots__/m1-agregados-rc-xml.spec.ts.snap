@@ -1,0 +1,53 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`RC y nota 07 conservan orden, Catálogo 11 y referencia real 1`] = `
+[
+  "<sac:SummaryDocumentsLine>
+      <cbc:LineID>1</cbc:LineID>
+      <cbc:DocumentTypeCode>03</cbc:DocumentTypeCode>
+      <cbc:ID>B001-00000001</cbc:ID>
+      <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>20100070970</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>6</cbc:AdditionalAccountID></cac:AccountingCustomerParty>
+      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <sac:TotalAmount currencyID="PEN">118.00</sac:TotalAmount>
+      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">100.00</cbc:PaidAmount><cbc:InstructionID>01</cbc:InstructionID></sac:BillingPayment>
+      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>1000</cbc:ID><cbc:Name>IGV</cbc:Name><cbc:TaxTypeCode>VAT</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
+    </sac:SummaryDocumentsLine>",
+  "<sac:SummaryDocumentsLine>
+      <cbc:LineID>2</cbc:LineID>
+      <cbc:DocumentTypeCode>07</cbc:DocumentTypeCode>
+      <cbc:ID>BC01-00000001</cbc:ID>
+      <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>20100070970</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>6</cbc:AdditionalAccountID></cac:AccountingCustomerParty>
+      <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>B001-1</cbc:ID><cbc:DocumentTypeCode>03</cbc:DocumentTypeCode></cac:InvoiceDocumentReference></cac:BillingReference>
+      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <sac:TotalAmount currencyID="PEN">118.00</sac:TotalAmount>
+      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">100.00</cbc:PaidAmount><cbc:InstructionID>01</cbc:InstructionID></sac:BillingPayment>
+      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>1000</cbc:ID><cbc:Name>IGV</cbc:Name><cbc:TaxTypeCode>VAT</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
+    </sac:SummaryDocumentsLine>",
+]
+`;
+
+exports[`RC y nota 08 conservan orden, Catálogo 11 y referencia real 1`] = `
+[
+  "<sac:SummaryDocumentsLine>
+      <cbc:LineID>1</cbc:LineID>
+      <cbc:DocumentTypeCode>03</cbc:DocumentTypeCode>
+      <cbc:ID>B001-00000001</cbc:ID>
+      <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>20100070970</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>6</cbc:AdditionalAccountID></cac:AccountingCustomerParty>
+      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <sac:TotalAmount currencyID="PEN">118.00</sac:TotalAmount>
+      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">100.00</cbc:PaidAmount><cbc:InstructionID>01</cbc:InstructionID></sac:BillingPayment>
+      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>1000</cbc:ID><cbc:Name>IGV</cbc:Name><cbc:TaxTypeCode>VAT</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
+    </sac:SummaryDocumentsLine>",
+  "<sac:SummaryDocumentsLine>
+      <cbc:LineID>2</cbc:LineID>
+      <cbc:DocumentTypeCode>08</cbc:DocumentTypeCode>
+      <cbc:ID>BD01-00000001</cbc:ID>
+      <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>20100070970</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>6</cbc:AdditionalAccountID></cac:AccountingCustomerParty>
+      <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>B001-1</cbc:ID><cbc:DocumentTypeCode>03</cbc:DocumentTypeCode></cac:InvoiceDocumentReference></cac:BillingReference>
+      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <sac:TotalAmount currencyID="PEN">118.00</sac:TotalAmount>
+      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">100.00</cbc:PaidAmount><cbc:InstructionID>01</cbc:InstructionID></sac:BillingPayment>
+      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">18.00</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>1000</cbc:ID><cbc:Name>IGV</cbc:Name><cbc:TaxTypeCode>VAT</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
+    </sac:SummaryDocumentsLine>",
+]
+`;

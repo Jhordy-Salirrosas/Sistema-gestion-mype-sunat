@@ -29,6 +29,7 @@ import { redondearMoneda as r2 } from '../../money';
  *    comprobante ya se informó como baja, volver a incluirlo lo resucita.
  */
 import { BadRequestException } from '@nestjs/common';
+import type { SummaryFiscal } from './summaryFiscal';
 
 /** Tipos de comprobante que viajan agregados en un resumen diario. */
 export const TIPOS_EN_RESUMEN: readonly string[] = ['03', '07', '08'];
@@ -59,6 +60,7 @@ export interface ComprobanteAgregado {
   documentoAfectado?: string;
   /** Estado del comprobante ante SUNAT: solo lo aceptado puede darse de baja. */
   motivoBaja?: string;
+  fiscal?: SummaryFiscal;
 }
 
 /** Datos del emisor y del envío del resumen. */
@@ -258,66 +260,22 @@ export const validarTiposEnBaja = (
   });
 };
 
-/**
- * Bloque de un comprobante dentro de `SummaryDocuments`.
- *
- * ELEMENTOS EN EL NAMESPACE `sac:` (SunatAggregateComponents-1):
- * `SummaryDocumentsLine`, `TotalAmount` y `BillingPayment`. Con `cac:` SUNAT
- * rechaza el archivo entero:
- *   "found <cac:SummaryDocumentsLine> (in namespace ...CommonAggregateComponents-2),
- *    but next item should be {...SunatAggregateComponents-1}SummaryDocumentsLine"
- *
- * `sac:BillingPayment` SOLO admite `cbc:InstructionID`. Por el tipo
- * `PaymentType` del esquema no se puede añadir nada después: tanto
- * `cbc:PaidAmount` como `cbc:Amount` fueron rechazados contra BETA con
- *   "...found <cbc:Amount> ..., but next item should be end-element"
- * El importe ya va en `sac:TotalAmount` (total) y en el `TaxTotal` (base e IGV),
- * así que el pago solo declara su instrucción.
- */
-const lineaResumen = (c: ComprobanteAgregado): string => {
-  const numero = `${c.serie}-${String(c.correlativo).padStart(8, '0')}`;
-  const total = r2(c.total);
-  const igv = r2(c.igv);
-  const base = r2(total - igv);
-
-  // `sac:SummaryDocumentsLine` — el elemento va en el namespace de SUNAT
-  // (SunatAggregateComponents-1), NO en el de UBL. Con `cac:` el validador de
-  // SUNAT responde, rechazando el archivo completo:
-  //   "found <cac:SummaryDocumentsLine> (in namespace ...CommonAggregateComponents-2),
-  //    but next item should be {...SunatAggregateComponents-1}SummaryDocumentsLine"
-  // Se comprobó enviando de verdad a BETA el 01-11.
+/** Secuencia XSD 2.0 y pagos Catálogo 11; no sustituye la afectación real. */
+const lineaResumen = (c: ComprobanteAgregado, index: number): string => {
+  if (!c.fiscal?.pagos.length) throw new BadRequestException('RC requiere desglose fiscal persistido');
+  if (['07', '08'].includes(c.tipoComprobante) && !/^B[A-Z0-9]{3}-[0-9]{1,8}$/.test(c.documentoAfectado ?? '')) throw new BadRequestException('RC requiere referencia real de la nota a boleta');
+  const money = (n: number) => r2(n).toFixed(2);
+  const names: Record<string, [string, string]> = { '1000': ['IGV','VAT'], '9997': ['EXO','VAT'], '9998': ['INA','FRE'], '9995': ['EXP','FRE'], '9996': ['GRA','FRE'], '7152': ['ICBPER','OTH'] };
   return `    <sac:SummaryDocumentsLine>
-      <cbc:LineID>${esc(c.serie)}</cbc:LineID>
+      <cbc:LineID>${index + 1}</cbc:LineID>
       <cbc:DocumentTypeCode>${esc(c.tipoComprobante)}</cbc:DocumentTypeCode>
-      <cbc:ID>${esc(numero)}</cbc:ID>
-      <cac:AccountingCustomerParty>
-        <cac:Party>
-          <cac:PartyIdentification>
-            <cbc:ID schemeID="${esc(c.tipoDocCliente)}">${esc(c.numDocCliente)}</cbc:ID>
-          </cac:PartyIdentification>
-        </cac:Party>
-      </cac:AccountingCustomerParty>
-      <cac:Status>
-        <cbc:ConditionCode>1</cbc:ConditionCode>
-      </cac:Status>
-      <sac:TotalAmount currencyID="PEN">${total.toFixed(2)}</sac:TotalAmount>
-      <sac:BillingPayment>
-        <cbc:InstructionID>01</cbc:InstructionID>
-      </sac:BillingPayment>
-      <cac:TaxTotal>
-        <cbc:TaxAmount currencyID="PEN">${igv.toFixed(2)}</cbc:TaxAmount>
-        <cac:TaxSubtotal>
-          <cbc:TaxableAmount currencyID="PEN">${base.toFixed(2)}</cbc:TaxableAmount>
-          <cbc:TaxAmount currencyID="PEN">${igv.toFixed(2)}</cbc:TaxAmount>
-          <cac:TaxCategory>
-            <cac:TaxScheme>
-              <cbc:ID>1000</cbc:ID>
-              <cbc:Name>IGV</cbc:Name>
-              <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
-            </cac:TaxScheme>
-          </cac:TaxCategory>
-        </cac:TaxSubtotal>
-      </cac:TaxTotal>
+      <cbc:ID>${esc(c.serie)}-${String(c.correlativo).padStart(8, '0')}</cbc:ID>
+      <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>${esc(c.numDocCliente)}</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>${esc(c.tipoDocCliente)}</cbc:AdditionalAccountID></cac:AccountingCustomerParty>${c.documentoAfectado ? `
+      <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${esc(c.documentoAfectado)}</cbc:ID><cbc:DocumentTypeCode>03</cbc:DocumentTypeCode></cac:InvoiceDocumentReference></cac:BillingReference>` : ''}
+      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <sac:TotalAmount currencyID="PEN">${money(c.total)}</sac:TotalAmount>
+${c.fiscal.pagos.map(p => `      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">${money(p.monto)}</cbc:PaidAmount><cbc:InstructionID>${p.codigo}</cbc:InstructionID></sac:BillingPayment>`).join('\n')}
+${c.fiscal.tributos.map(t => `      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${money(t.impuesto)}</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">${money(t.impuesto)}</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>${t.codigo}</cbc:ID><cbc:Name>${names[t.codigo][0]}</cbc:Name><cbc:TaxTypeCode>${names[t.codigo][1]}</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>`).join('\n')}
     </sac:SummaryDocumentsLine>`;
 };
 
@@ -379,10 +337,9 @@ export const construirResumenDiario = (
   <cbc:ReferenceDate>${esc(fecha)}</cbc:ReferenceDate>
   <cbc:IssueDate>${esc(cabecera.fechaGeneracion)}</cbc:IssueDate>
   <cac:AccountingSupplierParty>
+    <cbc:CustomerAssignedAccountID>${esc(cabecera.rucEmisor)}</cbc:CustomerAssignedAccountID>
+    <cbc:AdditionalAccountID>6</cbc:AdditionalAccountID>
     <cac:Party>
-      <cac:PartyIdentification>
-        <cbc:ID schemeID="6">${esc(cabecera.rucEmisor)}</cbc:ID>
-      </cac:PartyIdentification>
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>${esc(cabecera.razonSocialEmisor)}</cbc:RegistrationName>
       </cac:PartyLegalEntity>

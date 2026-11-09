@@ -155,7 +155,6 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       const result = await (type === 'summary'
         ? service.enviarResumenDiario(context.companyId, '2026-11-01')
         : service.enviarComunicacionBaja(context.companyId, '2026-11-01', [{ id: 'i', motivo: 'Prueba' }]));
-      if (type === 'summary') { expect(result.enviado).toBe(false); return; }
       expect(result.enviado).toBe(true);
       expect(resolve).toHaveBeenCalledWith(context.companyId);
       expect(signXml).toHaveBeenCalledWith('<SummaryDocuments/>', context);

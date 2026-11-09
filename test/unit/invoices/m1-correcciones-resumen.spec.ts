@@ -56,7 +56,7 @@ describe('M1 filas de bajas y resúmenes', () => {
           id: `inv-${i}`,
           tipo,
           estado,
-          reenviable: i < 3,
+          reenviable: method === 'vistaResumenDiario' ? false : i < 3,
         })),
       );
       expect(prisma.invoice.findMany.mock.calls[0][0].where.company_id).toBe(
@@ -117,7 +117,7 @@ describe('M1 proyección de filas desde el controlador de bajas y resúmenes', (
         id: 'fila',
         tipoComprobante: filas[0].tipo_comprobante,
         estado: 'ERROR_RED',
-        reenviable: true,
+        reenviable: method !== 'vistaResumen',
       });
       const explicit = await controller[method]('empresa', ' 2026-11-07 ', '2');
       expect(explicit.envio.correlativo).toBe(2);
