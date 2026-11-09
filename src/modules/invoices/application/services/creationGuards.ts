@@ -6,6 +6,7 @@ import { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
+import { CATALOGO_09_MOTIVOS } from './invoiceNoteService';
 import { validarPago } from './paymentTermsAndSpotValidator';
 import { resolverRetencionMaestro } from './retencionMaestro';
 import type { PrismaService } from '../../../../database/prismaService';
@@ -134,6 +135,9 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
       const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
       if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
+      if (CATALOGO_09_MOTIVOS.find(m => m.codigo === dto.codigo_motivo_nota)?.total && Math.round(importe * 100) !== disponible) {
+        throw new BadRequestException('El motivo de nota exige devolver el saldo disponible total');
+      }
     }
   }
   if (dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03') {

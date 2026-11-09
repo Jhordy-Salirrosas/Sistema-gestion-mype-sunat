@@ -31,3 +31,17 @@ it('no habilita productos inactivos para una venta nueva', async () => {
   const h = harness(); h.dto.tipo_comprobante = '01';
   await expect(h.run()).rejects.toThrow();
 });
+
+it.each(['01', '02', '06'])('motivo total %s no admite devolución parcial', async motivo => {
+  const h = harness(); h.dto.codigo_motivo_nota = motivo; h.dto.items[0].precioUnitario = 59;
+  await expect(h.run()).rejects.toThrow('saldo disponible total');
+});
+it('motivo total usa el saldo restante después de notas previas', async () => {
+  const h = harness(); h.dto.codigo_motivo_nota = '06'; h.dto.items[0].precioUnitario = 59;
+  h.tx.invoice.findMany.mockResolvedValue([{ monto_total: 59 }] as never);
+  await expect(h.run()).resolves.toMatchObject({ codigo_motivo_nota: '06' });
+});
+it('motivo por ítem conserva la devolución parcial', async () => {
+  const h = harness(); h.dto.items[0].precioUnitario = 59;
+  await expect(h.run()).resolves.toMatchObject({ codigo_motivo_nota: '07' });
+});

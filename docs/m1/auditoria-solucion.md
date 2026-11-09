@@ -442,3 +442,13 @@ El primer pase simultáneo falló solo por el umbral temporal de TA-13 (4/10
 menores de 500 ms); el pase completo exclusivo pasó sin cambiar el test.
 Lint backend y typecheck front aprobados. Ferry frontend: rama
 ferry/m1-verificacion-dev, commit 4293cc2, con FERRY.md y tres rutas exactas.
+
+### Corrección: motivos totales en flujo común (3.3)
+
+Se reutiliza CATALOGO_09_MOTIVOS de InvoiceNoteService: 01/02/06 exigen que
+las líneas devuelvan el saldo disponible completo, después de notas anteriores
+y bajo el bloqueo del origen. Un importe parcial se rechaza con causa clara;
+no se inventan precios/cantidades para completar el saldo. Motivo 07 conserva
+la devolución parcial. Cinco pruebas nuevas; suite completa backend:
+244 suites/2136 pruebas aprobadas, 3 suites/18 pruebas optativas omitidas.
+Frontend sin cambios: 97 archivos/773 pruebas aprobados.
