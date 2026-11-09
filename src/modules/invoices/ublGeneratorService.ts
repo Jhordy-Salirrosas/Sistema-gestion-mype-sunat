@@ -208,7 +208,9 @@ export class UblGeneratorService {
       emisor: bloqueEmisor(emisor),
       cliente: clienteXml,
       /**
-       * LAS NOTAS NO LLEVAN FORMA DE PAGO.
+       * FormaPago (cabecera y cuotas) se declara solo en facturas 01.
+       * Boletas 03 lo rechazan con SFS 3128; detracción se ensambla aparte.
+       * Las notas mantienen su comportamiento sin FormaPago.
        *
        * Una Nota de Crédito o de Débito no es una venta: no se cobra, solo
        * ajusta un comprobante anterior. SUNAT la rechaza con el código 3246
@@ -221,7 +223,7 @@ export class UblGeneratorService {
        * emitía una nota de punta a punta.
        */
       formaPago:
-        raiz === 'Invoice'
+        tipo === '01'
           ? bloqueFormaPago(formaPago!, moneda, payload.cuotas ?? [], netoPendiente)
           : '',
       mediosPago,
