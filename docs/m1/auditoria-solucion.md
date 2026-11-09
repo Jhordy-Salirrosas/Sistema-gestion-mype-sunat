@@ -408,3 +408,37 @@ Las pruebas nuevas incluyen serie configurada F087 con F001 inactiva, los
 códigos fiscales completos, entorno null, has_credit estricto y RA/RC bloqueado
 antes de firma/cola. Sin emisiones, llamadas a SUNAT, migraciones aplicadas,
 PR, fusiones ni despliegues. 3.3 y los puntos señalados de 3.4 siguen pendientes.
+
+## Ciclo de verificación sobre dev — 9 noviembre 2026
+
+### Fase 0
+
+Backend dev: 42b66ae6c14dc6ad590f8b1fba598b79b7cbc672.
+Frontend dev: a3f723e9a80325024efa40c0cfddefc9f47aa1a4.
+Línea base completa: backend 243 suites/2127 tests aprobados, 3 suites/18
+pruebas optativas omitidos; frontend 96 archivos/766 pruebas aprobados.
+Se utilizó PostgreSQL 16 local nuevo y desechable, exclusivamente con las
+migraciones existentes, conforme a la excepción autorizada por Emma. Sin
+conexión a bases compartidas, emisiones ni llamadas reales a SUNAT.
+
+### Corrección: líneas históricas de notas (3.3)
+
+La guarda común de ambas rutas admitía solo productos activos y cotejaba
+siempre su configuración actual. Ahora permite un producto inactivo únicamente
+si consta en el origen de la misma empresa y conserva su unidad/afectación
+históricas; rechaza alteraciones o productos inactivos ajenos. Las ventas
+nuevas conservan el filtro activo. NC no exige stock para una salida nueva;
+ND conserva comprobación de disponibilidad sin sustituir la fiscalidad histórica
+por la actual. OBSERVADO sigue sin habilitar un origen.
+
+El frontend conserva codigoAfectacion y precio_unitario del detalle de origen,
+incluidos los códigos antes comprimidos/rechazados. Un precio desconocido
+impide precargar; no se reconstruye desde una base redondeada. Pruebas nuevas:
+cuatro guardas históricas y siete contratos detalle → nota → payload.
+
+Cierre de este arreglo: backend 244 suites/2131 pruebas aprobadas, 3 suites/18
+pruebas optativas omitidas; frontend 97 archivos/773 pruebas aprobados.
+El primer pase simultáneo falló solo por el umbral temporal de TA-13 (4/10
+menores de 500 ms); el pase completo exclusivo pasó sin cambiar el test.
+Lint backend y typecheck front aprobados. Ferry frontend: rama
+ferry/m1-verificacion-dev, commit 4293cc2, con FERRY.md y tres rutas exactas.
