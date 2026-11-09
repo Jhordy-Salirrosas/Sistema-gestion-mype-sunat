@@ -4,6 +4,22 @@
 `applicationResponse` con `parseCdr()` y persiste el XML/código/descripción del
 CDR en `Invoice.cdr_sunat` y `TransactionHistory`.
 
+## Consulta de padrón RUC
+
+`GET /api/v1/sunat/ruc/:ruc` consulta un proveedor autorizado y conserva el
+resultado en `padron_ruc_cache`. La ruta exige `Authorization: Bearer <JWT>`.
+El proveedor se configura con `SUNAT_RUC_SERVICE_URL`; puede incluir `{ruc}` o
+ser una URL base a la que se agrega `/{ruc}`. Si el registro cacheado está
+vigente según `SUNAT_RUC_CACHE_TTL_SECONDS`, se responde sin llamar al
+proveedor. Un cache vencido no se presenta como vigente: si el proveedor no
+responde, la ruta devuelve `503`.
+
+El proveedor debe responder JSON con `ruc`, `razonSocial` (o `razon_social`),
+`estadoContribuyente` (o `estado_contribuyente`) y `condicionDomicilio` (o
+`condicion_domicilio`). Son opcionales `ubigeo`, `direccionFiscal` y
+`esAgenteRetencion`. El backend verifica que el RUC recibido coincida con el
+consultado y nunca marca datos manuales como `SUNAT`.
+
 ## Credenciales y certificado
 
 La homologación pública de SUNAT suele usar el RUC `20000000001`, usuario
