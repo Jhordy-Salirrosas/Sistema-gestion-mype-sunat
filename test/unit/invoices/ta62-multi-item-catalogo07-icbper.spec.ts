@@ -175,7 +175,7 @@ describe('TA-62 · cada afectación emite su tributo', () => {
     );
   });
 
-  it('la gratuita va con precio 0, PriceTypeCode 02 y fuera de la base', () => {
+  it('la gratuita declara referencia, precio de venta 0 y queda fuera de la base cobrada', () => {
     const gratuita: LineaDetalle = {
       id: 1,
       descripcion: 'Bolsa de cemento de regalo',
@@ -197,14 +197,16 @@ describe('TA-62 · cada afectación emite su tributo', () => {
     );
 
     expect(primeraLinea).toContain('<cbc:PriceTypeCode>02</cbc:PriceTypeCode>');
-    // Regla 3278: el LineExtensionAmount de la gratuita es cero.
+    // El importe de línea declara referencia; el total oneroso la excluye.
     expect(primeraLinea).toContain(
-      '<cbc:LineExtensionAmount currencyID="PEN">0.00</cbc:LineExtensionAmount>',
+      '<cbc:LineExtensionAmount currencyID="PEN">125.00</cbc:LineExtensionAmount>',
     );
-    // El precio alternativo también es cero.
+    // El precio alternativo tipo 02 conserva el valor referencial.
     expect(primeraLinea).toContain(
-      '<cbc:PriceAmount currencyID="PEN">0.00</cbc:PriceAmount>',
+      '<cbc:PriceAmount currencyID="PEN">25.00</cbc:PriceAmount>',
     );
+    expect(primeraLinea).toContain('<cbc:ID>9996</cbc:ID>');
+    expect(primeraLinea).toContain('<cac:Price>\n      <cbc:PriceAmount currencyID="PEN">0.00</cbc:PriceAmount>');
   });
 
   it('la gratuita NO infla la base imponible del comprobante', () => {

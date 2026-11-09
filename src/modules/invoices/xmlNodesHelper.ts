@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { referenciaGratuita } from './freeOperationReference';
 import { formatoMoneda, formatoUnitario, multiplicarMoneda } from './money';
 /**
  * Constructores de nodos XML para el generador UBL 2.1 (M1).
@@ -106,14 +107,14 @@ const categoriaLinea = (afectacion: string, tributo: string): string => {
   // El Percent solo tiene sentido en los gravados; en exonerado/inafecto
   // SUNAT lo omite y declararlo con 18.00 se lee como un IGV mal calculado.
   const porcentaje =
-    tributo === '1000' ? '\n          <cbc:Percent>18.00</cbc:Percent>' : '';
+    tributo === '1000' || (tributo === '9996' && afectacion.startsWith('1')) ? '\n          <cbc:Percent>18.00</cbc:Percent>' : tributo === '9996' ? '\n          <cbc:Percent>0.00</cbc:Percent>' : '';
 
   // La razón de exoneración es el código del Catálogo 07. En las gratuitas
   // además se declara PriceTypeCode en el PricingReference, no aquí.
   const razon = `\n          <cbc:TaxExemptionReasonCode>${esc(afectacion)}</cbc:TaxExemptionReasonCode>`;
 
   const idCategoria =
-    tributo === '1000' ? 'S' : tributo === '9997' ? 'E' : tributo === '9995' ? 'G' : 'O';
+    tributo === '9996' ? 'Z' : tributo === '1000' ? 'S' : tributo === '9997' ? 'E' : tributo === '9995' ? 'G' : 'O';
 
   return `        <cac:TaxCategory>
           <cbc:ID schemeID="UN/ECE 5305">${idCategoria}</cbc:ID>${porcentaje}${razon}
@@ -165,10 +166,11 @@ export const bloqueLinea = (
   // Base de la línea sin IGV, ya con los descuentos aplicados.
   const descuentos = l.descuentos ?? [];
   const baseBruta = multiplicarMoneda(l.cantidad, l.valorUnitario);
-  const neto = gratuita ? 0 : l.totalLinea - l.igvLinea;
+  const referencia = referenciaGratuita(l);
+  const neto = gratuita ? referencia.base : l.totalLinea - l.igvLinea;
 
-  // Regla 3278: la gratuita se declara a precio cero con tipo '02'.
-  const precioXml = gratuita ? 0 : precio;
+  // Tipo 02 informa valor referencial sin IGV; cac:Price conserva precio de venta cero.
+  const precioXml = gratuita ? l.valorUnitario : precio;
   const tipoPrecio = gratuita ? '02' : '01';
 
   const item = l.codigo
@@ -205,7 +207,7 @@ export const bloqueLinea = (
       </cac:TaxSubtotal>`
       : '';
 
-  const totalImpuestosLinea = dinero((gratuita ? 0 : l.igvLinea) + (l.icbperLinea ?? 0));
+  const totalImpuestosLinea = dinero((gratuita ? referencia.igv : l.igvLinea) + (l.icbperLinea ?? 0));
 
   // ORDEN DE LOS HIJOS DE `cac:InvoiceLine` (UBL 2.1)
   //
@@ -235,8 +237,8 @@ ${raiz === 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}    <cac:TaxTo
       <cbc:TaxAmount currencyID="${moneda}">${totalImpuestosLinea}</cbc:TaxAmount>
       <cac:TaxSubtotal>
         <cbc:TaxableAmount currencyID="${moneda}">${dinero(neto)}</cbc:TaxableAmount>
-        <cbc:TaxAmount currencyID="${moneda}">${dinero(gratuita ? 0 : l.igvLinea)}</cbc:TaxAmount>
-${categoriaLinea(l.afectacion, tributo)}
+        <cbc:TaxAmount currencyID="${moneda}">${dinero(gratuita ? referencia.igv : l.igvLinea)}</cbc:TaxAmount>
+${categoriaLinea(l.afectacion, gratuita ? '9996' : tributo)}
       </cac:TaxSubtotal>${icbperXml}
     </cac:TaxTotal>
 ${raiz !== 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}${item}

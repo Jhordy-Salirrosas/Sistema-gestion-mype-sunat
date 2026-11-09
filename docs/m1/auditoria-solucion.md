@@ -462,3 +462,20 @@ la exención de stock de servicios. Pruebas: exceso 6+6 frente a 10 (fallaba en
 dev), límite decimal exacto, servicio repetido y afectación alterada en segunda
 línea. Suite completa backend: 245 suites/2140 pruebas aprobadas; 3 suites/18
 pruebas optativas omitidas. Frontend sin cambios: 97 archivos/773 pruebas.
+
+### Corrección: gratuitas referenciales (3.4)
+
+El XML anterior anulaba referencia, base e IGV, y utilizaba el tributo oneroso.
+Ahora el flujo común conserva precio final y base referenciales, desglosa IGV
+referencial para 11–16, declara tributo 9996 en línea/cabecera y precio tipo 02
+sin IGV; cac:Price (precio de venta) sigue cero. LineExtensionAmount de la
+línea informa referencia, excluida del total oneroso de cabecera. El IGV no
+cobrado se declara en 9996 y no aumenta PayableAmount. No se modifica SPOT.
+Una gratuita sin referencia positiva se bloquea; no se inventa el valor.
+
+Seis pruebas nuevas fallaban antes: comunes 11/16/21/31/37 → XML → firma
+ficticia → ejecutor SFS real local, con referencia positiva y payable cero;
+referencia cero rechazada. Se corrige la expectativa antigua que confundía
+precio de venta cero con referencia cero. Suite completa backend: 246 suites/
+2146 pruebas aprobadas, 3 suites/18 pruebas optativas omitidas. Frontend sin
+cambios: 97 archivos/773 pruebas aprobados.
