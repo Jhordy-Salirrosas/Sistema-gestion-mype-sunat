@@ -236,6 +236,14 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return this.mapPeriod(row);
   }
 
+  async findLedgerOpeningBalance(companyId: string, period: string, accountCode: string) {
+    const entries = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period: { lt: period } },
+      include: { lines: { where: { account_code: accountCode } } },
+    });
+    return entries.reduce((sum, entry) => sum + entry.lines.reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0), 0);
+  }
+
   async findLedgerMovements(companyId: string, period: string, accountCode: string) {
     const entries = await this.prisma.accountingEntry.findMany({
       where: { company_id: companyId, period },

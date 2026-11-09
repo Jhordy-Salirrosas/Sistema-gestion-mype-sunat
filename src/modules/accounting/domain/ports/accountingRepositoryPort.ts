@@ -26,6 +26,8 @@ export interface IAccountingRepositoryPort {
   closePeriod(companyId: string, period: string): Promise<AccountingPeriodEntity>;
   /** Movimientos de una cuenta en un período. */
   findLedgerMovements(companyId: string, period: string, accountCode: string): Promise<LedgerMovement[]>;
+  /** Saldo acumulado de la cuenta en períodos anteriores. */
+  findLedgerOpeningBalance(companyId: string, period: string, accountCode: string): Promise<number>;
   /** Saldos por cuenta de todo el período. */
   findTrialBalanceRows(companyId: string, period: string): Promise<TrialBalanceRow[]>;
 }
