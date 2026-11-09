@@ -65,24 +65,16 @@ describe('TA-31 con las hojas OFICIALES', () => {
     'utf8',
   );
 
-  it('ejecuta la hoja oficial de Factura sobre un XML real', async () => {
+  it('TA-70 rechaza el fixture con ExtensionContent vacío mediante XSD oficial', async () => {
     const servicio = new SunatXslValidatorService();
 
     const resultado = await servicio.validar(xmlFactura, '01');
 
-    // La hoja se CARGA y se EJECUTA sin reventar.
-    expect(resultado.motivoBloqueo).not.toMatch(/No se pudo cargar la hoja/);
-    expect(Array.isArray(resultado.errores)).toBe(true);
-
-    // Pero NO puede validar: le faltan las plantillas de commons/error.
-    // Este es el defecto de TA-31 que descubrió TA-62 y que tiene su propia
-    // tarea. Antes esta prueba solo comprobaba `bloqueado === false`, que es
-    // siempre cierto mientras la hoja se cargue: por eso no detectó nada.
-    expect(resultado.validadoDeVerdad).toBe(false);
+    expect(resultado.motivoBloqueo).toBeNull();
+    expect(resultado.bloqueado).toBe(false);
+    expect(resultado.validadoDeVerdad).toBe(true);
     expect(resultado.valido).toBe(false);
-    expect(resultado.motivoBloqueo).toMatch(/validate_utils/);
-    // Y no inventa códigos leyendo el XML: la lista de errores está vacía.
-    expect(resultado.errores).toEqual([]);
+    expect(resultado.errores).toEqual([expect.objectContaining({ codigo: 'XSD', mensaje: expect.stringContaining('ExtensionContent') })]);
   }, 30000);
 
   it('bloquea cuando el tipo no tiene hoja mapeada', async () => {

@@ -57,6 +57,9 @@ jobs:
       - name: Run Linter (oxlint)
         run: npm run lint
 
+      - name: Install Python validation dependencies
+        run: python3 -m pip install -r scripts/m1/requirements.txt
+
       - name: Run Tests with Coverage (Jest)
         run: npm test -- --coverage --coverageDirectory=coverage
         env:
