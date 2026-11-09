@@ -1,9 +1,11 @@
 import { ForbiddenException } from '@nestjs/common';
 import { AccountingController } from '../../../src/modules/accounting/infrastructure/controllers/accountingController';
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
+import { GenerateClosingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
+import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/openAccountingPeriodUseCase';
 import { OpenFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/openFiscalYearUseCase';
@@ -18,9 +20,11 @@ import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/en
 describe('AccountingController', () => {
   let controller: AccountingController;
   let generateUseCase: jest.Mocked<GenerateAccountingEntryUseCase>;
+  let closingUseCase: jest.Mocked<GenerateClosingEntryUseCase>;
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
+  let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
   let listPeriodsUseCase: jest.Mocked<ListAccountingPeriodsUseCase>;
   let openPeriodUseCase: jest.Mocked<OpenAccountingPeriodUseCase>;
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
@@ -36,6 +40,9 @@ describe('AccountingController', () => {
     generateUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<GenerateAccountingEntryUseCase>;
+    closingUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<GenerateClosingEntryUseCase>;
 
     exportPleUseCase = {
       execute: jest.fn(),
@@ -48,6 +55,9 @@ describe('AccountingController', () => {
     listAccountsUseCase = {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<ListAccountingAccountsUseCase>;
+    createAccountUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<CreateAccountingAccountUseCase>;
 
     listPeriodsUseCase = {
       execute: jest.fn().mockResolvedValue([]),
@@ -83,9 +93,11 @@ describe('AccountingController', () => {
 
     controller = new AccountingController(
       generateUseCase,
+      closingUseCase,
       exportPleUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
+      createAccountUseCase,
       listPeriodsUseCase,
       openPeriodUseCase,
       openFiscalYearUseCase,
