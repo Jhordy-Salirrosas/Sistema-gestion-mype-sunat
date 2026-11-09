@@ -49,6 +49,9 @@ function escenario() {
         ['12121', '70121', '40111'].map((code) => ({ code })),
       ),
     },
+    inventoryMovement: {
+      findMany: jest.fn(async () => []),
+    },
     accountingEntry: {
       findFirst: jest.fn(async ({ where, orderBy }: any) =>
         orderBy

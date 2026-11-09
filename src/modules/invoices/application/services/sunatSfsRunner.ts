@@ -1,13 +1,15 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { sfsTimeoutMs } from './sunatSfsRuntime';
 
 export interface ResultadoSfs {
   completado: true;
   errores: { codigo: string; mensaje: string; nodo: string | null }[];
 }
 
-/** Proceso cancelable: 2 s frente a ~200 ms de libxslt, sin shell ni red. */
+/** Proceso cancelable, sin shell ni red; presupuesto configurable para arranque frío en servidores pequeños. */
 export function ejecutarSfs(xml: string, tipo: string): Promise<ResultadoSfs> {
+  const timeoutMs = sfsTimeoutMs();
   return new Promise((resolve, reject) => {
     const child = spawn(process.env.SUNAT_SFS_PYTHON ?? 'python3', [
       join(process.cwd(), 'scripts', 'm1', 'validate_sfs.py'),
@@ -15,8 +17,8 @@ export function ejecutarSfs(xml: string, tipo: string): Promise<ResultadoSfs> {
     let salida = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new Error('Ejecutor SFS excedió 2000 ms'));
-    }, 2000);
+      reject(new Error(`Ejecutor SFS excedió ${timeoutMs} ms`));
+    }, timeoutMs);
     child.on('error', () => { clearTimeout(timer); reject(new Error('Ejecutor Python SFS no disponible')); });
     child.stdin.on('error', () => { /* El cierre del proceso resuelve el fallo. */ });
     child.stdout.setEncoding('utf8');

@@ -529,6 +529,7 @@ describe('TA-68 · servicio puente', () => {
     productoExiste?: boolean;
     movimientoYaExiste?: boolean;
     asientoYaExiste?: boolean;
+    costoVenta?: number;
   } = {}) {
     const movimientoCreado = jest.fn<(dto: unknown) => Promise<unknown>>(
       async () => ({ id: 'mov-1' }),
@@ -547,6 +548,9 @@ describe('TA-68 · servicio puente', () => {
         findFirst: jest.fn(async () =>
           opciones.movimientoYaExiste ? { id: 'mov-0' } : null,
         ),
+        findMany: jest.fn(async () => opciones.costoVenta
+          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2 }]
+          : []),
       },
       accountingEntry: {
         findFirst: jest.fn(async () =>
@@ -574,6 +578,14 @@ describe('TA-68 · servicio puente', () => {
     expect(resultado.asientoId).toBe('asiento-1');
     expect(movimientoCreado).toHaveBeenCalledTimes(1);
     expect(asientoCreado).toHaveBeenCalledTimes(1);
+  });
+
+  it('contabiliza el costo de ventas con la salida de almacén', async () => {
+    const { puente, asientoCreado } = dobles({ costoVenta: 600 });
+    const resultado = await puente.registrar(facturaPrueba());
+    expect(resultado.costoVenta).toBe(600);
+    expect(resultado.asientoCostoId).toBe('asiento-1');
+    expect(asientoCreado).toHaveBeenCalledTimes(2);
   });
 
   it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
