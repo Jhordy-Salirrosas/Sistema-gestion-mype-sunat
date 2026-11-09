@@ -1,3 +1,4 @@
+import { normalizarEntorno } from '../../../sunat/soap/sunatBillTypes';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -116,6 +117,11 @@ export class SummaryEnvioService {
       };
     }
 
+    const context = await this.issuerConfig?.resolve(companyId);
+    const entorno = context ? context.environment : normalizarEntorno(process.env.SUNAT_ENV);
+    if (entorno !== 'MOCK') return { enviado: false, identificador, jobId: null, incluidos,
+      motivo: 'Despacho externo no habilitado para RA/RC' };
+
     // El XML no puede ser null aquí: `motivoParaNoEnviar` ya lo comprobó.
     //
     // CONVENCIÓN DE NOMBRES, tomada del EJEMPLO OFICIAL de SUNAT
@@ -135,7 +141,7 @@ export class SummaryEnvioService {
     const xmlFirmado = this.firmar(
       xmlConId,
       identificador,
-      await this.issuerConfig?.resolve(companyId),
+      context,
     );
 
     const { zip, fileName } = this.comprimir(

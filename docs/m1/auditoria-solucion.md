@@ -270,19 +270,21 @@ no un defecto del chequeo de RUC. No se relaja el chequeo, no se modifica la
 política de respaldo y no se registra un certificado ajeno para la demo.
 Registrar un certificado propio es una decisión de datos del equipo.
 
-### Límite de alcance pendiente para Parte 2
+### Excepciones autorizadas para Parte 2
 
-No se modificó Resiliencia ni Contabilidad. El reintento manual solicitado en
-2.1 llama boss.retry(INVOICE_DLQ, id) dentro de QueueService.retryDlq; la política
-de INVOICE_QUEUE (2.2) también se declara en ese archivo de Resiliencia.
-La conciliación antes de cada reintento de transporte (2.4) vive dentro del
-bucle de InvoiceRetryService, también en Resiliencia. Se solicitó aclarar si
-se autorizan esos cambios puntuales, dado el límite explícito de usar solo
-interfaces existentes. Las Partes 2 y 3 no se declaran implementadas.
+La autorización de Emma/Jhordy se limita a retryDlq y la declaración de
+INVOICE_QUEUE en queue.service.ts, más invoiceRetryService.ts exclusivamente
+para 2.4. Su fundamento y alcance final constan en la sección de Parte 2.
+Los demás archivos de Resiliencia y todos los archivos de Contabilidad se
+conservan. El bloqueo de despacho RA/RC sigue intacto.
 
 Validación de cierre Parte 1: backend 238 suites/2105 pruebas aprobadas;
 4 suites/20 pruebas optativas omitidas. Frontend 96 archivos/753 pruebas
-aprobados. Build y lint de ambos repos aprobados; control de secretos aprobado.
+aprobados. Build de ambos repos, lint del backend y control de secretos aprobados.
+Rectificación: el lint global del frontend NO pasó; tiene 63 errores y 25
+advertencias heredados. Se informó inicialmente como aprobado por una lectura
+incorrecta del resultado. El contraste con la base conserva los mismos
+diagnósticos por archivo y regla, sin añadir errores nuevos.
 Se descartaron ejecuciones solapadas con generación de Prisma/build y se
 repitieron las suites completas en serie sobre el estado final. Frontend se
 entrega mediante ferry/m1-auditoria-2-parte1, con rutas y procedimiento en FERRY.md.
@@ -361,3 +363,48 @@ Sin llamadas a SUNAT, migraciones aplicadas, cambios de Contabilidad, PR,
 fusiones ni despliegues. El detalle de archivos y pruebas queda en el diff del
 commit de Parte 2; las dos únicas fuentes modificadas de Resiliencia son las
 expresamente autorizadas arriba.
+
+### Parte 3 — alcance parcial: 3.1 y 3.2
+
+El frontend exige has_credit === true y no infiere crédito de payment_terms.
+El catálogo conserva el código de afectación real por separado de la categoría
+visual: 12/16/21/31/37/40 y los demás códigos admitidos llegan sin compresión al
+payload. No se sustituye una unidad desconocida por NIU; una unidad que la
+grilla no soporta o una afectación ausente bloquea la selección con causa.
+La página y el modal usan series activas de Configuración, sin respaldo a
+F001/B001 cuando faltan; la página permite elegir entre las activas del tipo.
+La lista pasa la configuración de la empresa autenticada al modal. Un entorno
+ausente permanece null y el formulario lo presenta sin preseleccionar MOCK.
+Las pruebas de formularios declaran ahora sus series ficticias explícitamente;
+no se alteran reglas SPOT al actualizar esas preparaciones.
+
+SummaryEnvioService responde «Despacho externo no habilitado para RA/RC»
+fuera de MOCK, incluido entorno ausente, antes de firmar o encolar. La
+resolución empresarial determina el entorno efectivo. Se mantiene el bloqueo
+posterior de Resiliencia y no se habilita ningún despacho externo.
+
+Quedan FUERA de este commit parcial: 3.3 (productos históricos inactivos y
+semántica de motivos totales en el flujo común) y el tratamiento completo de
+gratuitas y stock agregado de 3.4. No se cambió OBSERVADO como origen.
+Diferencia de precisión aún vigente, documentada conforme a 3.4: payload/XML
+permiten diez decimales unitarios; InvoiceItem.unit_price/unit_value persisten
+cuatro decimales. Esta parte no aplica ni genera una migración de precisión;
+la diferencia puede afectar proyecciones reconstruidas y queda pendiente de
+unificación. Esta sección no declara cerrados los puntos pendientes.
+
+Cierre del alcance PARCIAL de Parte 3: backend 239 suites/2116 pruebas
+aprobadas, 4 suites/20 pruebas optativas omitidas; frontend 96 archivos/766
+pruebas aprobados. Build de ambos y lint del backend aprobados. El lint global
+del front conserva exactamente 63 errores y 25 advertencias de la base,
+contrastados por archivo/regla (cero diagnósticos nuevos o retirados).
+No se corrigieron módulos ajenos para limpiar esa deuda heredada.
+
+Frontend entregado en ferry/m1-auditoria-2-parte3, commit
+1ffdc790641e7bf3a93205140dfd8a144a80c5d3, 26 archivos, con FERRY.md y todas las
+rutas exactas. Aplicar después de ferry/m1-auditoria-2-parte1 (15868aa).
+Backend de esta parte: docs/m1/auditoria-solucion.md,
+summaryEnvioService.ts y m1-envio-resumenes-bajas.spec.ts.
+Las pruebas nuevas incluyen serie configurada F087 con F001 inactiva, los
+códigos fiscales completos, entorno null, has_credit estricto y RA/RC bloqueado
+antes de firma/cola. Sin emisiones, llamadas a SUNAT, migraciones aplicadas,
+PR, fusiones ni despliegues. 3.3 y los puntos señalados de 3.4 siguen pendientes.
