@@ -19,6 +19,7 @@ import { CreateAccountingAccountDto } from '../../application/dto/createAccounti
 import { OpenAccountingPeriodDto } from '../../application/dto/openAccountingPeriodDto';
 import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
+import { GenerateClosingEntryUseCase } from '../../application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
@@ -39,6 +40,7 @@ import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEnti
 export class AccountingController {
   constructor(
     private readonly generateEntryUseCase: GenerateAccountingEntryUseCase,
+    private readonly generateClosingEntryUseCase: GenerateClosingEntryUseCase,
     private readonly exportPleUseCase: ExportPleTxtUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
@@ -119,6 +121,18 @@ export class AccountingController {
   @HttpCode(HttpStatus.CREATED)
   async createAccount(@Body() dto: CreateAccountingAccountDto) {
     return this.createAccountUseCase.execute(dto);
+  }
+
+  @Post('closing-entry/:year')
+  @HttpCode(HttpStatus.CREATED)
+  async generateClosingEntry(
+    @Param('year') year: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.generateClosingEntryUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      Number(year),
+    );
   }
 
   @Get('periods')

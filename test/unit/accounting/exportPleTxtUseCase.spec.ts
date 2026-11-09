@@ -63,4 +63,13 @@ describe('ExportPleTxtUseCase', () => {
     expect(result.totalCredit).toBe(0);
     expect(result.content).toBe('');
   });
+
+  it('genera el libro 7.1 con saldos por cuenta', async () => {
+    const result = await useCase.execute({
+      companyRuc: '20601234567', year: 2026, month: 3, bookCode: '070100',
+    } as any, mockEntries);
+    expect(result.recordsCount).toBe(5);
+    expect(result.content).toContain('101|');
+    expect(result.totalDebit).toBe(168);
+  });
 });
