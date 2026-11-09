@@ -42,6 +42,10 @@ export interface ResultadoPuente {
   asientoId?: string;
   /** ¿El asiento ya existía y no se duplicó? */
   asientoOmitido: boolean;
+  /** Asiento de costo de ventas, si se pudo determinar el costo. */
+  asientoCostoId?: string;
+  /** Costo total contabilizado. */
+  costoVenta?: number;
   /** Errores no bloqueantes, con la fase en la que ocurrieron. */
   errores: readonly string[];
   /** ¿Se completaron las dos partes? */
@@ -111,6 +115,10 @@ export class InvoiceAccountingBridgeService {
       ? (errores.push(factura.motivoBloqueoAsiento), { asientoOmitido: true })
       : await this.registrarAsiento(factura, numero, errores);
 
+    const costo = factura.motivoBloqueoAsiento || !['01', '03'].includes(factura.tipoComprobante)
+      ? {}
+      : await this.registrarCostoVenta(factura, numero, errores);
+
     const completo = errores.length === 0;
 
     if (!completo) {
@@ -123,6 +131,7 @@ export class InvoiceAccountingBridgeService {
     return {
       ...kardex,
       ...contabilidad,
+      ...costo,
       errores,
       completo,
     };
@@ -264,6 +273,51 @@ export class InvoiceAccountingBridgeService {
     } catch (error) {
       errores.push(`Contabilidad: ${(error as Error).message}`);
       return { asientoOmitido: false };
+    }
+  }
+
+  /** Contabiliza el costo de las salidas de almacén de la factura. */
+  private async registrarCostoVenta(
+    factura: FacturaParaPuente,
+    numero: string,
+    errores: string[],
+  ): Promise<{ asientoCostoId?: string; costoVenta?: number }> {
+    const referencia = `${factura.id}:COSTO`;
+    const existente = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: factura.companyId, source_module: MODULO_ORIGEN, source_reference_id: referencia },
+      select: { id: true },
+    });
+    if (existente) return { asientoCostoId: existente.id };
+
+    const movimientos = await this.prisma.inventoryMovement.findMany({
+      where: { company_id: factura.companyId, source_reference_id: numero, operation_type_code: '01' },
+      select: { quantity: true, previous_unit_cost: true },
+    });
+    const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.quantity) * Number(m.previous_unit_cost), 0) * 100) / 100;
+    if (costo <= 0) return { costoVenta: 0 };
+
+    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
+    })) ?? [];
+    const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+    try {
+      const asiento = await this.generadorAsientos.execute({
+        companyId: factura.companyId,
+        period: periodoDe(factura.fechaEmision),
+        entryDate: new Date(`${factura.fechaEmision}T00:00:00Z`).toISOString(),
+        glosa: `Costo de ventas según ${numero}`,
+        sourceModule: MODULO_ORIGEN,
+        sourceReferenceId: referencia,
+        idempotencyKey: `m1:invoice-cost:${factura.id}`,
+        lines: [
+          { lineOrder: 1, accountCode: roles.get('COSTO_VENTA') || '691', accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: roles.get('INVENTARIO') || '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
+        ],
+      });
+      return { asientoCostoId: asiento.id, costoVenta: costo };
+    } catch (error) {
+      errores.push(`Costo de ventas: ${(error as Error).message}`);
+      return { costoVenta: costo };
     }
   }
 
