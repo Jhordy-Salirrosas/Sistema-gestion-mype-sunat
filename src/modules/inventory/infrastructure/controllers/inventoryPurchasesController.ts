@@ -32,6 +32,12 @@ export class InventoryPurchasesController {
     return this.purchaseService.createPurchase(companyId, dto);
   }
 
+  @Get(':id/payments')
+  async listPayments(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.purchaseService.listPayments(companyId, id);
+  }
+
   @Post(':id/pay')
   @HttpCode(HttpStatus.OK)
   async payPurchase(

@@ -19,7 +19,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         findMany: jest.fn(),
         update: jest.fn(),
       },
-      treasuryMovement: { create: jest.fn() },
+      treasuryMovement: { create: jest.fn(), findMany: jest.fn() },
       accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
       businessPartner: {
         findFirst: jest.fn(),
@@ -303,6 +303,12 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     }));
   });
 
+  it('lista el historial de pagos de una compra', async () => {
+    mockPrisma.nationalPurchase.findFirst.mockResolvedValue({ purchase_number: 'COM-1' });
+    mockPrisma.treasuryMovement.findMany.mockResolvedValue([{ id: 'm1', movement_date: new Date('2026-11-09'), amount: 50, payment_method: 'TRANSFERENCIA', bank_name: 'BCP', concept: 'Pago parcial' }]);
+    await expect(service.listPayments(companyId, 'p1')).resolves.toEqual([{ id: 'm1', date: new Date('2026-11-09'), amount: 50, paymentMethod: 'TRANSFERENCIA', bankName: 'BCP', concept: 'Pago parcial' }]);
+  });
+
   it('registra un pago parcial y deja saldo pendiente', async () => {
     const accounting = { execute: jest.fn().mockResolvedValue({}) };
     const serviceConPago = new InventoryPurchaseService(mockPrisma, accounting as never);
@@ -316,4 +322,3 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     expect(mockPrisma.nationalPurchase.update).toHaveBeenCalledWith({ where: { id: 'p2' }, data: { status: 'PAGO_PARCIAL', paid_amount: 50 } });
   });
 });
-
