@@ -13,6 +13,7 @@ from lxml import etree
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets" / "sunat-sfs" / "commons"
 HOJAS = {"01": "Factura", "03": "Boleta", "07": "NC", "08": "ND"}
+HOJAS_AGREGADOS = {"RA": "SummaryVoided", "RC": "Summary"}
 ESQUEMAS = {"01": "Invoice", "03": "Invoice", "07": "CreditNote", "08": "DebitNote"}
 CBC = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 CAC = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -88,7 +89,7 @@ DUPLICADAS = {
 def adaptar_duplicadas(contenido, tipo):
     """Cuarta adaptación autorizada; falla si cambia la ubicación vendorizada."""
     lineas = contenido.splitlines(keepends=True)
-    for numero, anterior, nuevo, referencias in DUPLICADAS[tipo]:
+    for numero, anterior, nuevo, referencias in DUPLICADAS.get(tipo, []):
         atributo = f'name="{anterior}"'
         if numero > len(lineas) or lineas[numero - 1].count(atributo) != 1:
             raise ValueError("La adaptación de duplicadas no corresponde a esta hoja SFS")
@@ -103,7 +104,7 @@ def adaptar_duplicadas(contenido, tipo):
 
 def validar(request):
     tipo = request["tipo"]
-    hoja = HOJAS[tipo]
+    hoja = HOJAS.get(tipo) or HOJAS_AGREGADOS[tipo]
     parser_xml = etree.XMLParser(no_network=True, resolve_entities=False, load_dtd=False)
     try:
         doc = etree.fromstring(request["xml"].encode("utf-8"), parser_xml)
@@ -114,15 +115,15 @@ def validar(request):
     # La estructura se verifica antes de compilar o ejecutar cualquier XSL.
     parser_xsd = etree.XMLParser(no_network=True, resolve_entities=False, load_dtd=False)
     parser_xsd.resolvers.add(Resolver(ASSETS))
-    schema_path = ASSETS / "xsd" / "2.1" / "maindoc" / f"UBL-{ESQUEMAS[tipo]}-2.1.xsd"
+    schema_path = (ASSETS / "xsd" / "2.0" / "main" / ("UBLPE-VoidedDocuments-1.0.xsd" if tipo == "RA" else "UBLPE-SummaryDocuments-1.0.xsd")) if tipo in ("RA", "RC") else ASSETS / "xsd" / "2.1" / "maindoc" / f"UBL-{ESQUEMAS[tipo]}-2.1.xsd"
     schema = etree.XMLSchema(etree.parse(str(schema_path), parser_xsd))
     if not schema.validate(doc):
         error = schema.error_log[0]
         return {"completado": True, "errores": [{"codigo": "XSD", "mensaje": error.message, "nodo": error.path}]}
     ns = {"cbc": CBC, "cac": CAC}
-    ruc = doc.findtext("cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID", namespaces=ns) or ""
+    ruc = (doc.findtext("cac:AccountingSupplierParty/cbc:CustomerAssignedAccountID", namespaces=ns) if tipo in ("RA", "RC") else doc.findtext("cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID", namespaces=ns)) or ""
     numero = doc.findtext("cbc:ID", namespaces=ns) or ""
-    nombre = f"{ruc}-{tipo}-{numero}.xml"
+    nombre = f"{ruc}-{numero}.xml" if tipo in ("RA", "RC") else f"{ruc}-{tipo}-{numero}.xml"
     registrar_exslt()
     with tempfile.TemporaryDirectory(prefix="sfs-vali-") as work:
         commons = Path(work) / "VALI" / "commons"
@@ -130,7 +131,7 @@ def validar(request):
         utils = commons / "error" / "validate_utils.xsl"
         original = utils.read_text(encoding="utf-8")
         utils.write_text(original.replace('extension-element-prefixes="dp"', 'extension-element-prefixes="dp func"').replace("matches(", "regexp:test("), encoding="utf-8")
-        path = commons / "xsl" / "validation" / "2.X" / f"ValidaExprReg{hoja}-2.0.1.xsl"
+        path = commons / "xsl" / "validation" / ("1.X" if tipo in ("RA", "RC") else "2.X") / (f"ValidaExprReg{hoja}-1.0.1.xsl" if tipo == "RA" else f"ValidaExprReg{hoja}-1.1.0.xsl" if tipo == "RC" else f"ValidaExprReg{hoja}-2.0.1.xsl")
         contenido = path.read_text(encoding="utf-8").replace("current-date()", "date:date()")
         contenido = adaptar_duplicadas(contenido, tipo)
         path.write_text(contenido, encoding="utf-8")

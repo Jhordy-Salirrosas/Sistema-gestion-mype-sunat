@@ -777,3 +777,98 @@ Build y lint backend aprobados, sin diagnósticos nuevos (solo advertencia
 contable heredada). Sin emisiones reales, llamadas SUNAT, migraciones, PR,
 fusiones ni despliegues. La clasificación/presentación del rechazo local queda
 como el único ítem secundario abierto de esta parte.
+
+## Construcción autorizada de agregados — 2A RA y 2B RC
+
+Emma confirmó el diseño y Jhordy autorizó UNA tabla aditiva M1. Base backend:
+af5f4fb2b2440f91436a4a7657aae941bbdd1fca; frontend:
+204d3da6e620f80d0533debc8b629e2bf3a3a574. Rama fix/m1-bajas-resumenes-envio.
+Base completa: back 248 suites/2179 pruebas aprobadas, 4 suites/20 optativas
+omitidas; front 98 archivos/779 pruebas aprobados. No se modifican Resiliencia,
+Contabilidad ni los assets oficiales. SPOT permanece aparcado.
+
+### 2A — comunicación de baja
+
+Modelo InvoiceAggregate y migración 20261110000000_m1_invoice_aggregates,
+GENERADA con prisma migrate diff desde el esquema anterior. El SQL crea SOLO
+invoice_aggregates y sus índices. No añade columnas ni relaciones en otra tabla.
+Contiene reserva e identificador único por empresa/tipo/identificador, huella de
+solicitud, fecha, contexto, XML/hash/ZIP, miembros y motivos en JSON, ticket,
+incertidumbre, estado, resultado y job. Emma aplica el SQL a mano antes de
+integrar/desplegar. No se aplicó a una base compartida. Para verificar transacciones
+se creó PostgreSQL 16 local nuevo y desechable, enlazado solo a 127.0.0.1:5436;
+allí se aplicaron las migraciones existentes y esta migración de prueba.
+
+RA exige selección explícita, sin ella responde 400 antes de reservar/firmar.
+El servidor vuelve a seleccionar dentro de una transacción, bloquea los miembros
+y reserva correlativo bajo advisory lock de empresa; no acepta empresa por body.
+Excluye ANULADO, RUC histórico ajeno, plazo inválido, reserva previa y la factura
+neutralizada por NC aceptadas/observadas de saldo completo. Las NC pendientes
+bloquean la baja mientras se resuelven. La trampa F001-61/FC01-13 está reproducida
+en PostgreSQL local. Una nota nueva tampoco puede crearse mientras su origen
+está reservado en RA; el bloqueo se comprueba en la guarda común bajo el mismo
+bloqueo del origen. No cambia OBSERVADO como origen de notas.
+
+El usuario captura un motivo por documento (inicial «Anulación de la operación»).
+Se transporta, escapa y valida (1–100 caracteres); no se acepta vacío. El front
+previsualiza exclusivamente la selección, invalida esa vista al editarla y exige
+confirmación antes de publicar. La vista de candidatos/exclusiones se conserva.
+
+RA genera LineID ordinal y cabecera UBL 2.0 con CustomerAssignedAccountID,
+AdditionalAccountID=6 y RegistrationName. Extensión del ejecutor local para
+RA/RC: XSD 2.0 seguido de las hojas 1.X correspondientes, mismas adaptaciones de
+motor que TA-70, sin editar ni omitir reglas oficiales. HOJAS y adaptaciones de
+los cuatro tipos individuales permanecen separadas para proteger sus tests.
+El RA generado y firmado con certificado ficticio pasa XSD Y XSL oficiales.
+
+SummaryGate se ejecuta en preparación y despacho. Comprueba destino/entorno,
+RUC, identificador, firma presente y SFS; no usa bypass de demostración.
+MOCK solo puede ir a localhost; BETA debe ir al endpoint BETA coherente. El ZIP
+se conserva en la tabla y el worker coteja nombre, hash y XML contra ese artefacto,
+no confía en un ZIP inyectado por el job. Ninguna credencial se guarda en el job.
+
+La reserva se conserva antes de publicar; un PREPARED sin publicación se recupera
+por un barrido M1 de 60 s usando la interfaz existente de cola. Publicaciones
+repetidas no duplican sendSummary: update condicional reclama el agregado y
+confirma incertidumbre ANTES de abrir red. El ticket se persiste inmediatamente;
+la reentrega retoma getStatus. Si se pierde la respuesta sin ticket, permanece
+UNCERTAIN y no se reenvía a ciegas, aunque la cola reentregue el job. El Monitor
+lo presenta para revisión; no se inventa un ticket. Con ticket, ofrece consulta
+explícita sin reenvío. Cola y consumidor de Resiliencia permanecen intactos.
+
+Un CDR debe corresponder al RUC/nombre de archivo y al identificador reservado.
+La lista del XML firmado/hash debe coincidir con los miembros reservados, tipos
+y ordinales; si el CDR enumera documentos, la lista también debe corresponder
+exactamente. Un CDR global acredita el agregado único y su XML inmutable.
+Solo código 0 permite actualizar a ANULADO. El resultado del agregado y TODAS
+las anulaciones se guardan en la misma transacción; si cambia un miembro,
+rollback completo. CDR ajeno no anula y deja revisión visible.
+
+GET /invoices/resumenes/envios añade el listado M1 al Monitor con ticket,
+estado, código y motivo; no expone XML/ZIP/CDR completos en el listado ni datos
+de otra empresa. POST /invoices/resumenes/envios/:identificador/consultar solo
+opera si ya existe ticket. La respuesta de envío sigue significando ENCOLADO,
+no aceptación. Durante 2A RC continúa cerrado hasta terminar 2B.
+
+Pruebas de aceptación 2A: RA firmado contra XSD+XSL, snapshot del orden/motivos,
+destinos incoherentes bloqueados, selección/motivos, XML anterior a publicación,
+cola caída, idempotencia y reserva incierta. En PostgreSQL real se comprueban
+NC completa, aislamiento, doble clic concurrente, reclamación única del envío,
+ticket durable, marca antes de red, CDR válido/ajeno, rollback de anulación y
+recuperación PREPARED. Front: selección/confirmación, motivo, preview invalidado,
+resultado visible y Monitor con consulta por ticket, siempre con API simulada.
+
+El primer pase completo descubrió una flaqueza heredada de TA-30: comparaba dos
+ZIP generados en instantes distintos y sus timestamps podían variar. Se conserva
+una sola entrada ZIP para afirmar el contrato del parser, sin cambiar su lógica.
+Los dobles de las pruebas antiguas se actualizaron al repositorio/compuerta nuevos;
+no hay una ruta de compatibilidad productiva que omita persistencia o validación.
+
+Cierre 2A: back 251 suites / 2201 pruebas aprobadas (3 suites / 18 pruebas
+omitidas por sus condiciones existentes), con PostgreSQL 16 local desechable y
+la integración real de agregados habilitada. Front 99 archivos / 784 pruebas
+aprobadas. Build de ambos repos y lint de los archivos modificados aprobados
+(solo avisos heredados). La recuperación también cubre reservas sin artefacto
+tras reinicio, conservando identificador y miembros. Los fallos previsibles de
+contexto se registran sanitizados y quedan visibles como bloqueo/revisión.
+La migración no se aplicó a bases compartidas. Sin llamadas reales a SUNAT.

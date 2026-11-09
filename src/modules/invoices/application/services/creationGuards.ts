@@ -121,6 +121,8 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     if (!actual || actual.estado !== 'ACEPTADO' || !['01', '03'].includes(actual.tipo_comprobante)) {
       throw new BadRequestException('El origen debe ser factura o boleta aceptada por SUNAT');
     }
+    const bajas = await tx.invoiceAggregate?.findMany({ where: { company_id: companyId, kind: 'RA', state: { notIn: ['BLOCKED', 'REJECTED'] } }, select: { members: true } }) ?? [];
+    if (bajas.some(b => (b.members as unknown as { id: string }[]).some(m => m.id === actual.id))) throw new ConflictException('BAJA_EN_PROCESO');
     const referencia = `${actual.serie}-${String(actual.correlativo).padStart(8, '0')}`;
     if (numero && (numero[1] !== actual.serie || Number(numero[2]) !== actual.correlativo)) throw new BadRequestException('UUID y número de origen no coinciden');
     if (actual.customer_identity_number !== (dto.customer_identity_number ?? null) || actual.customer_identity_type !== (dto.customer_identity_type ?? null)) {

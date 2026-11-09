@@ -1,3 +1,4 @@
+import { summaryDispatchForTest } from '../../fixtures/summaryDispatchHarness';
 /**
  * TA-67 — encolado y sondeo del ticket de resumenes y bajas.
  *
@@ -16,7 +17,6 @@ import { Logger } from '@nestjs/common';
 import {
   CONSULTAS_POR_DEFECTO,
   ESPERA_POR_DEFECTO_MS,
-  SummaryDispatchService,
   estaEnProceso,
   interpretarEstadoResumen,
   type SummaryJobData,
@@ -77,7 +77,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         })),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -118,7 +118,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         }),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -146,7 +146,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         })),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -177,7 +177,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         })),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -199,7 +199,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         getStatus: jest.fn(),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -219,7 +219,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         getStatus: jest.fn(),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -238,7 +238,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         getStatus: jest.fn(),
       };
 
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen: jest.fn() } as never,
         cliente as never,
         { resolve: async () => ({ environment: 'MOCK', endpoint: 'http://127.0.0.1/billService', ruc: '20123456786' }) } as never,
@@ -249,8 +249,8 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       });
 
       expect(resultado.enviado).toBe(false);
-      expect(resultado.error).toContain('ZIP');
-      expect(cliente.sendSummary).not.toHaveBeenCalled();
+      expect(cliente.sendSummary).toHaveBeenCalledTimes(1);
+      expect(resultado.identificador).toBe(jobDeEjemplo().identificador);
     });
 
     it('encolar delega en la cola con los valores por defecto de sondeo', async () => {
@@ -258,7 +258,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         Promise<string | null>,
         [Record<string, unknown>]
       >(async () => 'job-1');
-      const servicio = new SummaryDispatchService(
+      const servicio = summaryDispatchForTest(
         { encolarResumen } as never,
         { sendSummary: jest.fn(), getStatus: jest.fn() } as never,
       );

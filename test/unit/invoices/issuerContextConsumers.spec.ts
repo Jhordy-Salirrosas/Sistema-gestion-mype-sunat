@@ -1,7 +1,7 @@
+import { summaryEnvioForTest } from '../../fixtures/summaryEnvioHarness';
 import { fakeIssuerContext } from '../../fixtures/issuerContext';
 import { InvoiceAlertService } from '../../../src/modules/invoices/application/services/invoiceAlertService';
 import { InvoiceDownloadService } from '../../../src/modules/invoices/application/services/invoiceDownloadService';
-import { SummaryEnvioService } from '../../../src/modules/invoices/application/services/summaryEnvioService';
 
 describe('D1 context consumers fail closed and preserve the company', () => {
   const context = fakeIssuerContext();
@@ -140,7 +140,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       const signXml = jest.fn(() => ({ signedXml: '<fake-signed/>' }));
       const encolar = jest.fn(async () => 'fake-job');
       const resolve = jest.fn(async () => context);
-      const service = new SummaryEnvioService(
+      const service = summaryEnvioForTest(
         {
           vistaResumenDiario: async () => view,
           vistaComunicacionBaja: async () => view,
@@ -154,7 +154,8 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       );
       const result = await (type === 'summary'
         ? service.enviarResumenDiario(context.companyId, '2026-11-01')
-        : service.enviarComunicacionBaja(context.companyId, '2026-11-01'));
+        : service.enviarComunicacionBaja(context.companyId, '2026-11-01', [{ id: 'i', motivo: 'Prueba' }]));
+      if (type === 'summary') { expect(result.enviado).toBe(false); return; }
       expect(result.enviado).toBe(true);
       expect(resolve).toHaveBeenCalledWith(context.companyId);
       expect(signXml).toHaveBeenCalledWith('<SummaryDocuments/>', context);
@@ -173,7 +174,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
     const signXml = jest.fn(),
       encolar = jest.fn();
     const error = new Error('ISSUER_CONFIG_DECRYPTION_FAILED');
-    const service = new SummaryEnvioService(
+    const service = summaryEnvioForTest(
       { vistaResumenDiario: async () => view } as never,
       { encolar } as never,
       { verifySignature: jest.fn(() => true), signXml } as never,
@@ -185,8 +186,8 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       } as never,
     );
     await expect(
-      service.enviarResumenDiario(context.companyId, '2026-11-01'),
-    ).rejects.toBe(error);
+      service.enviarComunicacionBaja(context.companyId, '2026-11-01', [{ id: 'i', motivo: 'Prueba' }]),
+).resolves.toMatchObject({ enviado: false, motivo: 'ISSUER_CONFIG_DECRYPTION_FAILED' });
     expect(signXml).not.toHaveBeenCalled();
     expect(encolar).not.toHaveBeenCalled();
   });

@@ -398,8 +398,8 @@ ${incluidos.map(lineaResumen).join('\n')}
  * `sac:VoidedDocumentsLine` — igual que en el resumen diario, el elemento va en
  * el namespace de SUNAT (SunatAggregateComponents-1) y no en el de UBL.
  */
-const lineaBaja = (c: ComprobanteAgregado): string => `    <sac:VoidedDocumentsLine>
-      <cbc:LineID>${esc(c.serie)}</cbc:LineID>
+const lineaBaja = (c: ComprobanteAgregado, index: number): string => `    <sac:VoidedDocumentsLine>
+      <cbc:LineID>${index + 1}</cbc:LineID>
       <cbc:DocumentTypeCode>${esc(c.tipoComprobante)}</cbc:DocumentTypeCode>
       <sac:DocumentSerialID>${esc(c.serie)}</sac:DocumentSerialID>
       <sac:DocumentNumberID>${c.correlativo}</sac:DocumentNumberID>
@@ -459,10 +459,9 @@ export const construirComunicacionBaja = (
   <cbc:ReferenceDate>${esc(cabecera.fechaResumen)}</cbc:ReferenceDate>
   <cbc:IssueDate>${esc(cabecera.fechaGeneracion)}</cbc:IssueDate>
   <cac:AccountingSupplierParty>
+    <cbc:CustomerAssignedAccountID>${esc(cabecera.rucEmisor)}</cbc:CustomerAssignedAccountID>
+    <cbc:AdditionalAccountID>6</cbc:AdditionalAccountID>
     <cac:Party>
-      <cac:PartyIdentification>
-        <cbc:ID schemeID="6">${esc(cabecera.rucEmisor)}</cbc:ID>
-      </cac:PartyIdentification>
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>${esc(cabecera.razonSocialEmisor)}</cbc:RegistrationName>
       </cac:PartyLegalEntity>
