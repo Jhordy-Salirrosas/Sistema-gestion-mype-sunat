@@ -30,7 +30,8 @@ export class GetLedgerUseCase {
 
     const rows = await this.repository.findLedgerMovements(companyId, normalizado, accountCode);
     const factor = account.nature === 'Acreedora' ? -1 : 1;
-    let saldo = 0;
+    const openingBalance = Math.round(factor * ((await this.repository.findLedgerOpeningBalance?.(companyId, normalizado, accountCode)) ?? 0) * 100) / 100;
+    let saldo = openingBalance;
     const movements = rows.map((row) => {
       saldo = Math.round((saldo + factor * (row.debit - row.credit)) * 100) / 100;
       return {
@@ -47,7 +48,7 @@ export class GetLedgerUseCase {
       accountCode: account.code,
       accountName: account.name,
       nature: account.nature,
-      openingBalance: 0,
+      openingBalance,
       movements,
       totalDebit,
       totalCredit,
