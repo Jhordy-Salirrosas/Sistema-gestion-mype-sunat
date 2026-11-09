@@ -22,7 +22,7 @@ async function certificadoBase64(file: File): Promise<string> {
 export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
   config: Omit<ConfiguracionBackend, 'series'>; ruc: string; guardar: (input: ConfiguracionInput) => Promise<void>;
 }) => {
-  const [entorno, setEntorno] = useState(config.entorno ?? 'MOCK');
+  const [entorno, setEntorno] = useState(config.entorno ?? '');
   const [perfilComercial, setPerfilComercial] = useState<PerfilComercial | ''>(config.perfil_comercial ?? '');
   const [fiscal, setFiscal] = useState({
     local_anexo: config.local_anexo ?? '',
@@ -45,7 +45,7 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
     setError(''); setGuardado(false); setEnviando(true);
     try {
       const input: ConfiguracionInput = {};
-      if (entorno !== config.entorno) input.entorno = entorno as EntornoFiscal;
+      if (entorno && entorno !== config.entorno) input.entorno = entorno as EntornoFiscal;
       const perfilActual = config.perfil_comercial ?? '';
       if (perfilComercial !== perfilActual) {
         input.perfil_comercial = perfilComercial === '' ? null : perfilComercial;
@@ -72,7 +72,7 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
     <PageField label="RUC (no editable)" htmlFor="cfg-ruc"><input id="cfg-ruc" className={clase} readOnly value={config.ruc ?? ruc} /></PageField>
     <fieldset disabled={enviando} className="grid gap-4">
       <PageField label="Ambiente" htmlFor="cfg-entorno"><select id="cfg-entorno" className={clase} value={entorno} onChange={(e) => setEntorno(e.target.value)}>
-        <option value="MOCK">MOCK (simulado)</option><option value="BETA">BETA (pruebas)</option><option value="PRODUCCION">PRODUCCIÓN</option>
+        <option value="" disabled>Sin configurar</option><option value="MOCK">MOCK (simulado)</option><option value="BETA">BETA (pruebas)</option><option value="PRODUCCION">PRODUCCIÓN</option>
       </select></PageField>
       <PageField label="Perfil comercial de la empresa" htmlFor="cfg-perfil-comercial">
         <select

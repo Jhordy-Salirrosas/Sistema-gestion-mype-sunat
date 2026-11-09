@@ -91,3 +91,12 @@ it('edita los datos fiscales reales sin enviar secretos ni valores por defecto',
   fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
   await waitFor(() => expect(guardar).toHaveBeenCalledWith({ local_anexo: '0007', domicilio_fiscal: 'Domicilio de prueba 123' }));
 });
+it('entorno ausente permanece sin configurar y no se convierte en MOCK', async () => {
+  vi.mocked(apiClient.get).mockImplementation(async url => ({ data: url === '/invoices/config' ? { ...config, entorno: null } : [] }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
+  await screen.findByLabelText('Ambiente');
+  expect((screen.getByLabelText('Ambiente') as HTMLSelectElement).value).toBe('');
+  expect(screen.getByText(/^Ambiente efectivo:/).textContent).not.toContain('MOCK');
+  client.clear();
+});

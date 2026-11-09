@@ -1,3 +1,5 @@
+import { apiClient } from '@/lib/axios';
+import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,7 +10,7 @@ import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
 import { hoyEnLima } from '@/modules/invoices/lib/invoiceFecha';
 import { enqueueInvoiceEmission } from '@/lib/outbox';
 
-vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async () => ({ data: [] })) } }));
+vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async (url: string) => ({ data: url === '/invoices/config' ? { series: [{ document_type: '01', series: 'F001', is_active: true }, { document_type: '03', series: 'B001', is_active: true }] } : [] })) } }));
 vi.mock('@/lib/outbox', () => ({ enqueueInvoiceEmission: vi.fn(async () => 'queued') }));
 vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => []) }));
 vi.mock('@/modules/invoices/components/RetencionMaestro', () => ({ RetencionMaestro: () => null }));
@@ -16,12 +18,13 @@ vi.mock('@/modules/invoices/services/invoicesApi', () => ({ invoicesApi: { busca
 const clients: QueryClient[] = [];
 beforeEach(() => { vi.clearAllMocks(); Object.defineProperty(navigator, 'onLine', { configurable: true, value: true }); });
 afterEach(() => { cleanup(); clients.splice(0).forEach(q => q.clear()); });
-function montar(via: string) {
+async function montar(via: string, serieEsperada = 'F001') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); clients.push(client);
   const onEmitir = vi.fn();
   render(<QueryClientProvider client={client}><MemoryRouter>{via === 'modal'
-    ? <InvoiceEmitModal tipoInicial="01" fecha={hoyEnLima()} existentes={[]} onEmitir={onEmitir} onCerrar={vi.fn()} />
+    ? <InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha={hoyEnLima()} existentes={[]} onEmitir={onEmitir} onCerrar={vi.fn()} />
     : <InvoiceEmissionPage />}</MemoryRouter></QueryClientProvider>);
+  if (via === 'pagina') await waitFor(() => expect((screen.getByLabelText('Serie configurada') as HTMLSelectElement).value).toBe(serieEsperada));
   fireEvent.change(screen.getByLabelText(via === 'modal' ? 'RUC / DNI del cliente' : 'RUC del cliente'), { target: { value: '20100070970' } });
   fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente de prueba' } });
   fireEvent.change(screen.getByLabelText('Descripción de la línea 1'), { target: { value: 'Servicio' } });
@@ -30,7 +33,7 @@ function montar(via: string) {
 }
 it.each(['modal', 'pagina'])('%s: 409 conserva todos los datos y reintentar conserva la clave; editar inicia otro intento', async via => {
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue({ response: { status: 409 } });
-  const { onEmitir, emitir } = montar(via);
+  const { onEmitir, emitir } = await montar(via);
   emitir();
   await screen.findByText(/Conflicto de emisión \(409\)/);
   const datos = () => ['Razón social / nombre', 'Descripción de la línea 1', 'Valor unitario de la línea 1'].map(label => (screen.getByLabelText(label) as HTMLInputElement).value);
@@ -50,14 +53,14 @@ it.each(['modal', 'pagina'])('%s: 409 conserva todos los datos y reintentar cons
 });
 it.each(['modal', 'pagina'])('%s: al perder la red transfiere exactamente la clave del intento a la Outbox', async via => {
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue(Object.assign(new Error('timeout'), { response: undefined }));
-  const { emitir } = montar(via);
+  const { emitir } = await montar(via);
   emitir();
   await waitFor(() => expect(enqueueInvoiceEmission).toHaveBeenCalledTimes(1));
   expect(vi.mocked(enqueueInvoiceEmission).mock.calls[0]).toEqual(vi.mocked(invoicesApi.emitirComprobante).mock.calls[0]);
 });
 it.each(['modal', 'pagina'])('%s: después de un alta exitosa incluso el mismo cuerpo obtiene otra clave', async via => {
   vi.mocked(invoicesApi.emitirComprobante).mockResolvedValue({ numero: 'F001-1', monto_total: 118, lineas: [], avisos: [] } as never);
-  const { emitir } = montar(via);
+  const { emitir } = await montar(via);
   emitir();
   await waitFor(() => expect(invoicesApi.emitirComprobante).toHaveBeenCalledTimes(1));
   await waitFor(() => expect((screen.getByRole('button', { name: via === 'modal' ? 'Emitir Factura' : 'Emitir comprobante' }) as HTMLButtonElement).disabled).toBe(false));
@@ -70,4 +73,13 @@ it.each(['modal', 'pagina'])('%s: después de un alta exitosa incluso el mismo c
   const [primera, segunda] = vi.mocked(invoicesApi.emitirComprobante).mock.calls;
   expect(segunda[0]).toEqual(primera[0]);
   expect(segunda[1]).not.toBe(primera[1]);
+});
+it('la página usa la serie activa de configuración aunque no sea F001', async () => {
+  vi.mocked(apiClient.get).mockImplementation(async (url) => ({ data: url === '/invoices/config' ? {
+    series: [{ document_type: '01', series: 'F087', is_active: true }, { document_type: '01', series: 'F001', is_active: false }],
+  } : [] }));
+  vi.mocked(invoicesApi.emitirComprobante).mockResolvedValue({ numero: 'F087-1', monto_total: 118, lineas: [], avisos: [] } as never);
+  const { emitir } = await montar('pagina', 'F087');
+  emitir();
+  await waitFor(() => expect(invoicesApi.emitirComprobante).toHaveBeenCalledWith(expect.objectContaining({ serie: 'F087' }), expect.any(String)));
 });

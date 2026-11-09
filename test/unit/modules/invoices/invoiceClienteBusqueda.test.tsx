@@ -1,3 +1,4 @@
+import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -61,7 +62,7 @@ describe('búsqueda real del formulario de emisión', () => {
 it('también busca por nombre desde el formulario de notas', async () => {
   const usuario = userEvent.setup();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><InvoiceEmitModal tipoInicial="07" fecha="2026-11-05" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="07" fecha="2026-11-05" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
   await usuario.type(screen.getByLabelText('Razón social / nombre'), 'FERRETERIA');
   expect(await screen.findByRole('button', { name: /FERRETERÍA LOS ANDES S.A.C./i })).toBeTruthy();
   expect(apiClient.get).toHaveBeenCalledWith('/master-data/partners', { params: { role: 'CLIENTE', q: 'FERRETERIA' } });
@@ -71,7 +72,7 @@ it('también busca por nombre desde el formulario de notas', async () => {
 it('también limpia la razón social en notas al editar el documento elegido', async () => {
   const usuario = userEvent.setup();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><InvoiceEmitModal tipoInicial="07" fecha="2026-11-05" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="07" fecha="2026-11-05" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
   await usuario.type(screen.getByLabelText('Razón social / nombre'), 'FERRETERIA');
   await usuario.click(await screen.findByRole('button', { name: /FERRETERÍA LOS ANDES S.A.C./i }));
   const doc = screen.getByLabelText('RUC / DNI del cliente');

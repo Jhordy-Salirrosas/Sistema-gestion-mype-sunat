@@ -75,6 +75,7 @@ import { problemasDeNota } from '../lib/invoiceNotaOrigen';
 
 interface InvoiceEmitModalProps {
   tipoInicial: TipoEmisible;
+  seriesConfiguradas?: readonly { document_type: string; series: string; is_active: boolean }[];
   fecha: string;
   /** Comprobantes ya emitidos: de aquí salen el correlativo y las notas. */
   existentes: readonly ComprobanteDemo[];
@@ -208,6 +209,7 @@ const motivosPendientes = (
 /** Modal de emisión con grilla de ítems, cuotas y resumen en tiempo real. */
 export const InvoiceEmitModal = ({
   tipoInicial,
+  seriesConfiguradas = [],
   fecha,
   existentes,
   productos = [],
@@ -224,6 +226,7 @@ export const InvoiceEmitModal = ({
     const inicial = borradorInicial(tipoEfectivo, fecha);
     return {
       ...inicial,
+      serie: seriesConfiguradas.find(s => s.document_type === tipoEfectivo && s.is_active)?.series ?? '',
       ...(clienteConCredito !== undefined
         ? { clienteTieneCredito: clienteConCredito }
         : {}),
@@ -237,6 +240,14 @@ export const InvoiceEmitModal = ({
   /** Motivo por el que el backend rechazó, o por el que no se llegó a enviar. */
   const [errorEmision, setErrorEmision] = useState<string | null>(null);
   const [avisoLineas, setAvisoLineas] = useState('');
+
+  useEffect(() => {
+    void Promise.resolve().then(() => setB(previo => {
+      const opciones = seriesConfiguradas.filter(s => s.document_type === previo.tipo && s.is_active && (!esTipoNota(previo.tipo) || !previo.documentoAfectado || s.series[0] === previo.documentoAfectado[0])).map(s => s.series);
+      const serie = opciones.includes(previo.serie) ? previo.serie : opciones[0] ?? '';
+      return serie === previo.serie ? previo : { ...previo, serie };
+    }));
+  }, [seriesConfiguradas, b.tipo, b.documentoAfectado]);
 
   const drafts = useRef<Partial<Record<TipoEmisible, BorradorEmision>>>({});
   useEffect(() => { setErrorEmision(null); }, [b]);
@@ -270,7 +281,9 @@ export const InvoiceEmitModal = ({
     [b, existentes, productos],
   );
   const flujo = calcularFlujo(b);
+  const seriesDelTipo = seriesConfiguradas.filter(s => s.document_type === b.tipo && s.is_active).map(s => s.series);
   const pendientes = [...pendientesBase];
+  if (!seriesDelTipo.includes(b.serie)) pendientes.push('Configure una serie activa para este tipo de comprobante.');
   if (b.tipo === '07' && afectado) {
     if (!saldoNota.data || saldoNota.isFetching || saldoNota.isError) pendientes.push(saldoNota.isError ? extractApiErrorMessage(saldoNota.error, 'No se pudo consultar el saldo de la nota; inténtelo de nuevo.') : 'Consultando saldo del comprobante…');
     else if (Math.round(flujo.importeTotal * 100) > Math.round(saldoNota.data.disponible * 100)) pendientes.push(`La nota supera el saldo disponible informado por el servidor (S/ ${saldoNota.data.disponible.toFixed(2)}).`);
@@ -328,11 +341,12 @@ export const InvoiceEmitModal = ({
    * con 0 y el usuario lo completa, en lugar de no hacer nada y dejarle la
    * duda de si el clic funcionó.
    */
-  const itemDeProducto = (producto: ProductoBuscado) =>
-    setB((previo) => ({
-      ...previo,
-      items: agregarItem(previo.items, itemDesdeProducto(producto, nuevaClave())),
-    }));
+  const itemDeProducto = (producto: ProductoBuscado) => {
+    try {
+      const item = itemDesdeProducto(producto, nuevaClave());
+      setB(previo => ({ ...previo, items: agregarItem(previo.items, item) }));
+    } catch (error) { setErrorEmision(error instanceof Error ? error.message : 'Producto incompatible'); }
+  };
 
   const nuevaBolsa = () =>
     setB((previo) => {
@@ -428,6 +442,7 @@ export const InvoiceEmitModal = ({
         {avisoLineas && <p role="status">{avisoLineas}</p>}
         <InvoiceEmitCampos
           borrador={b}
+          series={seriesDelTipo}
           actualizar={actualizar}
           existentes={existentes}
           total={flujo.importeTotal}

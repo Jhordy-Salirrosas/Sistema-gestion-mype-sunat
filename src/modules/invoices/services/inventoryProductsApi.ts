@@ -35,16 +35,7 @@ interface RespuestaStocks {
   }>;
 }
 
-const traducirAfectacionProducto = (
-  codigo?: string | null,
-): 'GRAVADA' | 'EXONERADA' | 'INAFECTA' | 'GRATUITA' | null => {
-  const limpio = (codigo ?? '').trim().toUpperCase();
-  if (limpio === '10' || limpio === 'GRAVADA') return 'GRAVADA';
-  if (limpio === '20' || limpio === 'EXONERADA') return 'EXONERADA';
-  if (limpio === '30' || limpio === 'INAFECTA') return 'INAFECTA';
-  if (limpio === '11' || limpio === 'GRATUITA') return 'GRATUITA';
-  return null;
-};
+const traducirAfectacionProducto = (codigo?: string | null): string | null => codigo?.trim() || null;
 
 /** Redondeo a céntimos para el valor unitario sugerido. */
 const r2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -75,7 +66,7 @@ export const productosDesdeStocks = (
       return {
         sku,
         descripcion: (b.description ?? '').trim(),
-        unidad: unidadRaw || 'NIU',
+        unidad: unidadRaw,
         valorUnitario: Number.isFinite(costo) ? r2(costo) : 0,
         stock: Number.isFinite(stock) ? stock : 0,
         ...(afectacion ? { afectacion } : {}),

@@ -10,7 +10,6 @@
  * imponible»: el detalle ahora es una grilla de varias líneas.
  */
 import {
-  SERIES_POR_TIPO,
   MOTIVOS_NC,
   MOTIVOS_ND,
   documentoValidoParaTipo,
@@ -36,6 +35,7 @@ import type { SaldoNota } from '../services/invoicesApi';
 
 interface InvoiceEmitCamposProps {
   borrador: BorradorEmision;
+  series?: readonly string[];
   actualizar: (parcial: Partial<BorradorEmision>) => void;
   /** Comprobantes ya emitidos: se usan para vincular las notas. */
   existentes: readonly ComprobanteDemo[];
@@ -62,6 +62,7 @@ const OPCIONES_TIPO = [
 /** Campos de identificación del comprobante, del cliente y del detalle. */
 export const InvoiceEmitCampos = ({
   borrador: b,
+  series = [],
   actualizar,
   existentes,
   total,
@@ -107,7 +108,7 @@ export const InvoiceEmitCampos = ({
         label="Serie"
         value={b.serie}
         onChange={(v) => actualizar({ serie: v })}
-        opciones={(SERIES_POR_TIPO[b.tipo] ?? ['F001']).map((s) => ({
+        opciones={series.map((s) => ({
           value: s,
           label: s,
         }))}

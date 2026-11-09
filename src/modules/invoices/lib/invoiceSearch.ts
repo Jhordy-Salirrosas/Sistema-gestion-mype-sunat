@@ -42,7 +42,7 @@ export interface ProductoBuscado {
   /** Stock disponible, si se conoce; se muestra para no vender lo que no hay. */
   stock?: number;
   /** Afectación tributaria configurada en el producto (Catálogo 07: 10, 20, 30, 11). */
-  afectacion?: 'GRAVADA' | 'EXONERADA' | 'INAFECTA' | 'GRATUITA' | '10' | '20' | '30' | '11' | null;
+  afectacion?: string | null;
 }
 
 /** Mínimo de caracteres para disparar una búsqueda por nombre. */

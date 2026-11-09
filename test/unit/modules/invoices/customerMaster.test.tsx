@@ -1,3 +1,4 @@
+import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -41,7 +42,7 @@ it('busca en el maestro por rol CLIENTE, excluye inactivos y conserva ID, docume
   fireEvent.click(await screen.findByRole('button', { name: /Cliente maestro/ }));
   expect(masterDataApi.getPartners).toHaveBeenCalledWith({ role: 'CLIENTE', q: 'Cliente' });
   expect(screen.queryByText('Cliente inactivo')).toBeNull();
-  expect(selected).toHaveBeenCalledWith({ id: partner.id, tipoDocumento: '6', numeroDocumento: partner.doc_number, razonSocial: partner.legal_name, direccion: partner.address });
+  expect(selected).toHaveBeenCalledWith({ id: partner.id, tipoDocumento: '6', numeroDocumento: partner.doc_number, razonSocial: partner.legal_name, direccion: partner.address, tieneCredito: false });
 });
 it('registra con el formulario compartido, selecciona el creado, invalida las consultas y vuelve a resolver retención', async () => {
   let created = false;
@@ -94,7 +95,7 @@ it('solo habilita la venta al crédito con cuotas para clientes con crédito reg
   const sinCredito: BusinessPartnerRecord = { ...partner, id: 'c-contado', legal_name: 'Cliente Contado', has_credit: false, payment_terms: 'CONTADO' };
   const conCredito: BusinessPartnerRecord = { ...partner, id: 'c-credito', doc_number: '20555555551', legal_name: 'Cliente Credito', has_credit: true, payment_terms: '30_DIAS' };
   vi.mocked(masterDataApi.getPartners).mockResolvedValue([sinCredito, conCredito]);
-  render(<QueryClientProvider client={client}><InvoiceEmitModal tipoInicial="01" fecha="2026-11-06" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha="2026-11-06" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
   const btnCredito = () => screen.getByRole('button', { name: 'Crédito' }) as HTMLButtonElement;
   expect(btnCredito().disabled).toBe(true);
   fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
@@ -110,7 +111,7 @@ it('solo habilita descuentos por línea y globales cuando el cliente admite desc
   const sinDesc: BusinessPartnerRecord = { ...partner, id: 'c-no-desc', legal_name: 'Cliente Sin Descuento', allows_discount: false };
   const conDesc: BusinessPartnerRecord = { ...partner, id: 'c-si-desc', doc_number: '20555555551', legal_name: 'Cliente Con Descuento', allows_discount: true };
   vi.mocked(masterDataApi.getPartners).mockResolvedValue([sinDesc, conDesc]);
-  render(<QueryClientProvider client={client}><InvoiceEmitModal tipoInicial="01" fecha="2026-11-06" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha="2026-11-06" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
   const descLinea = () => screen.getByLabelText('Tipo de descuento de la línea 1') as HTMLSelectElement;
   const descGlobal = () => screen.getByLabelText('Descuento global (Catálogo 53)') as HTMLSelectElement;
   expect(descLinea().disabled).toBe(true);
@@ -125,4 +126,8 @@ it('solo habilita descuentos por línea y globales cuando el cliente admite desc
   expect(descLinea().disabled).toBe(true);
   expect(descGlobal().disabled).toBe(true);
   expect(descGlobal().value).toBe('');
+});
+it.each([undefined, null, false, true])('payment_terms no concede crédito cuando has_credit es %s', async has_credit => {
+  const { partnerToCustomer } = await import('@/modules/invoices/components/CustomerLookupField');
+  expect(partnerToCustomer({ ...partner, has_credit, payment_terms: '30_DIAS' } as BusinessPartnerRecord).tieneCredito).toBe(has_credit === true);
 });

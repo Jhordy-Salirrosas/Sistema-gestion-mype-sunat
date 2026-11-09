@@ -1,3 +1,4 @@
+import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,7 +11,7 @@ import { borradorInicial } from '@/modules/invoices/lib/invoiceEmitDraft';
 import { borradorAPayloadEmision } from '@/modules/invoices/lib/invoiceEmitPayload';
 import { hoyEnLima } from '@/modules/invoices/lib/invoiceFecha';
 
-vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async () => ({ data: [] })) } }));
+vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async (url: string) => ({ data: url === '/invoices/config' ? { series: [{ document_type: '01', series: 'F001', is_active: true }, { document_type: '03', series: 'B001', is_active: true }] } : [] })) } }));
 vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => []) }));
 vi.mock('@/modules/invoices/services/invoicesApi', () => ({ invoicesApi: {
   buscarClientes: vi.fn(async () => []), emitirComprobante: vi.fn(async () => { throw new Error('Respuesta de prueba'); }),
@@ -24,8 +25,9 @@ it('conserva los 22 códigos exactos y omite el campo sin detracción efectiva, 
 it.each(['modal', 'pagina'])('%s: solo aparece con detracción, bloquea vacío y envía el código elegido', async (via) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   render(<QueryClientProvider client={client}><MemoryRouter>{via === 'modal'
-    ? <InvoiceEmitModal tipoInicial="01" fecha={hoyEnLima()} existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} />
+    ? <InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha={hoyEnLima()} existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} />
     : <InvoiceEmissionPage />}</MemoryRouter></QueryClientProvider>);
+  if (via === 'pagina') await waitFor(() => expect((screen.getByLabelText('Serie configurada') as HTMLSelectElement).value).toBe('F001'));
   expect(screen.queryByLabelText('Medio de pago de la detracción')).toBeNull();
   fireEvent.change(screen.getByLabelText(via === 'modal' ? 'RUC / DNI del cliente' : 'RUC del cliente'), { target: { value: '20100070970' } });
   fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente de prueba' } });

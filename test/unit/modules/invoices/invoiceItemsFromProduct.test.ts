@@ -14,7 +14,7 @@
  *     sin mirarla, una venta normal podía nacer excluida del total.
  */
 import { describe, expect, it } from 'vitest';
-import { UNIDADES_MEDIDA, calcularItem, itemDesdeProducto } from '@/modules/invoices/lib/invoiceItems';
+import { calcularItem, itemDesdeProducto } from '@/modules/invoices/lib/invoiceItems';
 
 /** Producto de almacén tal como lo devuelve el buscador. */
 function producto(extra: Record<string, unknown> = {}) {
@@ -22,6 +22,7 @@ function producto(extra: Record<string, unknown> = {}) {
     sku: 'CEM-001',
     descripcion: 'Cemento Portland tipo I - 42.5 kg',
     unidad: 'NIU',
+    afectacion: '10',
     valorUnitario: 32.9,
     ...extra,
   };
@@ -63,10 +64,8 @@ describe('TA-64 + TA-61 - producto elegido en el buscador -> línea de la grilla
     expect(item.unidad).toBe('NIU');
   });
 
-  it('una unidad fuera del Catálogo 03 cae a NIU en vez de romper el XML', () => {
-    const item = itemDesdeProducto(producto({ unidad: 'kilos' }), 'k');
-    expect(item.unidad).toBe('NIU');
-    expect(UNIDADES_MEDIDA.some((u) => u.codigo === item.unidad)).toBe(true);
+  it('bloquea unidad incompatible sin sustituirla por NIU', () => {
+    expect(() => itemDesdeProducto(producto({ unidad: 'kilos' }), 'k')).toThrow(/Unidad del producto no compatible/);
   });
 
   it('acepta cualquier unidad que sí esté en el catálogo', () => {

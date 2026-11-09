@@ -57,7 +57,7 @@ export interface ConfiguracionBackend {
   origen_certificado?: 'company' | 'deployment';
   sol_password_configurada?: boolean;
   cert_password_configurada?: boolean;
-  entorno?: string;
+  entorno?: string | null;
   endpoint_bill_service?: string;
   endpoint_consult_service?: string;
   listo_para_emitir?: boolean;
@@ -79,7 +79,7 @@ export interface ConfiguracionBackend {
 /** Lo que consume la pantalla, ya normalizado. */
 export interface ConfiguracionFeVista extends Omit<ConfiguracionBackend, 'series'> {
   perfil_comercial?: PerfilComercial | null;
-  entorno: string;
+  entorno: string | null;
   endpoint_bill_service: string;
   endpoint_consult_service: string;
   listo_para_emitir: boolean;
@@ -130,7 +130,7 @@ export const useInvoiceConfig = (ruc: string) => {
           data.perfil_comercial === 'MAYORISTA' || data.perfil_comercial === 'MINORISTA'
             ? data.perfil_comercial
             : null,
-        entorno: data.entorno ?? 'MOCK',
+        entorno: data.entorno ?? null,
         endpoint_bill_service: data.endpoint_bill_service ?? '',
         endpoint_consult_service: data.endpoint_consult_service ?? '',
         listo_para_emitir: data.listo_para_emitir ?? false,

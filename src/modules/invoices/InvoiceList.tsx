@@ -1,3 +1,5 @@
+import { useInvoiceConfig } from './hooks/useInvoiceConfig';
+import { useAuthStore } from '@/stores/authStore';
 /**
  * Orquestador de la vista principal del módulo de Facturación (M1).
  *
@@ -90,6 +92,8 @@ interface VisorState {
 }
 
 export const InvoiceList = () => {
+  const ruc = useAuthStore(state => state.activeCompany?.ruc) ?? '';
+  const { data: configuracionFiscal } = useInvoiceConfig(ruc);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = tabDesdeRuta(pathname);
@@ -322,6 +326,8 @@ export const InvoiceList = () => {
           tipoInicial={TIPO_POR_OPCION[modalEmision]}
           fecha={fechaHoy}
           existentes={comprobantes}
+          seriesConfiguradas={configuracionFiscal?.series.map(s => ({ document_type: s.tipoComprobante, series: s.serie, is_active: s.activa }))}
+          perfilComercial={configuracionFiscal?.perfil_comercial}
           onEmitir={agregarComprobante}
           onCerrar={() => setModalEmision(null)}
         />

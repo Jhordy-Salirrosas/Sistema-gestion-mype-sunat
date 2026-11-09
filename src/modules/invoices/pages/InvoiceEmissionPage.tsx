@@ -105,8 +105,6 @@ import { revisarGrilla, primeraLineaConError } from '../lib/invoiceStockLinea';
 import type { ProductoBuscado } from '../lib/invoiceSearch';
 import type { ResultadoEmisionBackend } from '../types/invoiceEmision.types';
 
-/** Series válidas por tipo (Catálogo del SEE). */
-const SERIES: Record<'01' | '03', string> = { '01': 'F001', '03': 'B001' };
 
 /*
  * Aquí vivía `CODIGO_AFECTACION`, la traducción de 'GRAVADA' al código 10 del
@@ -123,15 +121,19 @@ export default function InvoiceEmissionPage() {
     tipoQuery === '03' ? '03' : '01',
   );
 
+  const [seriesConfiguradas, setSeriesConfiguradas] = useState<NonNullable<ConfiguracionBackend['series']>>([]);
+  const [serieElegida, setSerieElegida] = useState('');
+  const seriesDelTipo = seriesConfiguradas.filter(s => s.document_type === tipo && s.is_active);
+  const serieActual = seriesDelTipo.find(s => s.series === serieElegida)?.series ?? seriesDelTipo[0]?.series ?? '';
   useEffect(() => {
-    if (tipoQuery === '01' || tipoQuery === '03') return;
     let vivo = true;
     apiClient
       .get<ConfiguracionBackend>('/invoices/config')
       .then(({ data }) => {
         if (!vivo) return;
         const sugerido = tipoComprobantePorPerfil(data?.perfil_comercial);
-        if (sugerido) setTipo(sugerido);
+        setSeriesConfiguradas(data.series ?? []);
+        if (sugerido && tipoQuery !== '01' && tipoQuery !== '03') setTipo(sugerido);
       })
       .catch(() => {});
     return () => {
@@ -298,7 +300,9 @@ export default function InvoiceEmissionPage() {
    * comprobación; es exactamente la duplicación que se elimina al unificar.
    */
   const agregarConProducto = (producto: ProductoBuscado) => {
-    const relleno = itemDesdeProducto(producto, 'prod');
+    let relleno: ItemBorrador;
+    try { relleno = itemDesdeProducto(producto, 'prod'); }
+    catch (error) { setResultado({ ok: false, mensaje: error instanceof Error ? error.message : 'Producto incompatible' }); return; }
 
     setItems((prev) => {
       const vacia = prev.findIndex(
@@ -315,6 +319,7 @@ export default function InvoiceEmissionPage() {
 
   const emitir = async (evento: React.FormEvent) => {
     evento.preventDefault();
+    if (!serieActual) { setResultado({ ok: false, mensaje: 'Configure una serie activa para este tipo de comprobante.' }); return; }
 
     setResultado(null);
 
@@ -413,7 +418,7 @@ export default function InvoiceEmissionPage() {
        */
       const borradorCompleto: BorradorEmision = {
         tipo,
-        serie: SERIES[tipo],
+        serie: serieActual,
         correlativo: 0, // lo asigna la serie en el backend
         clienteId: clienteSeleccionado?.id,
         clienteTipoDocumento: clienteSeleccionado?.tipoDocumento,
@@ -491,7 +496,7 @@ export default function InvoiceEmissionPage() {
     <Page>
       <PageHeader
         title="Emisión de Comprobantes Electrónicos"
-        description="Facturas (F001) y boletas (B001) con detalle de varias líneas, stock validado y liquidación real"
+        description="Facturas y boletas con detalle de varias líneas, stock validado y liquidación real"
       />
 
       <form onSubmit={emitir} className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -521,8 +526,13 @@ export default function InvoiceEmissionPage() {
                     }}
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="01">Factura Electrónica (F001)</option>
-                    <option value="03">Boleta de Venta Electrónica (B001)</option>
+                    <option value="01">Factura Electrónica</option>
+                    <option value="03">Boleta de Venta Electrónica</option>
+                  </select>
+                  <label htmlFor="serie-cpe">Serie configurada</label>
+                  <select id="serie-cpe" value={serieActual} onChange={e => setSerieElegida(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
+                    {!seriesDelTipo.length && <option value="">Sin serie activa</option>}
+                    {seriesDelTipo.map(s => <option key={s.series} value={s.series}>{s.series}</option>)}
                   </select>
                 </div>
 

@@ -7,12 +7,7 @@ import { PageText } from '@/components/ui';
 import { ESPERA_MS, MINIMO_CARACTERES, type ClienteBuscado } from '../lib/invoiceSearch';
 
 export const partnerToCustomer = (p: BusinessPartnerRecord): ClienteBuscado => {
-  const tieneCredito =
-    typeof p.has_credit === 'boolean'
-      ? p.has_credit
-      : p.payment_terms
-        ? p.payment_terms !== 'CONTADO'
-        : undefined;
+  const tieneCredito = p.has_credit === true;
   const admiteDescuento =
     typeof p.allows_discount === 'boolean' ? p.allows_discount : undefined;
   return {

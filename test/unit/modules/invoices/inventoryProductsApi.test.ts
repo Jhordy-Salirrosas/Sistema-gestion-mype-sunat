@@ -28,7 +28,7 @@ describe('TA-64 · productos desde el stock', () => {
     expect(productos[0].descripcion).toBe('Cemento Portland tipo I');
     expect(productos[0].stock).toBe(120);
     expect(productos[0].valorUnitario).toBe(25.5);
-    expect(productos[0].unidad).toBe('NIU');
+    expect(productos[0].unidad).toBe('');
   });
 
   it('acepta stock y costo que llegan como texto (Decimal de Prisma)', () => {
@@ -93,7 +93,7 @@ describe('TA-64 · productos desde el stock', () => {
         { sku: 'INA-1', description: 'Fruta', currentStock: 5, averageUnitCost: 10, taxAffectation: '30' },
       ],
     });
-    expect(productos[0].afectacion).toBe('EXONERADA');
-    expect(productos[1].afectacion).toBe('INAFECTA');
+    expect(productos[0].afectacion).toBe('20');
+    expect(productos[1].afectacion).toBe('30');
   });
 });

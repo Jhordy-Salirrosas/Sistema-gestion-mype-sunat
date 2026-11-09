@@ -68,6 +68,7 @@ export interface ItemBorrador {
   afectacion: AfectacionIgv;
   /** True cuando la afectación proviene del producto elegido y no es editable como campo libre. */
   afectacionHeredada?: boolean;
+  codigoAfectacion?: string;
   /** True cuando la unidad proviene del producto y no debe editarse en la venta. */
   unidadHeredada?: boolean;
   descuento?: { codigo: '00' | '01'; monto: number } | null;
@@ -276,28 +277,17 @@ export const itemVacio = (clave: string): ItemBorrador => ({
   icbper: 0,
 });
 
-/**
- * Línea nueva a partir de un producto del catálogo (TA-61 dentro de TA-64).
- *
- * La unidad que trae el producto se COMPRUEBA contra el Catálogo 03: si el
- * almacén la devuelve en otro formato ("kg", "NIU "), copiarla tal cual
- * produciría un XML rechazado por SUNAT. Ante una unidad desconocida se cae a
- * `NIU` y se deja la descripción intacta, porque un producto sin línea es peor
- * que una línea con la unidad por corregir.
- *
- * `afectacion` se fija en GRAVADA a propósito: es la que corresponde al precio
- * de venta que muestra el almacén. Si el producto fuera exonerado, el usuario lo
- * cambia en la fila, y así el valor por defecto nunca declara impuesto que no
- * corresponda.
- */
+/** Conserva el código fiscal por separado de la categoría usada para presentar totales.
+ * Un catálogo incompleto o incompatible bloquea la selección con causa explícita. */
 export const normalizarAfectacionProducto = (
   afectacion?: string | null,
 ): AfectacionIgv => {
   const limpio = (afectacion ?? '').trim().toUpperCase();
-  if (limpio === '20' || limpio === 'EXONERADA') return 'EXONERADA';
-  if (limpio === '30' || limpio === 'INAFECTA') return 'INAFECTA';
-  if (limpio === '11' || limpio === 'GRATUITA') return 'GRATUITA';
-  return 'GRAVADA';
+  if (['10', 'GRAVADA'].includes(limpio)) return 'GRAVADA';
+  if (['20', 'EXONERADA'].includes(limpio)) return 'EXONERADA';
+  if (['30', '40', 'INAFECTA'].includes(limpio)) return 'INAFECTA';
+  if (['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36', '37', 'GRATUITA'].includes(limpio)) return 'GRATUITA';
+  throw new Error('Producto sin afectación tributaria compatible: configure el código real del Catálogo 07.');
 };
 
 export const itemDesdeProducto = (
@@ -311,7 +301,7 @@ export const itemDesdeProducto = (
   clave: string,
 ): ItemBorrador => {
   const unidad = producto.unidad.trim().toUpperCase();
-  const valida = UNIDADES_MEDIDA.some((u) => u.codigo === unidad);
+  if (!unidadValida(unidad)) throw new Error(`Unidad del producto no compatible: ${unidad || 'sin configurar'}. Corrija el catálogo; no se presume NIU.`);
   const valor = Number(producto.valorUnitario);
   const afectacion = normalizarAfectacionProducto(producto.afectacion);
 
@@ -319,11 +309,12 @@ export const itemDesdeProducto = (
     clave,
     codigo: producto.sku,
     descripcion: producto.descripcion,
-    unidad: valida ? unidad : 'NIU',
+    unidad,
     cantidad: 1,
     valorUnitario: Number.isFinite(valor) && valor > 0 ? valor : 0,
     precioUnitario: Number.isFinite(valor) && valor > 0 ? (afectacion === 'GRAVADA' ? Number((valor * 1.18).toFixed(10)) : valor) : 0,
     afectacion,
+    codigoAfectacion: ({ GRAVADA: '10', EXONERADA: '20', INAFECTA: '30', GRATUITA: '11' } as Record<string, string>)[producto.afectacion?.trim().toUpperCase() ?? ''] ?? producto.afectacion?.trim(),
     afectacionHeredada: true,
     unidadHeredada: true,
     icbper: 0,
