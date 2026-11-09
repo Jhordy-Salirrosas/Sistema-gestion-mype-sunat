@@ -309,6 +309,23 @@ export class InventoryPurchaseService {
     return result;
   }
 
+  async listPayments(companyId: string, id: string) {
+    const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id, company_id: companyId }, select: { purchase_number: true } });
+    if (!purchase) throw new NotFoundException('Compra no encontrada.');
+    const pagos = await this.prisma.treasuryMovement.findMany({
+      where: { company_id: companyId, source_module: 'PURCHASES', source_reference_id: purchase.purchase_number, direction: 'EGRESO' },
+      orderBy: { movement_date: 'desc' },
+    });
+    return pagos.map((p) => ({
+      id: p.id,
+      date: p.movement_date,
+      amount: Number(p.amount),
+      paymentMethod: p.payment_method,
+      bankName: p.bank_name,
+      concept: p.concept,
+    }));
+  }
+
   /** Registra el pago de una compra y su asiento CxP contra caja/banco. */
   async payPurchase(companyId: string, id: string, dto: { amount?: number; paymentDate?: string; paymentMethod?: string; bankName?: string }) {
     const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id, company_id: companyId }, include: { items: true } });
