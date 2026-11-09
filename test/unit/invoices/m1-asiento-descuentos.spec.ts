@@ -38,7 +38,7 @@ describe('asiento de descuentos 01 y 03', () => {
       findAccounts: jest.fn(async () => ['12121', '74', '70121', '40111'].map((code) => ({ code }))),
       getNextEntryNumber: jest.fn(async () => 1), saveEntry };
     const generador = new GenerateAccountingEntryUseCase(repo as never);
-    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) } } as never, {} as never, generador);
+    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) }, inventoryMovement: { findMany: jest.fn(async () => []) } } as never, {} as never, generador);
     const resultado = await puente.registrar({ id: 'inv-1', companyId: 'company-1', tipoComprobante: '01', serie: 'F001', correlativo: 1, fechaEmision: '2026-03-15', items: [], importes });
     expect(resultado.completo).toBe(true);
     expect(saveEntry).toHaveBeenCalledTimes(1);
@@ -51,7 +51,7 @@ describe('asiento de descuentos 01 y 03', () => {
     const repo = { findByIdempotencyKey: jest.fn(async () => null), findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),
       findAccounts: jest.fn(async () => ['12121', '70121', '40111'].map((code) => ({ code }))),
       getNextEntryNumber: jest.fn(async () => 1), saveEntry };
-    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) } } as never, {} as never, new GenerateAccountingEntryUseCase(repo as never));
+    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) }, inventoryMovement: { findMany: jest.fn(async () => []) } } as never, {} as never, new GenerateAccountingEntryUseCase(repo as never));
     const resultado = await puente.registrar({ id: 'inv-1', companyId: 'company-1', tipoComprobante: '01', serie: 'F001', correlativo: 1, fechaEmision: '2026-03-15', items: [], importes });
     expect(resultado.completo).toBe(false);
     expect(resultado.errores.join(' ')).toContain('cuenta PCGE 74 no existe');
