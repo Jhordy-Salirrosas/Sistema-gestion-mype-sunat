@@ -24,6 +24,7 @@ const COMPROBANTE = {
   tipo_comprobante: '01',
   serie: 'F001',
   correlativo: 1,
+  fecha_emision: new Date('2026-11-08'),
   estado: InvoiceStatus.EN_COLA,
   payload_ubl: { rucEmisor: '20601012341', tipoComprobante: '01' },
   xml_storage_url: '<?xml version="1.0"?><Invoice/>',
@@ -82,6 +83,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
     movimientosRegistrados: 0,
     movimientosOmitidos: 0,
     asientoOmitido: false,
+    asientoId: 'asiento-falso',
     errores: [],
     completo: true,
   }));
@@ -247,7 +249,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
 
   it('condiciona el fallo de preparación para no sobrescribir un estado final concurrente', async () => {
     const d = crearDobles(null);
-    await d.consumidor.procesar({ invoice_id: 'inv-1' });
+    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
     expect(d.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'inv-1', estado: { notIn: [InvoiceStatus.ACEPTADO,
         InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
@@ -256,9 +258,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
 
   it('deja ERROR_RED si el comprobante no se puede preparar', async () => {
     const d = crearDobles(null);
-    const resultado = await d.consumidor.procesar({ invoice_id: 'inv-1' });
-
-    expect(resultado).toBeNull();
+    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
     expect(d.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { estado: InvoiceStatus.ERROR_RED },
@@ -269,7 +269,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
 
   it('genera el asiento contable cuando el CDR queda aceptado', async () => {
     const accounting = {
-      execute: jest.fn<(args: unknown) => Promise<unknown>>(async () => null),
+      execute: jest.fn<(args: unknown) => Promise<unknown>>(async () => ({ id: 'asiento-respaldo' })),
     };
     const FILA_CONTABLE = {
       ...COMPROBANTE,
@@ -353,7 +353,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
       { persistFailure: jest.fn() } as never, { registrar } as never,
       { guardar: jest.fn(async () => 'hash') } as never, accounting as never,
     );
-    await consumer.procesar({ invoice_id: 'inv-1' });
+    await expect(consumer.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_ACCOUNTING_REVIEW_REQUIRED');
     expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: null, importes: expect.objectContaining({ gravado: 100, igv: 18, total: 108, descuentoNoAfecto: 10 }) }));
     expect(accounting.execute).not.toHaveBeenCalled();
   });
@@ -388,6 +388,16 @@ describe('TA-28 InvoiceJobConsumer', () => {
 it('no propaga un fallo al marcar ERROR_RED cuando otro worker finalizó concurrentemente', async () => {
   const d = crearDobles(null);
   d.update.mockRejectedValueOnce(new Error('registro ya finalizado'));
+  await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
+  expect(d.processWithRetry).not.toHaveBeenCalled();
+});
+it('una aceptación con asiento pendiente se recupera por reentrega sin volver a enviar', async () => {
+  const d = crearDobles({ ...COMPROBANTE, estado: InvoiceStatus.ACEPTADO });
+  const registrar = (d.consumidor as any).puenteContable.registrar;
+  registrar.mockRejectedValueOnce(new Error('Contabilidad temporalmente ausente'));
+  await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('Contabilidad temporalmente ausente');
   await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).resolves.toBeNull();
+  expect(registrar).toHaveBeenCalledTimes(2);
+  expect(d.signXml).not.toHaveBeenCalled();
   expect(d.processWithRetry).not.toHaveBeenCalled();
 });

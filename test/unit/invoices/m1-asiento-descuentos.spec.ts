@@ -34,7 +34,7 @@ describe('asiento de descuentos 01 y 03', () => {
 
   it('el generador contable real acepta la cuenta 74 activa y recibe partida doble', async () => {
     const saveEntry = jest.fn(async (entry: unknown) => entry);
-    const repo = { findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),
+    const repo = { findByIdempotencyKey: jest.fn(async () => null), findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),
       findAccounts: jest.fn(async () => ['12121', '74', '70121', '40111'].map((code) => ({ code }))),
       getNextEntryNumber: jest.fn(async () => 1), saveEntry };
     const generador = new GenerateAccountingEntryUseCase(repo as never);
@@ -48,7 +48,7 @@ describe('asiento de descuentos 01 y 03', () => {
 
   it('informa si la cuenta 74 no está activa en el catálogo contable', async () => {
     const saveEntry = jest.fn(async (entry: unknown) => entry);
-    const repo = { findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),
+    const repo = { findByIdempotencyKey: jest.fn(async () => null), findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),
       findAccounts: jest.fn(async () => ['12121', '70121', '40111'].map((code) => ({ code }))),
       getNextEntryNumber: jest.fn(async () => 1), saveEntry };
     const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) } } as never, {} as never, new GenerateAccountingEntryUseCase(repo as never));
@@ -75,7 +75,7 @@ describe('asiento de descuentos 01 y 03', () => {
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null, validadoDeVerdad: true })) } as never,
       {} as never, { registrar } as never, { guardar: jest.fn(async () => 'hash-fixture') } as never, accounting as never,
     );
-    await consumer.procesar({ invoice_id: 'inv-1' });
+    await expect(consumer.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_ACCOUNTING_REVIEW_REQUIRED');
     expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: null, importes: expect.objectContaining(importes) }));
     expect(accounting.execute).not.toHaveBeenCalled();
   });

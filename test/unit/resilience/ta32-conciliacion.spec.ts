@@ -92,43 +92,14 @@ describe('TA-32 · conciliación antes de reintentar', () => {
     expect(dobles.sleep).not.toHaveBeenCalled();
   });
 
-  it('reenvía cuando la consulta tampoco trae un CDR', async () => {
-    const { sunat, sendAndProcess } = sunatQueDevuelve(
-      falloDeRed(),
-      rechazoDeNegocio(),
-    );
-    const consulta = {
-      consultarEstado: jest
-        .fn()
-        .mockResolvedValue({ ...falloDeRed(), cdr: null }),
-    } as unknown as ConsultaEstadoPort;
-
-    const resultado = await crearServicio(sunat, consulta).processWithRetry(
-      paramsBase,
-    );
-
-    expect(sendAndProcess).toHaveBeenCalledTimes(2);
-    expect(dobles.sleep).toHaveBeenCalledWith(5_000);
-    expect(resultado.estado).toBe(InvoiceStatus.RECHAZADO);
-  });
-
-  it('si la consulta falla, continúa con el reintento en vez de abortar', async () => {
-    const { sunat, sendAndProcess } = sunatQueDevuelve(
-      falloDeRed(),
-      rechazoDeNegocio(),
-    );
-    const consulta = {
-      consultarEstado: jest
-        .fn()
-        .mockRejectedValue(new Error('consultService caído')),
-    } as unknown as ConsultaEstadoPort;
-
-    const resultado = await crearServicio(sunat, consulta).processWithRetry(
-      paramsBase,
-    );
-
-    expect(sendAndProcess).toHaveBeenCalledTimes(2);
-    expect(resultado.estado).toBe(InvoiceStatus.RECHAZADO);
+  it.each(['sin CDR', 'consulta fallida'])('conserva el job sin reenviar cuando hay %s', async caso => {
+    const { sunat, sendAndProcess } = sunatQueDevuelve(falloDeRed(), rechazoDeNegocio());
+    const consultarEstado = caso === 'sin CDR'
+      ? jest.fn().mockResolvedValue({ ...falloDeRed(), cdr: null })
+      : jest.fn().mockRejectedValue(new Error('consulta fallida'));
+    await expect(crearServicio(sunat, { consultarEstado }).processWithRetry(paramsBase)).rejects.toThrow();
+    expect(sendAndProcess).toHaveBeenCalledTimes(1);
+    expect(dobles.sleep).not.toHaveBeenCalled();
   });
 
   it('informa a la consulta el número de intento real, no un 1 fijo', async () => {

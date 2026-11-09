@@ -13,6 +13,13 @@ model Company {
   ruc                   String        @unique
   legal_name            String
   trade_name            String?
+  local_anexo String?
+  domicilio_fiscal String?
+  ubigeo_fiscal String?
+  departamento_fiscal String?
+  provincia_fiscal String?
+  distrito_fiscal String?
+
   sol_user              String
   sol_pass_encrypted    String
   cert_storage_url      String?

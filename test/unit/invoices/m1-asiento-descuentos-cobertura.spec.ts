@@ -38,7 +38,7 @@ describe('casos de revisión del asiento con descuentos 01/03', () => {
       lineas: [{ descuentos: codigo === '01' ? [{ codigo, monto }] : [] }],
       descuentoGlobal: codigo === '03' ? { codigo, monto } : undefined };
     const { interno, registrar, execute, advertir } = consumidor(payload);
-    await interno.registrarEnContabilidad('inv-1', InvoiceStatus.ACEPTADO);
+    await expect(interno.registrarEnContabilidad('inv-1', InvoiceStatus.ACEPTADO)).rejects.toThrow();
     expect(advertir).toHaveBeenCalledWith(expect.stringContaining('Descuento 01/03 inválido: requiere revisión contable'));
     expect(advertir).toHaveBeenCalledWith(expect.stringContaining('asiento automático omitido'));
     expect(registrar).not.toHaveBeenCalled();
@@ -54,7 +54,7 @@ describe('casos de revisión del asiento con descuentos 01/03', () => {
     ['total negativo', { lineas: [{ descuentos: [{ codigo: '01', monto: 1200 }] }], montoTotal: -20 }, 'El total del comprobante no concuerda'],
   ])('deja en revisión si hay %s', async (_caso, cambios, mensaje) => {
     const { interno, registrar, execute, advertir } = consumidor({ ...payloadBase, ...cambios });
-    await interno.registrarEnContabilidad('inv-1', InvoiceStatus.ACEPTADO);
+    await expect(interno.registrarEnContabilidad('inv-1', InvoiceStatus.ACEPTADO)).rejects.toThrow();
     expect(advertir).toHaveBeenCalledWith(expect.stringContaining(mensaje));
     expect(advertir).toHaveBeenCalledWith(expect.stringContaining('asiento automático omitido'));
     expect(registrar).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe('casos de revisión del asiento con descuentos 01/03', () => {
 
   it('advierte y no usa el respaldo si el puente no produce asiento con descuento', async () => {
     const { interno, registrar, execute, advertir } = consumidor(payloadBase);
-    await interno.registrarEnContabilidad('inv-1', InvoiceStatus.ACEPTADO);
+    await expect(interno.registrarEnContabilidad('inv-1', InvoiceStatus.ACEPTADO)).rejects.toThrow();
     expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ importes: expect.objectContaining({ descuentoNoAfecto: 100 }) }));
     expect(advertir).toHaveBeenCalledWith(expect.stringContaining('asiento automático omitido'));
     expect(execute).not.toHaveBeenCalled();

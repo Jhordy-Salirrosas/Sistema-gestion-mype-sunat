@@ -32,7 +32,7 @@ import { createHash } from 'node:crypto';
 import AdmZip from 'adm-zip';
 import { PrismaService } from '../../database/prismaService';
 import { InvoiceStatus } from '../../generated/client/enums';
-import { RegisterInvoiceAccountingEntryUseCase } from '../accounting/application/use-cases/registerInvoiceAccountingEntryUseCase';
+import { InvoiceAccountingFallbackService } from './application/services/invoiceAccountingFallbackService';
 import {
   InvoiceRetryService,
   RetryInvoiceResult,
@@ -55,7 +55,7 @@ import type { InvoicePayload } from './invoicePayload';
 import { aplicarDescuentoGlobal } from './application/services/descuentoGlobal';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
-import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
+import { InvoiceAccountingBridgeService, claveAsientoM1 } from './application/services/invoiceAccountingBridgeService';
 import type { FacturaParaPuente } from './application/services/invoiceAccountingBridgeService';
 import { SignedXmlStorageService } from './application/services/signedXmlStorageService';
 
@@ -141,7 +141,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
      * asiento —ver `registrarEnContabilidad`—, y queda como respaldo.
      */
     @Optional()
-    private readonly accounting?: RegisterInvoiceAccountingEntryUseCase,
+    private readonly accounting?: InvoiceAccountingFallbackService,
     @Optional() private readonly issuerConfig?: IssuerConfigResolver,
   ) {}
 
@@ -160,12 +160,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
   }
 
   /**
-   * Un job de la cola. Nunca lanza hacia pg-boss: un throw haria que el
-   * transporte marque el job como fallido y lo reintente por su cuenta,
-   * saltandose el backoff de `InvoiceRetryService`.
-   *
-   * UNICA excepcion (TA-58): `ErrorValidacionBloqueada`, que se relanza a
-   * proposito. Explicado en `bloqueoDeInfraestructura`.
+   * El orquestador conserva los intentos SOAP. Preparación, infraestructura,
+   * circuito abierto y efectos contables pendientes se relanzan a pg-boss,
+   * cuya política durable reprograma el trabajo o lo conserva en DLQ.
    */
   async procesar(job: InvoiceJobPayload): Promise<RetryInvoiceResult | null> {
     const invoiceId = job?.invoice_id;
@@ -179,17 +176,21 @@ export class InvoiceJobConsumer implements OnModuleInit {
       aprobado = await this.preparar(invoiceId);
     } catch (error) {
       // Una reentrega de la cola es un no-op, nunca un fallo de preparación.
-      if (error instanceof ComprobanteFinalizado) return null;
+      if (error instanceof ComprobanteFinalizado) {
+        const final = await this.prisma.invoice.findUnique({ where: { id: invoiceId }, select: { estado: true } });
+        if (final && [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO].includes(final.estado as 'ACEPTADO' | 'OBSERVADO')) await this.registrarEnContabilidad(invoiceId, final.estado);
+        return null;
+      }
       if (error instanceof ErrorValidacionBloqueada) {
         return this.bloqueoDeInfraestructura(invoiceId, error);
       }
 
-      // Fallo al generar, validar o firmar: no tiene sentido reintentar contra
-      // SUNAT porque el XML saldria igual de invalido. Se deja en ERROR_RED.
+      // Un fallo de preparación conserva el documento y el trabajo recuperables.
+      // pg-boss reintentará la preparación, nunca envía este XML inválido.
       const mensaje = error instanceof Error ? error.message : String(error);
       this.logger.error(`[TA-28] ${invoiceId} no se pudo preparar: ${mensaje}`);
       await this.marcar(invoiceId, InvoiceStatus.ERROR_RED);
-      return null;
+      throw new Error('M1_PREPARATION_PENDING');
     }
 
     // TA-58, criterio 1: si la compuerta XSL marco defectos en el comprobante,
@@ -204,6 +205,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     }
 
     const resultado = await this.retry.processWithRetry(aprobado.params);
+    if (resultado?.circuitoAbierto) throw new Error('M1_CIRCUIT_OPEN_RETRY');
 
     // TA-68: si SUNAT aceptó u observó el comprobante, cabe mover el stock y
     // asentar la venta. Con un rechazo o un error de red NO: el documento fiscal
@@ -223,61 +225,27 @@ export class InvoiceJobConsumer implements OnModuleInit {
   /**
    * Ejecuta el puente facturación → Kardex + Contabilidad (TA-68).
    *
-   * Nunca propaga el error: la factura ya está aceptada por SUNAT y un fallo
-   * contable no la invalida. Se registra en el log para poder reintentarlo.
+   * Propaga el fallo contable sin invalidar la aceptación fiscal: la reentrega
+   * completa el efecto pendiente y nunca vuelve a enviar el comprobante.
    */
   private async registrarEnContabilidad(
     invoiceId: string,
     estado: InvoiceStatus,
   ): Promise<void> {
-    let asientoDelPuente: string | undefined;
-    let bloquearRespaldo = true;
     try {
-      const factura = await this.cargarParaPuente(invoiceId, estado);
-
-      if (factura) {
-        bloquearRespaldo = Boolean(
-          factura.motivoBloqueoAsiento ||
-          (factura.importes.descuentoNoAfecto ?? 0) > 0,
-        );
-        const resultado = await this.puenteContable.registrar(factura);
-        asientoDelPuente = resultado.asientoId;
-
-        if (!resultado.completo) {
-          this.logger.warn(
-            `[TA-68] ${invoiceId}: puente incompleto (${resultado.errores.join(' | ')})`,
-          );
-        } else {
-          this.logger.log(
-            `[TA-68] ${invoiceId}: ${resultado.movimientosRegistrados} movimiento(s) de Kardex` +
-              `${resultado.asientoOmitido ? ', asiento ya existente' : `, asiento ${resultado.asientoId ?? 'creado'}`}`,
-          );
-        }
-      }
+    const factura = await this.cargarParaPuente(invoiceId, estado);
+    if (!factura) throw new Error('M1_ACCOUNTING_DOCUMENT_UNAVAILABLE');
+    const resultado = await this.puenteContable.registrar(factura);
+    if (resultado.completo && (resultado.asientoId || resultado.asientoOmitido)) return;
+    if (factura.motivoBloqueoAsiento || (factura.importes.descuentoNoAfecto ?? 0) > 0) throw new Error('M1_ACCOUNTING_REVIEW_REQUIRED');
+    if (!resultado.asientoId) await this.registrarAsiento(invoiceId);
+    // Un asiento recuperado no oculta errores de Kardex.
+    if (resultado.errores.some(e => !e.startsWith('Contabilidad:'))) throw new Error('M1_KARDEX_PENDING');
     } catch (error) {
-      const mensaje = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `[TA-68] ${invoiceId}: no se pudo contabilizar: ${mensaje}`,
-      );
-    }
-
-    // RESPALDO: si el puente no dejó asiento, contabilidad emite el suyo.
-    // Va FUERA del try para que un fallo del puente no impida asentar la venta:
-    // son dos escritores con referencias distintas y solo uno debe actuar.
-    if (bloquearRespaldo) {
-      if (!asientoDelPuente)
-        this.logger.warn(
-          `[CONTABILIDAD] ${invoiceId}: asiento automático omitido; requiere revisión contable o no se pudo leer el comprobante.`,
-        );
-      return;
-    }
-    try {
-      await this.registrarAsiento(invoiceId, asientoDelPuente);
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `[CONTABILIDAD] ${invoiceId}: no se pudo asentar: ${mensaje}`,
-      );
+      const motivo = error instanceof Error ? error.message : 'M1_ACCOUNTING_PENDING';
+      this.logger.warn(`[TA-68] ${invoiceId}: ${motivo}`);
+      this.logger.warn(`[CONTABILIDAD] ${invoiceId}: asiento automático omitido; trabajo pendiente recuperable.`);
+      throw error;
     }
   }
 
@@ -548,7 +516,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
    *
    * Es un problema de INFRAESTRUCTURA, no del comprobante, asi que:
    *  - no se marca RECHAZADO: el XML puede estar perfecto;
-   *  - no se manda a la DLQ ni se consume un intento del backoff;
+   *  - no consume intentos SOAP; pg-boss reprograma y conserva su DLQ;
    *  - el error se relanza para que pg-boss vuelva a entregar el job cuando
    *    la hoja exista. Devolver `null` dejaria el comprobante trabado en
    *    EN_COLA para siempre.
@@ -560,7 +528,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     error: ErrorValidacionBloqueada,
   ): never {
     this.logger.error(
-      `[TA-58] ${invoiceId} no se puede validar (${error.motivo}): el job vuelve a la cola sin consumir intento`,
+      `[TA-58] ${invoiceId} no se puede validar (${error.motivo}): el job se reprograma sin consumir intento SOAP`,
     );
     throw error;
   }
@@ -578,7 +546,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     invoiceId: string,
     idAsientoDelPuente?: string,
   ): Promise<void> {
-    if (!this.accounting) return;
+    if (!this.accounting) throw new Error('M1_ACCOUNTING_FALLBACK_UNAVAILABLE');
     if (idAsientoDelPuente) return;
 
     const invoice = await this.prisma.invoice.findUnique({
@@ -597,7 +565,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
         payload_ubl: true,
       },
     });
-    if (!invoice) return;
+    if (!invoice) throw new Error('M1_ACCOUNTING_DOCUMENT_UNAVAILABLE');
     if (
       invoice.tipo_comprobante !== '01' &&
       invoice.tipo_comprobante !== '03'
@@ -616,6 +584,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
             source_reference_id: `${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}`,
           },
           { source_module: 'INVOICES', source_reference_id: invoice.id },
+          { source_module: 'M1_INVOICES', source_reference_id: invoice.id },
+          { idempotency_key: claveAsientoM1(invoice.id) },
         ],
       },
       select: { id: true },
@@ -648,7 +618,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
           ? taxable
           : centimos(total - igv);
 
-    await this.accounting.execute({
+    const entry = await this.accounting.execute({
       companyId: invoice.company_id,
       invoiceId: invoice.id,
       tipoComprobante: invoice.tipo_comprobante,
@@ -660,6 +630,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       igv,
       total,
     });
+    if (!entry) throw new Error('M1_ACCOUNTING_PENDING');
   }
 
   /** Traduce `{ invoice_id }` a los datos completos del envio. */

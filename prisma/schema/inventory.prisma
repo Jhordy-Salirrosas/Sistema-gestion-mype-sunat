@@ -265,6 +265,7 @@ model InventoryAdjustmentItem {
 
 enum NationalPurchaseStatus {
   REGISTRADA
+  PAGO_PARCIAL
   PAGADA
   ANULADA
 }
@@ -293,6 +294,7 @@ model NationalPurchase {
   total_amount        Decimal                @db.Decimal(14, 2) // Total CxP proveedor
 
   status              NationalPurchaseStatus @default(REGISTRADA)
+  paid_amount         Decimal                @default(0.00) @db.Decimal(14, 2)
   notes               String?
   responsible         String?
 

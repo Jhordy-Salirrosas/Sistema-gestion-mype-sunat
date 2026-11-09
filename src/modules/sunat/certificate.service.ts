@@ -17,6 +17,10 @@ export interface ValidatedCertificate {
   daysRemaining: number;
 }
 
+export class CertificateInspectionError extends BadRequestException {
+  constructor(readonly causa: string, readonly detalle: string) { super(detalle); }
+}
+
 @Injectable()
 export class CertificateService implements OnModuleInit {
   private readonly logger = new Logger(CertificateService.name);
@@ -67,13 +71,13 @@ export class CertificateService implements OnModuleInit {
 
   /** Inspección para configuración: conserva vigencia aunque el certificado haya vencido.
    * No devuelve clave privada ni autoriza a firmar. */
-  public inspectCertificate(context?: IssuerContext): Pick<ValidatedCertificate, 'validFrom' | 'validTo' | 'issuerRuc' | 'daysRemaining'> {
+  public inspectCertificate(context?: IssuerContext): Pick<ValidatedCertificate, 'validFrom' | 'validTo' | 'issuerRuc' | 'daysRemaining'> & { identificador: string } {
     const c = this.loadCertificate(
       context ? context.certificate?.base64 : process.env.CERT_BASE64,
       context ? context.certificate?.password : process.env.CERT_PASSWORD,
       context?.ruc ?? process.env.RUC_EMISOR, false,
     );
-    return { validFrom: c.validFrom, validTo: c.validTo, issuerRuc: c.issuerRuc, daysRemaining: c.daysRemaining };
+    return { identificador: `SHA256:${createHash('sha256').update(c.certificatePem).digest('hex')}`, validFrom: c.validFrom, validTo: c.validTo, issuerRuc: c.issuerRuc, daysRemaining: c.daysRemaining };
   }
 
   public validarYCargarCertificado(
@@ -88,13 +92,11 @@ export class CertificateService implements OnModuleInit {
     rucEmisor: string | undefined, requireValidity: boolean): ValidatedCertificate {
     // 1. Comprobar la presencia de las variables de entorno.
     if (!certBase64) {
-      throw new BadRequestException('Falta la variable de entorno CERT_BASE64');
+      throw new CertificateInspectionError('SIN_CERTIFICADO', 'Sin certificado (CERT_BASE64 ausente)');
     }
 
     if (!certPassword) {
-      throw new BadRequestException(
-        'Falta la variable de entorno CERT_PASSWORD',
-      );
+      throw new CertificateInspectionError('CONTRASENA_NO_CONFIGURADA', 'Contraseña del certificado ausente (CERT_PASSWORD)');
     }
 
     if (!rucEmisor) {
@@ -103,9 +105,18 @@ export class CertificateService implements OnModuleInit {
 
     try {
       // 2. Decodificar Base64 y procesar el archivo PKCS#12.
-      const p12Der = forge.util.decode64(certBase64);
-      const p12Asn1 = forge.asn1.fromDer(p12Der);
-      const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, certPassword);
+      let p12Asn1: forge.asn1.Asn1;
+      try {
+        if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(certBase64)) throw new Error();
+        p12Asn1 = forge.asn1.fromDer(forge.util.decode64(certBase64));
+      } catch { if (requireValidity) throw new BadRequestException('Contraseña inválida o formato PKCS#12 corrupto'); throw new CertificateInspectionError('FORMATO_INVALIDO', 'Formato inválido'); }
+      let p12: forge.pkcs12.Pkcs12Pfx;
+      try { p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, certPassword); }
+      catch (error) {
+        if (requireValidity) throw new BadRequestException('Contraseña inválida o formato PKCS#12 corrupto');
+        const password = error instanceof Error && /password|mac could not be verified/i.test(error.message);
+        throw new CertificateInspectionError(password ? 'CONTRASENA_INCORRECTA' : 'FORMATO_INVALIDO', password ? 'Contraseña incorrecta' : 'Formato inválido');
+      }
 
       // 3. Extraer el certificado y la clave privada.
       const certificates: forge.pki.Certificate[] = [];
@@ -124,6 +135,7 @@ export class CertificateService implements OnModuleInit {
       }
 
       if (!privateKeyPem) {
+        if (!requireValidity) throw new CertificateInspectionError('FORMATO_INVALIDO', 'Formato inválido: falta clave privada');
         throw new BadRequestException(
           'El archivo PKCS#12 no contiene una clave privada válida',
         );
@@ -139,6 +151,7 @@ export class CertificateService implements OnModuleInit {
         );
       });
       if (!certificate) {
+        if (!requireValidity) throw new CertificateInspectionError('FORMATO_INVALIDO', 'Formato inválido: no hay par de certificado y clave privada');
         throw new BadRequestException(
           'El archivo PKCS#12 no contiene un par de certificado y clave privada válidos',
         );
@@ -184,9 +197,10 @@ export class CertificateService implements OnModuleInit {
           `El certificado no corresponde al RUC configurado: ${rucEmisor}`,
         );
 
-        throw new BadRequestException(
-          `El certificado digital no corresponde al RUC emisor configurado (${rucEmisor})`,
-        );
+        const rucs = [...new Set(certificate.subject.attributes.flatMap(attr => String(attr.value).split(/[^0-9]+/).filter(value => /^\d{11}$/.test(value))))];
+        throw new CertificateInspectionError('RUC_NO_COINCIDE',
+          `RUC no coincide: empresa ${/^\d{11}$/.test(rucEmisor) ? rucEmisor : 'sin RUC válido'}; certificado ${rucs.join(', ') || 'sin RUC identificable'}`);
+
       }
 
       // 6. Guardar el certificado validado en memoria.

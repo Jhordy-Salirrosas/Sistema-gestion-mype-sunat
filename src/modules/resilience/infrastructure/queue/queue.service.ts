@@ -108,14 +108,13 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       await this.boss.start();
 
       await this.boss.createQueue(INVOICE_DLQ);
-      // Los reintentos con backoff (5, 15 y 45 s) los decide `InvoiceRetryService`
-      // aplicando `backoffPolicy.ts`. pg-boss solo transporta y persiste: si se
-      // dejara su propio retryLimit, cada job se reintentaría dos veces (una por
-      // pg-boss y otra por el orquestador) y la secuencia dejaría de cumplirse.
-      await this.boss.createQueue(INVOICE_QUEUE, {
-        retryLimit: 0,
-        deadLetter: INVOICE_DLQ,
-      });
+      // Los reintentos SOAP (5/15/45 s) siguen dentro de InvoiceRetryService;
+      // pg-boss recupera únicamente los fallos que el consumidor relanza.
+      // Excepción autorizada M1 auditoría 2: errores de preparación, circuito
+      // abierto y contabilidad se relanzan; el backoff SOAP sigue en su orquestador.
+      const invoicePolicy = { retryLimit: 3, retryDelay: 60, retryBackoff: true, retryDelayMax: 300, deadLetter: INVOICE_DLQ };
+      await this.boss.createQueue(INVOICE_QUEUE, invoicePolicy);
+      await this.boss.updateQueue(INVOICE_QUEUE, invoicePolicy);
 
       // TA-67: la cola de resúmenes se declara con su propia DLQ. Aquí SÍ se
       // deja un `retryLimit` > 0, al contrario que en la cola de comprobantes:
@@ -367,7 +366,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
 
   /** Devuelve un trabajo propio de la empresa autenticada a la cola principal. */
   async retryDlq(id: string, companyId: string): Promise<void> {
-    const [job] = await this.boss.findJobs<{ company_id?: string }>(
+    const [job] = await this.boss.findJobs<{ company_id?: string; invoice_id?: string }>(
       INVOICE_DLQ,
       { id, queued: true },
     );
@@ -375,7 +374,12 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('No se encontró el trabajo de DLQ.');
     }
 
-    await this.boss.retry(INVOICE_DLQ, id);
+    if (!job.data.invoice_id) throw new NotFoundException('Trabajo de DLQ sin comprobante recuperable.');
+    // Publicar primero: un fallo deja la DLQ recuperable. singleton evita que
+    // reintentar tras un fallo de limpieza produzca dos trabajos vivos.
+    await this.boss.send(INVOICE_QUEUE, { invoice_id: job.data.invoice_id, company_id: companyId },
+      { singletonKey: `invoice:${job.data.invoice_id}` });
+    await this.boss.deleteJob(INVOICE_DLQ, id);
   }
 
   /**

@@ -59,6 +59,8 @@ describe('M1 estado estructurado del certificado', () => {
       const config = await servicio.obtener('empresa');
       expect(config.certificado).toEqual({
         archivo: null,
+        causa: estado === 'VENCIDO' ? 'VENCIDO' : null,
+        detalle: estado === 'VENCIDO' ? 'Certificado vencido' : null,
         configurado,
         estado,
         vence_el: new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10),
@@ -81,6 +83,8 @@ describe('M1 estado estructurado del certificado', () => {
       const config = await servicio.obtener('empresa');
       expect(config.certificado).toEqual({
         archivo: null,
+        causa: 'SIN_CERTIFICADO',
+        detalle: 'Sin certificado',
         configurado: false,
         estado: 'NO_CONFIGURADO',
         vence_el: null,

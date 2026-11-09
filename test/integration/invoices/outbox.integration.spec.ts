@@ -26,6 +26,7 @@ import { NativeJwtAdapter } from '../../../src/modules/auth/infrastructure/secur
 import { PrismaInvoiceRepository } from '../../../src/modules/invoices/infrastructure/persistence/prismaInvoiceRepository';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
 import { InvoiceEntity } from '../../../src/modules/invoices/domain/entities/invoiceEntity';
+import { fakeFiscalAddress } from '../../fixtures/fakeFiscalAddress';
 import {
   INVOICE_QUEUE,
   QueueService,
@@ -144,6 +145,8 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
       data: {
         ruc: RUC,
         legal_name: 'EMPRESA DE PRUEBA TA-13 S.A.C.',
+        // La ingesta valida el emisor antes de reservar el correlativo.
+        ...fakeFiscalAddress,
         sol_user: 'MODDATOS',
         sol_pass_encrypted: 'cifrado-de-prueba',
       },
