@@ -22,6 +22,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import type { LineaDetalle } from '../../xmlNodesHelper';
+import { Prisma } from '../../../../generated/client/client';
 
 /** Ítem a validar: código del producto en el catálogo (SKU) y cantidad. */
 export interface ItemAValidar {
@@ -110,6 +111,12 @@ export class StockValidationService {
     const avisos: string[] = [];
     const faltantes: Faltante[] = [];
 
+    const cantidades = new Map<string, Prisma.Decimal>();
+    for (const item of conCodigo) {
+      const sku = item.codigo!.trim();
+      cantidades.set(sku, (cantidades.get(sku) ?? new Prisma.Decimal(0)).plus(item.cantidad));
+    }
+    const revisados = new Set<string>();
     for (const item of conCodigo) {
       const codigo = item.codigo!.trim();
       const entrada = stockPorSku.get(codigo);
@@ -133,15 +140,17 @@ export class StockValidationService {
         );
       }
 
-      if (entrada.isInventory && item.cantidad > entrada.stock) {
+      const pedido = cantidades.get(codigo)!;
+      if (!revisados.has(codigo) && entrada.isInventory && pedido.greaterThan(entrada.stock)) {
         faltantes.push({
           descripcion: entrada.descripcion,
           codigo,
-          pedido: item.cantidad,
+          pedido: pedido.toNumber(),
           disponible: entrada.stock,
           unidad: item.unidad ?? entrada.unidad,
         });
       }
+      revisados.add(codigo);
     }
 
     if (faltantes.length > 0) {

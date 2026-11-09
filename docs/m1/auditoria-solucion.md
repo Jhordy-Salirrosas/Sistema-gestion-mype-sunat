@@ -408,3 +408,184 @@ Las pruebas nuevas incluyen serie configurada F087 con F001 inactiva, los
 códigos fiscales completos, entorno null, has_credit estricto y RA/RC bloqueado
 antes de firma/cola. Sin emisiones, llamadas a SUNAT, migraciones aplicadas,
 PR, fusiones ni despliegues. 3.3 y los puntos señalados de 3.4 siguen pendientes.
+
+## Ciclo de verificación sobre dev — 9 noviembre 2026
+
+### Fase 0
+
+Backend dev: 42b66ae6c14dc6ad590f8b1fba598b79b7cbc672.
+Frontend dev: a3f723e9a80325024efa40c0cfddefc9f47aa1a4.
+Línea base completa: backend 243 suites/2127 tests aprobados, 3 suites/18
+pruebas optativas omitidos; frontend 96 archivos/766 pruebas aprobados.
+Se utilizó PostgreSQL 16 local nuevo y desechable, exclusivamente con las
+migraciones existentes, conforme a la excepción autorizada por Emma. Sin
+conexión a bases compartidas, emisiones ni llamadas reales a SUNAT.
+
+### Corrección: líneas históricas de notas (3.3)
+
+La guarda común de ambas rutas admitía solo productos activos y cotejaba
+siempre su configuración actual. Ahora permite un producto inactivo únicamente
+si consta en el origen de la misma empresa y conserva su unidad/afectación
+históricas; rechaza alteraciones o productos inactivos ajenos. Las ventas
+nuevas conservan el filtro activo. NC no exige stock para una salida nueva;
+ND conserva comprobación de disponibilidad sin sustituir la fiscalidad histórica
+por la actual. OBSERVADO sigue sin habilitar un origen.
+
+El frontend conserva codigoAfectacion y precio_unitario del detalle de origen,
+incluidos los códigos antes comprimidos/rechazados. Un precio desconocido
+impide precargar; no se reconstruye desde una base redondeada. Pruebas nuevas:
+cuatro guardas históricas y siete contratos detalle → nota → payload.
+
+Cierre de este arreglo: backend 244 suites/2131 pruebas aprobadas, 3 suites/18
+pruebas optativas omitidas; frontend 97 archivos/773 pruebas aprobados.
+El primer pase simultáneo falló solo por el umbral temporal de TA-13 (4/10
+menores de 500 ms); el pase completo exclusivo pasó sin cambiar el test.
+Lint backend y typecheck front aprobados. Ferry frontend: rama
+ferry/m1-verificacion-dev, commit 4293cc2, con FERRY.md y tres rutas exactas.
+
+### Corrección: motivos totales en flujo común (3.3)
+
+Se reutiliza CATALOGO_09_MOTIVOS de InvoiceNoteService: 01/02/06 exigen que
+las líneas devuelvan el saldo disponible completo, después de notas anteriores
+y bajo el bloqueo del origen. Un importe parcial se rechaza con causa clara;
+no se inventan precios/cantidades para completar el saldo. Motivo 07 conserva
+la devolución parcial. Cinco pruebas nuevas; suite completa backend:
+244 suites/2136 pruebas aprobadas, 3 suites/18 pruebas optativas omitidas.
+Frontend sin cambios: 97 archivos/773 pruebas aprobados.
+
+### Corrección: stock agregado (3.4)
+
+StockValidationService suma todas las cantidades por SKU normalizado antes de
+comparar con la suma de almacenes de la empresa. Decimal evita falsos excesos
+como 0.1 + 0.2 frente a 0.3. Se conserva el cotejo tributario de cada línea y
+la exención de stock de servicios. Pruebas: exceso 6+6 frente a 10 (fallaba en
+dev), límite decimal exacto, servicio repetido y afectación alterada en segunda
+línea. Suite completa backend: 245 suites/2140 pruebas aprobadas; 3 suites/18
+pruebas optativas omitidas. Frontend sin cambios: 97 archivos/773 pruebas.
+
+### Corrección: gratuitas referenciales (3.4)
+
+El XML anterior anulaba referencia, base e IGV, y utilizaba el tributo oneroso.
+Ahora el flujo común conserva precio final y base referenciales, desglosa IGV
+referencial para 11–16, declara tributo 9996 en línea/cabecera y precio tipo 02
+sin IGV; cac:Price (precio de venta) sigue cero. LineExtensionAmount de la
+línea informa referencia, excluida del total oneroso de cabecera. El IGV no
+cobrado se declara en 9996 y no aumenta PayableAmount. No se modifica SPOT.
+Una gratuita sin referencia positiva se bloquea; no se inventa el valor.
+
+Seis pruebas nuevas fallaban antes: comunes 11/16/21/31/37 → XML → firma
+ficticia → ejecutor SFS real local, con referencia positiva y payable cero;
+referencia cero rechazada. Se corrige la expectativa antigua que confundía
+precio de venta cero con referencia cero. Suite completa backend: 246 suites/
+2146 pruebas aprobadas, 3 suites/18 pruebas optativas omitidas. Frontend sin
+cambios: 97 archivos/773 pruebas aprobados.
+
+### Corrección y límite del rescate (2.4)
+
+Dev ya dispone de Invoice.transport_uncertain nullable: no hace falta una
+migración nueva para registrar incertidumbre. InvoiceRetryService confirma
+true antes de la red, consulta antes de reenviar true, interpreta null con
+ENVIADO/ERROR_RED como desconocimiento y solo reenvía tras ausencia confirmada.
+Las pruebas m1-auditoria2-outbox verifican reinicio, consulta inconcluyente,
+marcador anterior a la red y no segundo envío.
+
+El rescate manual de M1 (InvoiceQueryService.reintentarCdr) no escribía el
+marcador para PENDIENTE/EN_COLA históricos con null. Ahora confirma true ANTES
+de publicar el rescate, con filtro por empresa/estado/null; conserva true/false
+existentes. Si falla esa escritura, no encola. Dos pruebas nuevas fallaban
+antes y pasan después. Es una decisión conservadora: desconocimiento no se
+convierte en certeza de que nunca se envió. La consulta de boletas puede quedar
+sin conclusión; no se autoriza por eso un reenvío a ciegas.
+
+**2.4 PARCIAL: resto automático fuera del alcance autorizado.**
+InvoiceQueueReconciler.reconciliar (Resiliencia) selecciona EN_COLA sin job y
+llama reenqueueInvoiceIfIdle, sin clasificar/persistir null como incertidumbre.
+InvoiceRetryService interpreta null como incierto solo en ENVIADO/ERROR_RED.
+Por tanto un EN_COLA histórico sin marcador y con intento previo desconocido
+sigue sin prueba durable de ausencia antes del rescate automático. Ya existe
+el campo seguro donde registrarlo, pero cerrar ese camino exige modificar
+el reconciliador o la interpretación de null en Resiliencia, prohibido en este
+ciclo. No se cambió ninguno de esos archivos ni se generó una migración.
+
+Separadamente, publicación y auditoría del rescate no son una transacción
+única: la API reenqueueInvoiceIfIdle no admite cliente transaccional. La
+incertidumbre anterior a publicación queda durable aun si falla esa auditoría;
+no se declara atomicidad que la interfaz existente no ofrece. La transición
+explícita InvoiceDlqService (estado/historial y posterior publicación DLQ)
+también conserva ese límite preexistente de Resiliencia.
+
+### Veredictos de la revisión
+
+- **1.1 Cumple en código y pruebas locales.** datosDelEmisor lee los seis
+  campos persistidos y bloquea ISSUER_FISCAL_DATA_REQUIRED antes de numerar.
+  AtomicInvoiceCreationService usa prepareCreation para las dos rutas;
+  emitirComprobanteAdapter → UblGeneratorService → xmlPartiesHelper transporta
+  AddressTypeCode y dirección reales. Evidencia: atomicInvoiceCreation.spec.ts
+  y m1-auditoria2-sfs.spec.ts (XML común firmado con credencial ficticia y SFS,
+  sin 3030). Con domicilio_fiscal NULL informado por Emma, la demo debe seguir
+  bloqueada. No se completó ese dato ni se probó una emisión real.
+- **1.2 Cumple.** selección de producto inicializa precio final, contrato de
+  payload lo conserva y prepareCreation exige precioUnitario. Evidencia:
+  pruebas del selector/payload frontend y creationGuards.spec.ts.
+- **1.3 Cumple.** InvoiceConfigService usa diagnosticarSfs; el script prueba
+  Python/lxml/assets/XSD y devuelve causas permitidas sanitizadas. La compuerta
+  por documento sigue separada. Evidencia: m1-auditoria2-sfs y ta70-sfs.
+- **1.4 Cumple.** inspectCertificate conserva comprobación de RUC;
+  InvoiceConfigService expone causa, detalle, origen y huella identificadora
+  cuando funciona. InvoiceIssuerConfigForm distingue INVALIDO/AUN_NO_VIGENTE
+  y origen. Prueba de RUC discrepante conserva ambos RUC sin secretos.
+  La credencial ajena de respaldo no se habilitó; su sustitución es del equipo.
+- **2.1–2.3 Cumple en las rutas verificadas.** retryDlq publica INVOICE_QUEUE
+  antes de borrar DLQ; cola crea/actualiza retryLimit=3, demora60/backoff/max300
+  y deadLetter. InvoiceJobConsumer relanza preparación, infraestructura y
+  circuito abierto. Evidencia: pruebas de QueueService, consumidor y
+  m1-auditoria2-outbox.spec.ts. Resiliencia se leyó sin modificarla.
+- **2.5 Cumple en las rutas verificadas.** puente y respaldo comparten
+  m1:invoice:<UUID> por interfaz contable existente y su unicidad durable.
+  Reentrega de aceptado/observado completa contabilidad sin nuevo transporte;
+  fallo contable relanza el job. Evidencia: m1-auditoria2-outbox y pruebas del
+  consumidor/puente. Contabilidad no se modificó.
+- **3.1 Cumple.** has_credit estricto, códigos/unidades reales, series
+  configuradas y entorno ausente null se conservan. La precarga histórica
+  queda cubierta además por invoiceHistoricasContrato.test.ts.
+- **3.2 Cumple como bloqueo.** SummaryEnvioService devuelve «Despacho externo
+  no habilitado para RA/RC» antes de firmar/encolar fuera de MOCK. Evidencia:
+  m1-envio-resumenes-bajas.spec.ts. El transporte externo de resúmenes continúa
+  deshabilitado y no se modificó el bloqueo de Resiliencia.
+- **3.3 Corregido.** líneas históricas y motivos totales según los arreglos
+  anteriores; OBSERVADO como origen permanece rechazado.
+- **3.4 Corregido en fiscalidad gratuita y stock agregado.** la precisión
+  conserva la diferencia ya documentada: payload/XML diez decimales unitarios,
+  InvoiceItem.unit_price/unit_value cuatro. No se unificó ni se propuso una
+  migración nueva; reconstruir desde columnas puede perder esos decimales.
+- **4 Cumple en las comprobaciones automatizadas.** idempotencia obligatoria,
+  guardas de ambas rutas, compuerta, cotejo ReferenceID del CDR y consultar-sunat
+  sin reenvío mantienen sus tests. TA-70 ejecuta XSD+SFS reales locales para
+  01/03/07/08; BTC sigue rechazado con 3088 y anexo ausente con 3030.
+  Evidencia: atomicInvoiceCreation, ta32-idempotencia-envio,
+  m1-consulta-sunat-segura, pruebas de referencia CDR y ta70-sfs.
+
+No se generaron ni aplicaron migraciones nuevas. No se cambió SPOT, Contabilidad,
+Resiliencia ni módulos ajenos a M1. No se abrió PR, fusionó ni desplegó.
+
+### Cierre del ciclo
+
+Suite completa final backend, con cobertura y PostgreSQL 16 local real:
+246 suites/2148 pruebas aprobadas, 3 suites/18 pruebas optativas omitidas
+(249 suites/2166 pruebas totales). Frontend: 97 archivos/773 pruebas aprobados.
+Build de ambos repos, lint backend y ESLint de los tres archivos frontend
+modificados aprobados; typecheck frontend aprobado. Cada arreglo anterior tuvo
+su propio pase completo verde antes del commit. El rescate añade dos pruebas.
+
+Commits previos de este ciclo: 3f828c0 (históricos), 7fd0410 (motivos totales),
+3681d82 (stock), 88bfc69 (gratuitas). Este último commit de rescate contiene
+InvoiceQueryService, m1-rescate-manual.spec.ts y este informe. Frontend se
+entrega exclusivamente por ferry/m1-verificacion-dev (4293cc2), tres archivos
+más FERRY.md; el commit local frontend es 191fc8b y no se empujó a su repo.
+
+Restos abiertos: rescate automático histórico null en Resiliencia y falta de
+atomicidad de sus interfaces de publicación/historial descritos arriba;
+precisión persistida cuatro frente a diez decimales unitarios documentada;
+transporte externo RA/RC deshabilitado por diseño. Datos de demo pendientes
+del equipo: domicilio fiscal real y certificado propio del RUC. Nada de esto
+se disfraza de validación productiva ni se resuelve inventando datos.

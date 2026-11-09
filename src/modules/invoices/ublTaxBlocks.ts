@@ -41,6 +41,10 @@ export const bloqueImpuestos = (
 ): string[] => {
   const subtotales: SubtotalTributo[] = [];
 
+  if ((t.gratuito ?? 0) > 0) {
+    subtotales.push({ codigo: '9996', nombre: 'GRA', tipo: 'FRE', categoria: 'Z', base: t.gratuito!, importe: t.igvGratuito ?? 0 });
+  }
+
   if (t.gravado > 0) {
     subtotales.push({
       codigo: '1000',

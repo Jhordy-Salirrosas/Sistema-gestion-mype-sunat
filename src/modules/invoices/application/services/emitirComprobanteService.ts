@@ -607,12 +607,15 @@ export class EmitirComprobanteService {
     dto: EmitirComprobanteDto,
     companyId: string,
   ): Promise<void> {
+    // Una NC revierte/corrige la operación; no necesita existencias para una salida nueva.
+    if (dto.tipo_comprobante === '07') return;
     const items: ItemAValidar[] = dto.items.map((item) => ({
       codigo: item.codigo ?? null,
       descripcion: item.descripcion,
       cantidad: item.cantidad,
       unidad: item.unidad,
-      afectacion: item.afectacion ?? null,
+      // La guarda común ya cotejó la afectación de la nota con su origen.
+      afectacion: dto.tipo_comprobante === '08' ? null : item.afectacion ?? null,
     }));
 
     await this.stock.validar(companyId, items);

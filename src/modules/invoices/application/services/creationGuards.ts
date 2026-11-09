@@ -6,6 +6,7 @@ import { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
+import { CATALOGO_09_MOTIVOS } from './invoiceNoteService';
 import { validarPago } from './paymentTermsAndSpotValidator';
 import { resolverRetencionMaestro } from './retencionMaestro';
 import type { PrismaService } from '../../../../database/prismaService';
@@ -63,23 +64,40 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   }
   const codigos = dto.items.map((l) => l.codigo?.trim());
   if (codigos.some((c) => !c)) throw new BadRequestException('Cada producto o servicio debe estar registrado con código y afectación');
+  const esNota = dto.tipo_comprobante === '07' || dto.tipo_comprobante === '08';
+  let historicas: { item_code: string | null; unit_code: string | null; igv_affectation_type: string | null }[] = [];
+  if (esNota) {
+    const numero = /^([A-Za-z0-9]{4})-(\d{1,8})$/.exec(dto.documento_afectado?.trim() ?? '');
+    if (numero || dto.referenced_invoice_id) {
+      const origen = await tx.invoice.findFirst({ where: { company_id: companyId,
+        ...(dto.referenced_invoice_id ? { id: dto.referenced_invoice_id } : { serie: numero![1], correlativo: Number(numero![2]) }) },
+        select: { items: { select: { item_code: true, unit_code: true, igv_affectation_type: true } } } });
+      if (!origen) throw new NotFoundException('Comprobante origen no encontrado en la empresa');
+      historicas = origen.items ?? [];
+    }
+  }
   const productos = await tx.inventoryProduct.findMany({ where: {
-    company_id: companyId, sku: { in: codigos as string[] }, is_active: true,
-  }, select: { sku: true, tax_affectation: true, sunat_unit_code: true } });
+    company_id: companyId, sku: { in: codigos as string[] }, ...(esNota ? {} : { is_active: true }),
+  }, select: { sku: true, tax_affectation: true, sunat_unit_code: true, is_active: true } });
   for (const l of dto.items) {
     const producto = productos.find((p) => p.sku === l.codigo!.trim());
     if (!producto) throw new BadRequestException(`Producto o servicio no registrado: ${l.codigo}`);
-    const afectacion = producto.tax_affectation?.trim();
+    const candidatas = historicas.filter(h => h.item_code === l.codigo!.trim());
+    const historica = candidatas.find(h => (!l.afectacion || l.afectacion === h.igv_affectation_type) && (!l.unidad || l.unidad === h.unit_code));
+    if ((candidatas.length && !historica) || (producto.is_active === false && !historica)) throw new BadRequestException('La línea inactiva o histórica debe corresponder al comprobante origen');
+    const afectacion = (historica ? historica.igv_affectation_type : producto.tax_affectation)?.trim();
+    const unidad = historica ? historica.unit_code : producto.sunat_unit_code;
+    if (!unidad?.trim()) throw new BadRequestException('La línea no tiene unidad fiscal registrada');
     if (!afectacion || !(AFECTACIONES_GRILLA as readonly string[]).includes(afectacion)) {
       throw new BadRequestException(`Producto ${l.codigo} sin afectación tributaria válida`);
     }
     if (l.afectacion && l.afectacion !== afectacion) throw new BadRequestException('No puede alterar la afectación del producto');
-    if (l.unidad && l.unidad !== producto.sunat_unit_code) throw new BadRequestException('No puede alterar la unidad del producto');
+    if (l.unidad && l.unidad !== unidad) throw new BadRequestException('No puede alterar la unidad del producto');
     if (!Number.isFinite(l.precioUnitario)) {
       throw new BadRequestException('Indique precio unitario con IGV y cantidad válidos');
     }
     l.afectacion = afectacion;
-    l.unidad = producto.sunat_unit_code;
+    l.unidad = unidad;
   }
   const descuento = Boolean(dto.descuento_global) || dto.items.some((l) => Boolean(l.descuento));
   if (dto.forma_pago === 'Credito' || descuento) {
@@ -117,6 +135,9 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
       const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
       if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
+      if (CATALOGO_09_MOTIVOS.find(m => m.codigo === dto.codigo_motivo_nota)?.total && Math.round(importe * 100) !== disponible) {
+        throw new BadRequestException('El motivo de nota exige devolver el saldo disponible total');
+      }
     }
   }
   if (dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03') {
