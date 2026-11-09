@@ -198,3 +198,213 @@ Build Nest y lint completo aprobados. No se detectó otro bloqueo en los cuatro
 fixtures positivos ni en los negativos verificados. La integración queda en
 cuatro commits por partes; la autorización de la cuarta adaptación y sus
 pruebas/documentación se incorporan al commit de cierre de la Parte 4.
+
+## Segunda corrección
+
+### Fase 0 y base autorizada
+
+Emma autorizó sustituir la base 24fb5a2 por main
+`af5a71fade3ca38125634a876a1c2bcbade8a572`, comprobado con ls-remote.
+24fb5a2 es ancestro; el delta de base contiene únicamente .env.example,
+prisma/seeds/auth.seed.ts y prismaAccountingRepository.ts. Rama de trabajo:
+fix/m1-auditoria-2. Front clonado por URL desde
+https://github.com/CarlosSoles/Fronted-sistema-mype-sunat.git, main
+`c22b923272e0de9248a8bcc32f10237e636e7f6d`.
+
+Línea base después de generar el cliente Prisma local (sin migraciones):
+237 suites/2096 pruebas aprobadas; 4 suites/20 pruebas optativas omitidas.
+Frontend: 96 archivos/747 pruebas aprobados. Python/lxml/assets operativos;
+la invocación local de validate_sfs.py con moneda BTC devolvió 3088.
+La auditoría adjunta se trató como evidencia, no como autorización adicional.
+
+### Parte 1: datos fiscales, precio y diagnósticos
+
+Se incorporan seis campos opcionales de Company: local_anexo,
+domicilio_fiscal, ubigeo_fiscal, departamento_fiscal, provincia_fiscal y
+distrito_fiscal. Configuración permite leerlos y guardarlos; omitir conserva
+el valor y vaciar guarda null. No hay valores predeterminados ni backfill.
+La migración 20261109040000_m1_issuer_fiscal_address fue GENERADA con
+`prisma migrate diff --from-schema <copia anterior> --to-schema prisma/schema --script`.
+No fue aplicada. Emma debe revisarla/aplicarla antes de usar el nuevo código.
+El equipo debe registrar los datos reales de cada emisor.
+
+Ambas rutas HTTP pasan por el mismo servicio, que carga esos campos de la
+empresa y bloquea con ISSUER_FISCAL_DATA_REQUIRED antes de reservar número
+si faltan datos o los códigos son inválidos. El adaptador transporta el anexo
+hasta AddressTypeCode y el domicilio hasta RegistrationAddress. Las pruebas
+usan datos ficticios explícitos exclusivamente en test/fixtures; no se copian
+a configuración real. Se verifica en ambas rutas la persistencia del payload,
+su XML generado, firma de prueba y ejecución SFS concluyente sin 3030 ni otros
+errores. No se emiten comprobantes ni se llama a SUNAT.
+
+Al seleccionar un producto el frontend conserva el valor sugerido por el
+catálogo e inicializa precioUnitario final con IGV para gravadas; las otras
+afectaciones conservan su precio. El payload siempre transporta precioUnitario,
+incluso al restaurar líneas anteriores con valorUnitario. La guarda backend
+permanece. Contrato cubierto: seleccionar, no editar, construir solicitud.
+La fuente existente del catálogo sigue siendo la valorización real expuesta
+por /invoices/products (averageUnitCost); esta parte no crea una política de
+márgenes o un maestro separado de precios de venta.
+
+La fila de validación usa un diagnóstico independiente: ejecutable Python,
+importación de lxml, archivos principales SFS, compilación de los tres XSD
+oficiales y prueba XSD mínima positiva y negativa. Retorna causas cerradas y
+sanitizadas para Python/lxml/assets/XSD, timeout o protocolo inválido. Una
+selección heredada por SUNAT_XSL_DIR se muestra como tal y no acredita SFS.
+Se verificaron también lxml ausente (python -S) y assets ausentes en una copia
+temporal del diagnóstico. No se modifica validaDeVerdad ni la compuerta por
+documento. scripts/m1/diagnose_sfs.py debe distribuirse junto a los demás scripts
+y assets; ejecutar desde la raíz sigue siendo requisito del empaquetado.
+
+La inspección conserva causas clasificadas sin publicar errores de parser,
+certificados, claves ni contraseñas. RUC_NO_COINCIDE muestra ambos RUC obtenidos
+del contexto y del sujeto; se mantiene la comprobación estricta. Cuando la
+inspección funciona, archivo contiene un identificador SHA256 del certificado.
+Configuración publica origen efectivo, causa y explicación. El front distingue
+INVALIDO y AUN_NO_VIGENTE y presenta origen y causa.
+
+Evidencia de producción aportada por Emma (no se accedió a producción en este
+trabajo): el certificado del XML histórico F001-00000060 corresponde al RUC
+20601234567; la empresa demo es 20614142503. Es una discrepancia de credenciales,
+no un defecto del chequeo de RUC. No se relaja el chequeo, no se modifica la
+política de respaldo y no se registra un certificado ajeno para la demo.
+Registrar un certificado propio es una decisión de datos del equipo.
+
+### Excepciones autorizadas para Parte 2
+
+La autorización de Emma/Jhordy se limita a retryDlq y la declaración de
+INVOICE_QUEUE en queue.service.ts, más invoiceRetryService.ts exclusivamente
+para 2.4. Su fundamento y alcance final constan en la sección de Parte 2.
+Los demás archivos de Resiliencia y todos los archivos de Contabilidad se
+conservan. El bloqueo de despacho RA/RC sigue intacto.
+
+Validación de cierre Parte 1: backend 238 suites/2105 pruebas aprobadas;
+4 suites/20 pruebas optativas omitidas. Frontend 96 archivos/753 pruebas
+aprobados. Build de ambos repos, lint del backend y control de secretos aprobados.
+Rectificación: el lint global del frontend NO pasó; tiene 63 errores y 25
+advertencias heredados. Se informó inicialmente como aprobado por una lectura
+incorrecta del resultado. El contraste con la base conserva los mismos
+diagnósticos por archivo y regla, sin añadir errores nuevos.
+Se descartaron ejecuciones solapadas con generación de Prisma/build y se
+repitieron las suites completas en serie sobre el estado final. Frontend se
+entrega mediante ferry/m1-auditoria-2-parte1, con rutas y procedimiento en FERRY.md.
+
+Autorización posterior de Emma/Jhordy para Parte 2: la excepción a «otros
+módulos intocados» se limita EXACTAMENTE a QueueService.retryDlq y a la
+declaración de reintentos de INVOICE_QUEUE en
+src/modules/resilience/infrastructure/queue/queue.service.ts. Ningún otro
+cambio de Resiliencia queda autorizado. El bloqueo RA/RC permanece intacto.
+Esta constancia debe comunicarse a Oliver, dueño del módulo, durante la
+revisión del equipo; Codex no envió mensajes a terceros.
+
+### Parte 2: recuperación e integridad del Outbox
+
+Segunda excepción expresa de Emma/Jhordy: se autoriza modificar
+src/modules/resilience/infrastructure/queue/invoiceRetryService.ts SOLO para
+2.4, persistencia de incertidumbre y consulta antes de reenviar. Fundamento:
+el docente permite reenviar cuando el comprobante no ingresó; una consulta
+inconcluyente nunca demuestra esa ausencia. Esta autorización amplía la
+excepción anterior, no habilita otros cambios de Resiliencia. Oliver debe
+recibir ambas excepciones y este fundamento durante la revisión del equipo.
+No se cambian las reglas del circuito ni el bloqueo de RA/RC.
+
+retryDlq publica un trabajo mínimo en INVOICE_QUEUE con la misma empresa y
+clave singleton del comprobante; solo después elimina el de DLQ. Si publicar
+falla, conserva DLQ; si falla la limpieza, el reintento usa la misma clave.
+Ya no se llama boss.retry sobre una cola sin consumidor. La política de la
+cola principal se crea y actualiza con 3 reintentos, demora 60 s, backoff y
+máximo 300 s, más su DLQ. Los intentos SOAP normales siguen perteneciendo a
+InvoiceRetryService; los throws de preparación, infraestructura, circuito
+abierto o contabilidad se recuperan por pg-boss. Los jobs ya creados pueden
+conservar opciones anteriores de pg-boss; el reintento manual crea el job con
+la política nueva.
+
+Invoice.transport_uncertain se escribe ANTES de cada llamada física. Un
+reinicio no borra la incertidumbre. El marcador es nullable: no se fabrica
+certeza para registros antiguos; ENVIADO/ERROR_RED sin marcador exige consulta.
+Solo el resultado del puerto que confirma NO_ENCONTRADO (null) autoriza
+reenviar; un CDR recuperado termina el flujo sin envío; una consulta fallida o
+sin CDR conserva el marcador y el trabajo recuperable. Se generó, sin aplicar,
+20261109043000_m1_transport_uncertainty mediante prisma migrate diff.
+Emma debe aplicar la migración antes de usar este código.
+
+Los fallos de firma, estructura y disponibilidad se relanzan tras conservar
+ERROR_RED, con causa en el registro existente; no se completa silenciosamente
+el job. Un circuito abierto también se relanza para reprogramación. No se
+modifica la clasificación de rechazos locales de negocio de la compuerta.
+
+Puente y respaldo de M1 pasan m1:invoice:<UUID> como idempotencyKey a
+GenerateAccountingEntryUseCase. Se usa la restricción ÚNICA ya existente de
+Contabilidad (company_id, idempotency_key); no se modifican sus archivos ni se
+crea una segunda política de unicidad. Se conservan consultas de referencias
+históricas M1_INVOICES/número e INVOICES/UUID para no duplicarlas. El respaldo
+vive en M1 y consume la interfaz existente de generación contable. Los errores
+de Kardex no se ocultan por haber recuperado un asiento.
+
+El mismo job durable conserva la tarea posterior a la aceptación: si falla la
+contabilización no se completa, y la reentrega de ACEPTADO/OBSERVADO intenta
+completar el puente/respaldo sin firmar ni reenviar. Tras agotar la política,
+queda en DLQ y el reintento manual conserva ese mismo comportamiento. Los
+casos que requieren revisión fiscal/contable tampoco se convierten en éxito
+silencioso. No se cambia la política de OBSERVADO como origen de notas.
+
+Pruebas: marcador confirmado antes de la red, recuperación tras reinicio sin
+sendBill, consulta inconcluyente sin segundo envío, ausencia confirmada antes
+del reenvío, misma clave para escritores, publicación fallida que conserva
+DLQ y reentrega contable sin transporte. Los escenarios anteriores de backoff
+usan ahora una respuesta explícita de ausencia confirmada en sus dobles.
+PostgreSQL real y concurrencia de infraestructura continúan en las suites
+optativas; ninguna migración o base de producción fue utilizada.
+
+Cierre Parte 2: suite completa 239 suites/2113 pruebas aprobadas, 4 suites/20
+pruebas optativas omitidas. Build Nest, lint y control de secretos aprobados.
+El frontend no cambia en esta parte (última verificación: 96 archivos/753 pruebas).
+Sin llamadas a SUNAT, migraciones aplicadas, cambios de Contabilidad, PR,
+fusiones ni despliegues. El detalle de archivos y pruebas queda en el diff del
+commit de Parte 2; las dos únicas fuentes modificadas de Resiliencia son las
+expresamente autorizadas arriba.
+
+### Parte 3 — alcance parcial: 3.1 y 3.2
+
+El frontend exige has_credit === true y no infiere crédito de payment_terms.
+El catálogo conserva el código de afectación real por separado de la categoría
+visual: 12/16/21/31/37/40 y los demás códigos admitidos llegan sin compresión al
+payload. No se sustituye una unidad desconocida por NIU; una unidad que la
+grilla no soporta o una afectación ausente bloquea la selección con causa.
+La página y el modal usan series activas de Configuración, sin respaldo a
+F001/B001 cuando faltan; la página permite elegir entre las activas del tipo.
+La lista pasa la configuración de la empresa autenticada al modal. Un entorno
+ausente permanece null y el formulario lo presenta sin preseleccionar MOCK.
+Las pruebas de formularios declaran ahora sus series ficticias explícitamente;
+no se alteran reglas SPOT al actualizar esas preparaciones.
+
+SummaryEnvioService responde «Despacho externo no habilitado para RA/RC»
+fuera de MOCK, incluido entorno ausente, antes de firmar o encolar. La
+resolución empresarial determina el entorno efectivo. Se mantiene el bloqueo
+posterior de Resiliencia y no se habilita ningún despacho externo.
+
+Quedan FUERA de este commit parcial: 3.3 (productos históricos inactivos y
+semántica de motivos totales en el flujo común) y el tratamiento completo de
+gratuitas y stock agregado de 3.4. No se cambió OBSERVADO como origen.
+Diferencia de precisión aún vigente, documentada conforme a 3.4: payload/XML
+permiten diez decimales unitarios; InvoiceItem.unit_price/unit_value persisten
+cuatro decimales. Esta parte no aplica ni genera una migración de precisión;
+la diferencia puede afectar proyecciones reconstruidas y queda pendiente de
+unificación. Esta sección no declara cerrados los puntos pendientes.
+
+Cierre del alcance PARCIAL de Parte 3: backend 239 suites/2116 pruebas
+aprobadas, 4 suites/20 pruebas optativas omitidas; frontend 96 archivos/766
+pruebas aprobados. Build de ambos y lint del backend aprobados. El lint global
+del front conserva exactamente 63 errores y 25 advertencias de la base,
+contrastados por archivo/regla (cero diagnósticos nuevos o retirados).
+No se corrigieron módulos ajenos para limpiar esa deuda heredada.
+
+Frontend entregado en ferry/m1-auditoria-2-parte3, commit
+1ffdc790641e7bf3a93205140dfd8a144a80c5d3, 26 archivos, con FERRY.md y todas las
+rutas exactas. Aplicar después de ferry/m1-auditoria-2-parte1 (15868aa).
+Backend de esta parte: docs/m1/auditoria-solucion.md,
+summaryEnvioService.ts y m1-envio-resumenes-bajas.spec.ts.
+Las pruebas nuevas incluyen serie configurada F087 con F001 inactiva, los
+códigos fiscales completos, entorno null, has_credit estricto y RA/RC bloqueado
+antes de firma/cola. Sin emisiones, llamadas a SUNAT, migraciones aplicadas,
+PR, fusiones ni despliegues. 3.3 y los puntos señalados de 3.4 siguen pendientes.

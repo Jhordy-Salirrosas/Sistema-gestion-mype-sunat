@@ -3,6 +3,7 @@ import { AccountingController } from '../../../src/modules/accounting/infrastruc
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
 import { GenerateClosingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
+import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/exportTaxPleUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
@@ -22,6 +23,7 @@ describe('AccountingController', () => {
   let generateUseCase: jest.Mocked<GenerateAccountingEntryUseCase>;
   let closingUseCase: jest.Mocked<GenerateClosingEntryUseCase>;
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
+  let exportTaxPleUseCase: jest.Mocked<ExportTaxPleUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
   let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
@@ -95,6 +97,7 @@ describe('AccountingController', () => {
       generateUseCase,
       closingUseCase,
       exportPleUseCase,
+      exportTaxPleUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
       createAccountUseCase,

@@ -1,3 +1,4 @@
+import { fakeFiscalAddress } from '../../fixtures/fakeFiscalAddress';
 import { AtomicInvoiceCreationService } from '../../../src/modules/invoices/application/services/atomicInvoiceCreationService';
 import { ConflictException } from '@nestjs/common';
 
@@ -23,7 +24,7 @@ function harness() {
         requests.set(JSON.stringify({ company_id_request_key: { company_id: data.company_id, request_key: data.request_key } }), data);
       }),
     },
-    company: { findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'Empresa' })) },
+    company: { findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'Empresa', ...fakeFiscalAddress })) },
     businessPartner: { findFirst: jest.fn(async () => null) },
     inventoryProduct: { findMany: jest.fn(async () => [{ id: 'p1', sku: 'SERV', description: 'Servicio', sunat_unit_code: 'NIU', tax_affectation: '10', is_inventory: false }]) },
     inventoryBalance: { groupBy: jest.fn(async () => []) },
@@ -107,4 +108,28 @@ it.each(['create', 'emitir'] as const)('ambas rutas bloquean has_credit nulo: %s
   const dto = route === 'create' ? { ...fiscal, payload_ubl: { ...fiscal.payload_ubl, formaPago: 'Credito', cuotas: [{ monto: 118, vencimiento: '2026-12-01' }] } } : { ...pantalla, forma_pago: 'Credito', cuotas: [{ monto: 118, vencimiento: '2026-12-01' }] };
   await expect((h.service[route] as any)(dto, 'empresa', 'request-key-00001')).rejects.toThrow('maestro');
   expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
+});
+
+
+it.each(['pantalla', 'fiscal'])('sin dato fiscal persistido bloquea %s antes de numerar', async route => {
+  const h = harness();
+  h.tx.company.findUnique.mockResolvedValue({ ruc: '20100070970', legal_name: 'Empresa' } as never);
+  const operation = route === 'pantalla' ? h.service.emitir(pantalla as never, 'empresa', 'request-key-00001') : h.service.create(fiscal as never, 'empresa', 'request-key-00001');
+  await expect(operation).rejects.toMatchObject({ response: { code: 'ISSUER_FISCAL_DATA_REQUIRED' } });
+  expect(h.tx.$queryRaw).not.toHaveBeenCalled();
+  expect(h.tx.invoice.create).not.toHaveBeenCalled();
+});
+it.each(['pantalla', 'fiscal'])('transporta la configuración persistida en %s hasta XML firmado y SFS', async route => {
+  const h = harness();
+  if (route === 'pantalla') await h.service.emitir(pantalla as never, 'empresa', 'request-key-00001');
+  else await h.service.create(fiscal as never, 'empresa', 'request-key-00001');
+  const payload = h.tx.invoice.create.mock.calls[0][0].data.payload_ubl;
+  expect(payload).toMatchObject({ codigoLocalAnexoEmisor: '0001', direccionEmisor: fakeFiscalAddress.domicilio_fiscal });
+  const { UblGeneratorService } = require('../../../src/modules/invoices/ublGeneratorService');
+  const { SignatureService } = require('../../../src/modules/sunat/signature.service');
+  const { fakeIssuerCertificate } = require('../../fixtures/fakeIssuerCertificate');
+  const { ejecutarSfs } = require('../../../src/modules/invoices/application/services/sunatSfsRunner');
+  const certificate = fakeIssuerCertificate('20100070970');
+  const xml = new SignatureService({ getCertificate: () => ({ certificatePem: certificate.pem, privateKeyPem: certificate.privateKeyPem }) }).signXml(new UblGeneratorService().generateInvoiceXml(payload)).signedXml;
+  expect(await ejecutarSfs(xml, '01')).toEqual({ completado: true, errores: [] });
 });

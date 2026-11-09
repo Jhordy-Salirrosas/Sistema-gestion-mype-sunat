@@ -2,7 +2,7 @@ import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
 import { InvoiceAccountingBridgeService } from '../../../src/modules/invoices/application/services/invoiceAccountingBridgeService';
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
-import { RegisterInvoiceAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/registerInvoiceAccountingEntryUseCase';
+import { InvoiceAccountingFallbackService } from '../../../src/modules/invoices/application/services/invoiceAccountingFallbackService';
 import { PrismaAccountingRepository } from '../../../src/modules/accounting/infrastructure/prismaAccountingRepository';
 
 // Solo se simulan los límites externos: envío aceptado y almacenamiento Prisma.
@@ -78,7 +78,7 @@ function escenario() {
     generator,
   );
   const registrar = jest.spyOn(bridge, 'registrar');
-  const fallback = new RegisterInvoiceAccountingEntryUseCase(repo, generator);
+  const fallback = new InvoiceAccountingFallbackService(generator);
   const respaldo = jest.spyOn(fallback, 'execute');
   const consumer = new InvoiceJobConsumer(
     {} as never,
@@ -133,10 +133,11 @@ describe('M1 · asiento único en el flujo del worker', () => {
       movimientosOmitidos: 0,
       asientoOmitido: false,
       completo: false,
-      errores: ['Fallo contable'],
+      errores: ['Contabilidad: fallo contable'],
     });
     await emitir(s.consumer);
-    expect(s.entries.map((e) => e.source_module)).toEqual(['INVOICES']);
+    expect(s.entries.map((e) => e.source_module)).toEqual(['M1_INVOICES']);
+    expect(s.entries[0].idempotency_key).toBe('m1:invoice:invoice-uuid');
     expect(s.respaldo).toHaveBeenCalledTimes(1);
     await emitir(s.consumer);
     expect(s.entries).toHaveLength(1);
@@ -181,6 +182,8 @@ describe('M1 · asiento único en el flujo del worker', () => {
               source_reference_id: 'F001-00000143',
             },
             { source_module: 'INVOICES', source_reference_id: 'invoice-uuid' },
+            { source_module: 'M1_INVOICES', source_reference_id: 'invoice-uuid' },
+            { idempotency_key: 'm1:invoice:invoice-uuid' },
           ],
         },
         select: { id: true },

@@ -29,6 +29,7 @@ model InvoiceSeries {
 }
 
 model Invoice {
+  transport_uncertain Boolean?
   id                          String        @id @default(uuid())
   company_id                  String
   company                     Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)

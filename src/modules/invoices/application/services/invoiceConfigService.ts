@@ -1,4 +1,4 @@
-import { validaDeVerdad } from './sunatXslAdapter';
+import { diagnosticarSfs } from './sunatSfsDiagnostics';
 import { normalizarEntorno, resolveEndpoint, endpointCoherente } from '../../../sunat/soap/sunatBillTypes';
 import {
   IssuerConfigResolver,
@@ -8,6 +8,7 @@ import { IssuerConfigWriter } from './issuerConfigWriter';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   CertificateService,
+  CertificateInspectionError,
   type ValidatedCertificate,
 } from '../../../sunat/certificate.service';
 import { InvoiceSeriesService, type SerieFiscal } from './invoiceSeriesService';
@@ -18,6 +19,8 @@ export type EntornoFiscal = 'MOCK' | 'BETA' | 'PRODUCCION';
 /** Resumen directo del certificado digital (.PFX / .P12) para la pantalla de Configuración. */
 export interface EstadoCertificadoConfiguracion {
   archivo: string | null;
+  causa: string | null;
+  detalle: string | null;
   configurado: boolean;
   estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'AUN_NO_VIGENTE' | 'INVALIDO' | 'NO_CONFIGURADO';
   vence_el: string | null;
@@ -43,6 +46,13 @@ export interface ConfiguracionFiscal {
   sol_password_configurada?: boolean;
   cert_password_configurada?: boolean;
   ruc?: string;
+  local_anexo?: string | null;
+  domicilio_fiscal?: string | null;
+  ubigeo_fiscal?: string | null;
+  departamento_fiscal?: string | null;
+  provincia_fiscal?: string | null;
+  distrito_fiscal?: string | null;
+
   perfil_comercial?: 'MAYORISTA' | 'MINORISTA' | null;
   tipo_comprobante_predeterminado: '01' | '03' | null;
   entorno: EntornoFiscal | null;
@@ -81,13 +91,17 @@ export class InvoiceConfigService {
 
     const { punto: puntoCertificado, resumen: resumenCertificado } =
       this.evaluarCertificado(context);
+    const motor = await diagnosticarSfs();
     const checklist: EstadoConfiguracion[] = [
+      { clave: 'domicilio_emisor', descripcion: 'Local anexo y domicilio fiscal del emisor', obligatorio: true,
+        configurado: Boolean(context && /^\d{4}$/.test(context.local_anexo ?? '') && /^\d{6}$/.test(context.ubigeo_fiscal ?? '') && [context.domicilio_fiscal, context.departamento_fiscal, context.provincia_fiscal, context.distrito_fiscal].every(v => v?.trim())),
+        detalle: 'Complete los datos fiscales reales de la empresa; su ausencia bloquea antes de numerar' },
       this.chequeoEntorno(entorno),
       { clave: 'endpoints', descripcion: 'Endpoints coherentes con el entorno', obligatorio: true,
         configurado: endpointCoherente(entorno, billEndpoint) && endpointCoherente(entorno, consultEndpoint) },
       { clave: 'validacion_oficial', descripcion: 'Validación oficial previa al envío', obligatorio: true,
-        configurado: entorno === 'MOCK' || validaDeVerdad(),
-        detalle: 'La validación XSL oficial requiere sus dependencias completas; sin ellas el envío externo está bloqueado' },
+        configurado: motor.disponible,
+        detalle: motor.disponible ? 'SFS disponible: Python, lxml, assets y prueba XSD verificados' : `${motor.motor}: ${motor.causa}` },
       this.chequeoUsuarioSol(context),
       puntoCertificado,
       this.chequeoSeries(listado),
@@ -104,6 +118,13 @@ export class InvoiceConfigService {
         ? Boolean(context.certificate)
         : Boolean(process.env.CERT_PASSWORD),
       ruc: context?.ruc,
+      local_anexo: context?.local_anexo ?? null,
+      domicilio_fiscal: context?.domicilio_fiscal ?? null,
+      ubigeo_fiscal: context?.ubigeo_fiscal ?? null,
+      departamento_fiscal: context?.departamento_fiscal ?? null,
+      provincia_fiscal: context?.provincia_fiscal ?? null,
+      distrito_fiscal: context?.distrito_fiscal ?? null,
+
       perfil_comercial: context?.commercialProfile ?? null,
       tipo_comprobante_predeterminado: context?.commercialProfile === 'MAYORISTA' ? '01' : context?.commercialProfile === 'MINORISTA' ? '03' : null,
       entorno,
@@ -200,16 +221,19 @@ export class InvoiceConfigService {
       context?.certificateSource === 'company' ? 'company' : 'deployment';
 
     const presente = context ? Boolean(context.certificate) : Boolean(process.env.CERT_BASE64);
-    let leido: Pick<ValidatedCertificate, 'validFrom' | 'validTo' | 'daysRemaining' | 'issuerRuc'>;
+    let leido: Pick<ValidatedCertificate, 'validFrom' | 'validTo' | 'daysRemaining' | 'issuerRuc'> & { identificador?: string };
     try {
       leido = this.certificado.inspectCertificate(context);
-    } catch {
-      const mensaje = 'Certificado no utilizable';
+    } catch (error) {
+      const causa = !presente ? 'SIN_CERTIFICADO' : error instanceof CertificateInspectionError ? error.causa : 'INSPECCION_FALLIDA';
+      const mensaje = !presente ? 'Sin certificado' : error instanceof CertificateInspectionError ? error.detalle : 'No se pudo inspeccionar el certificado';
       this.logger.warn(`[TA-60] Certificado no utilizable: ${mensaje}`);
       return {
         punto: { ...base, configurado: false, detalle: mensaje },
         resumen: {
           archivo: null,
+          causa,
+          detalle: mensaje,
           configurado: false,
           estado: presente ? 'INVALIDO' : 'NO_CONFIGURADO',
           vence_el: null,
@@ -236,7 +260,9 @@ export class InvoiceConfigService {
         detalle: `${estado}: ${vence}${aviso}`,
       },
       resumen: {
-        archivo: null,
+        archivo: leido.identificador ?? null,
+        causa: estado === 'VENCIDO' ? 'VENCIDO' : estado === 'AUN_NO_VIGENTE' ? 'AUN_NO_VIGENTE' : null,
+        detalle: estado === 'VENCIDO' ? 'Certificado vencido' : estado === 'AUN_NO_VIGENTE' ? 'Certificado aún no vigente' : null,
         configurado: utilizable,
         estado,
         vence_el: vence,

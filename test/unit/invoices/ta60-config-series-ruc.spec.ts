@@ -276,7 +276,7 @@ describe('TA-60 · configuración de facturación', () => {
     expect(json).not.toContain('clave-super-secreta-123');
     expect(json).not.toContain('MODDATOS');
     expect(resultado.entorno).toBe('BETA');
-    expect(resultado.listo_para_emitir).toBe(false); // Dependencia XSL oficial ausente: no declarar disponibilidad ficticia.
+    expect(resultado.listo_para_emitir).toBe(false); // Sin contexto fiscal persistido no se declara listo para emitir.
   });
 
   it('reporta no listo para emitir cuando falta el usuario SOL', async () => {

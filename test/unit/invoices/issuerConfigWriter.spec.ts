@@ -257,6 +257,8 @@ describe('D1 issuer configuration write boundary', () => {
     const cfg = await configService.obtener(h.company.id);
     expect(cfg.certificado).toEqual({
       archivo: null,
+      causa: null,
+      detalle: null,
       configurado: true,
       estado: 'VIGENTE',
       vence_el: '2099-01-01',

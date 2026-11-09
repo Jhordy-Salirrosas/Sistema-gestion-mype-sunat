@@ -19,7 +19,9 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         findMany: jest.fn(),
         update: jest.fn(),
       },
-      treasuryMovement: { create: jest.fn() },
+      treasuryMovement: { create: jest.fn(), findMany: jest.fn() },
+      company: { findUnique: jest.fn().mockResolvedValue({ inventory_cost_method: 'PROMEDIO' }) },
+      inventoryCostLayer: { create: jest.fn().mockResolvedValue({}) },
       accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
       businessPartner: {
         findFirst: jest.fn(),
@@ -97,6 +99,8 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       })),
     }));
 
+    mockPrisma.company.findUnique.mockResolvedValue({ inventory_cost_method: 'FIFO' });
+
     const result = await service.createPurchase(companyId, {
       supplierDocNumber: '20100000001',
       supplierName: 'Distribuidora Lima S.A.C.',
@@ -119,6 +123,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
 
     // Verificación de asientos Kardex generados
     expect(mockPrisma.inventoryMovement.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalledTimes(2);
     const mov1 = mockPrisma.inventoryMovement.create.mock.calls[0][0].data;
     expect(mov1.operation_type_code).toBe('02'); // Operación 02 SUNAT
     expect(mov1.direction).toBe('ENTRADA');
@@ -292,15 +297,33 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       supplier_name: 'Proveedor', document_serial: 'F001', document_number: '1', total_amount: 118,
     });
     mockPrisma.nationalPurchase.update.mockResolvedValue({});
-    mockPrisma.treasuryMovement.create.mockResolvedValue({});
+    mockPrisma.treasuryMovement.create.mockResolvedValue({ id: 'mov-1' });
     await expect(serviceConPago.payPurchase(companyId, 'p1', { paymentMethod: 'TRANSFERENCIA' })).resolves.toMatchObject({ status: 'PAGADA', amount: 118 });
     expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
-      sourceReferenceId: 'PAGO-COM-1',
+      sourceReferenceId: 'PAGO-COM-1-mov-1',
       lines: expect.arrayContaining([
         expect.objectContaining({ accountCode: '421', debitAmount: 118 }),
         expect.objectContaining({ accountCode: '1041', creditAmount: 118 }),
       ]),
     }));
   });
-});
 
+  it('lista el historial de pagos de una compra', async () => {
+    mockPrisma.nationalPurchase.findFirst.mockResolvedValue({ purchase_number: 'COM-1' });
+    mockPrisma.treasuryMovement.findMany.mockResolvedValue([{ id: 'm1', movement_date: new Date('2026-11-09'), amount: 50, payment_method: 'TRANSFERENCIA', bank_name: 'BCP', concept: 'Pago parcial' }]);
+    await expect(service.listPayments(companyId, 'p1')).resolves.toEqual([{ id: 'm1', date: new Date('2026-11-09'), amount: 50, paymentMethod: 'TRANSFERENCIA', bankName: 'BCP', concept: 'Pago parcial' }]);
+  });
+
+  it('registra un pago parcial y deja saldo pendiente', async () => {
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const serviceConPago = new InventoryPurchaseService(mockPrisma, accounting as never);
+    mockPrisma.nationalPurchase.findFirst.mockResolvedValue({
+      id: 'p2', company_id: companyId, purchase_number: 'COM-2', status: 'REGISTRADA',
+      supplier_name: 'Proveedor', document_serial: 'F001', document_number: '2', total_amount: 118, paid_amount: 0,
+    });
+    mockPrisma.nationalPurchase.update.mockResolvedValue({});
+    mockPrisma.treasuryMovement.create.mockResolvedValue({ id: 'mov-1' });
+    await expect(serviceConPago.payPurchase(companyId, 'p2', { amount: 50 })).resolves.toMatchObject({ status: 'PAGO_PARCIAL', paidAmount: 50, balance: 68 });
+    expect(mockPrisma.nationalPurchase.update).toHaveBeenCalledWith({ where: { id: 'p2' }, data: { status: 'PAGO_PARCIAL', paid_amount: 50 } });
+  });
+});
