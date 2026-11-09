@@ -39,6 +39,7 @@ import {
   reglaPorCodigo,
 } from './sunatValidationCatalog';
 import { nombreArchivoDesdeXml, normalizarHojaSunat, validaDeVerdad } from './sunatXslAdapter';
+import { ejecutarSfs } from './sunatSfsRunner';
 
 /** Resultado de ejecutar la hoja oficial sobre un XML. */
 export interface ResultadoValidacionXsl {
@@ -66,6 +67,7 @@ export interface ResultadoValidacionXsl {
 export interface ErrorValidacionXsl {
   codigo: string;
   mensaje: string;
+  nodo?: string | null;
   /** Regla del catálogo que lo explica, si se conoce. */
   regla: ReglaSunat | null;
 }
@@ -116,6 +118,22 @@ export class SunatXslValidatorService {
       return this.bloqueo(
         `No hay hoja XSL mapeada para el tipo de comprobante '${tipoComprobante}'`,
       );
+    }
+
+    // Las rutas explícitas antiguas conservan su diagnóstico no concluyente.
+    // El motor productivo por defecto utiliza el juego completo del SFS.
+    if (!process.env.SUNAT_XSL_DIR) {
+      try {
+        const resultado = await ejecutarSfs(xml, tipoComprobante);
+        const errores = resultado.errores.map(error => ({ ...error, regla: reglaPorCodigo(error.codigo) }));
+        return {
+          valido: errores.length === 0, errores,
+          codigosDesconocidos: errores.filter(e => !e.regla).map(e => e.codigo),
+          bloqueado: false, motivoBloqueo: null, validadoDeVerdad: true,
+        };
+      } catch (error) {
+        return this.bloqueo(error instanceof Error ? error.message : 'Ejecutor SFS no disponible');
+      }
     }
 
     const hoja = this.cargarHoja(archivo);
