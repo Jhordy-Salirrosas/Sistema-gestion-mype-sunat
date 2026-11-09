@@ -1,3 +1,4 @@
+import { detalleErrorConsulta } from './statusConsultaError';
 import { assertCdrReference } from './soap/cdrReferenceGuard';
 import { IssuerConfigResolver } from './issuerConfigResolver';
 /**
@@ -21,7 +22,7 @@ import { CdrPersistenceService } from './cdr-persistence.service';
 import { parseCdr } from './soap/cdr.parser';
 import { classifyCdr } from './soap/cdr.classifier';
 import { buildSolUsername, endpointCoherente } from './soap/sunatBillTypes';
-import { SunatSoapClient, SunatTransportError } from './soap/sunat-soap.client';
+import { SunatSoapClient } from './soap/sunat-soap.client';
 import { SUNAT_CODE_NO_ENCONTRADO } from './soap/sunatStatusCdrOperation';
 import type { ProcessCdrResult } from './soap/sunatBillTypes';
 
@@ -130,34 +131,38 @@ export class SunatStatusConsultaService {
       return { tipo: 'INCIERTO', motivo };
     }
 
-    const invoice = this.resolver
-      ? await this.prisma.invoice.findUnique({
-          where: { id: request.invoiceId },
-          select: { company_id: true },
-        })
-      : null;
-    const companyId = request.companyId ?? invoice?.company_id;
-    if (
-      this.resolver &&
-      (!companyId || (invoice && invoice.company_id !== companyId))
-    )
-      throw new Error('ISSUER_COMPANY_REQUIRED');
-    const context =
-      this.resolver && companyId
-        ? await this.resolver.resolve(companyId)
-        : undefined;
-    if (context && context.ruc !== request.rucEmisor)
-      throw new Error('ISSUER_IDENTITY_MISMATCH');
-    if (context && !endpointCoherente(context.environment, context.consultEndpoint))
-      return { tipo: 'INCIERTO', motivo: 'ISSUER_ENDPOINT_ENV_MISMATCH' };
-    const cliente =
-      this.client ??
-      new SunatSoapClient({
-        endpoint: context?.endpoint,
-        timeoutMs: context?.timeoutMs,
-      });
-
+    let etapa = 'contexto';
+    let secrets: string[] = [];
     try {
+      const invoice = this.resolver
+        ? await this.prisma.invoice.findUnique({
+            where: { id: request.invoiceId },
+            select: { company_id: true },
+          })
+        : null;
+      const companyId = request.companyId ?? invoice?.company_id;
+      if (
+        this.resolver &&
+        (!companyId || (invoice && invoice.company_id !== companyId))
+      )
+        throw new Error('ISSUER_COMPANY_REQUIRED');
+      const context =
+        this.resolver && companyId
+          ? await this.resolver.resolve(companyId)
+          : undefined;
+      secrets = [context?.sol?.username, context?.sol?.password, context?.certificate?.base64, context?.certificate?.password].filter((v): v is string => Boolean(v));
+      if (context && context.ruc !== request.rucEmisor)
+        throw new Error(`ISSUER_IDENTITY_MISMATCH: RUC del comprobante ${request.rucEmisor}; RUC de la empresa ${context.ruc}. No se puede consultar con otra identidad emisora.`);
+      if (context && !endpointCoherente(context.environment, context.consultEndpoint))
+        return { tipo: 'INCIERTO', motivo: 'ISSUER_ENDPOINT_ENV_MISMATCH' };
+      const cliente =
+        this.client ??
+        new SunatSoapClient({
+          endpoint: context?.endpoint,
+          timeoutMs: context?.timeoutMs,
+        });
+
+      etapa = 'consulta';
       const respuesta = await cliente.getStatusCdr(
         {
           rucEmisor: request.rucEmisor,
@@ -194,14 +199,9 @@ export class SunatStatusConsultaService {
         ),
       };
     } catch (error) {
-      const motivo =
-        error instanceof SunatTransportError
-          ? `La consulta de estado falló: ${error.message}`
-          : `La consulta de estado falló: ${
-              error instanceof Error ? error.message : 'error desconocido'
-            }`;
-
-      this.logger.error(`[TA-30] ${request.invoiceId}: ${motivo}`);
+      const detalle = detalleErrorConsulta(error, secrets);
+      const motivo = `La consulta de estado falló: ${detalle.mensaje}`;
+      this.logger.error(`[TA-30] ${request.invoiceId} (${etapa}): ${detalle.nombre}: ${detalle.mensaje}`);
       return { tipo: 'INCIERTO', motivo };
     }
   }

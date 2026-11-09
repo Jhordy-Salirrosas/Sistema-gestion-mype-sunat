@@ -430,7 +430,7 @@ describe('D1 consulta company context', () => {
         serie: 'F001',
         correlativo: 1,
       }),
-    ).rejects.toThrow('ISSUER_COMPANY_REQUIRED');
+    ).resolves.toMatchObject({ tipo: 'INCIERTO', motivo: expect.stringContaining('ISSUER_COMPANY_REQUIRED') });
     expect(getStatusCdr).not.toHaveBeenCalled();
   });
 });
