@@ -140,6 +140,18 @@ class EnvironmentVariables {
   @IsOptional()
   SUNAT_BILL_SERVICE_URL_PRODUCCION: string =
     'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService';
+
+  @IsString()
+  @IsOptional()
+  SUNAT_RUC_SERVICE_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  SUNAT_RUC_SERVICE_API_KEY?: string;
+
+  @IsNumber()
+  @IsOptional()
+  SUNAT_RUC_CACHE_TTL_SECONDS: number = 86400;
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -12,6 +12,9 @@ import { SunatStatusConsultaService } from './statusConsultaService';
 import { CONSULTA_ESTADO_PORT } from '../resilience/infrastructure/queue/invoiceRetryService';
 import { SunatSummaryClient } from './soap/sunatSummaryOperations';
 import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
+import { AuthModule } from '../auth/authModule';
+import { RucController } from './rucController';
+import { RucConsultaService } from './rucConsultaService';
 
 /**
  * Modulo SUNAT.
@@ -31,8 +34,8 @@ import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
  *    diarios y las comunicaciones de baja (`sendSummary` y `getStatus`).
  */
 @Module({
-  imports: [PrismaModule, ResilienceStateModule],
-  controllers: [],
+  imports: [PrismaModule, ResilienceStateModule, AuthModule],
+  controllers: [RucController],
   providers: [
     IssuerConfigEncryption,
     IssuerConfigResolver,
@@ -87,6 +90,7 @@ import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
     SunatStatusConsultaService,
     // TA-67: lo usa `SummaryDispatchService` para enviar resúmenes y bajas.
     SunatSummaryClient,
+    RucConsultaService,
     // TA-58: el consumidor de facturas audita el rechazo de la compuerta XSL
     // con `CdrPersistenceService`, para que la traza sea la misma que la de un
     // rechazo de SUNAT. Se exporta porque `InvoicesModule` lo inyecta.

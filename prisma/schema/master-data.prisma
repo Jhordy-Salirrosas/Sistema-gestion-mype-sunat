@@ -106,6 +106,25 @@ model PartnerTaxStatus {
   @@map("partner_tax_status")
 }
 
+/// Último estado del padrón RUC obtenido desde una fuente autorizada.
+model PadronRucCache {
+  id                    String   @id @default(uuid())
+  ruc                   String   @unique @db.VarChar(11)
+  razon_social          String
+  estado_contribuyente  String
+  condicion_domicilio   String
+  ubigeo                String?  @db.VarChar(6)
+  direccion_fiscal      String?
+  es_agente_retencion   Boolean?
+  source                String
+  consulted_at          DateTime
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([estado_contribuyente, condicion_domicilio])
+  @@map("padron_ruc_cache")
+}
+
 model PartnerAddress {
   id           String          @id @default(uuid())
   partner_id   String
