@@ -120,7 +120,8 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   const unidad = (item.unidad ?? 'NIU').toUpperCase();
   const cantidad = item.cantidad;
   const gratuita = esGratuita(afectacion);
-  const gravada = !gratuita && tributoDe(afectacion) === '1000';
+  const referenciaGravada = tributoDe(afectacion) === '1000';
+  const gravada = !gratuita && referenciaGravada;
   const tienePrecioConIgv =
     typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario);
 
@@ -129,15 +130,17 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   // dividiendo entre (1 + TASA_IGV) y el total de la línea preserva el precio con IGV.
   const precioUnitarioEfectivo = tienePrecioConIgv
     ? item.precioUnitario!
-    : gravada
+    : referenciaGravada
       ? centimos(item.valorUnitario * (1 + TASA_IGV))
       : item.valorUnitario ?? 0;
 
   const valorUnitarioEfectivo = tienePrecioConIgv
-    ? gravada
+    ? referenciaGravada
       ? dividirUnitario(item.precioUnitario!, 1 + TASA_IGV)
       : item.precioUnitario!
     : item.valorUnitario ?? 0;
+
+  if (gratuita && valorUnitarioEfectivo <= 0) throw new BadRequestException('La operación gratuita requiere valor referencial positivo');
 
   const totalBrutoConIgv = tienePrecioConIgv
     ? multiplicarMoneda(cantidad, item.precioUnitario!)
@@ -147,9 +150,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
       ? dividirMoneda(totalBrutoConIgv!, 1 + TASA_IGV)
       : multiplicarMoneda(cantidad, valorUnitarioEfectivo);
 
-  // Regla 3278: una gratuita lleva LineExtensionAmount en 0 y su precio
-  // unitario en cero. Declarar importe en una transferencia gratuita haría
-  // creer a SUNAT que hubo una venta.
+  // La gratuita conserva sus valores referenciales, pero su importe cobrado es cero.
   const descuento = item.descuento;
   if (descuento && (gratuita || !Number.isFinite(descuento.monto) || descuento.monto <= 0 || descuento.monto > valorVentaBruto || !['00', '01'].includes(descuento.codigo))) {
     throw new BadRequestException(`Descuento inválido en la línea ${indice + 1}`);

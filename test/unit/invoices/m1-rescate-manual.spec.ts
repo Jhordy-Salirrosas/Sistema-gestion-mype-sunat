@@ -6,14 +6,15 @@ type Resultado = 'ENCOLADO' | 'YA_EN_COLA' | 'EN_DLQ' | 'ESTADO_NO_PERMITIDO';
 function crear(resultado: Resultado, estadoAlComprobar: InvoiceStatus = InvoiceStatus.EN_COLA) {
   const fila = { id: 'inv-1', estado: InvoiceStatus.EN_COLA, serie: 'F001', correlativo: 57 };
   const findFirst = jest.fn<() => Promise<unknown>>().mockResolvedValueOnce(fila).mockResolvedValue({ ...fila, estado: estadoAlComprobar });
+  const marcar = jest.fn(async (_args: unknown) => ({ count: 1 }));
   const historial = jest.fn(async (_args: unknown) => ({}));
   const rescatar = jest.fn(async (_id: string, _empresa: string, permitido: () => Promise<boolean>) => {
     if (resultado === 'YA_EN_COLA' || resultado === 'EN_DLQ') return { estado: resultado };
     if (!(await permitido())) return { estado: 'ESTADO_NO_PERMITIDO' as const };
     return { estado: resultado, ...(resultado === 'ENCOLADO' ? { jobId: 'job-1' } : {}) };
   });
-  const servicio = new InvoiceQueryService({ invoice: { findFirst }, transactionHistory: { create: historial } } as never, { reenqueueInvoiceIfIdle: rescatar } as never);
-  return { servicio, rescatar, historial, findFirst };
+  const servicio = new InvoiceQueryService({ invoice: { findFirst, updateMany: marcar }, transactionHistory: { create: historial } } as never, { reenqueueInvoiceIfIdle: rescatar } as never);
+  return { servicio, rescatar, historial, findFirst, marcar };
 }
 
 describe('rescate manual de comprobantes en espera', () => {
@@ -38,4 +39,16 @@ describe('rescate manual de comprobantes en espera', () => {
     expect(r.encolado).toBe(false);
     expect(d.rescatar).not.toHaveBeenCalled();
   });
+});
+
+it('persiste incertidumbre desconocida antes del rescate manual sin sobrescribir certezas', async () => {
+  const d = crear('ENCOLADO');
+  await d.servicio.reintentarCdr('empresa-1', 'inv-1');
+  expect(d.marcar).toHaveBeenCalledWith({ where: { id: 'inv-1', company_id: 'empresa-1', estado: { in: ['EN_COLA', 'PENDIENTE'] }, transport_uncertain: null }, data: { transport_uncertain: true } });
+  expect(d.marcar.mock.invocationCallOrder[0]).toBeLessThan(d.rescatar.mock.invocationCallOrder[0]);
+});
+it('si no puede persistir la incertidumbre no publica el rescate', async () => {
+  const d = crear('ENCOLADO'); d.marcar.mockRejectedValue(new Error('base no disponible'));
+  await expect(d.servicio.reintentarCdr('empresa-1', 'inv-1')).rejects.toThrow('base no disponible');
+  expect(d.rescatar).not.toHaveBeenCalled();
 });

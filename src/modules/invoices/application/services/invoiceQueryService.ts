@@ -335,6 +335,12 @@ export class InvoiceQueryService {
     }
 
     if (fila.estado === 'EN_COLA' || fila.estado === 'PENDIENTE') {
+      // Un rescate histórico sin marcador no demuestra que nunca se abrió red.
+      // Confirmar la incertidumbre antes de publicar; false/true existentes se conservan.
+      await this.prisma.invoice.updateMany({
+        where: { id: fila.id, company_id: companyId, estado: { in: ['EN_COLA', 'PENDIENTE'] }, transport_uncertain: null },
+        data: { transport_uncertain: true },
+      });
       let estadoActual: InvoiceStatus = fila.estado;
       const resultado = await this.queue.reenqueueInvoiceIfIdle(fila.id, companyId, async () => {
         const actual = await this.prisma.invoice.findFirst({

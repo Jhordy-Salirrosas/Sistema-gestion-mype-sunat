@@ -24,6 +24,8 @@ import {
 } from './sunatCatalogsQuery';
 
 export interface TotalesCalculados {
+  gratuito?: number;
+  igvGratuito?: number;
   /** Base imponible del IGV (afectaciones gravadas onerosas). */
   gravado: number;
   igv: number;
@@ -88,10 +90,8 @@ export interface DatosTributarios {
 /**
  * Reparte el valor de venta de las líneas entre las cuatro bases.
  *
- * Las gratuitas NO suman a ninguna base: por la regla 3278 su
- * `LineExtensionAmount` es cero, aunque hayan generado un IGV referencial que
- * sí se informa en su propia línea. Sumarlas al gravado declararía como venta
- * algo que no se cobró.
+ * Las gratuitas no suman a las bases cobradas. Su referencia y su IGV se
+ * declaran por separado en el tributo 9996; no aumentan el importe por cobrar.
  */
 function repartirBases(lineas: LineaTributaria[]): {
   gravado: number;

@@ -1,3 +1,4 @@
+import { totalesGratuitos } from './freeOperationReference';
 import { formatoMoneda, redondearMoneda as centimos } from './money';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { TASA_IGV } from './sunatCatalogs';
@@ -108,7 +109,7 @@ export class UblGeneratorService {
     // que el cálculo caía en la rama sin detalle y usaba `montoTotal`, que
     // quien arma el payload puede no haber rellenado: llegaba 0 y la regla
     // 3319 rechazaba todo cronograma al crédito con "neto pendiente 0.00".
-    const totales = calcularTotales(this.conLineas(payload));
+    const totales = { ...calcularTotales(this.conLineas(payload)), ...totalesGratuitos(payload.lineas ?? (payload.linea ? [payload.linea] : [])) };
     const medioPagoDetraccion = validarMedioPagoDetraccion(
       payload.medioPagoDetraccion,
       esOperacionConDetraccion(tipoOperacion) && totales.detraccion > 0,
