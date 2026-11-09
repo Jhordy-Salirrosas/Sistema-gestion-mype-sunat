@@ -43,6 +43,7 @@ import { RucConsultaService } from './rucConsultaService';
     SignatureService,
     CdrPersistenceService,
     SunatStatusConsultaService,
+    RucConsultaService,
     // TA-58: `useExisting` y no `useClass`, para que el token y el provider
     // apunten a la MISMA instancia. Con `useClass` Nest construye dos objetos
     // y se pierden tanto el cache como el estado del logger.
