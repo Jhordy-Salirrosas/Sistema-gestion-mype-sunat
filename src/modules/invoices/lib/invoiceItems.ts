@@ -322,6 +322,7 @@ export const itemDesdeProducto = (
     unidad: valida ? unidad : 'NIU',
     cantidad: 1,
     valorUnitario: Number.isFinite(valor) && valor > 0 ? valor : 0,
+    precioUnitario: Number.isFinite(valor) && valor > 0 ? (afectacion === 'GRAVADA' ? Number((valor * 1.18).toFixed(10)) : valor) : 0,
     afectacion,
     afectacionHeredada: true,
     unidadHeredada: true,

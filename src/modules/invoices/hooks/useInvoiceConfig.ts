@@ -16,6 +16,13 @@ export const tipoComprobantePorPerfil = (
 };
 
 export interface ConfiguracionInput {
+  local_anexo?: string | null;
+  domicilio_fiscal?: string | null;
+  ubigeo_fiscal?: string | null;
+  departamento_fiscal?: string | null;
+  provincia_fiscal?: string | null;
+  distrito_fiscal?: string | null;
+
   entorno?: EntornoFiscal;
   perfil_comercial?: PerfilComercial | null;
   sol_user?: string;
@@ -25,8 +32,10 @@ export interface ConfiguracionInput {
 }
 export interface EstadoCertificadoBackend {
   archivo: string | null;
+  causa?: string | null;
+  detalle?: string | null;
   configurado: boolean;
-  estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'NO_CONFIGURADO';
+  estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'AUN_NO_VIGENTE' | 'INVALIDO' | 'NO_CONFIGURADO';
   vence_el: string | null;
   dias_restantes: number | null;
   origen: 'company' | 'deployment';
@@ -34,6 +43,13 @@ export interface EstadoCertificadoBackend {
 
 export interface ConfiguracionBackend {
   ruc?: string;
+  local_anexo?: string | null;
+  domicilio_fiscal?: string | null;
+  ubigeo_fiscal?: string | null;
+  departamento_fiscal?: string | null;
+  provincia_fiscal?: string | null;
+  distrito_fiscal?: string | null;
+
   certificado?: EstadoCertificadoBackend;
   perfil_comercial?: PerfilComercial | null;
   origen_efectivo?: 'company' | 'deployment';

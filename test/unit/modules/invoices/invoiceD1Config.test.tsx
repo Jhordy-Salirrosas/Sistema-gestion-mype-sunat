@@ -73,3 +73,21 @@ it.each([[400, 'ISSUER_SOL_GROUP_INCOMPLETE', /ingrese usuario y contraseña jun
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(texto));
   client.clear();
 });
+it.each([['INVALIDO', 'Inválido'], ['AUN_NO_VIGENTE', 'Aún no vigente']] as const)('presenta %s con causa y origen efectivos', (estado, etiqueta) => {
+  render(<InvoiceIssuerConfigForm config={{ ...config, certificado: {
+    archivo: null, configurado: false, estado, vence_el: null, dias_restantes: null, origen: 'deployment',
+    causa: 'RUC_NO_COINCIDE', detalle: 'RUC no coincide: empresa 20614142503; certificado 20601234567',
+  } }} ruc={config.ruc} guardar={vi.fn()} />);
+  expect(screen.getByText(etiqueta)).toBeTruthy();
+  expect(screen.getByText('Origen: Respaldo del despliegue')).toBeTruthy();
+  expect(screen.getByText(/RUC no coincide: empresa 20614142503; certificado 20601234567/)).toBeTruthy();
+});
+it('edita los datos fiscales reales sin enviar secretos ni valores por defecto', async () => {
+  const guardar = vi.fn().mockResolvedValue(undefined);
+  render(<InvoiceIssuerConfigForm config={config} ruc={config.ruc} guardar={guardar} />);
+  expect((screen.getByLabelText('Local anexo (Catálogo 59)') as HTMLInputElement).value).toBe('');
+  fireEvent.change(screen.getByLabelText('Local anexo (Catálogo 59)'), { target: { value: '0007' } });
+  fireEvent.change(screen.getByLabelText('Domicilio fiscal'), { target: { value: 'Domicilio de prueba 123' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+  await waitFor(() => expect(guardar).toHaveBeenCalledWith({ local_anexo: '0007', domicilio_fiscal: 'Domicilio de prueba 123' }));
+});

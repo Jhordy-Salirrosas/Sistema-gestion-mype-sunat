@@ -24,6 +24,14 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
 }) => {
   const [entorno, setEntorno] = useState(config.entorno ?? 'MOCK');
   const [perfilComercial, setPerfilComercial] = useState<PerfilComercial | ''>(config.perfil_comercial ?? '');
+  const [fiscal, setFiscal] = useState({
+    local_anexo: config.local_anexo ?? '',
+    domicilio_fiscal: config.domicilio_fiscal ?? '',
+    ubigeo_fiscal: config.ubigeo_fiscal ?? '',
+    departamento_fiscal: config.departamento_fiscal ?? '',
+    provincia_fiscal: config.provincia_fiscal ?? '',
+    distrito_fiscal: config.distrito_fiscal ?? '',
+  });
   const [solUser, setSolUser] = useState('');
   const [solPassword, setSolPassword] = useState('');
   const [certPassword, setCertPassword] = useState('');
@@ -41,6 +49,9 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
       const perfilActual = config.perfil_comercial ?? '';
       if (perfilComercial !== perfilActual) {
         input.perfil_comercial = perfilComercial === '' ? null : perfilComercial;
+      }
+      for (const key of Object.keys(fiscal) as Array<keyof typeof fiscal>) {
+        if (fiscal[key] !== (config[key] ?? '')) input[key] = fiscal[key].trim() || null;
       }
       if (solUser.trim()) input.sol_user = solUser.trim();
       if (solPassword) input.sol_password = solPassword;
@@ -75,6 +86,12 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
           <option value="MINORISTA">Minorista (preselecciona Boleta 03)</option>
         </select>
       </PageField>
+      <PageField label="Local anexo (Catálogo 59)" htmlFor="cfg-local_anexo"><input id="cfg-local_anexo" className={clase} maxLength={4} value={fiscal.local_anexo} onChange={e => setFiscal({ ...fiscal, local_anexo: e.target.value })} /></PageField>
+      <PageField label="Domicilio fiscal" htmlFor="cfg-domicilio_fiscal"><input id="cfg-domicilio_fiscal" className={clase} maxLength={500} value={fiscal.domicilio_fiscal} onChange={e => setFiscal({ ...fiscal, domicilio_fiscal: e.target.value })} /></PageField>
+      <PageField label="Ubigeo fiscal" htmlFor="cfg-ubigeo_fiscal"><input id="cfg-ubigeo_fiscal" className={clase} maxLength={6} value={fiscal.ubigeo_fiscal} onChange={e => setFiscal({ ...fiscal, ubigeo_fiscal: e.target.value })} /></PageField>
+      <PageField label="Departamento fiscal" htmlFor="cfg-departamento_fiscal"><input id="cfg-departamento_fiscal" className={clase} maxLength={100} value={fiscal.departamento_fiscal} onChange={e => setFiscal({ ...fiscal, departamento_fiscal: e.target.value })} /></PageField>
+      <PageField label="Provincia fiscal" htmlFor="cfg-provincia_fiscal"><input id="cfg-provincia_fiscal" className={clase} maxLength={100} value={fiscal.provincia_fiscal} onChange={e => setFiscal({ ...fiscal, provincia_fiscal: e.target.value })} /></PageField>
+      <PageField label="Distrito fiscal" htmlFor="cfg-distrito_fiscal"><input id="cfg-distrito_fiscal" className={clase} maxLength={100} value={fiscal.distrito_fiscal} onChange={e => setFiscal({ ...fiscal, distrito_fiscal: e.target.value })} /></PageField>
       <PageField label="Usuario SOL" htmlFor="cfg-sol-user"><input id="cfg-sol-user" className={clase} autoComplete="off" maxLength={64} value={solUser} onChange={(e) => setSolUser(e.target.value)} />
         <p>El usuario actual no se publica. Escriba solo para reemplazarlo.</p></PageField>
       <PageField label="Nueva contraseña SOL" htmlFor="cfg-sol-password"><input id="cfg-sol-password" className={clase} type="password" autoComplete="new-password" maxLength={256} value={solPassword} onChange={(e) => setSolPassword(e.target.value)} />
@@ -97,9 +114,12 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
                 ? 'Por vencer'
                 : config.certificado?.estado === 'VENCIDO'
                   ? 'Vencido'
-                  : 'No configurado'}
+                  : config.certificado?.estado === 'INVALIDO' ? 'Inválido'
+                    : config.certificado?.estado === 'AUN_NO_VIGENTE' ? 'Aún no vigente' : 'No configurado'}
           </Badge>
         </div>
+        <p>Origen: {origen(config.certificado?.origen)}</p>
+        {config.certificado?.detalle && <p>{config.certificado.detalle}</p>}
         <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
           <p>
             <span className="font-medium text-foreground">Archivo:</span>{' '}
@@ -111,7 +131,7 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
             <span className="font-medium text-foreground">Estado:</span>{' '}
             {config.certificado?.configurado
               ? 'Operativo para firma XML'
-              : 'Pendiente de carga o vencido'}
+              : config.certificado?.estado ?? 'Sin información'}
           </p>
           <p>
             <span className="font-medium text-foreground">Vencimiento:</span>{' '}
