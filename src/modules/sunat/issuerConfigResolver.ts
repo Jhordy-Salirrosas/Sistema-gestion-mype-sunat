@@ -10,6 +10,13 @@ import { SUNAT_BILL_SERVICE_URLS } from './soap/soap.constants';
 
 export interface IssuerContext {
   readonly companyId: string;
+  readonly local_anexo?: string | null;
+  readonly domicilio_fiscal?: string | null;
+  readonly ubigeo_fiscal?: string | null;
+  readonly departamento_fiscal?: string | null;
+  readonly provincia_fiscal?: string | null;
+  readonly distrito_fiscal?: string | null;
+
   readonly ruc: string;
   readonly version: string;
   readonly source: 'company' | 'deployment';
@@ -88,6 +95,13 @@ export class IssuerConfigResolver {
       issuer_cert_configured?: boolean | null;
       issuer_environment: string | null;
       commercial_profile?: string | null;
+      local_anexo?: string | null;
+      domicilio_fiscal?: string | null;
+      ubigeo_fiscal?: string | null;
+      departamento_fiscal?: string | null;
+      provincia_fiscal?: string | null;
+      distrito_fiscal?: string | null;
+
       sol_user: string;
       sol_pass_encrypted: string;
       cert_storage_url: string | null;
@@ -98,7 +112,14 @@ export class IssuerConfigResolver {
     const rawProfile = company.commercial_profile?.trim().toUpperCase();
     const commercialProfile: 'MAYORISTA' | 'MINORISTA' | null =
       rawProfile === 'MAYORISTA' || rawProfile === 'MINORISTA' ? rawProfile : null;
-    const fallback = deploymentContext(company.id, company.ruc);
+    const fallback = Object.freeze({ ...deploymentContext(company.id, company.ruc),
+      local_anexo: company.local_anexo ?? null,
+      domicilio_fiscal: company.domicilio_fiscal ?? null,
+      ubigeo_fiscal: company.ubigeo_fiscal ?? null,
+      departamento_fiscal: company.departamento_fiscal ?? null,
+      provincia_fiscal: company.provincia_fiscal ?? null,
+      distrito_fiscal: company.distrito_fiscal ?? null,
+    });
     if (!company.issuer_config_activated_at) {
       return commercialProfile ? Object.freeze({ ...fallback, commercialProfile }) : fallback;
     }

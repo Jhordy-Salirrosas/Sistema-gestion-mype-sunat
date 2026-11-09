@@ -1,3 +1,4 @@
+import { InvoiceAccountingFallbackService } from './application/services/invoiceAccountingFallbackService';
 import { InvoiceSunatConsultController } from './infrastructure/controllers/invoiceSunatConsultController';
 import { AtomicInvoiceCreationService } from './application/services/atomicInvoiceCreationService';
 import { IssuerConfigWriter } from './application/services/issuerConfigWriter';
@@ -114,6 +115,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceSummaryService,
     // TA-68: puente facturación -> Kardex + Contabilidad.
     InvoiceAccountingBridgeService,
+    InvoiceAccountingFallbackService,
     // TA-67: encolado y sondeo del ticket de resumenes y bajas.
     SummaryDispatchService,
     // M1: el envío REAL de resumenes diarios (RC) y comunicaciones de baja (RA).

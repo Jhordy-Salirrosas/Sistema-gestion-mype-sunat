@@ -1,6 +1,6 @@
 import * as forge from 'node-forge';
 /** Self-signed and deliberately false; never trusted or used outside tests. */
-export function fakeIssuerCertificate() {
+export function fakeIssuerCertificate(ruc = '20000000001') {
   const keys = forge.pki.rsa.generateKeyPair(1024);
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
@@ -8,7 +8,7 @@ export function fakeIssuerCertificate() {
   cert.validity.notBefore = new Date(Date.now() - 10000);
   cert.validity.notAfter = new Date(Date.now() + 86400000);
   cert.setSubject([
-    { name: 'commonName', value: 'Obviously Fake Issuer 20000000001' },
+    { name: 'commonName', value: `Obviously Fake Issuer ${ruc}` },
   ]);
   cert.setIssuer(cert.subject.attributes);
   cert.sign(keys.privateKey, forge.md.sha256.create());

@@ -20,6 +20,8 @@ interface BossMock {
   on: jest.Mock;
   start: jest.Mock;
   createQueue: jest.Mock;
+  updateQueue: jest.Mock;
+  deleteJob: jest.Mock;
   stop: jest.Mock;
   work: jest.Mock;
 }
@@ -33,6 +35,8 @@ function crearServicio(): { service: QueueService; boss: BossMock } {
     on: jest.fn(),
     start: jest.fn().mockResolvedValue(undefined),
     createQueue: jest.fn().mockResolvedValue(undefined),
+    updateQueue: jest.fn().mockResolvedValue(undefined),
+    deleteJob: jest.fn().mockResolvedValue(undefined),
     stop: jest.fn().mockResolvedValue(undefined),
     work: jest.fn().mockResolvedValue('worker-id'),
   };
@@ -208,7 +212,7 @@ describe('HU-04 · QueueService (DLQ)', () => {
   it('devuelve un job de la DLQ a la cola de reintento', async () => {
     const { service, boss } = crearServicio();
     boss.findJobs.mockResolvedValue([
-      { data: { company_id: 'company-a' } },
+      { data: { company_id: 'company-a', invoice_id: 'inv-1' } },
     ]);
 
     await service.retryDlq('dlq-1', 'company-a');
@@ -217,7 +221,9 @@ describe('HU-04 · QueueService (DLQ)', () => {
       id: 'dlq-1',
       queued: true,
     });
-    expect(boss.retry).toHaveBeenCalledWith(INVOICE_DLQ, 'dlq-1');
+    expect(boss.send).toHaveBeenCalledWith(INVOICE_QUEUE, { invoice_id: 'inv-1', company_id: 'company-a' }, { singletonKey: 'invoice:inv-1' });
+    expect(boss.deleteJob).toHaveBeenCalledWith(INVOICE_DLQ, 'dlq-1');
+    expect(boss.retry).not.toHaveBeenCalled();
   });
 
   it('does not retry a DLQ job belonging to another company', async () => {
@@ -294,4 +300,17 @@ describe('HU-04 · QueueService (DLQ)', () => {
       expect(boss.send).not.toHaveBeenCalled();
     });
   });
+});it('un fallo al publicar el reintento conserva el trabajo original de DLQ', async () => {
+  const { service, boss } = crearServicio();
+  boss.findJobs.mockResolvedValue([{ data: { company_id: 'empresa', invoice_id: 'inv-1' } }]);
+  boss.send.mockRejectedValue(new Error('fallo de cola'));
+  await expect(service.retryDlq('dlq-1', 'empresa')).rejects.toThrow('fallo de cola');
+  expect(boss.deleteJob).not.toHaveBeenCalled();
+});
+it('declara y actualiza la misma política recuperable en la cola principal existente', async () => {
+  const { service, boss } = crearServicio();
+  await service.onModuleInit();
+  const policy = { retryLimit: 3, retryDelay: 60, retryBackoff: true, retryDelayMax: 300, deadLetter: INVOICE_DLQ };
+  expect(boss.createQueue).toHaveBeenCalledWith(INVOICE_QUEUE, policy);
+  expect(boss.updateQueue).toHaveBeenCalledWith(INVOICE_QUEUE, policy);
 });

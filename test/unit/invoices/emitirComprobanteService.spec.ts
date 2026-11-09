@@ -1,3 +1,4 @@
+import { fakeFiscalAddress } from '../../fixtures/fakeFiscalAddress';
 /**
  * Emisión desde la pantalla: validaciones de orden y de origen (M1, 31-10).
  *
@@ -80,7 +81,7 @@ const montar = (
     company: {
       findUnique: jest.fn(async () => ({
         ruc: '20100070970',
-        legal_name: 'FERRETERÍA LOS ANDES S.A.C.',
+        legal_name: 'FERRETERÍA LOS ANDES S.A.C.', ...fakeFiscalAddress,
         trade_name: null,
       })),
     },
@@ -793,7 +794,7 @@ describe('Corrección 7 — Bajas y Resúmenes con tipo, estado SUNAT y marca re
   it('expone id, tipoComprobante, estado y reenviable en las filas de resumen diario y comunicación de baja', async () => {
     const prismaMock = {
       company: {
-        findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'EMPRESA S.A.C.' })),
+        findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'EMPRESA S.A.C.', ...fakeFiscalAddress })),
       },
       invoice: {
         findMany: jest.fn(async () => [

@@ -30,6 +30,7 @@ import { movimientosDeFactura, type LineaParaKardex } from './kardexBridge';
 
 /** Módulo que se escribe en `source_module` del asiento. */
 export const MODULO_ORIGEN = 'M1_INVOICES';
+export const claveAsientoM1 = (invoiceId: string) => `m1:invoice:${invoiceId}`;
 
 /** Resultado del puente; nunca lanza, siempre informa. */
 export interface ResultadoPuente {
@@ -198,8 +199,12 @@ export class InvoiceAccountingBridgeService {
     const existente = await this.prisma.accountingEntry.findFirst({
       where: {
         company_id: factura.companyId,
-        source_module: MODULO_ORIGEN,
-        source_reference_id: numero,
+        OR: [
+          { idempotency_key: claveAsientoM1(factura.id) },
+          { source_module: MODULO_ORIGEN, source_reference_id: numero },
+          { source_module: MODULO_ORIGEN, source_reference_id: factura.id },
+          { source_module: 'INVOICES', source_reference_id: factura.id },
+        ],
       },
       select: { id: true },
     });
@@ -250,7 +255,8 @@ export class InvoiceAccountingBridgeService {
         entryDate: new Date(`${factura.fechaEmision}T00:00:00Z`).toISOString(),
         glosa: this.glosaDe(factura, numero),
         sourceModule: MODULO_ORIGEN,
-        sourceReferenceId: numero,
+        sourceReferenceId: factura.id,
+        idempotencyKey: claveAsientoM1(factura.id),
         lines: lineas.map((l) => ({ ...l })),
       });
 

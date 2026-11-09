@@ -599,7 +599,8 @@ describe('TA-68 · servicio puente', () => {
     };
 
     expect(dto.sourceModule).toBe('M1_INVOICES');
-    expect(dto.sourceReferenceId).toBe('F001-00000143');
+    expect(dto.sourceReferenceId).toBe('inv-1');
+    expect(dto.idempotencyKey).toBe('m1:invoice:inv-1');
     expect(dto.period).toBe('2026-10');
     expect(dto.lines.map((l) => l.accountCode)).toContain('12121');
   });

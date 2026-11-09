@@ -219,6 +219,13 @@ export class EmitirComprobanteService {
         ruc: true,
         legal_name: true,
         trade_name: true,
+        local_anexo: true,
+        domicilio_fiscal: true,
+        ubigeo_fiscal: true,
+        departamento_fiscal: true,
+        provincia_fiscal: true,
+        distrito_fiscal: true,
+
       },
     });
 
@@ -228,7 +235,17 @@ export class EmitirComprobanteService {
       );
     }
 
+    const faltantes = ['local_anexo', 'domicilio_fiscal', 'ubigeo_fiscal', 'departamento_fiscal', 'provincia_fiscal', 'distrito_fiscal'].filter(k => !String(empresa[k as keyof typeof empresa] ?? '').trim());
+    if (faltantes.length || !/^\d{4}$/.test(empresa.local_anexo ?? '') || !/^\d{6}$/.test(empresa.ubigeo_fiscal ?? '')) {
+      throw new BadRequestException({ code: 'ISSUER_FISCAL_DATA_REQUIRED', message: 'Complete el local anexo y domicilio fiscal reales en Configuración', campos: faltantes });
+    }
     return {
+      codigoLocalAnexo: empresa.local_anexo!,
+      direccion: empresa.domicilio_fiscal!,
+      ubigeo: empresa.ubigeo_fiscal!,
+      departamento: empresa.departamento_fiscal!,
+      provincia: empresa.provincia_fiscal!,
+      distrito: empresa.distrito_fiscal!,
       ruc: empresa.ruc,
       razonSocial: empresa.legal_name,
       nombreComercial: empresa.trade_name ?? undefined,

@@ -16,7 +16,7 @@
  *  - si la cola no devuelve job id, se informa `enviado: false` en vez de dar
  *    por hecho un envío que no existe.
  */
-import { describe, expect, it, jest, beforeEach } from '@jest/globals';
+import { describe, expect, it, jest, beforeEach, afterAll } from '@jest/globals';
 import AdmZip from 'adm-zip';
 import { SummaryEnvioService } from '../../../src/modules/invoices/application/services/summaryEnvioService';
 import type {
@@ -90,6 +90,10 @@ function montar(
 
   return { servicio, resumenes, encolar, signXml };
 }
+
+const entornoAnterior = process.env.SUNAT_ENV;
+beforeEach(() => { process.env.SUNAT_ENV = 'MOCK'; });
+afterAll(() => { if (entornoAnterior === undefined) delete process.env.SUNAT_ENV; else process.env.SUNAT_ENV = entornoAnterior; });
 
 describe('M1 · envío real del resumen diario (RC)', () => {
   beforeEach(() => {
@@ -261,4 +265,15 @@ describe('D1 summary SOAP isolation', () => {
       else process.env.SUNAT_SOL_USER = before;
     }
   });
+});
+it.each(['BETA', 'PRODUCCION', ''])('RA/RC avisa bloqueo externo en %s antes de firmar o encolar', async entorno => {
+  const previous = process.env.SUNAT_ENV;
+  try {
+    process.env.SUNAT_ENV = entorno;
+    const h = montar();
+    const result = await h.servicio.enviarResumenDiario(EMPRESA, FECHA);
+    expect(result).toMatchObject({ enviado: false, jobId: null, motivo: 'Despacho externo no habilitado para RA/RC' });
+    expect(h.signXml).not.toHaveBeenCalled();
+    expect(h.encolar).not.toHaveBeenCalled();
+  } finally { if (previous === undefined) delete process.env.SUNAT_ENV; else process.env.SUNAT_ENV = previous; }
 });
