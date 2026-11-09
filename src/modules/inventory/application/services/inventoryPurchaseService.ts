@@ -309,27 +309,32 @@ export class InventoryPurchaseService {
     return result;
   }
 
-  /** Registra el pago de una compra y su asiento CxP contra caja/banco. */
+  /** Registra un pago total o parcial y su asiento CxP contra caja/banco. */
   async payPurchase(companyId: string, id: string, dto: { amount?: number; paymentDate?: string; paymentMethod?: string; bankName?: string }) {
     const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id, company_id: companyId }, include: { items: true } });
     if (!purchase) throw new NotFoundException('Compra no encontrada.');
     if (purchase.status === 'ANULADA') throw new BadRequestException('La compra está anulada.');
     if (purchase.status === 'PAGADA') throw new BadRequestException('La compra ya está pagada.');
 
-    const monto = Number(dto.amount ?? purchase.total_amount);
-    if (!(monto > 0) || monto > Number(purchase.total_amount)) throw new BadRequestException('El monto del pago no es válido.');
+    const total = Number(purchase.total_amount);
+    const pagado = Number(purchase.paid_amount ?? 0);
+    const saldo = Math.round((total - pagado) * 100) / 100;
+    const monto = Math.round(Number(dto.amount ?? saldo) * 100) / 100;
+    if (!(monto > 0) || monto > saldo) throw new BadRequestException(`El monto debe estar entre 0.01 y ${saldo.toFixed(2)}.`);
     const fecha = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
     const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
+    const nuevoPagado = Math.round((pagado + monto) * 100) / 100;
+    const nuevoEstado = nuevoPagado >= total - 0.005 ? 'PAGADA' : 'PAGO_PARCIAL';
 
-    await this.prisma.$transaction(async (tx: any) => {
-      await tx.treasuryMovement.create({
+    const movimiento = await this.prisma.$transaction(async (tx: any) => {
+      const creado = await tx.treasuryMovement.create({
         data: {
           company_id: companyId,
           movement_date: fecha,
           direction: 'EGRESO',
           document_reference: `${purchase.document_serial}-${purchase.document_number}`,
           counterpart_name: purchase.supplier_name,
-          concept: `Pago compra ${purchase.purchase_number}`,
+          concept: `Pago ${nuevoEstado === 'PAGADA' ? 'total' : 'parcial'} compra ${purchase.purchase_number}`,
           amount: monto,
           source_module: 'PURCHASES',
           source_reference_id: purchase.purchase_number,
@@ -337,7 +342,8 @@ export class InventoryPurchaseService {
           bank_name: dto.bankName ?? null,
         },
       });
-      await tx.nationalPurchase.update({ where: { id }, data: { status: 'PAGADA' } });
+      await tx.nationalPurchase.update({ where: { id }, data: { status: nuevoEstado, paid_amount: nuevoPagado } });
+      return creado;
     });
 
     if (this.accounting) {
@@ -347,13 +353,11 @@ export class InventoryPurchaseService {
       const caja = metodo === 'EFECTIVO' ? (roles.get('CAJA') || '101') : (roles.get('BANCO') || '1041');
       const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       await this.accounting.execute({
-        companyId,
-        period: periodo,
-        entryDate: fecha.toISOString(),
-        glosa: `Pago compra ${purchase.purchase_number} · ${purchase.supplier_name}`,
+        companyId, period: periodo, entryDate: fecha.toISOString(),
+        glosa: `Pago ${nuevoEstado === 'PAGADA' ? 'total' : 'parcial'} compra ${purchase.purchase_number} · ${purchase.supplier_name}`,
         sourceModule: 'PURCHASES',
-        sourceReferenceId: `PAGO-${purchase.purchase_number}`,
-        idempotencyKey: `purchase-payment:${purchase.purchase_number}`,
+        sourceReferenceId: `PAGO-${purchase.purchase_number}-${movimiento.id}`,
+        idempotencyKey: `purchase-payment:${movimiento.id}`,
         lines: [
           { lineOrder: 1, accountCode: cxp, accountName: 'Cuentas por pagar comerciales', debitAmount: monto, creditAmount: 0 },
           { lineOrder: 2, accountCode: caja, accountName: metodo === 'EFECTIVO' ? 'Caja' : 'Cuenta corriente', debitAmount: 0, creditAmount: monto },
@@ -361,7 +365,7 @@ export class InventoryPurchaseService {
       });
     }
 
-    return { id, status: 'PAGADA', amount: monto, paymentMethod: metodo };
+    return { id, status: nuevoEstado, amount: monto, paidAmount: nuevoPagado, balance: Math.round((total - nuevoPagado) * 100) / 100, paymentMethod: metodo };
   }
 
   /** Asiento de compra PCGE: Naturaleza (60/40/42) y Destino al almacén (20/61). */

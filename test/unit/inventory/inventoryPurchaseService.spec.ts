@@ -292,15 +292,28 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       supplier_name: 'Proveedor', document_serial: 'F001', document_number: '1', total_amount: 118,
     });
     mockPrisma.nationalPurchase.update.mockResolvedValue({});
-    mockPrisma.treasuryMovement.create.mockResolvedValue({});
+    mockPrisma.treasuryMovement.create.mockResolvedValue({ id: 'mov-1' });
     await expect(serviceConPago.payPurchase(companyId, 'p1', { paymentMethod: 'TRANSFERENCIA' })).resolves.toMatchObject({ status: 'PAGADA', amount: 118 });
     expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({
-      sourceReferenceId: 'PAGO-COM-1',
+      sourceReferenceId: 'PAGO-COM-1-mov-1',
       lines: expect.arrayContaining([
         expect.objectContaining({ accountCode: '421', debitAmount: 118 }),
         expect.objectContaining({ accountCode: '1041', creditAmount: 118 }),
       ]),
     }));
+  });
+
+  it('registra un pago parcial y deja saldo pendiente', async () => {
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const serviceConPago = new InventoryPurchaseService(mockPrisma, accounting as never);
+    mockPrisma.nationalPurchase.findFirst.mockResolvedValue({
+      id: 'p2', company_id: companyId, purchase_number: 'COM-2', status: 'REGISTRADA',
+      supplier_name: 'Proveedor', document_serial: 'F001', document_number: '2', total_amount: 118, paid_amount: 0,
+    });
+    mockPrisma.nationalPurchase.update.mockResolvedValue({});
+    mockPrisma.treasuryMovement.create.mockResolvedValue({ id: 'mov-1' });
+    await expect(serviceConPago.payPurchase(companyId, 'p2', { amount: 50 })).resolves.toMatchObject({ status: 'PAGO_PARCIAL', paidAmount: 50, balance: 68 });
+    expect(mockPrisma.nationalPurchase.update).toHaveBeenCalledWith({ where: { id: 'p2' }, data: { status: 'PAGO_PARCIAL', paid_amount: 50 } });
   });
 });
 
