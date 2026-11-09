@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { IAccountingRepositoryPort } from '../domain/ports/accountingRepositoryPort';
 import { AccountingEntryEntity } from '../domain/entities/accountingEntryEntity';
 import { PrismaService } from '../../../database/prismaService';
 
 @Injectable()
 export class PrismaAccountingRepository implements IAccountingRepositoryPort {
+  private readonly logger = new Logger(PrismaAccountingRepository.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getNextEntryNumber(companyId: string, period: string): Promise<number> {
@@ -64,7 +66,7 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           },
         },
       });
-      console.log('✅ ¡ASIENTO GUARDADO EXITOSAMENTE EN SUPABASE!');
+      this.logger.debug(`Asiento ${persisted.id} guardado`);
       return new AccountingEntryEntity({
         ...entry,
         id: persisted.id,
