@@ -75,6 +75,12 @@ export class InventoryPurchaseService {
       throw new BadRequestException('No se puede repetir el mismo producto/SKU en la factura de compra.');
     }
 
+    const empresa = await (this.prisma as any).company?.findUnique?.({
+      where: { id: companyId },
+      select: { inventory_cost_method: true },
+    });
+    const usaFifo = empresa?.inventory_cost_method === 'FIFO';
+
     const result = await this.prisma.$transaction(async (tx: any) => {
       // 1. Validar almacén
       const warehouse = await tx.inventoryWarehouse.findFirst({
@@ -227,6 +233,18 @@ export class InventoryPurchaseService {
             last_movement_at: issueDate,
           },
         });
+
+        if (usaFifo) {
+          await tx.inventoryCostLayer.create({
+            data: {
+              company_id: companyId,
+              warehouse_id: warehouse.id,
+              product_id: product.id,
+              quantity_remaining: quantity,
+              unit_cost: r4(unitCostNet),
+            },
+          });
+        }
 
         preparedItems.push({
           product_id: product.id,
