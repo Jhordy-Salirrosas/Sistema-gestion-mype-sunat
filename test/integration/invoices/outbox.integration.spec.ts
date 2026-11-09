@@ -368,14 +368,18 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
       const tiempos = mediciones
         .map((medicion) => medicion.ms.toFixed(1))
         .join(', ');
-      expect(
-        rapidas.length,
-        `Tiempos de respuesta (ms): ${tiempos}`,
-      ).toBeGreaterThanOrEqual(9);
-      expect(
-        Math.max(...mediciones.map((medicion) => medicion.ms)),
-        `Tiempos de respuesta (ms): ${tiempos}`,
-      ).toBeLessThan(1000);
+      if (rapidas.length < 9) {
+        throw new Error(
+          `Solo ${rapidas.length}/10 respuestas fueron menores a 500 ms. Tiempos (ms): ${tiempos}`,
+        );
+      }
+
+      const maximoMs = Math.max(...mediciones.map((medicion) => medicion.ms));
+      if (maximoMs >= 1000) {
+        throw new Error(
+          `Una respuesta superó el límite de 1000 ms. Tiempos (ms): ${tiempos}`,
+        );
+      }
 
       // Y todas quedaron asociadas a la empresa del token.
       const asociadas = await prisma.invoice.count({
