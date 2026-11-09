@@ -618,3 +618,32 @@ TTL de éxito y fallo, deduplicación concurrente e invalidación; TA-70 conserv
 bloqueo real por timeout con presupuesto de prueba de 100 ms, SFS 01/03/07/08,
 BTC 3088 y anexo ausente 3030. Suite completa Parte A: 246 suites/2161 pruebas
 aprobadas; 4 suites/20 pruebas optativas omitidas. Sin llamadas reales a SUNAT.
+
+### Parte B — consulta explícita dentro del detalle
+
+InvoiceCdrModal incorpora InvoiceSunatConsulta, que solo llama mediante
+invoicesApi a POST /invoices/:id/consultar-sunat tras pulsar «Consultar SUNAT».
+Muestra estado, código y mensaje en la misma vista; conserva NO_ENCONTRADO e
+INCIERTO como tales, sin inventar código ni aceptación. Deshabilita lecturas
+simultáneas y muestra errores inline. No envía ni reencola comprobantes.
+
+El endpoint M1 ya existente omitía description del CDR recuperado. Se añade
+mensaje nullable desde ese CDR para presentarlo fielmente; no se modifica el
+servicio de SUNAT ni su transporte. Prueba de contrato backend adicional.
+Seis pruebas frontend nuevas cubren detalle real montado, clic explícito,
+respuesta recuperada/no encontrada/incierta, espera y error/respuesta inválida,
+con API simulada y un único POST a consultar-sunat.
+
+Cierre: backend 246 suites/2162 pruebas aprobadas; 4 suites/20 pruebas optativas
+omitidas (250 suites/2182 pruebas totales). Frontend 98 archivos/779 pruebas
+aprobados. Builds de ambos, lint backend y ESLint de los cuatro archivos del
+front aprobados. Una advertencia contable heredada no se modificó.
+
+Frontend local: 737ce29; entrega exclusivamente por ferry/m1-sfs-timeout, con
+FERRY.md y sus cuatro rutas exactas, sobre base frontend 34480624. Parte A
+backend: 8271c36. Todo queda en fix/m1-sfs-timeout para revisión de Emma.
+Sin migraciones, emisiones, llamadas reales a SUNAT, PR, fusiones ni despliegues.
+No quedan pendientes funcionales dentro de esta ronda; los casos PostgreSQL
+optativos no se ejecutaron, y el comportamiento en Render/SUNAT real no se
+probó por las restricciones del encargo. Los restos de auditorías anteriores
+no se modifican ni se declaran cerrados aquí.

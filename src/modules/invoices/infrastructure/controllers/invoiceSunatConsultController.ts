@@ -20,6 +20,6 @@ export class InvoiceSunatConsultController {
       tipoComprobante: invoice.tipo_comprobante, serie: invoice.serie, correlativo: invoice.correlativo });
     if (result.tipo !== 'RECUPERADO') return result;
     return { tipo: result.tipo, estado: result.resultado.estado,
-      codigo: result.resultado.responseCode, referencia: result.resultado.cdr?.referenceId ?? null };
+      codigo: result.resultado.responseCode, mensaje: result.resultado.cdr?.description ?? null, referencia: result.resultado.cdr?.referenceId ?? null };
   }
 }
