@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/authModule';
 import { AccountingController } from './infrastructure/controllers/accountingController';
 import { GenerateAccountingEntryUseCase } from './application/use-cases/generateAccountingEntryUseCase';
+import { GenerateClosingEntryUseCase } from './application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from './application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from './application/use-cases/getAccountingEntriesUseCase';
 import { RegisterInvoiceAccountingEntryUseCase } from './application/use-cases/registerInvoiceAccountingEntryUseCase';
@@ -25,6 +26,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
   controllers: [AccountingController],
   providers: [
     GenerateAccountingEntryUseCase,
+    GenerateClosingEntryUseCase,
     ExportPleTxtUseCase,
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
@@ -45,6 +47,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
   ],
   exports: [
     GenerateAccountingEntryUseCase,
+    GenerateClosingEntryUseCase,
     ExportPleTxtUseCase,
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,

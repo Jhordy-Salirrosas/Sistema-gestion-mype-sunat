@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { AccountingController } from '../../../src/modules/accounting/infrastructure/controllers/accountingController';
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
+import { GenerateClosingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
@@ -18,6 +19,7 @@ import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/en
 describe('AccountingController', () => {
   let controller: AccountingController;
   let generateUseCase: jest.Mocked<GenerateAccountingEntryUseCase>;
+  let closingUseCase: jest.Mocked<GenerateClosingEntryUseCase>;
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
@@ -36,6 +38,9 @@ describe('AccountingController', () => {
     generateUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<GenerateAccountingEntryUseCase>;
+    closingUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<GenerateClosingEntryUseCase>;
 
     exportPleUseCase = {
       execute: jest.fn(),
@@ -83,6 +88,7 @@ describe('AccountingController', () => {
 
     controller = new AccountingController(
       generateUseCase,
+      closingUseCase,
       exportPleUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
