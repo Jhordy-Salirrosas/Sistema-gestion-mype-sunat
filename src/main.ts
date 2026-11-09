@@ -31,6 +31,7 @@ export async function bootstrap() {
       'Content-Type',
       'Authorization',
       'X-Tenant-Id', // Requerido por el interceptor del frontend de Carlos
+      'Idempotency-Key', // Requerido por la creación idempotente de comprobantes (M1)
       'Accept',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
