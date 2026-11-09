@@ -452,3 +452,13 @@ no se inventan precios/cantidades para completar el saldo. Motivo 07 conserva
 la devolución parcial. Cinco pruebas nuevas; suite completa backend:
 244 suites/2136 pruebas aprobadas, 3 suites/18 pruebas optativas omitidas.
 Frontend sin cambios: 97 archivos/773 pruebas aprobados.
+
+### Corrección: stock agregado (3.4)
+
+StockValidationService suma todas las cantidades por SKU normalizado antes de
+comparar con la suma de almacenes de la empresa. Decimal evita falsos excesos
+como 0.1 + 0.2 frente a 0.3. Se conserva el cotejo tributario de cada línea y
+la exención de stock de servicios. Pruebas: exceso 6+6 frente a 10 (fallaba en
+dev), límite decimal exacto, servicio repetido y afectación alterada en segunda
+línea. Suite completa backend: 245 suites/2140 pruebas aprobadas; 3 suites/18
+pruebas optativas omitidas. Frontend sin cambios: 97 archivos/773 pruebas.
