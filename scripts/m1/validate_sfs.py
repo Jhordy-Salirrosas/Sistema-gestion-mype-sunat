@@ -72,6 +72,35 @@ class Resolver(etree.Resolver):
         return self.resolve_filename(str(path), context)
 
 
+# Líneas de las hojas vendorizadas: solo identificadores y referencias locales.
+# Cada instancia se documenta en docs/m1/auditoria-solucion.md.
+DUPLICADAS = {
+    "01": [(4735, "totalDescuentosGlobales", "totalDescuentosGlobalesInafectos", (4736,))],
+    "03": [(5304, "totalDescuentosGlobales", "totalDescuentosGlobalesInafectos", (5305,))],
+    "07": [(81, "tipoComprobante", "tipoComprobantePorSerie", ())],
+    "08": [(34, "tipoComprobante", "tipoComprobantePorSerie", ()),
+           (1073, "totalImpuestos", "totalImpuestosLocal", ()),
+           (1074, "SumatoriaImpuestos", "SumatoriaImpuestosLocal", ()),
+           (1983, "valorVentaLinea", "valorVentaLineaDuplicado", ())],
+}
+
+
+def adaptar_duplicadas(contenido, tipo):
+    """Cuarta adaptación autorizada; falla si cambia la ubicación vendorizada."""
+    lineas = contenido.splitlines(keepends=True)
+    for numero, anterior, nuevo, referencias in DUPLICADAS[tipo]:
+        atributo = f'name="{anterior}"'
+        if numero > len(lineas) or lineas[numero - 1].count(atributo) != 1:
+            raise ValueError("La adaptación de duplicadas no corresponde a esta hoja SFS")
+        lineas[numero - 1] = lineas[numero - 1].replace(atributo, f'name="{nuevo}"')
+        for referencia in referencias:
+            patron = rf"\${anterior}\b"
+            if not re.search(patron, lineas[referencia - 1]):
+                raise ValueError("Referencia local de variable duplicada ausente")
+            lineas[referencia - 1] = re.sub(patron, lambda _: f"${nuevo}", lineas[referencia - 1])
+    return "".join(lineas)
+
+
 def validar(request):
     tipo = request["tipo"]
     hoja = HOJAS[tipo]
@@ -102,7 +131,9 @@ def validar(request):
         original = utils.read_text(encoding="utf-8")
         utils.write_text(original.replace('extension-element-prefixes="dp"', 'extension-element-prefixes="dp func"').replace("matches(", "regexp:test("), encoding="utf-8")
         path = commons / "xsl" / "validation" / "2.X" / f"ValidaExprReg{hoja}-2.0.1.xsl"
-        path.write_text(path.read_text(encoding="utf-8").replace("current-date()", "date:date()"), encoding="utf-8")
+        contenido = path.read_text(encoding="utf-8").replace("current-date()", "date:date()")
+        contenido = adaptar_duplicadas(contenido, tipo)
+        path.write_text(contenido, encoding="utf-8")
         parser = etree.XMLParser(no_network=True, resolve_entities=False, load_dtd=False)
         parser.resolvers.add(Resolver(commons))
         transform = etree.XSLT(etree.parse(str(path), parser), access_control=etree.XSLTAccessControl(read_file=True, read_network=True, write_file=False, write_network=False, create_dir=False))

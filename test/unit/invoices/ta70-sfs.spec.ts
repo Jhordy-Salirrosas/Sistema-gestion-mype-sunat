@@ -1,6 +1,7 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { validaDeVerdad } from '../../../src/modules/invoices/application/services/sunatXslAdapter';
 import { ejecutarSfs } from '../../../src/modules/invoices/application/services/sunatSfsRunner';
 import { SunatXslValidatorService } from '../../../src/modules/invoices/application/services/sunatXslValidatorService';
@@ -43,6 +44,37 @@ describe('TA-70: ejecución real del SFS', () => {
     expect(validaDeVerdad({ completado: true })).toBe(true);
   });
 
+  it.each([['factura', '01'], ['boleta', '03'], ['nota-credito', '07'], ['nota-debito', '08']])('valida %s completa de punta a punta con las adaptaciones autorizadas', async (nombre, tipo) => {
+    const xml = readFileSync(`test/fixtures/sfs/${nombre}.xml`, 'utf8');
+    expect(await ejecutarSfs(xml, tipo)).toEqual({ completado: true, errores: [] });
+    expect(await new SunatXslValidatorService().validar(xml, tipo)).toEqual({
+      valido: true, bloqueado: false, validadoDeVerdad: true, errores: [],
+      motivoBloqueo: null, codigosDesconocidos: [],
+    });
+  });
+
+  it('la cuarta adaptación cambia solo identificadores en las líneas autorizadas', () => {
+    execFileSync(python ?? 'python3', ['test/unit/invoices/ta70_sfs_adaptations_test.py'], {
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' }, timeout: 2000,
+    });
+  });
+
+  it('NC conserva el rechazo SUNAT 2172 para un motivo fuera de catálogo', async () => {
+    const xml = readFileSync('test/fixtures/sfs/nota-credito.xml', 'utf8')
+      .replace('<cbc:ResponseCode>01</cbc:ResponseCode>', '<cbc:ResponseCode>99</cbc:ResponseCode>');
+    expect(await ejecutarSfs(xml, '07')).toMatchObject({ completado: true, errores: [{ codigo: '2172', nodo: 'cac:DiscrepancyResponse/cbc:ResponseCode' }] });
+  });
+
+  it('Factura conserva el rechazo SUNAT 2369 en la validación de líneas', async () => {
+    const xml = factura().replace('<cbc:PriceAmount currencyID="PEN">100.00</cbc:PriceAmount>', '<cbc:PriceAmount currencyID="PEN">-1.00</cbc:PriceAmount>');
+    expect(await ejecutarSfs(xml, '01')).toMatchObject({ completado: true, errores: [{ codigo: '2369', nodo: 'cac:Price/cbc:PriceAmount' }] });
+  });
+
+  it.each(['01', '03', '07', '08'])('aplica el esquema oficial del tipo %s antes de la hoja', async tipo => {
+    const result = await ejecutarSfs('<OtroDocumento/>', tipo);
+    expect(result).toMatchObject({ completado: true, errores: [{ codigo: 'XSD' }] });
+  });
+
   it('ejecutor ausente devuelve NO concluyente y nunca válido', async () => {
     process.env.SUNAT_SFS_PYTHON = '/no-existe/python-sfs';
     const result = await new SunatXslValidatorService().validar(factura(), '01');
@@ -52,7 +84,7 @@ describe('TA-70: ejecución real del SFS', () => {
 
   it('mata un ejecutor que excede el plazo y no reutiliza un éxito previo', async () => {
     const servicio = new SunatXslValidatorService();
-    expect((await servicio.validar(factura().replace('<cbc:AddressTypeCode>0000</cbc:AddressTypeCode>', ''), '01')).validadoDeVerdad).toBe(true);
+    expect((await servicio.validar(factura(), '01')).valido).toBe(true);
     const dir = mkdtempSync(join(tmpdir(), 'ta70-timeout-'));
     try {
       const slow = join(dir, 'python');

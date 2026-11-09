@@ -335,27 +335,9 @@ describe('TA-62 · unidades del Catálogo 03', () => {
 // 4 · Validación contra la HOJA OFICIAL (la prueba que importa)
 // ---------------------------------------------------------------------------
 
-describe('TA-62 · el XML pasa la hoja oficial de SUNAT', () => {
-  /**
-   * Nota importante sobre estos casos.
-   *
-   * La redacción original exigía `errores === []` contra la hoja oficial. Eso
-   * no se puede cumplir HOY, y no por un defecto de TA-62: la hoja oficial
-   * delega la validación en `commons/error/validate_utils.xsl`, archivo que
-   * SUNAT no publica (verificado descargando el ZIP oficial del 06/09/2022).
-   * Sin él la hoja se ejecuta pero no emite ningún código de error.
-   *
-   * Afirmar "0 errores" en esa situación sería un falso verde. Lo que sí se
-   * comprueba aquí, y es lo que aporta valor real:
-   *
-   *  - el XML se genera sin fallos y es XML bien formado;
-   *  - la hoja oficial lo PROCESA sin reventar (ningún error de transformación);
-   *  - el validador declara honestamente que no pudo validar.
-   *
-   * Cuando se resuelva la dependencia, estos casos pasarán a exigir los 0
-   * errores. El diagnóstico está en `specs/DEUDA_VALIDADOR_XSL.md`.
-   */
-
+describe('TA-62 · fixtures sin firma frente al XSD oficial (TA-70)', () => {
+  // Estos XML del generador aún no están firmados: su ExtensionContent vacío
+  // es rechazado por el XSD 2.1 antes de ejecutar reglas XSL de negocio.
   /** Factura ferretera de 5 ítems con unidades distintas. */
   function facturaFerreteraCompleta(): InvoicePayload {
     return factura(
@@ -370,7 +352,7 @@ describe('TA-62 · el XML pasa la hoja oficial de SUNAT', () => {
     );
   }
 
-  it('la factura multi-ítem se genera y la hoja Factura 2.0.1 la procesa', async () => {
+  it('rechaza la estructura sin firma de la factura multi-ítem', async () => {
     const xml = generador.generateInvoiceXml(facturaFerreteraCompleta());
 
     // Es XML bien formado y tiene las 6 líneas esperadas (5 ítems + bolsa).
@@ -379,16 +361,11 @@ describe('TA-62 · el XML pasa la hoja oficial de SUNAT', () => {
 
     const resultado = await validadorXsl.validar(xml, '01');
 
-    // La hoja oficial se ejecutó: no falló al cargar ni al transformar.
-    expect(resultado.motivoBloqueo).not.toMatch(/No se pudo cargar la hoja/);
-    expect(resultado.motivoBloqueo).not.toMatch(/falló al procesar/);
-
-    // Y declara que no pudo concluir, en vez de aprobar a ciegas.
-    expect(resultado.validadoDeVerdad).toBe(false);
-    expect(resultado.motivoBloqueo).toMatch(/validate_utils/);
+    expect(resultado).toMatchObject({ valido: false, bloqueado: false, validadoDeVerdad: true,
+      errores: [expect.objectContaining({ codigo: 'XSD', mensaje: expect.stringContaining('ExtensionContent') })] });
   }, 60000);
 
-  it('la boleta multi-ítem se genera y la hoja Boleta 2.0.1 la procesa', async () => {
+  it('rechaza la estructura sin firma de la boleta multi-ítem', async () => {
     const boleta = facturaFerreteraCompleta();
     boleta.tipoComprobante = '03';
     boleta.serie = 'B001';
@@ -401,9 +378,8 @@ describe('TA-62 · el XML pasa la hoja oficial de SUNAT', () => {
     const xml = generador.generateInvoiceXml(boleta);
     const resultado = await validadorXsl.validar(xml, '03');
 
-    expect(resultado.motivoBloqueo).not.toMatch(/No se pudo cargar la hoja/);
-    expect(resultado.motivoBloqueo).not.toMatch(/falló al procesar/);
-    expect(resultado.validadoDeVerdad).toBe(false);
+    expect(resultado).toMatchObject({ valido: false, bloqueado: false, validadoDeVerdad: true,
+      errores: [expect.objectContaining({ codigo: 'XSD', mensaje: expect.stringContaining('ExtensionContent') })] });
   }, 60000);
 
   it('una factura de solo exonerado también se genera sin fallos', async () => {
@@ -422,8 +398,8 @@ describe('TA-62 · el XML pasa la hoja oficial de SUNAT', () => {
     const xml = generador.generateInvoiceXml(factura([exonerada]));
     const resultado = await validadorXsl.validar(xml, '01');
 
-    expect(resultado.motivoBloqueo).not.toMatch(/falló al procesar/);
-    expect(resultado.validadoDeVerdad).toBe(false);
+    expect(resultado).toMatchObject({ valido: false, bloqueado: false, validadoDeVerdad: true,
+      errores: [expect.objectContaining({ codigo: 'XSD', mensaje: expect.stringContaining('ExtensionContent') })] });
   }, 60000);
 });
 
