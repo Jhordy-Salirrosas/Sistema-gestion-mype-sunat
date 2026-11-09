@@ -127,9 +127,9 @@ export class SunatXslValidatorService {
         const resultado = await ejecutarSfs(xml, tipoComprobante);
         const errores = resultado.errores.map(error => ({ ...error, regla: reglaPorCodigo(error.codigo) }));
         return {
-          valido: errores.length === 0, errores,
+          valido: validaDeVerdad(resultado) && errores.length === 0, errores,
           codigosDesconocidos: errores.filter(e => !e.regla).map(e => e.codigo),
-          bloqueado: false, motivoBloqueo: null, validadoDeVerdad: true,
+          bloqueado: false, motivoBloqueo: null, validadoDeVerdad: validaDeVerdad(resultado),
         };
       } catch (error) {
         return this.bloqueo(error instanceof Error ? error.message : 'Ejecutor SFS no disponible');

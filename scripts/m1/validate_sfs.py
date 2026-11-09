@@ -111,6 +111,8 @@ def validar(request):
         except etree.XSLTApplyError:
             # Solo rejectCall del SFS acredita un rechazo. Un fallo XPath,
             # include, catálogo o función ausente es un fallo del ejecutor.
+            if any(e.message.startswith("runtime error") for e in transform.error_log):
+                raise
             fatal = [e.message.strip() for e in transform.error_log if e.message.strip().startswith("error:")]
             if not fatal:
                 raise

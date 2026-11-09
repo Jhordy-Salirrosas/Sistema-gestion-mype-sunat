@@ -19,8 +19,9 @@ export function ejecutarSfs(xml: string, tipo: string): Promise<ResultadoSfs> {
     }, 2000);
     child.on('error', () => { clearTimeout(timer); reject(new Error('Ejecutor Python SFS no disponible')); });
     child.stdin.on('error', () => { /* El cierre del proceso resuelve el fallo. */ });
-    child.stdout.on('data', (chunk: Buffer) => {
-      salida += chunk.toString('utf8');
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      salida += chunk;
       if (salida.length > 1_000_000) child.kill('SIGKILL');
     });
     child.on('close', (code) => {
