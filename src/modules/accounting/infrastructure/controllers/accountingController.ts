@@ -21,6 +21,7 @@ import { ExportPleDto } from '../../application/dto/exportPleDto';
 import { GenerateAccountingEntryUseCase } from '../../application/use-cases/generateAccountingEntryUseCase';
 import { GenerateClosingEntryUseCase } from '../../application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
+import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
@@ -42,6 +43,7 @@ export class AccountingController {
     private readonly generateEntryUseCase: GenerateAccountingEntryUseCase,
     private readonly generateClosingEntryUseCase: GenerateClosingEntryUseCase,
     private readonly exportPleUseCase: ExportPleTxtUseCase,
+    private readonly exportTaxPleUseCase: ExportTaxPleUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
@@ -259,6 +261,21 @@ export class AccountingController {
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);
+  }
+
+  @Post('ple/tax-export')
+  @HttpCode(HttpStatus.OK)
+  async exportTaxPle(
+    @Body() body: { year: number; month: number; bookCode: '080100' | '140100'; companyRuc: string },
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.exportTaxPleUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      body.companyRuc,
+      Number(body.year),
+      Number(body.month),
+      body.bookCode,
+    );
   }
 
   // ==========================================
