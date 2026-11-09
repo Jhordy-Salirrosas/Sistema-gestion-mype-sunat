@@ -12,36 +12,41 @@ export const DEMO_COMPANY = {
   isActive: true,
 };
 
+const DEMO_USERS_PASSWORD = process.env['DEMO_USERS_PASSWORD']?.trim() || 'Password123!#';
+if (process.env['NODE_ENV'] === 'production' && !process.env['DEMO_USERS_PASSWORD']) {
+  throw new Error('DEMO_USERS_PASSWORD es obligatoria para sembrar usuarios demo en producción.');
+}
+
 export const DEMO_USERS = [
   {
     email: 'admin@mype.pe',
     fullName: 'Administrador General',
     role: 'ADMIN' as const,
-    password: 'Password123!#',
+    password: DEMO_USERS_PASSWORD,
   },
   {
     email: 'contador@mype.pe',
     fullName: 'Contador Principal',
     role: 'CONTADOR' as const,
-    password: 'Password123!#',
+    password: DEMO_USERS_PASSWORD,
   },
   {
     email: 'facturador@mype.pe',
     fullName: 'Operador de Ventas',
     role: 'OPERADOR_FACTURACION' as const,
-    password: 'Password123!#',
+    password: DEMO_USERS_PASSWORD,
   },
   {
     email: 'aduanas@mype.pe',
     fullName: 'Especialista Aduanero',
     role: 'OPERADOR_ADUANAS' as const,
-    password: 'Password123!#',
+    password: DEMO_USERS_PASSWORD,
   },
   {
     email: 'auditor@mype.pe',
     fullName: 'Auditor Fiscal',
     role: 'AUDITOR' as const,
-    password: 'Password123!#',
+    password: DEMO_USERS_PASSWORD,
   },
 ];
 
