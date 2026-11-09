@@ -717,3 +717,63 @@ explicación, sin abrir SOAP. La decisión sobre esa discrepancia histórica que
 en manos del equipo. La corrección cierra el 500 no controlado; no relaja el
 cotejo para conseguir un resultado SUNAT con otra identidad.
 Sin migraciones, emisiones, consultas SUNAT reales, PR, fusiones ni despliegues.
+
+## Parte 1 — boletas: FormaPago y error SFS 3128 (9 noviembre 2026)
+
+### Fase 0
+
+Clon backend actualizado; dev b2365bf1e45897d3f109fe5062976897136f09cc.
+Rama nueva fix/m1-boleta-paymentterms. Antes de tocar código se reportó:
+247 suites/2170 pruebas aprobadas; 4 suites/20 pruebas optativas omitidas
+(sin base PostgreSQL ni migraciones en esta ronda).
+
+### Corrección y evidencia
+
+Verificada la regla activa 3128 en la hoja SFS de boleta, sobre la existencia
+de cac:PaymentTerms/cbc:PaymentMeansID fuera de operaciones 1001–1004.
+UblGeneratorService usaba raiz === 'Invoice', compartida por 01 y 03, para
+insertar bloqueFormaPago. Ahora usa tipo === '01': solo factura declara la
+cabecera Contado/Credito y sus cuotas. xmlNodesHelper y ublDocumentTemplate no
+cambian. Las notas 07/08 ya omitían FormaPago y siguen igual; TA-70 de notas
+permanece verde. No se cambia ningún otro criterio de generación o validación.
+
+Prueba nueva con XML de boleta contado S/17.70 generado por traducirEmision →
+UblGeneratorService, producto CEM-001 y firma de certificado ficticio:
+antes del cambio el ejecutor SFS real devolvió exactamente 3128, nodo
+cac:PaymentTerms/cbc:PaymentMeansID, valor Contado; después devuelve
+{completado:true, errores:[]}. No se persigue la observación no bloqueante 4269
+por el SKU. No se usaron datos/XML/certificados productivos ni llamadas SUNAT.
+
+Se capturaron TRES snapshots antes de cambiar el generador y se verificaron
+sin actualizarlos después: FormaPago de factura contado, cabecera/cuota de
+factura crédito y bloques PaymentMeans/PaymentTerms de detracción. Estos
+bloques permanecen byte a byte idénticos a la base. No se modifica SPOT ni su
+política: la suite existente rechaza boletas con detracción (no hay fixture de
+XML permitido de boleta SPOT); esa guarda sigue aprobada. Se protege el XML de
+factura SPOT del caso ya existente, sin habilitar boletas ni reinterpretar normas.
+
+Pruebas dirigidas: 4 suites/96 pruebas y 3 snapshots aprobados. Nueve pruebas
+nuevas cubren factura contado/crédito, boleta contado/crédito sin FormaPago,
+notas 07/08, SPOT intacto, boleta SPOT bloqueada y SFS de boleta generado.
+
+### Ítem secundario pendiente: rechazo local presentado como SUNAT
+
+Fuera de la zona de serialización FormaPago: invoiceSendGate.ts, decidirEnvio,
+persiste estado RECHAZADO aun cuando el bloqueo fue local; sí registra el
+mensaje «Bloqueado antes de enviar por la validación XSL», cdr:null y
+reintentable:false. La presentación equipara RECHAZADO a «Rechazado por SUNAT».
+Cerrar este defecto requiere distinguir el origen local en la proyección del
+estado/contrato y su presentación, no eliminar un bloque XML. Se deja pendiente
+según el límite de esta parte. No se sustituye por ERROR_RED ni se habilitan
+reintentos, porque una validación local de negocio no es un fallo de red.
+No se modifica compuerta, clasificación, front, Resiliencia ni Contabilidad.
+
+Este arreglo cambia la generación de XML nuevos. No se reprocesó ni alteró
+la boleta B001-00000005 existente, su estado ni su XML firmado persistido.
+
+Cierre: suite completa 248 suites/2179 pruebas aprobadas y 3 snapshots intactos;
+4 suites/20 pruebas optativas omitidas (252 suites/2199 pruebas totales).
+Build y lint backend aprobados, sin diagnósticos nuevos (solo advertencia
+contable heredada). Sin emisiones reales, llamadas SUNAT, migraciones, PR,
+fusiones ni despliegues. La clasificación/presentación del rechazo local queda
+como el único ítem secundario abierto de esta parte.
