@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from '../../money';
 /**
  * Forma de pago, cronograma de cuotas y detracción SPOT (TA-63, HU-10).
  *
@@ -60,7 +61,6 @@ export interface DatosPago {
 }
 
 /** Redondeo a céntimos, sin arrastrar error de coma flotante. */
-const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 /**
  * ¿El tipo de operación es de los que llevan detracción?

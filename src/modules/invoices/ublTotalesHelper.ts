@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from './money';
 /**
  * Cálculo de detracción, retención, ICBPER e importe a pagar (M1).
  *
@@ -83,7 +84,6 @@ export interface DatosTributarios {
 }
 
 /** Redondeo monetario a dos decimales sin arrastrar error flotante. */
-const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 /**
  * Reparte el valor de venta de las líneas entre las cuatro bases.

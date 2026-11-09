@@ -65,6 +65,7 @@ export function issuerConfigHarness() {
   const certificates = {
     validarYCargarCertificado: jest.fn(() => certificate),
     getCertificate: jest.fn(() => certificate),
+    inspectCertificate: jest.fn(() => certificate),
   };
   const encryption = new IssuerConfigEncryption();
   const resolver = new IssuerConfigResolver(db as never, encryption);

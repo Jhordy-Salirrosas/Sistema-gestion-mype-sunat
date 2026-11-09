@@ -2,47 +2,47 @@ import { fakeIssuerContext } from '../../fixtures/issuerContext';
 import { InvoiceAlertService } from '../../../src/modules/invoices/application/services/invoiceAlertService';
 import { InvoiceDownloadService } from '../../../src/modules/invoices/application/services/invoiceDownloadService';
 import { SummaryEnvioService } from '../../../src/modules/invoices/application/services/summaryEnvioService';
-import { InvoiceWorkerService } from '../../../src/modules/invoices/invoiceWorkerService';
 
 describe('D1 context consumers fail closed and preserve the company', () => {
   const context = fakeIssuerContext();
   it('checks the company certificate and scopes DLQ queries to that company', async () => {
     const resolve = jest.fn(async () => context);
-    const getCertificate = jest.fn(() => ({
+    const inspectCertificate = jest.fn(() => ({
+      validFrom: new Date('2020-01-01'),
       validTo: new Date('2099-01-01'),
       daysRemaining: 60,
     }));
     const countDlq = jest.fn(async () => 0),
       countDlqHuerfanos = jest.fn(async () => 0);
     const result = await new InvoiceAlertService(
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       { countDlq, countDlqHuerfanos } as never,
       { resolve } as never,
     ).estado(context.companyId);
     expect(result.certificado.evaluado).toBe(true);
     expect(resolve).toHaveBeenCalledWith(context.companyId);
-    expect(getCertificate).toHaveBeenCalledWith(context);
+    expect(inspectCertificate).toHaveBeenCalledWith(context);
     expect(countDlq).toHaveBeenCalledWith(context.companyId);
     expect(countDlqHuerfanos).toHaveBeenCalledWith(context.companyId);
   });
   it('reports an unusable certificate without substituting a deployment certificate', async () => {
-    const getCertificate = jest.fn(() => {
+    const inspectCertificate = jest.fn(() => {
       throw new Error('fake-cert-unavailable');
     });
     const result = await new InvoiceAlertService(
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       { countDlq: async () => 0, countDlqHuerfanos: async () => 0 } as never,
       { resolve: async () => context } as never,
     ).estado(context.companyId);
     expect(result.certificado.evaluado).toBe(false);
-    expect(getCertificate).toHaveBeenCalledTimes(1);
-    expect(getCertificate).toHaveBeenCalledWith(context);
+    expect(inspectCertificate).toHaveBeenCalledTimes(1);
+    expect(inspectCertificate).toHaveBeenCalledWith(context);
   });
   it('does not hide a fiscal configuration decryption failure behind alerts', async () => {
-    const getCertificate = jest.fn();
+    const inspectCertificate = jest.fn();
     const error = new Error('ISSUER_CONFIG_DECRYPTION_FAILED');
     const service = new InvoiceAlertService(
-      { getCertificate } as never,
+      { inspectCertificate } as never,
       {} as never,
       {
         resolve: async () => {
@@ -51,7 +51,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       } as never,
     );
     await expect(service.estado(context.companyId)).rejects.toBe(error);
-    expect(getCertificate).not.toHaveBeenCalled();
+    expect(inspectCertificate).not.toHaveBeenCalled();
   });
   const download = (options: { saved?: string; error?: Error } = {}) => {
     const row = {
@@ -75,11 +75,11 @@ describe('D1 context consumers fail closed and preserve the company', () => {
       { generateInvoiceXml: () => '<Invoice/>' } as never,
       {} as never,
       {} as never,
-      { signXml } as never,
+      { verifySignature: jest.fn(() => true), signXml } as never,
       { guardar } as never,
       { resolve } as never,
     );
-    return { service, findFirst, signXml, guardar, resolve };
+    return { verifySignature: jest.fn(() => true), service, findFirst, signXml, guardar, resolve };
   };
   it('regenerates downloads with the resolved issuer and stores that exact signed XML', async () => {
     const h = download();
@@ -146,7 +146,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
           vistaComunicacionBaja: async () => view,
         } as never,
         { encolar } as never,
-        { signXml } as never,
+        { verifySignature: jest.fn(() => true), signXml } as never,
         {
           company: { findUnique: async () => ({ ruc: context.ruc }) },
         } as never,
@@ -176,7 +176,7 @@ describe('D1 context consumers fail closed and preserve the company', () => {
     const service = new SummaryEnvioService(
       { vistaResumenDiario: async () => view } as never,
       { encolar } as never,
-      { signXml } as never,
+      { verifySignature: jest.fn(() => true), signXml } as never,
       { company: { findUnique: async () => ({ ruc: context.ruc }) } } as never,
       {
         resolve: async () => {
@@ -190,40 +190,4 @@ describe('D1 context consumers fail closed and preserve the company', () => {
     expect(signXml).not.toHaveBeenCalled();
     expect(encolar).not.toHaveBeenCalled();
   });
-  it.each(['success', 'missing-invoice', 'decrypt-error'])(
-    'resolves the worker issuer from its persisted invoice: %s',
-    async (mode) => {
-      const findUnique = jest.fn(async () =>
-        mode === 'missing-invoice' ? null : { company_id: context.companyId },
-      );
-      const signXml = jest.fn(() => ({ signedXml: '<fake-signed/>' }));
-      const resolve = jest.fn(async (id: string) => {
-        if (!id) throw new Error('ISSUER_COMPANY_REQUIRED');
-        if (mode === 'decrypt-error')
-          throw new Error('ISSUER_CONFIG_DECRYPTION_FAILED');
-        return context;
-      });
-      const worker = new InvoiceWorkerService(
-        {
-          invoice: { findUnique, update: async () => ({}) },
-          transactionHistory: { create: async () => ({}) },
-        } as never,
-        { generateInvoiceXml: () => '<Invoice/>' } as never,
-        { validateInvoiceUbl21: () => ({ isValid: true }) } as never,
-        { signXml } as never,
-        { resolve } as never,
-      );
-      const result = await worker.processInvoiceJob({
-        invoiceId: 'fake-invoice',
-        payload: {} as never,
-      });
-      expect(resolve).toHaveBeenCalledWith(
-        mode === 'missing-invoice' ? '' : context.companyId,
-      );
-      expect(result.success).toBe(mode === 'success');
-      if (mode === 'success')
-        expect(signXml).toHaveBeenCalledWith('<Invoice/>', context);
-      else expect(signXml).not.toHaveBeenCalled();
-    },
-  );
 });

@@ -26,7 +26,7 @@ export interface PartyEmisor {
    *
    * `0000` es el valor que SUNAT usa para el domicilio fiscal principal; el
    * resto de locales se numeran. Se declara opcional en el tipo para no romper
-   * a los llamadores existentes y se rellena con `0000` por defecto.
+   * a los llamadores existentes y su ausencia se omite; nunca se presume el domicilio principal.
    */
   codigoLocalAnexo?: string;
 }
@@ -42,12 +42,12 @@ export const bloqueEmisor = (e: PartyEmisor): string => {
   // `AddressTypeCode` es el código de local anexo (Catálogo 59) y es
   // OBLIGATORIO: sin él SUNAT rechaza con el código 3030. Se emite también
   // cuando no hay dirección completa, porque el rechazo ocurre igual.
-  const codigoAnexo = e.codigoLocalAnexo?.trim() || '0000';
+  const codigoAnexo = e.codigoLocalAnexo?.trim();
 
   const domicilio = e.direccion
     ? `      <cac:RegistrationAddress>
-        <cbc:ID>${esc(e.ubigeo ?? '150101')}</cbc:ID>
-        <cbc:AddressTypeCode>${esc(codigoAnexo)}</cbc:AddressTypeCode>
+${e.ubigeo ? `        <cbc:ID>${esc(e.ubigeo)}</cbc:ID>` : ''}
+${codigoAnexo ? `        <cbc:AddressTypeCode>${esc(codigoAnexo)}</cbc:AddressTypeCode>` : ''}
         <cbc:CityName>${esc(e.provincia ?? '')}</cbc:CityName>
         <cbc:CountrySubentity>${esc(e.departamento ?? '')}</cbc:CountrySubentity>
         <cbc:District>${esc(e.distrito ?? '')}</cbc:District>
@@ -59,8 +59,8 @@ export const bloqueEmisor = (e: PartyEmisor): string => {
         </cac:Country>
       </cac:RegistrationAddress>`
     : `      <cac:RegistrationAddress>
-        <cbc:ID>${esc(e.ubigeo ?? '150101')}</cbc:ID>
-        <cbc:AddressTypeCode>${esc(codigoAnexo)}</cbc:AddressTypeCode>
+${e.ubigeo ? `        <cbc:ID>${esc(e.ubigeo)}</cbc:ID>` : ''}
+${codigoAnexo ? `        <cbc:AddressTypeCode>${esc(codigoAnexo)}</cbc:AddressTypeCode>` : ''}
         <cac:Country>
           <cbc:IdentificationCode>PE</cbc:IdentificationCode>
         </cac:Country>

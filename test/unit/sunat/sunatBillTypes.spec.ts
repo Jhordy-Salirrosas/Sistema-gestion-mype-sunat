@@ -26,8 +26,8 @@ describe('resolveEndpoint', () => {
     }
   });
 
-  it('usa el endpoint Beta por defecto', () => {
-    expect(resolveEndpoint()).toBe(SUNAT_BILL_SERVICE_URLS.beta);
+  it('sin entorno no inventa un destino Beta', () => {
+    expect(resolveEndpoint()).toBe('');
   });
 
   it('selecciona Producción solo si el entorno se configura explícitamente', () => {
@@ -36,6 +36,7 @@ describe('resolveEndpoint', () => {
   });
 
   it('usa el endpoint del entorno configurado', () => {
+    process.env.SUNAT_ENV = 'BETA';
     process.env.SUNAT_BILL_SERVICE_URL_BETA =
       'https://beta.example.test/billService';
     expect(resolveEndpoint()).toBe('https://beta.example.test/billService');

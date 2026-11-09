@@ -1,3 +1,5 @@
+import { BadRequestException } from '@nestjs/common';
+import { multiplicarMoneda } from './money';
 /**
  * ICBPER como línea independiente del detalle (TA-62, regla XSL 3306).
  *
@@ -43,8 +45,8 @@ export interface BolsaIcBper {
  */
 export const calcularIcbper = (cantidadBolsas: number): number => {
   if (!Number.isFinite(cantidadBolsas) || cantidadBolsas <= 0) return 0;
-  const centimos = Math.round(MONTO_ICBPER_POR_BOLSA * 100);
-  return (Math.round(cantidadBolsas * centimos)) / 100;
+  if (!Number.isSafeInteger(cantidadBolsas)) throw new BadRequestException('ICBPER requiere cantidad entera de bolsas');
+  return multiplicarMoneda(cantidadBolsas, MONTO_ICBPER_POR_BOLSA);
 };
 
 /**
@@ -61,7 +63,7 @@ export const lineaBolsaIcBper = (
   id: number,
   bolsa: BolsaIcBper,
 ): LineaDetalle | null => {
-  const cantidad = Math.floor(bolsa.cantidad);
+  const cantidad = bolsa.cantidad;
   if (cantidad <= 0) return null;
 
   const impuesto = calcularIcbper(cantidad);
@@ -85,5 +87,6 @@ export const lineaBolsaIcBper = (
     totalLinea: valorVenta,
     igvLinea: 0,
     icbperLinea: impuesto,
+    cantidadBolsas: cantidad,
   };
 };

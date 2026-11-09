@@ -399,6 +399,8 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
       .overrideProvider(QueueService)
       .useValue({
         enqueueInvoiceInTx: jest.fn(),
+        registerSirePeriodsWorker: jest.fn().mockResolvedValue('sire-periods-worker-test'),
+        registerSirePeriodsDlqWorker: jest.fn().mockResolvedValue('sire-periods-dlq-worker-test'),
       })
       .overrideProvider(CUSTOMS_SHIPMENT_REPOSITORY_PORT)
       .useValue(inMemoryShipmentRepo)

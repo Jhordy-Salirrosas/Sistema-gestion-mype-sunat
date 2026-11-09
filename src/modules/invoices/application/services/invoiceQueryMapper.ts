@@ -174,10 +174,10 @@ export function aComprobanteOrigenFallback(
       serie && correlativo !== null && Number.isFinite(correlativo)
         ? numeroComprobante(serie, correlativo)
         : refNumero,
-    cliente_documento: fila.customer_identity_number ?? null,
-    cliente_nombre: fila.customer_legal_name ?? null,
+    cliente_documento: null,
+    cliente_nombre: null,
     monto_total: null,
-    moneda: fila.currency_code ?? null,
+    moneda: null,
   };
 }
 
@@ -199,7 +199,7 @@ export function aCdr(valor: unknown): CdrDto | null {
           codigo: obs.codigo === null || obs.codigo === undefined
             ? null
             : String(obs.codigo),
-          texto: String(obs.texto ?? ''),
+          texto: typeof obs.texto === 'string' ? obs.texto : null,
         };
       })
     : [];
@@ -308,11 +308,11 @@ export function condicionesDePago(payload: unknown): {
     if (!crudo || typeof crudo !== 'object') continue;
     const cuota = crudo as Record<string, unknown>;
     cuotas.push({
-      numero: String(cuota.numero ?? `Cuota${String(cuotas.length + 1).padStart(3, '0')}`),
-      monto: numero(cuota.monto as { toString(): string } | number),
+      numero: typeof cuota.numero === 'string' && cuota.numero.trim() ? cuota.numero : null,
+      monto: typeof cuota.monto === 'number' && Number.isFinite(cuota.monto) ? cuota.monto : null,
       // El contrato guarda la fecha como `YYYY-MM-DD`; si viniera con hora se
       // recorta para que el front no tenga que adivinarlo.
-      vencimiento: String(cuota.vencimiento ?? '').slice(0, 10),
+      vencimiento: typeof cuota.vencimiento === 'string' && /^\d{4}-\d{2}-\d{2}(T|$)/.test(cuota.vencimiento) ? cuota.vencimiento.slice(0, 10) : null,
     });
   }
 

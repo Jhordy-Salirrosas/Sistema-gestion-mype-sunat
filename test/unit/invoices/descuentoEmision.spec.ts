@@ -4,7 +4,7 @@ import type { EmitirComprobanteDto } from '../../../src/modules/invoices/applica
 
 const emisor = { ruc: '20100070970', razonSocial: 'PRUEBA' };
 const dto = (codigo: '00' | '01'): EmitirComprobanteDto => ({
-  tipo_comprobante: '01', serie: 'F001', customer_legal_name: 'PRUEBA',
+  tipo_comprobante: '01', serie: 'F001', forma_pago: 'Contado', customer_legal_name: 'PRUEBA',
   items: [{ descripcion: 'Servicio', cantidad: 1, valorUnitario: 100, afectacion: '10', descuento: { codigo, monto: 10 } }],
 });
 

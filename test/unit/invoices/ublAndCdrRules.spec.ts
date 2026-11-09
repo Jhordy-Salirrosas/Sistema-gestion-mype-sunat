@@ -32,6 +32,9 @@ const payloadBase: InvoicePayload = {
   numero: 42,
   fechaEmision: '2026-10-20',
   tipoMoneda: 'PEN',
+  tipoOperacion: '0101',
+  formaPago: 'Contado',
+  lineas: [{ id: 1, codigo: 'TEST', descripcion: 'Producto de prueba', unidad: 'NIU', cantidad: 1, valorUnitario: 1000, precioUnitario: 1180, afectacion: '10', totalLinea: 1180, igvLinea: 180 }],
   cliente: {
     tipoDocumento: '6',
     numeroDocumento: '20100070970',
@@ -41,6 +44,8 @@ const payloadBase: InvoicePayload = {
   montoIgv: 180,
   montoTotal: 1180,
 };
+
+const referenciaNota = { documentoAfectado: 'F001-00000042', codigoMotivoNota: '01', descripcionMotivoNota: 'Anulación de operación de prueba' };
 
 describe('sunatCatalogs - catálogos oficiales de SUNAT', () => {
   it('expone los tipos de comprobante del Catálogo 01', () => {
@@ -102,6 +107,7 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
     const xml = generator.generateInvoiceXml({
       ...payloadBase,
       tipoComprobante: '07',
+      ...referenciaNota,
       serie: 'FC01',
       numero: 7,
       documentoAfectado: 'F001-00000042',
@@ -121,6 +127,7 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
     const xml = generator.generateInvoiceXml({
       ...payloadBase,
       tipoComprobante: '08',
+      ...referenciaNota,
       serie: 'FD01',
       numero: 3,
       documentoAfectado: 'F001-00000042',
@@ -219,6 +226,7 @@ describe('XsdValidatorService - validación estructural', () => {
     const nota = generator.generateInvoiceXml({
       ...payloadBase,
       tipoComprobante: '07',
+      ...referenciaNota,
       serie: 'FC01',
       documentoAfectado: 'F001-00000042',
     });
@@ -260,6 +268,7 @@ describe('XsdValidatorService - validación estructural', () => {
       .generateInvoiceXml({
         ...payloadBase,
         tipoComprobante: '07',
+      ...referenciaNota,
         serie: 'FC01',
       })
       .replace(/<cac:DiscrepancyResponse>[\s\S]*?<\/cac:BillingReference>/, '');

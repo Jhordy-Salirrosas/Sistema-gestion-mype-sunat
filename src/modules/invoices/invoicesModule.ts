@@ -1,3 +1,5 @@
+import { InvoiceSunatConsultController } from './infrastructure/controllers/invoiceSunatConsultController';
+import { AtomicInvoiceCreationService } from './application/services/atomicInvoiceCreationService';
 import { IssuerConfigWriter } from './application/services/issuerConfigWriter';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
@@ -24,7 +26,6 @@ import { CreateInvoiceUseCase } from './application/use-cases/createInvoiceUseCa
 import { INVOICE_REPOSITORY_PORT } from './domain/ports/invoiceRepositoryPort';
 import { PrismaInvoiceRepository } from './infrastructure/persistence/prismaInvoiceRepository';
 import { InvoiceJobConsumer } from './invoiceJobConsumer';
-import { InvoiceWorkerService } from './invoiceWorkerService';
 import { UblGeneratorService } from './ublGeneratorService';
 import { XsdValidatorService } from './xsdValidatorService';
 import { SunatXslValidatorService } from './application/services/sunatXslValidatorService';
@@ -61,6 +62,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    InvoiceSunatConsultController,
     InvoicesController,
     // ORDEN IMPORTANTE. `InvoiceQueryController` declara `GET :id`, que actúa
     // como comodín y se traga cualquier segmento. Nest registra las rutas en el
@@ -76,6 +78,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    AtomicInvoiceCreationService,
     IssuerConfigWriter,
     CreateInvoiceUseCase,
     InvoicesService,
@@ -88,7 +91,6 @@ import { InventoryModule } from '../inventory/inventoryModule';
       useClass: PrismaInvoiceRepository,
     },
     PrismaInvoiceRepository,
-    InvoiceWorkerService,
     InvoiceJobConsumer,
     UblGeneratorService,
     XsdValidatorService,
@@ -136,7 +138,6 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadService,
     InvoiceMetricsService,
     INVOICE_REPOSITORY_PORT,
-    InvoiceWorkerService,
     UblGeneratorService,
     XsdValidatorService,
     SunatXslValidatorService,

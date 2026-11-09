@@ -1,3 +1,4 @@
+import { esMockLocal } from './invoiceSendGate';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -166,18 +167,18 @@ export class SummaryDispatchService {
     }
 
     const context = await this.issuerConfig?.resolve(job.companyId);
-    if (context && !job.fileName.startsWith(context.ruc + '-'))
+    if (!context) throw new Error('VALIDACION_OFICIAL_RESUMEN_NO_DISPONIBLE: falta contexto efectivo');
+    if (!job.fileName.startsWith(context.ruc + '-'))
       throw new Error('ISSUER_IDENTITY_MISMATCH');
+    if (!esMockLocal(context)) throw new Error('VALIDACION_OFICIAL_RESUMEN_NO_DISPONIBLE: despacho externo bloqueado');
     let ticket: string | null;
     try {
       const envio = await this.cliente.sendSummary({
         fileName: job.fileName,
         zip: Buffer.from(job.zipBase64, 'base64'),
-        credentials: context
-          ? context.sol
-            ? { usuario: context.sol.username, clave: context.sol.password }
-            : null
-          : (opciones.credentials ?? null),
+        credentials: context.sol
+          ? { usuario: context.sol.username, clave: context.sol.password }
+          : null,
         context,
       });
       ticket = envio.ticket;
@@ -231,7 +232,7 @@ export class SummaryDispatchService {
   private async sondear(
     ticket: string,
     opciones: OpcionesEnvio,
-    context?: IssuerContext,
+    context: IssuerContext,
   ): Promise<{
     status: string | null;
     contenido: string | null;
@@ -255,11 +256,7 @@ export class SummaryDispatchService {
       try {
         ultimo = await this.cliente.getStatus(
           ticket,
-          context
-            ? context.sol
-              ? { usuario: context.sol.username, clave: context.sol.password }
-              : null
-            : (opciones.credentials ?? null),
+          context.sol ? { usuario: context.sol.username, clave: context.sol.password } : null,
           context,
         );
       } catch (error) {

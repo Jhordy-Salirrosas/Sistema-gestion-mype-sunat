@@ -1,3 +1,4 @@
+import { formatoMoneda, redondearMoneda as centimos } from './money';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { TASA_IGV } from './sunatCatalogs';
 import {
@@ -10,7 +11,6 @@ import {
   bloqueReferenciaNota,
   bloqueUblExtensions,
   esc,
-  type LineaDetalle,
   type PartyEmisor,
 } from './xmlNodesHelper';
 import {
@@ -43,7 +43,6 @@ export type { TotalesCalculados } from './ublTotalesHelper';
 export type { InvoicePayload } from './invoicePayload';
 
 /** Redondeo monetario a dos decimales sin arrastrar error de coma flotante. */
-const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 @Injectable()
 export class UblGeneratorService {
@@ -72,17 +71,24 @@ export class UblGeneratorService {
       throw new BadRequestException('El payload del comprobante es obligatorio');
     }
 
-    const tipo = payload.tipoComprobante ?? '01';
+    const requeridos = ['rucEmisor', 'razonSocialEmisor', 'tipoComprobante', 'serie', 'fechaEmision', 'tipoMoneda', 'tipoOperacion'] as const;
+    for (const campo of requeridos) if (typeof payload[campo] !== 'string' || !payload[campo]!.trim()) {
+      throw new BadRequestException(`Dato fiscal ausente: ${campo}`);
+    }
+    if (!Number.isSafeInteger(payload.numero) || payload.numero <= 0) throw new BadRequestException('Correlativo fiscal ausente o inválido');
+    const tipo = payload.tipoComprobante;
+    if (['01', '03'].includes(tipo) && !['Contado', 'Credito'].includes(payload.formaPago as string)) throw new BadRequestException('Forma de pago fiscal ausente');
+    if (['07', '08'].includes(tipo) && (!payload.documentoAfectado || !payload.codigoMotivoNota || !payload.descripcionMotivoNota)) throw new BadRequestException('Referencia y motivo de nota obligatorios');
 
     asegurarTipoUbl(tipo);
 
     const raiz = raizDe(tipo);
-    const moneda = payload.tipoMoneda ?? 'PEN';
-    const serie = payload.serie ?? 'F001';
-    const numero = payload.numero ?? 1;
+    const moneda = payload.tipoMoneda!;
+    const serie = payload.serie;
+    const numero = payload.numero;
     const documentoId = `${serie}-${numero.toString().padStart(8, '0')}`;
-    const tipoOperacion = payload.tipoOperacion ?? '0101';
-    const formaPago = payload.formaPago === 'Credito' ? 'Credito' : 'Contado';
+    const tipoOperacion = payload.tipoOperacion!;
+    const formaPago = payload.formaPago;
 
     const emisor: PartyEmisor = {
       ruc: payload.rucEmisor ?? '',
@@ -93,6 +99,7 @@ export class UblGeneratorService {
       departamento: payload.departamentoEmisor,
       provincia: payload.provinciaEmisor,
       distrito: payload.distritoEmisor,
+      codigoLocalAnexo: payload.codigoLocalAnexoEmisor,
     };
 
     // BUG corregido en TA-63: aquí se llamaba a `calcularTotales(payload)`,
@@ -114,8 +121,8 @@ export class UblGeneratorService {
     // cuadra o una cuota vencida en el pasado se detecta aquí, con un mensaje
     // que dice qué línea está mal; descubrirlo por el CDR de SUNAT cuesta el
     // envío y el rechazo no indica cuál de las cuotas falla.
-    validarPago({
-      formaPago,
+    if (raiz === 'Invoice') validarPago({
+      formaPago: formaPago!,
       montoTotal: totales.total,
       fechaEmision: payload.fechaEmision ?? '',
       cuotas: payload.cuotas ?? [],
@@ -155,8 +162,8 @@ export class UblGeneratorService {
       payload.documentoAfectado && (tipo === '07' || tipo === '08')
         ? `\n${bloqueReferenciaNota(
             payload.documentoAfectado,
-            payload.codigoMotivoNota ?? '01',
-            payload.descripcionMotivoNota ?? 'Anulación de la operación',
+            payload.codigoMotivoNota!,
+            payload.descripcionMotivoNota!,
           )}`
         : '';
     const observaciones = payload.observaciones
@@ -195,7 +202,7 @@ export class UblGeneratorService {
       tipoOperacion: esc(tipoOperacion),
       moneda,
       fecha: esc(payload.fechaEmision ?? ''),
-      hora: esc(payload.horaEmision ?? '10:00:00'),
+      hora: payload.horaEmision ? esc(payload.horaEmision) : '',
       extensiones: bloqueUblExtensions(),
       emisor: bloqueEmisor(emisor),
       cliente: clienteXml,
@@ -214,7 +221,7 @@ export class UblGeneratorService {
        */
       formaPago:
         raiz === 'Invoice'
-          ? bloqueFormaPago(formaPago, moneda, payload.cuotas ?? [], netoPendiente)
+          ? bloqueFormaPago(formaPago!, moneda, payload.cuotas ?? [], netoPendiente)
           : '',
       mediosPago,
       // Detracción y retención: van con los demás PaymentTerms, al principio.
@@ -229,8 +236,8 @@ export class UblGeneratorService {
         '    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>',
         `    <cbc:AllowanceChargeReasonCode listAgencyName="PE:SUNAT" listName="Cargo/descuento" listURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo53">${esc(payload.descuentoGlobal.codigo)}</cbc:AllowanceChargeReasonCode>`,
         `    <cbc:MultiplierFactorNumeric>${(payload.descuentoGlobal.monto / (totales.baseDescuentoGlobal ?? 1)).toFixed(5)}</cbc:MultiplierFactorNumeric>`,
-        `    <cbc:Amount currencyID="${moneda}">${payload.descuentoGlobal.monto.toFixed(2)}</cbc:Amount>`,
-        `    <cbc:BaseAmount currencyID="${moneda}">${(totales.baseDescuentoGlobal ?? 0).toFixed(2)}</cbc:BaseAmount>`,
+        `    <cbc:Amount currencyID="${moneda}">${formatoMoneda(payload.descuentoGlobal.monto)}</cbc:Amount>`,
+        `    <cbc:BaseAmount currencyID="${moneda}">${formatoMoneda(totales.baseDescuentoGlobal ?? 0)}</cbc:BaseAmount>`,
         '  </cac:AllowanceCharge>',
       ].join('\n') : '',
       impuestos,
@@ -303,15 +310,15 @@ export class UblGeneratorService {
     payload: InvoicePayload,
     raiz: 'Invoice' | 'CreditNote' | 'DebitNote' = 'Invoice',
   ): string[] {
-    const moneda = payload.tipoMoneda ?? 'PEN';
+    const moneda = payload.tipoMoneda!;
     const crudas = payload.lineas ?? (payload.linea ? [payload.linea] : []);
 
     const validadas = crudas.map((linea) => {
-      const unidad = (linea.unidad ?? 'NIU').trim().toUpperCase();
+      const unidad = linea.unidad?.trim().toUpperCase();
       // Una unidad fuera del Catálogo 03 hace que la hoja oficial devuelva
       // error 2xxx sobre el `unitCode`. Se rechaza antes, con un mensaje que
       // dice qué valor se acepta.
-      if (!esUnidadFerreteria(unidad)) {
+      if (!unidad || !esUnidadFerreteria(unidad)) {
         throw new BadRequestException(
           `La unidad '${linea.unidad}' de la línea ${linea.id} no pertenece al ` +
             'Catálogo 03 (se aceptan NIU, DZN, CEN, MIL, KGM, MTR, BG, BX)',
@@ -321,18 +328,7 @@ export class UblGeneratorService {
     });
 
     if (validadas.length === 0) {
-      // Retrocompatibilidad: sin detalle se sintetiza una línea con los totales.
-      const igv = payload.montoIgv ?? 0;
-      const linea: LineaDetalle = {
-        id: 1,
-        descripcion: 'Servicio prestado',
-        cantidad: 1,
-        valorUnitario: payload.montoGravado ?? 0,
-        afectacion: '10',
-        totalLinea: (payload.montoGravado ?? 0) + igv,
-        igvLinea: igv,
-      };
-      return [bloqueLinea(linea, moneda, raiz)];
+      throw new BadRequestException('El comprobante requiere líneas reales: no se sintetiza Servicio prestado');
     }
 
     const xml = validadas.map((l) => bloqueLinea(l, moneda, raiz));

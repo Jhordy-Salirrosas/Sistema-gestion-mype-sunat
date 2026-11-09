@@ -61,6 +61,8 @@ model Invoice {
   
   // Referencias para Notas de CrÃ©dito / DÃ©bito
   referenced_invoice_id       String?
+  referenced_invoice          Invoice? @relation("InvoiceNotes", fields: [company_id, referenced_invoice_id], references: [company_id, id], onDelete: Restrict, onUpdate: Cascade)
+  credit_debit_notes          Invoice[] @relation("InvoiceNotes")
   referenced_document_type    String?
   referenced_series_correlative String?
   credit_debit_reason_code    String?
@@ -74,6 +76,7 @@ model Invoice {
   created_at                  DateTime      @default(now())
   updated_at                  DateTime      @updatedAt
 
+  @@unique([company_id, id], map: "uq_invoice_tenant_id")
   @@unique([company_id, tipo_comprobante, serie, correlativo], map: "uq_invoices_fiscal")
   // Llave de idempotencia del envío (TA-32). Es ADICIONAL a uq_invoices_fiscal:
   // defensa en profundidad, no un reemplazo. Un mismo contribuyente puede
@@ -116,4 +119,17 @@ model IssuerCertificate {
   created_at DateTime @default(now())
   @@index([company_id])
   @@map("issuer_certificates")
+}
+
+// Respuesta durable de creación; la misma clave no puede representar otra venta.
+model InvoiceCreationRequest {
+  id          String @id @default(uuid())
+  company_id  String
+  request_key String @db.VarChar(128)
+  fingerprint String @db.VarChar(64)
+  response    Json
+  created_at  DateTime @default(now())
+
+  @@unique([company_id, request_key])
+  @@map("invoice_creation_requests")
 }

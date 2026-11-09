@@ -18,7 +18,7 @@ function consumidor(payload: unknown, resultado: Record<string, unknown> = {}) {
     fecha_emision: new Date('2026-03-15T00:00:00Z'), payload_ubl: payload, items: [item] };
   const instancia = new InvoiceJobConsumer({} as never, {} as never,
     { invoice: { findUnique: jest.fn(async () => fila) } } as never,
-    {} as never, {} as never, {} as never, {} as never, {} as never,
+    {} as never, {} as never, { verifySignature: jest.fn(() => true) } as never, {} as never, {} as never,
     { registrar } as never, {} as never, { execute } as never);
   const interno = instancia as unknown as {
     registrarEnContabilidad(id: string, estado: InvoiceStatus): Promise<void>;

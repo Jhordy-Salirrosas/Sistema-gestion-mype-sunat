@@ -141,3 +141,35 @@ describe('D1 issuer certificate rejection and cache lifetime', () => {
     ).toThrow('no vigente');
   });
 });
+
+it('inspecciona un certificado vencido sin habilitarlo para firmar ni devolver su clave privada', () => {
+  const fixture = fakeIssuerCertificate();
+  fixture.cert.validity.notBefore = new Date(Date.now() - 10 * 86400000);
+  fixture.cert.validity.notAfter = new Date(Date.now() - 2 * 86400000);
+  fixture.cert.sign(fixture.keys.privateKey, forge.md.sha256.create());
+  const service = new CertificateService();
+  const context = fakeIssuerContext('empresa', { certificate: { base64: fixture.p12(), password: 'obviously-fake-password' } });
+  const metadata = service.inspectCertificate(context);
+  expect(metadata.validTo.getTime()).toBeLessThan(Date.now());
+  expect(metadata.daysRemaining).toBe(-2);
+  expect(JSON.stringify(metadata)).not.toContain('PRIVATE KEY');
+  expect(metadata).not.toHaveProperty('privateKeyPem');
+  expect(() => service.getCertificate(context)).toThrow(/vencido|vigente/);
+});
+
+it('inspecciona el certificado de despliegue y conserva fechas sin publicar clave privada', () => {
+  const env = { ...process.env };
+  try {
+    const fixture = fakeIssuerCertificate();
+    process.env.CERT_BASE64 = fixture.p12();
+    process.env.CERT_PASSWORD = 'obviously-fake-password';
+    process.env.RUC_EMISOR = '20000000001';
+    const s = new CertificateService();
+    expect(s.inspectCertificate()).toMatchObject({ issuerRuc: '20000000001', daysRemaining: 1 });
+    expect(() => s.inspectCertificate(fakeIssuerContext('empresa', { certificate: null }))).toThrow('CERT_BASE64');
+    delete process.env.CERT_PASSWORD;
+    expect(() => s.inspectCertificate()).toThrow('CERT_PASSWORD');
+    delete process.env.CERT_BASE64;
+    expect(() => s.inspectCertificate()).toThrow('CERT_BASE64');
+  } finally { process.env = env; }
+});

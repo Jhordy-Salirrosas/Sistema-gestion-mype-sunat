@@ -71,7 +71,10 @@ export class CdrPersistenceService {
 
     return this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.update({
-        where: { id: invoiceId },
+        where: { id: invoiceId, OR: [
+          { estado: { notIn: [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
+          { estado: classification.status },
+        ] },
         data: {
           estado: classification.status,
           cdr_sunat: cdrSunat,
@@ -161,7 +164,10 @@ export class CdrPersistenceService {
 
     return this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.update({
-        where: { id: invoiceId },
+        where: { id: invoiceId, OR: [
+          { estado: { notIn: [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
+          { estado: estadoNuevo },
+        ] },
         data: { estado: estadoNuevo },
         select: { id: true, estado: true, updated_at: true, company_id: true },
       });

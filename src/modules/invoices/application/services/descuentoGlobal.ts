@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from '../../money';
 import { BadRequestException } from '@nestjs/common';
 
 /** Descuentos globales operativos del Catálogo 53; 04 requiere anticipos. */
@@ -15,7 +16,6 @@ export interface BasesDescuentoGlobal {
   icbper: number;
 }
 
-const centimos = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /** El 02 reduce base IGV; el 03 reduce solo el importe a pagar. */
 export function aplicarDescuentoGlobal<T extends BasesDescuentoGlobal>(

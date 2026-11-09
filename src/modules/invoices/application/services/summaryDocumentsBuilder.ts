@@ -1,3 +1,4 @@
+import { redondearMoneda as r2 } from '../../money';
 /**
  * Comunicación de baja (RA) y resumen diario de boletas (RC) — TA-67.
  *
@@ -143,7 +144,7 @@ export const motivoYaInformado = (c: ComprobanteAgregado): string =>
 
 
 /** Redondeo a céntimos. */
-const r2 = (n: number): number => Math.round(n * 100) / 100;
+
 
 /**
  * Plazo máximo, en días calendario, para informar un comprobante (regla 2957).

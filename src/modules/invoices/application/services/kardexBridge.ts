@@ -54,7 +54,7 @@ export interface DocumentoKardex {
  */
 export const AFECTACIONES_SIN_MOVIMIENTO: readonly string[] = [
   '11', '12', '13', '14', '15', '16',
-  '21', '31', '32', '33', '34', '35', '36',
+  '21', '31', '32', '33', '34', '35', '36', '37',
 ];
 
 /** ¿La línea debe generar un movimiento de inventario? */

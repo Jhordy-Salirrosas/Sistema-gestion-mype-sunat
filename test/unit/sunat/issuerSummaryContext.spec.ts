@@ -187,3 +187,19 @@ describe('D1 summary issuer context and transport errors', () => {
     expect(xml).toContain('fake&lt;&amp;');
   });
 });
+it.each(['BETA', 'PRODUCCION', undefined])('no envía RC/RA sin validación oficial en %s', async (environment) => {
+  const sendSummary = jest.fn();
+  const context = environment ? fakeIssuerContext('fake-company', { environment: environment as never }) : undefined;
+  const service = new SummaryDispatchService({} as never, { sendSummary } as never,
+    context ? { resolve: async () => context } as never : undefined);
+  await expect(service.procesar({ companyId: 'fake-company', identificador: 'RC-20261101-001',
+    fileName: '20000000001-RC-20261101-001.zip', zipBase64: 'fixture', tipo: 'RESUMEN_DIARIO' })).rejects.toThrow('VALIDACION_OFICIAL_RESUMEN');
+  expect(sendSummary).not.toHaveBeenCalled();
+});
+it.each([new Error('consulta fallida'), 'consulta fallida'])('conserva ticket ante error de sondeo %s', async (failure) => {
+  const service = new SummaryDispatchService({} as never, { sendSummary: async () => ({ ticket: 'ticket' }),
+    getStatus: async () => { throw failure; } } as never, { resolve: async () => fakeIssuerContext() } as never);
+  const result = await service.procesar({ companyId: 'fake-company', identificador: 'RC-20261101-001',
+    fileName: '20000000001-RC-20261101-001.zip', zipBase64: 'fixture', tipo: 'RESUMEN_DIARIO' }, { esperaMs: 0 });
+  expect(result.ticket).toBe('ticket'); expect(result.enviado).toBe(false); expect(result.error).toContain('consulta fallida');
+});

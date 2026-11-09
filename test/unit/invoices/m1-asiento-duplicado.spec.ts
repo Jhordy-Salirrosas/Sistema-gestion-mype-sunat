@@ -90,7 +90,7 @@ function escenario() {
     prisma as never,
     {} as never,
     {} as never,
-    {} as never,
+    { verifySignature: jest.fn(() => true) } as never,
     {
       validar: jest.fn(async () => ({
         valido: true,
@@ -103,7 +103,7 @@ function escenario() {
     } as never,
     {} as never,
     bridge,
-    { guardar: jest.fn(async () => null) } as never,
+    { guardar: jest.fn(async () => 'hash-fixture') } as never,
     fallback,
   );
   return { entries, prisma, registrar, respaldo, consumer };

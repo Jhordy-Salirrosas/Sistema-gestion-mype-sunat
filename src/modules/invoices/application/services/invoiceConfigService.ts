@@ -1,3 +1,5 @@
+import { validaDeVerdad } from './sunatXslAdapter';
+import { normalizarEntorno, resolveEndpoint, endpointCoherente } from '../../../sunat/soap/sunatBillTypes';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -17,7 +19,7 @@ export type EntornoFiscal = 'MOCK' | 'BETA' | 'PRODUCCION';
 export interface EstadoCertificadoConfiguracion {
   archivo: string | null;
   configurado: boolean;
-  estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'NO_CONFIGURADO';
+  estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'AUN_NO_VIGENTE' | 'INVALIDO' | 'NO_CONFIGURADO';
   vence_el: string | null;
   dias_restantes: number | null;
   origen: 'company' | 'deployment';
@@ -42,9 +44,10 @@ export interface ConfiguracionFiscal {
   cert_password_configurada?: boolean;
   ruc?: string;
   perfil_comercial?: 'MAYORISTA' | 'MINORISTA' | null;
-  entorno: EntornoFiscal;
-  endpoint_bill_service: string;
-  endpoint_consult_service: string;
+  tipo_comprobante_predeterminado: '01' | '03' | null;
+  entorno: EntornoFiscal | null;
+  endpoint_bill_service: string | null;
+  endpoint_consult_service: string | null;
   certificado: EstadoCertificadoConfiguracion;
   checklist: EstadoConfiguracion[];
   /** true solo si todos los puntos obligatorios están configurados. */
@@ -71,13 +74,20 @@ export class InvoiceConfigService {
    */
   async obtener(companyId: string): Promise<ConfiguracionFiscal> {
     const context = await this.resolver?.resolve(companyId);
-    const entorno = context?.environment ?? this.entorno();
+    const entorno = context ? context.environment : normalizarEntorno(process.env.SUNAT_ENV);
+    const billEndpoint = context?.endpoint ?? resolveEndpoint();
+    const consultEndpoint = context?.consultEndpoint ?? process.env.SUNAT_CONSULT_SERVICE_URL ?? billEndpoint.replace(/\/billService$/, '/billConsultService');
     const listado = await this.series.listar(companyId);
 
     const { punto: puntoCertificado, resumen: resumenCertificado } =
       this.evaluarCertificado(context);
     const checklist: EstadoConfiguracion[] = [
       this.chequeoEntorno(entorno),
+      { clave: 'endpoints', descripcion: 'Endpoints coherentes con el entorno', obligatorio: true,
+        configurado: endpointCoherente(entorno, billEndpoint) && endpointCoherente(entorno, consultEndpoint) },
+      { clave: 'validacion_oficial', descripcion: 'Validación oficial previa al envío', obligatorio: true,
+        configurado: entorno === 'MOCK' || validaDeVerdad(),
+        detalle: 'La validación XSL oficial requiere sus dependencias completas; sin ellas el envío externo está bloqueado' },
       this.chequeoUsuarioSol(context),
       puntoCertificado,
       this.chequeoSeries(listado),
@@ -95,15 +105,10 @@ export class InvoiceConfigService {
         : Boolean(process.env.CERT_PASSWORD),
       ruc: context?.ruc,
       perfil_comercial: context?.commercialProfile ?? null,
+      tipo_comprobante_predeterminado: context?.commercialProfile === 'MAYORISTA' ? '01' : context?.commercialProfile === 'MINORISTA' ? '03' : null,
       entorno,
-      endpoint_bill_service: this.publicEndpoint(
-        context?.endpoint ??
-          this.endpoint('SUNAT_BILL_SERVICE_URL', '/billService'),
-      ),
-      endpoint_consult_service: this.publicEndpoint(
-        context?.consultEndpoint ??
-          this.endpoint('SUNAT_CONSULT_SERVICE_URL', '/billConsultService'),
-      ),
+      endpoint_bill_service: this.publicEndpoint(billEndpoint),
+      endpoint_consult_service: this.publicEndpoint(consultEndpoint),
       certificado: resumenCertificado,
       checklist,
       listo_para_emitir: checklist
@@ -113,7 +118,7 @@ export class InvoiceConfigService {
     };
   }
 
-  /** Entorno declarado; MOCK por defecto para no apuntar a producción por error. */
+  /** Actualización explícita de la configuración persistida. */
   async actualizar(
     companyId: string,
     body: unknown,
@@ -123,14 +128,7 @@ export class InvoiceConfigService {
     return this.obtener(companyId);
   }
 
-  private entorno(): EntornoFiscal {
-    const valor = (process.env.SUNAT_ENV ?? '').trim().toUpperCase();
-    if (valor === 'PRODUCCION' || valor === 'PRODUCTION') return 'PRODUCCION';
-    if (valor === 'BETA') return 'BETA';
-    return 'MOCK';
-  }
-
-  private publicEndpoint(value: string): string {
+  private publicEndpoint(value: string): string | null {
     try {
       const url = new URL(value);
       url.username = '';
@@ -139,29 +137,18 @@ export class InvoiceConfigService {
       url.hash = '';
       return url.toString();
     } catch {
-      return '(sin configurar)';
+      return null;
     }
   }
 
-  /** Endpoint efectivo, sin secretos: la URL es pública. */
-  private endpoint(variable: string, sufijo: string): string {
-    const explicito = process.env[variable];
-    if (explicito) return explicito;
-
-    const base = process.env.SUNAT_BILL_SERVICE_URL;
-    if (base) return base.replace(/\/billService$/, sufijo);
-
-    return `(sin configurar: variable ${variable})`;
-  }
-
-  private chequeoEntorno(entorno: EntornoFiscal): EstadoConfiguracion {
+  private chequeoEntorno(entorno: EntornoFiscal | null): EstadoConfiguracion {
     return {
       clave: 'entorno',
       descripcion: 'Entorno de SUNAT al que se envía',
-      configurado: entorno !== 'MOCK',
-      obligatorio: false,
+      configurado: entorno !== null,
+      obligatorio: true,
       detalle:
-        entorno === 'MOCK'
+        entorno === null ? 'Entorno sin configurar: envío bloqueado' : entorno === 'MOCK'
           ? 'Modo simulado: los envíos no salen a SUNAT'
           : `Envíos reales a ${entorno}`,
     };
@@ -197,9 +184,8 @@ export class InvoiceConfigService {
    * rechazos de SUNAT en TODOS los envíos y el mensaje que devuelve no dice
    * "vencido". Mostrarlo aquí evita descubrirlo con la factura del cliente.
    *
-   * `getCertificate()` lanza `BadRequestException` cuando falta una variable o
-   * cuando el certificado no es vigente; ese mismo error se convierte aquí en
-   * el motivo legible del punto del checklist.
+   * `inspectCertificate()` conserva fechas vencidas sin autorizar la firma.
+   * Los errores de lectura se proyectan sin exponer detalles sensibles.
    */
   private evaluarCertificado(context?: IssuerContext): {
     punto: EstadoConfiguracion;
@@ -213,9 +199,10 @@ export class InvoiceConfigService {
     const origen: 'company' | 'deployment' =
       context?.certificateSource === 'company' ? 'company' : 'deployment';
 
-    let leido: ValidatedCertificate;
+    const presente = context ? Boolean(context.certificate) : Boolean(process.env.CERT_BASE64);
+    let leido: Pick<ValidatedCertificate, 'validFrom' | 'validTo' | 'daysRemaining' | 'issuerRuc'>;
     try {
-      leido = this.certificado.getCertificate(context);
+      leido = this.certificado.inspectCertificate(context);
     } catch {
       const mensaje = 'Certificado no utilizable';
       this.logger.warn(`[TA-60] Certificado no utilizable: ${mensaje}`);
@@ -224,7 +211,7 @@ export class InvoiceConfigService {
         resumen: {
           archivo: null,
           configurado: false,
-          estado: 'NO_CONFIGURADO',
+          estado: presente ? 'INVALIDO' : 'NO_CONFIGURADO',
           vence_el: null,
           dias_restantes: null,
           origen,
@@ -233,28 +220,24 @@ export class InvoiceConfigService {
     }
 
     const vence = leido.validTo.toISOString().slice(0, 10);
-    const dias = leido.daysRemaining;
+    const dias = Math.ceil((leido.validTo.getTime() - Date.now()) / 86400000) || 0;
     const estado =
-      dias < 0 ? 'VENCIDO' : dias <= 30 ? 'POR_VENCER' : 'VIGENTE';
+      leido.validFrom.getTime() > Date.now() ? 'AUN_NO_VIGENTE' : leido.validTo.getTime() < Date.now() ? 'VENCIDO' : dias <= 30 ? 'POR_VENCER' : 'VIGENTE';
+    const utilizable = estado === 'VIGENTE' || estado === 'POR_VENCER';
     const aviso =
       dias <= 30
         ? ` (¡vence en ${dias} días!)`
         : ` (${dias} días restantes)`;
-    const rucArchivo = leido.issuerRuc || context?.ruc || 'emisor';
-    const archivo =
-      origen === 'company'
-        ? `certificado-${rucArchivo}.p12 (custodia empresa)`
-        : `certificado-${rucArchivo}.p12 (custodia despliegue)`;
 
     return {
       punto: {
         ...base,
-        configurado: estado !== 'VENCIDO',
-        detalle: `Vigente hasta ${vence}${aviso}`,
+        configurado: utilizable,
+        detalle: `${estado}: ${vence}${aviso}`,
       },
       resumen: {
-        archivo,
-        configurado: estado !== 'VENCIDO',
+        archivo: null,
+        configurado: utilizable,
         estado,
         vence_el: vence,
         dias_restantes: dias,
@@ -274,7 +257,7 @@ export class InvoiceConfigService {
       obligatorio: true,
       detalle:
         activas.length === 0
-          ? 'No hay ninguna serie activa: registre F001 (facturas) y B001 (boletas)'
+          ? 'No hay ninguna serie activa: registre las series autorizadas de su empresa'
           : `${activas.length} serie(s) activa(s): ` +
             activas
               .map((serie) => `${serie.document_type}-${serie.series}`)

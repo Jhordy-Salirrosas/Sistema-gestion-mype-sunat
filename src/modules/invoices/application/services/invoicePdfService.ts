@@ -41,15 +41,15 @@ export interface CuotaImpresa {
 /** Todo lo que necesita el PDF. */
 export interface DatosPdfComprobante {
   rucEmisor: string;
-  razonSocialEmisor: string;
+  razonSocialEmisor: string | null;
   direccionEmisor?: string;
   tipoComprobante: string;
   serie: string;
   correlativo: number;
   fechaEmision: string;
-  moneda: string;
-  clienteRazonSocial: string;
-  clienteDocumento: string;
+  moneda: string | null;
+  clienteRazonSocial: string | null;
+  clienteDocumento: string | null;
   /** Descripción legible del tipo: "FACTURA ELECTRÓNICA". */
   nombreTipo: string;
   lineas: readonly LineaImpresa[];
@@ -210,7 +210,7 @@ export class InvoicePdfService {
     const x = g.margen;
 
     // Membrete centrado.
-    doc.fontSize(9).text(d.razonSocialEmisor, x, doc.y, {
+    doc.fontSize(9).text(d.razonSocialEmisor ?? '—', x, doc.y, {
       width: g.util,
       align: 'center',
     });
@@ -241,9 +241,9 @@ export class InvoicePdfService {
 
     // Adquirente.
     doc.fontSize(7);
-    doc.text(`Señor(es): ${d.clienteRazonSocial}`, x, doc.y, { width: g.util });
-    doc.text(`Documento: ${d.clienteDocumento}`, x, doc.y, { width: g.util });
-    doc.text(`Moneda: ${d.moneda}`, x, doc.y, { width: g.util });
+    doc.text(`Señor(es): ${d.clienteRazonSocial ?? '—'}`, x, doc.y, { width: g.util });
+    doc.text(`Documento: ${d.clienteDocumento ?? '—'}`, x, doc.y, { width: g.util });
+    doc.text(`Moneda: ${d.moneda ?? '—'}`, x, doc.y, { width: g.util });
     doc.moveDown(0.3);
     this.lineaTicket(doc, g);
 
@@ -349,7 +349,7 @@ export class InvoicePdfService {
 
   /** Membrete del emisor y datos del comprobante. */
   private cabecera(doc: PDFKit.PDFDocument, d: DatosPdfComprobante): void {
-    doc.fontSize(13).text(d.razonSocialEmisor, { continued: false });
+    doc.fontSize(13).text(d.razonSocialEmisor ?? '—', { continued: false });
     doc.fontSize(8).fillColor('#444');
     doc.text(`RUC ${d.rucEmisor}`);
     if (d.direccionEmisor) doc.text(d.direccionEmisor);
@@ -384,9 +384,9 @@ export class InvoicePdfService {
   /** Bloque del adquirente. */
   private cliente(doc: PDFKit.PDFDocument, d: DatosPdfComprobante): void {
     doc.fontSize(9);
-    doc.text(`Señor(es): ${d.clienteRazonSocial}`);
-    doc.text(`Documento: ${d.clienteDocumento}`);
-    doc.text(`Moneda: ${d.moneda}`);
+    doc.text(`Señor(es): ${d.clienteRazonSocial ?? '—'}`);
+    doc.text(`Documento: ${d.clienteDocumento ?? '—'}`);
+    doc.text(`Moneda: ${d.moneda ?? '—'}`);
     doc.moveDown(0.6);
   }
 

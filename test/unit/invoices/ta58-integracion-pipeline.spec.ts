@@ -138,7 +138,7 @@ function crearConsumidor(
     { invoice: { findUnique, update } } as never,
     { generateInvoiceXml: jest.fn() } as never,
     { validateInvoiceUbl21: jest.fn() } as never,
-    { signXml: jest.fn() } as never,
+    { verifySignature: jest.fn(() => true), signXml: jest.fn() } as never,
     { validar: validarXsl } as never,
     { persistFailure } as never,
     // TA-68: el puente contable se ejercita en su propia suite; aqui es un
