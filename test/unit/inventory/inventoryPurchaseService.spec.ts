@@ -19,7 +19,9 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         findMany: jest.fn(),
         update: jest.fn(),
       },
-      treasuryMovement: { create: jest.fn() },
+      treasuryMovement: { create: jest.fn(), findMany: jest.fn() },
+      company: { findUnique: jest.fn().mockResolvedValue({ inventory_cost_method: 'PROMEDIO' }) },
+      inventoryCostLayer: { create: jest.fn().mockResolvedValue({}) },
       accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
       businessPartner: {
         findFirst: jest.fn(),
@@ -97,6 +99,8 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       })),
     }));
 
+    mockPrisma.company.findUnique.mockResolvedValue({ inventory_cost_method: 'FIFO' });
+
     const result = await service.createPurchase(companyId, {
       supplierDocNumber: '20100000001',
       supplierName: 'Distribuidora Lima S.A.C.',
@@ -119,6 +123,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
 
     // Verificación de asientos Kardex generados
     expect(mockPrisma.inventoryMovement.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalledTimes(2);
     const mov1 = mockPrisma.inventoryMovement.create.mock.calls[0][0].data;
     expect(mov1.operation_type_code).toBe('02'); // Operación 02 SUNAT
     expect(mov1.direction).toBe('ENTRADA');
