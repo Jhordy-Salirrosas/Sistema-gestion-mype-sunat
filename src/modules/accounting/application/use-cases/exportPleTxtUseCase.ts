@@ -29,6 +29,44 @@ export class ExportPleTxtUseCase {
     let totalCredit = 0;
     const lines: string[] = [];
 
+    // 7.1 Inventarios y Balances: una línea por cuenta con sus saldos.
+    if (String(dto.bookCode) === '070100') {
+      const cuentas = new Map<string, { name: string; debit: number; credit: number }>();
+      for (const entry of entries) {
+        for (const line of entry.lines) {
+          const code = line.accountCode || (line as any).account_code || '';
+          const debit = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
+          const credit = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
+          const actual = cuentas.get(code) ?? { name: line.accountName || '', debit: 0, credit: 0 };
+          actual.debit += debit;
+          actual.credit += credit;
+          cuentas.set(code, actual);
+        }
+      }
+      let index = 0;
+      for (const [code, cuenta] of [...cuentas.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        index += 1;
+        totalDebit += cuenta.debit;
+        totalCredit += cuenta.credit;
+        lines.push([
+          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
+          `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(index).padStart(3, '0')}`,
+          code,
+          cuenta.name,
+          cuenta.debit.toFixed(2),
+          cuenta.credit.toFixed(2),
+          '1',
+        ].join('|'));
+      }
+      return {
+        fileName,
+        recordsCount: lines.length,
+        totalDebit: Math.round(totalDebit * 100) / 100,
+        totalCredit: Math.round(totalCredit * 100) / 100,
+        content: lines.length > 0 ? lines.join('\r\n') + '\r\n' : '',
+      };
+    }
+
     entries.forEach((entry, entryIndex) => {
       // Formateo estricto del CUO para SUNAT (ej. 001-202610-001)
       const rawEntryNumber = entry.entryNumber ? String(entry.entryNumber) : '';
