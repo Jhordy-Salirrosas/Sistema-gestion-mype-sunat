@@ -647,3 +647,73 @@ No quedan pendientes funcionales dentro de esta ronda; los casos PostgreSQL
 optativos no se ejecutaron, y el comportamiento en Render/SUNAT real no se
 probó por las restricciones del encargo. Los restos de auditorías anteriores
 no se modifican ni se declaran cerrados aquí.
+
+## Ronda post-despliegue 2 — consulta con fallos de contexto (9 noviembre 2026)
+
+Fase 0: dev e6fb72c3f09ec3f4d49e46a8144bb0490c1842f3; rama nueva
+fix/m1-consulta-500. Base completa: 246 suites/2163 pruebas aprobadas;
+4 suites/20 pruebas optativas omitidas, sin PostgreSQL ni migraciones.
+
+### Evidencia y límite de la atribución del 500 productivo
+
+La reproducción inicial con RUCs coincidentes usa resolver real, empresa
+20614142503 no activada, sol_pass_encrypted legado plano ficticio y SOL/certificado
+ficticios por entorno. Devuelve NO_ENCONTRADO con SOAP simulado; decrypt y
+lectura de certificado de empresa tienen cero llamadas. El camino feliz
+recupera y persiste un CDR aceptado con ese respaldo. El resolver retorna fallback
+antes de descifrar grupos cuando issuer_config_activated_at es null. La consulta
+no inspecciona X509: ni el legado ni el chequeo del certificado causan este 500.
+
+Emma confirmó por lectura de Supabase a las 12:16 Lima del 9 noviembre:
+F001-00000060 (398d74e5-12c6-4be4-b1d0-864672740295) tiene ruc_emisor
+20601234567; su empresa (5eaccb4e-a6ec-4f23-9909-85fe7fc9e879) tiene RUC
+20614142503. Con ESOS valores distintos, el test reproduce la causa exacta:
+statusConsultaService.ts:150 de la base lanza Error('ISSUER_IDENTITY_MISMATCH')
+ANTES del try. La traza llega al controlador sin captura y el filtro común lo
+clasifica como 500 no controlado. No hay llamada SOAP ni descifrado antes del
+fallo de identidad. Con los valores reales confirmados, esta reproducción sí
+corresponde al escenario productivo; no se atribuye por proximidad de logs.
+
+También se reproduce como riesgo una excepción de lectura del contexto fuera
+del catch. Activar SOL con legado indescifrable provoca BadRequestException
+('ISSUER_CONFIG_DECRYPTION_FAILED'); es un supuesto distinto del informado y
+sería HTTP 400 con el filtro existente, no el 500 no controlado observado.
+Antes del arreglo: test nuevo con tres fallos y dos aprobados.
+
+### Corrección mínima en el flujo de consulta
+
+Se extiende el try existente para incluir lectura del contexto, resolución,
+cotejo de empresa/RUC y construcción del cliente. Las guardas permanecen y no
+se consulta ante discrepancia; su fallo devuelve INCIERTO con motivo que explica ambos RUC y conserva el código de causa. El
+controlador conserva 404/otros HTTP deliberados <500 y controla los demás
+fallos de carga como INCIERTO útil. No se modifica HttpExceptionFilter.
+
+El log de servicio identifica etapa (contexto/consulta), nombre y mensaje real
+sanitizado de excepción. El controlador hace lo mismo si falla antes del
+servicio. Se omiten secretos del entorno y del contexto, URLs, XML y valores
+rotulados de credenciales; no se serializan error/stack/objetos SOL/certificado.
+Los motivos devueltos por el servicio usan ese mismo mensaje sanitizado.
+
+IssuerConfigResolver, cifrado, certificado y política de respaldo NO cambian.
+Radio de impacto: consulta manual y consultarEstado, el adaptador existente de
+conciliación; este último sigue rechazando INCIERTO y no autoriza reenvío. Se
+ajusta su test de empresa ajena para esperar INCIERTO conservando cero SOAP.
+No se modifica emisión, Resiliencia, Contabilidad ni ningún otro flujo.
+
+Siete pruebas nuevas: fallback sin decrypt, discrepancia de identidad,
+configuración activada indescifrable, fallo de carga del controlador, CDR
+recuperado feliz, fallo de carga del contexto y secretos de empresa no presentes
+en entorno. Cliente SOAP simulado; sin llamadas reales a SUNAT ni emisiones.
+
+Cierre de la ronda: suite completa final 247 suites/2170 pruebas aprobadas;
+4 suites/20 pruebas optativas omitidas (251 suites/2190 pruebas totales).
+Build y lint backend aprobados, sin diagnósticos nuevos; se conserva una
+advertencia contable heredada. El primer pase completo anterior también pasó;
+el final añade al motivo los RUC confirmados por Emma y comprueba su presentación.
+
+No se corrige ni reescribe ruc_emisor, companies.ruc ni ningún dato histórico.
+F001-00000060 queda INCIERTO por ISSUER_IDENTITY_MISMATCH, con ambos RUC y
+explicación, sin abrir SOAP. La decisión sobre esa discrepancia histórica queda
+en manos del equipo. La corrección cierra el 500 no controlado; no relaja el
+cotejo para conseguir un resultado SUNAT con otra identidad.
+Sin migraciones, emisiones, consultas SUNAT reales, PR, fusiones ni despliegues.
