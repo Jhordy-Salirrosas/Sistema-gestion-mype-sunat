@@ -589,3 +589,32 @@ precisión persistida cuatro frente a diez decimales unitarios documentada;
 transporte externo RA/RC deshabilitado por diseño. Datos de demo pendientes
 del equipo: domicilio fiscal real y certificado propio del RUC. Nada de esto
 se disfraza de validación productiva ni se resuelve inventando datos.
+
+## Ronda post-despliegue — timeout SFS y consulta en detalle (9 noviembre 2026)
+
+Fase 0: backend dev fe16db2b2f037b2fd2fe580709014e88115d306e,
+frontend dev 34480624cfabb30e6fb59f952679c9153103a53e.
+Línea base backend: 245 suites/2148 pruebas aprobadas; 4 suites/20 pruebas
+optativas omitidas (sin base PostgreSQL ni migraciones en esta ronda).
+Frontend: 97 archivos/773 pruebas aprobados. Rama nueva fix/m1-sfs-timeout.
+
+### Parte A — presupuesto compartido y diagnóstico cacheado
+
+SUNAT_SFS_TIMEOUT_MS configura el presupuesto en milisegundos de ambos procesos
+Python (diagnóstico y validación del documento). Por defecto 20000 ms para
+arranque frío en servidor pequeño. Valores ausentes/no enteros/no positivos o
+mayores al máximo de temporizador de Node usan ese valor seguro por defecto.
+No se confunde disponibilidad con validez: timeout del documento sigue siendo
+NO concluyente y bloquea el despacho; diagnóstico fallido sigue no disponible.
+
+El diagnóstico conserva éxito o fallo durante 60000 ms por proceso desde su
+finalización; las lecturas concurrentes comparten la ejecución. Cambio de
+Python, motor heredado o presupuesto invalida la entrada. La validación de
+cada documento no se cachea. La caché no habilita emisiones ni modifica la
+compuerta. Se elimina la suposición de arranque de ~200 ms.
+
+Pruebas: configuración válida/inválida, presupuesto efectivo en ambos caminos,
+TTL de éxito y fallo, deduplicación concurrente e invalidación; TA-70 conserva
+bloqueo real por timeout con presupuesto de prueba de 100 ms, SFS 01/03/07/08,
+BTC 3088 y anexo ausente 3030. Suite completa Parte A: 246 suites/2161 pruebas
+aprobadas; 4 suites/20 pruebas optativas omitidas. Sin llamadas reales a SUNAT.
