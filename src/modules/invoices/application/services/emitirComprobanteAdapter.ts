@@ -1,3 +1,5 @@
+import { multiplicarMoneda, dividirMoneda, dividirUnitario } from '../../money';
+import { redondearMoneda as centimos } from '../../money';
 /**
  * Traducción del formulario de emisión al contrato fiscal (M1).
  *
@@ -32,7 +34,7 @@ import type { EmitirComprobanteDto, LineaEmisionDto } from '../dto/emitirComprob
 import type { InvoicePayload } from '../../invoicePayload';
 import type { LineaDetalle } from '../../xmlNodesHelper';
 import { calcularRetencion, TASA_IGV } from '../../ublTotalesHelper';
-import { porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalogsQuery';
+import { tributoDeAfectacion, porcentajeDetraccion, superaUmbralDetraccion } from '../../sunatCatalogsQuery';
 import { importeEnLetras } from './importeEnLetras';
 import { numeroDeCuota } from './paymentTermsAndSpotValidator';
 import { aplicarDescuentoGlobal } from './descuentoGlobal';
@@ -72,7 +74,6 @@ export interface ComprobanteTraducido {
 }
 
 /** Redondeo monetario sin arrastrar error de coma flotante. */
-const centimos = (valor: number): number => Math.round(valor * 100) / 100;
 
 /** ¿La afectación es gratuita? No se cobra, pero sí se informa. */
 const esGratuita = (afectacion: string): boolean => {
@@ -80,7 +81,7 @@ const esGratuita = (afectacion: string): boolean => {
   return (
     ['11', '12', '13', '14', '15', '16'].includes(codigo) ||
     codigo === '21' ||
-    ['31', '32', '33', '34', '35', '36'].includes(codigo)
+    ['31', '32', '33', '34', '35', '36', '37'].includes(codigo)
   );
 };
 
@@ -108,12 +109,13 @@ interface LineaLiquidada {
 /**
  * Liquida una línea de la grilla.
  *
- * El valor unitario llega SIN IGV (es lo que se escribe en el mostrador como
- * "valor de venta"). El IGV de una gravada onerosa es el 18 % de su valor de
+ * El precio unitario de venta incluye IGV. La base unitaria conserva precisión
+ * y solo los importes de línea se redondean a céntimos. El IGV de una gravada onerosa es el 18 % de su valor de
  * venta; una gratuita no cobra IGV pero declara su tributo referencial.
  */
 const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada => {
-  const afectacion = item.afectacion ?? '10';
+  const afectacion = item.afectacion;
+  if (!afectacion || !tributoDeAfectacion(afectacion)) throw new BadRequestException('La línea requiere afectación tributaria registrada');
   const unidad = (item.unidad ?? 'NIU').toUpperCase();
   const cantidad = item.cantidad;
   const gratuita = esGratuita(afectacion);
@@ -125,24 +127,24 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   // jamás se trata como base sin impuesto: en operaciones gravadas se desglosa la base
   // dividiendo entre (1 + TASA_IGV) y el total de la línea preserva el precio con IGV.
   const precioUnitarioEfectivo = tienePrecioConIgv
-    ? centimos(item.precioUnitario!)
+    ? item.precioUnitario!
     : gravada
       ? centimos(item.valorUnitario * (1 + TASA_IGV))
-      : centimos(item.valorUnitario ?? 0);
+      : item.valorUnitario ?? 0;
 
   const valorUnitarioEfectivo = tienePrecioConIgv
     ? gravada
-      ? centimos(item.precioUnitario! / (1 + TASA_IGV))
-      : centimos(item.precioUnitario!)
-    : centimos(item.valorUnitario ?? 0);
+      ? dividirUnitario(item.precioUnitario!, 1 + TASA_IGV)
+      : item.precioUnitario!
+    : item.valorUnitario ?? 0;
 
   const totalBrutoConIgv = tienePrecioConIgv
-    ? centimos(cantidad * item.precioUnitario!)
+    ? multiplicarMoneda(cantidad, item.precioUnitario!)
     : null;
   const valorVentaBruto =
     tienePrecioConIgv && gravada
-      ? centimos(totalBrutoConIgv! / (1 + TASA_IGV))
-      : centimos(cantidad * valorUnitarioEfectivo);
+      ? dividirMoneda(totalBrutoConIgv!, 1 + TASA_IGV)
+      : multiplicarMoneda(cantidad, valorUnitarioEfectivo);
 
   // Regla 3278: una gratuita lleva LineExtensionAmount en 0 y su precio
   // unitario en cero. Declarar importe en una transferencia gratuita haría
@@ -159,7 +161,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   const igv = gravada
     ? totalLineaSinDescuento !== null
       ? centimos(totalLineaSinDescuento - valorVenta)
-      : centimos(valorVenta * TASA_IGV)
+      : multiplicarMoneda(valorVenta, TASA_IGV)
     : 0;
 
   /**
@@ -174,6 +176,11 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
    * `ublGeneratorService` ya lo hace así (línea ~272: `montoGravado + igv`), y
    * ese es el contrato real. Se detectó emitiendo contra BETA el 31-10.
    */
+  // El importe legado solo se acepta si coincide con cantidades comprobables.
+  const bolsas = item.cantidadBolsas ?? ((item.icbper ?? 0) > 0 ? cantidad : 0);
+  if (!Number.isSafeInteger(bolsas) || bolsas < 0) throw new BadRequestException('ICBPER requiere cantidad entera de bolsas');
+  const icbper = multiplicarMoneda(bolsas, 0.5);
+  if (item.icbper !== undefined && item.icbper !== icbper) throw new BadRequestException('ICBPER no coincide con la cantidad de bolsas');
   const linea: LineaDetalle = {
     id: indice + 1,
     descripcion: item.descripcion.trim(),
@@ -186,7 +193,8 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     totalLinea: totalLineaSinDescuento !== null ? totalLineaSinDescuento : centimos(valorVenta + igv),
     igvLinea: igv,
     descuentos: descuento ? [{ codigo: descuento.codigo, monto: descuento.monto }] : undefined,
-    icbperLinea: item.icbper && item.icbper > 0 ? centimos(item.icbper) : undefined,
+    icbperLinea: icbper > 0 ? icbper : undefined,
+    cantidadBolsas: bolsas > 0 ? bolsas : undefined,
   };
 
   return {
@@ -342,7 +350,7 @@ export const traducirEmision = (
     // detracción que no corresponde al tipo de operación"). Se detectó emitiendo
     // contra BETA el 31-10, después de corregir el importe total.
     tipoOperacion: detraccion > 0 ? '1001' : '0101',
-    formaPago: dto.forma_pago ?? 'Contado',
+    formaPago: dto.forma_pago,
     // Cronograma de la venta al crédito. El DTO llega con `{monto, vencimiento}`
     // y el generador UBL necesita el número de cuota (Cuota001...) que es lo
     // que se escribe en el XML. Se numera aquí y no en el front para que la

@@ -1,12 +1,14 @@
 import { parseIssuerKey } from '../modules/sunat/issuerConfigEncryption';
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, Transform } from 'class-transformer';
 import {
   IsEnum,
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   IsUrl,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -87,6 +89,36 @@ class EnvironmentVariables {
   @IsOptional()
   SUNAT_SIRE_ENV: SireEnvironment = SireEnvironment.Beta;
 
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  SUNAT_SIRE_INTEGRATION_ENABLED = false;
+
+  @ValidateIf((config) => config.SUNAT_SIRE_INTEGRATION_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  SIRE_AUTH_HOST?: string;
+
+  @ValidateIf((config) => config.SUNAT_SIRE_INTEGRATION_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  SIRE_API_HOST?: string;
+
+  @ValidateIf((config) => config.SUNAT_SIRE_INTEGRATION_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  SUNAT_CLIENT_ID?: string;
+
+  @ValidateIf((config) => config.SUNAT_SIRE_INTEGRATION_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  SUNAT_CLIENT_SECRET?: string;
+
+  @IsNumber()
+  @IsOptional()
+  SUNAT_SIRE_READONLY_TIMEOUT_MS = 10000;
+
   @IsString()
   @IsOptional()
   SUNAT_SOL_USER?: string;
@@ -108,6 +140,18 @@ class EnvironmentVariables {
   @IsOptional()
   SUNAT_BILL_SERVICE_URL_PRODUCCION: string =
     'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService';
+
+  @IsString()
+  @IsOptional()
+  SUNAT_RUC_SERVICE_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  SUNAT_RUC_SERVICE_API_KEY?: string;
+
+  @IsNumber()
+  @IsOptional()
+  SUNAT_RUC_CACHE_TTL_SECONDS: number = 86400;
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -142,6 +186,55 @@ export function validate(config: Record<string, unknown>) {
     throw new Error(
       'SUNAT_SIRE_ENV=mock no está permitido cuando NODE_ENV=production.',
     );
+  }
+
+  if (validatedConfig.SUNAT_SIRE_INTEGRATION_ENABLED) {
+    const clientId = validatedConfig.SUNAT_CLIENT_ID?.trim();
+    if (
+      !clientId ||
+      /^(tu-|your-|placeholder|inyectar-)|^<.*>$|sin-espacios$/i.test(clientId)
+    ) {
+      throw new Error(
+        'SUNAT_CLIENT_ID debe contener el Client ID real de la aplicación SUNAT; no se aceptan valores de ejemplo.',
+      );
+    }
+
+    const endpoints = [
+      {
+        value: validatedConfig.SIRE_AUTH_HOST!,
+        expectedHost: 'api-seguridad.sunat.gob.pe',
+      },
+      {
+        value: validatedConfig.SIRE_API_HOST!,
+        expectedHost: 'api-sire.sunat.gob.pe',
+      },
+    ];
+    for (const { value: endpoint, expectedHost } of endpoints) {
+      let url: URL;
+      try {
+        url = new URL(endpoint);
+      } catch {
+        throw new Error(
+          'Las URLs configuradas para SIRE deben ser válidas y oficiales.',
+        );
+      }
+
+      const host = url.hostname.toLowerCase();
+      if (
+        url.protocol !== 'https:' ||
+        url.port !== '' ||
+        host !== expectedHost ||
+        (url.pathname !== '/' && url.pathname !== '') ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash
+      ) {
+        throw new Error(
+          'SIRE_AUTH_HOST debe usar https://api-seguridad.sunat.gob.pe y SIRE_API_HOST debe usar https://api-sire.sunat.gob.pe, sin rutas ni credenciales adicionales.',
+        );
+      }
+    }
   }
 
   return Object.assign(validatedConfig, {

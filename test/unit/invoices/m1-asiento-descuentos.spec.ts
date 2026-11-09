@@ -71,9 +71,9 @@ describe('asiento de descuentos 01 y 03', () => {
     const consumer = new InvoiceJobConsumer(
       {} as never, { processWithRetry: jest.fn(async () => ({ estado: InvoiceStatus.ACEPTADO })) } as never,
       { invoice: { findUnique: jest.fn(async () => fila), update: jest.fn() } } as never,
-      {} as never, {} as never, {} as never,
+      {} as never, {} as never, { verifySignature: jest.fn(() => true) } as never,
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null, validadoDeVerdad: true })) } as never,
-      {} as never, { registrar } as never, { guardar: jest.fn(async () => null) } as never, accounting as never,
+      {} as never, { registrar } as never, { guardar: jest.fn(async () => 'hash-fixture') } as never, accounting as never,
     );
     await consumer.procesar({ invoice_id: 'inv-1' });
     expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ motivoBloqueoAsiento: null, importes: expect.objectContaining(importes) }));

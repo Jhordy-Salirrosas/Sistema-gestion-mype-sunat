@@ -1,3 +1,4 @@
+import { redondearMoneda as r2 } from '../../money';
 /**
  * Métricas del módulo de facturación (TA-69, HU-12).
  *
@@ -67,7 +68,7 @@ export const ESTADOS_VALIDOS = ['ACEPTADO', 'OBSERVADO', 'EN_COLA', 'ENVIADO', '
 export const ESTADOS_PENDIENTES = ['EN_COLA', 'ENVIADO', 'PENDIENTE', 'ERROR_RED'];
 
 /** Redondeo monetario a céntimos. */
-const r2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
 
 /** Rango de fechas de un periodo YYYY-MM. */
 export const rangoDelPeriodo = (

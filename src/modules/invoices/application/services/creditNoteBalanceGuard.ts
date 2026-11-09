@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from '../../money';
 /**
  * Control del saldo disponible de un comprobante antes de emitir una nota
  * (TA-66, HU-12).
@@ -54,7 +55,7 @@ export interface SaldoComprobante {
 }
 
 /** Redondeo monetario a céntimos. */
-const centimos = (n: number): number => Math.round(n * 100) / 100;
+
 
 /**
  * Calcula el saldo disponible de un comprobante.

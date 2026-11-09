@@ -4,6 +4,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { PgBoss, fromPrisma } from 'pg-boss';
 
@@ -20,6 +21,8 @@ export const INVOICE_DLQ = 'sunat-invoice-dlq';
 export const SUMMARY_QUEUE = 'sunat-summary-queue';
 /** Cola de muertos propia: un resumen atascado no debe mezclarse con facturas. */
 export const SUMMARY_DLQ = 'sunat-summary-dlq';
+export const SIRE_PERIODS_QUEUE = 'sunat-sire-periods-queue';
+export const SIRE_PERIODS_DLQ = 'sunat-sire-periods-dlq';
 
 /** Payload que viaja en la cola de resúmenes. */
 export interface SummaryJobData {
@@ -47,6 +50,14 @@ export interface InvoiceJobData {
   invoice_id: string;
 }
 
+export interface SirePeriodsJobData {
+  messageId: string;
+  companyId: string;
+  ruc: string;
+  bookCode: '140000' | '080000';
+  encryptedSolCredentials: string;
+}
+
 @Injectable()
 export class QueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
@@ -67,7 +78,9 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     const databaseUrl = process.env.PG_BOSS_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
-      throw new Error('La variable DATABASE_URL o PG_BOSS_URL no está configurada');
+      throw new Error(
+        'La variable DATABASE_URL o PG_BOSS_URL no está configurada',
+      );
     }
 
     this.boss = new PgBoss(databaseUrl);
@@ -115,6 +128,21 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         deadLetter: SUMMARY_DLQ,
       });
 
+      this.logger.log(
+        `Inicializando colas SIRE: ${SIRE_PERIODS_QUEUE} y ${SIRE_PERIODS_DLQ}`,
+      );
+      await this.boss.createQueue(SIRE_PERIODS_DLQ, { retryLimit: 0 });
+      await this.boss.createQueue(SIRE_PERIODS_QUEUE, {
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        retryDelayMax: 300,
+        deadLetter: SIRE_PERIODS_DLQ,
+      });
+      this.logger.log(
+        `Colas SIRE inicializadas: ${SIRE_PERIODS_QUEUE} y ${SIRE_PERIODS_DLQ}`,
+      );
+
       this.logger.log('Servicio de colas PgBoss iniciado correctamente');
     } catch (error) {
       this.logger.warn(
@@ -147,7 +175,9 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     invoiceId: string,
   ): Promise<string | null> {
     if (!tx.invoice?.findUnique) {
-      throw new Error('El cliente transaccional no permite obtener la empresa.');
+      throw new Error(
+        'El cliente transaccional no permite obtener la empresa.',
+      );
     }
 
     const invoice = await tx.invoice.findUnique({
@@ -212,9 +242,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       { singletonKey: `invoice:${invoiceId}` },
     );
 
-    return jobId
-      ? { estado: 'ENCOLADO', jobId }
-      : { estado: 'YA_EN_COLA' };
+    return jobId ? { estado: 'ENCOLADO', jobId } : { estado: 'YA_EN_COLA' };
   }
 
   /**
@@ -294,17 +322,19 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     const jobs = await this.listDlq(companyId);
     const ids = jobs
       .map((job) => job.comprobanteSerieNumero)
-      .filter((id): id is string => typeof id === 'string' && id !== 'sin identificar');
+      .filter(
+        (id): id is string =>
+          typeof id === 'string' && id !== 'sin identificar',
+      );
 
     if (ids.length === 0) return 0;
 
     // Se consulta con SQL directo porque `QueueService` no inyecta Prisma a
     // propósito: solo habla con pg-boss. Una consulta de existencia no
     // justifica introducir la dependencia.
-    const vivos = await this.boss.getDb().executeSql(
-      'SELECT id FROM invoices WHERE id = ANY($1::text[])',
-      [ids],
-    );
+    const vivos = await this.boss
+      .getDb()
+      .executeSql('SELECT id FROM invoices WHERE id = ANY($1::text[])', [ids]);
 
     const existentes = new Set(
       (Array.isArray(vivos.rows) ? vivos.rows : []).map((fila) =>
@@ -456,8 +486,80 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  async enqueueSirePeriods(job: SirePeriodsJobData): Promise<string> {
+    if (this.bypass) {
+      throw new ServiceUnavailableException(
+        'La cola de consultas SIRE no está disponible.',
+      );
+    }
+
+    const jobId = await this.boss.send(SIRE_PERIODS_QUEUE, job, {
+      id: job.messageId,
+    });
+    if (!jobId) {
+      throw new ServiceUnavailableException(
+        'No se pudo registrar la consulta SIRE en la cola.',
+      );
+    }
+    return jobId;
+  }
+
+  async registerSirePeriodsWorker(
+    handler: (job: SirePeriodsJobData) => Promise<unknown>,
+  ): Promise<string> {
+    if (this.bypass) {
+      this.logger.warn(
+        `No se registra el worker ${SIRE_PERIODS_QUEUE}: PgBoss está en modo bypass.`,
+      );
+      return '';
+    }
+
+    this.logger.log(`Registrando worker de SIRE en ${SIRE_PERIODS_QUEUE}`);
+    const workerId = await this.boss.work<SirePeriodsJobData>(
+      SIRE_PERIODS_QUEUE,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+        await handler(job.data);
+      },
+    );
+    this.logger.log(
+      `Worker de SIRE registrado en ${SIRE_PERIODS_QUEUE} (id=${workerId})`,
+    );
+    return workerId;
+  }
+
+  async registerSirePeriodsDlqWorker(
+    handler: (job: SirePeriodsJobData) => Promise<unknown>,
+  ): Promise<string> {
+    if (this.bypass) {
+      this.logger.warn(
+        `No se registra el worker de DLQ ${SIRE_PERIODS_DLQ}: PgBoss está en modo bypass.`,
+      );
+      return '';
+    }
+
+    this.logger.log(`Registrando worker de DLQ SIRE en ${SIRE_PERIODS_DLQ}`);
+    const workerId = await this.boss.work<SirePeriodsJobData>(
+      SIRE_PERIODS_DLQ,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+        await handler(job.data);
+      },
+    );
+    this.logger.log(
+      `Worker de DLQ SIRE registrado en ${SIRE_PERIODS_DLQ} (id=${workerId})`,
+    );
+    return workerId;
+  }
+
   /** TA-67: trabajos de resumen que quedaron sin procesar en la DLQ. */
-  async listSummaryDlq(companyId: string): Promise<Array<Record<string, unknown>>> {
+  async listSummaryDlq(
+    companyId: string,
+  ): Promise<Array<Record<string, unknown>>> {
     const jobs = await this.boss.findJobs<SummaryJobData>(SUMMARY_DLQ, {
       queued: true,
     });

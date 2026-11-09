@@ -93,7 +93,8 @@ export class SunatBillMockController {
     }
 
     // Casos de prueba explícitos de SOAP Fault.
-    const upperFileName = fileName.toUpperCase();
+    const scenarioName = String(req.query.scenario ?? fileName);
+    const upperFileName = scenarioName.toUpperCase();
 
     // Credenciales SOL inválidas.
     if (upperFileName.includes('AUTH')) {
@@ -109,7 +110,7 @@ export class SunatBillMockController {
       return;
     }
 
-    const scenario = resolveScenario(fileName);
+    const scenario = resolveScenario(scenarioName);
     const applicationResponse = MOCK_CDR_BY_SCENARIO[scenario];
 
     res.status(HttpStatus.OK);

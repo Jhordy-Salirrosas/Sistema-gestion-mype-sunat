@@ -158,3 +158,26 @@ describe('D1 signature company context', () => {
     expect(getCertificate).toHaveBeenCalledWith(context);
   });
 });
+it('la verificación criptográfica rechaza alterar el documento firmado', async () => {
+  const { fakeIssuerCertificate } = await import('../../fixtures/fakeIssuerCertificate');
+  const cert = fakeIssuerCertificate();
+  const service = new SignatureService({ getCertificate: () => ({ certificatePem: cert.pem, privateKeyPem: cert.privateKeyPem }) } as never);
+  const signed = service.signXml('<Invoice><Amount>118.00</Amount></Invoice>').signedXml;
+  expect(service.verifySignature(signed)).toBe(true);
+  expect(service.verifySignature(signed.replace('118.00', '119.00'))).toBe(false);
+  expect(service.verifySignature('<Invoice><ds:Signature><ds:DigestValue>x</ds:DigestValue><ds:SignatureValue>x</ds:SignatureValue></ds:Signature></Invoice>')).toBe(false);
+});
+it('rechaza firmas ambiguas, sin certificado, con referencias parciales o fallos criptográficos', async () => {
+  const { fakeIssuerCertificate } = await import('../../fixtures/fakeIssuerCertificate');
+  const { SignedXml } = await import('xml-crypto');
+  const cert = fakeIssuerCertificate();
+  const service = new SignatureService({ getCertificate: () => ({ certificatePem: cert.pem, privateKeyPem: cert.privateKeyPem }) } as never);
+  const signed = service.signXml('<Invoice><Amount>118.00</Amount></Invoice>').signedXml;
+  const signature = signed.match(/<ds:Signature\b[\s\S]*?<\/ds:Signature>/)![0];
+  expect(service.verifySignature(signed.replace('</Invoice>', signature + '</Invoice>'))).toBe(false);
+  expect(service.verifySignature(signed.replace(/<ds:X509Certificate>[\s\S]*?<\/ds:X509Certificate>/, ''))).toBe(false);
+  expect(service.verifySignature(signed.replace('URI=""', 'URI="#partial"'))).toBe(false);
+  const check = jest.spyOn(SignedXml.prototype, 'checkSignature').mockImplementation(() => { throw 'crypto failure'; });
+  expect(service.verifySignature(signed)).toBe(false);
+  check.mockRestore();
+});

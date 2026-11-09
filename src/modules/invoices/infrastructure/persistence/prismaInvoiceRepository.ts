@@ -14,17 +14,23 @@ import {
 
 @Injectable()
 export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
+  private transaction?: Prisma.TransactionClient;
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
   ) {}
 
+  inTransaction(tx: Prisma.TransactionClient): PrismaInvoiceRepository {
+    const repository = new PrismaInvoiceRepository(this.prisma, this.queueService);
+    repository.transaction = tx;
+    return repository;
+  }
+
   async saveWithTransactionalOutbox(
     invoice: InvoiceEntity,
   ): Promise<InvoicePersistenceResult> {
     try {
-      return await this.prisma.$transaction(
-        async (tx: Prisma.TransactionClient) => {
+      const write = async (tx: Prisma.TransactionClient) => {
           // Registrar el comprobante dentro de la transacción.
           const created = await tx.invoice.create({
             data: {
@@ -72,8 +78,8 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
           await this.queueService.enqueueInvoiceInTx(tx, created.id);
 
           return created;
-        },
-      );
+        };
+      return this.transaction ? await write(this.transaction) : await this.prisma.$transaction(write);
     } catch (error) {
       if (esViolacionDeUnicidad(error)) {
         // TA-32 frente 1: si la llave que chocó es `uq_invoices_idempotencia`
@@ -92,7 +98,7 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
         });
       }
 
-      console.error('Error al registrar el comprobante:', error);
+      console.error('OUTBOX_WRITE_FAILED: no se pudo registrar el comprobante ni su evento');
 
       throw new InternalServerErrorException({
         code: 'OUTBOX_WRITE_FAILED',

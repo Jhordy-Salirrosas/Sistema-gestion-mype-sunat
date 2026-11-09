@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prismaService';
 import { IssuerConfigEncryption } from './issuerConfigEncryption';
-import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
+import { resolveEndpoint, resolveTimeout, normalizarEntorno, endpointCoherente } from './soap/sunatBillTypes';
 import { SUNAT_BILL_SERVICE_URLS } from './soap/soap.constants';
 
 export interface IssuerContext {
@@ -15,7 +15,7 @@ export interface IssuerContext {
   readonly source: 'company' | 'deployment';
   readonly solSource?: 'company' | 'deployment';
   readonly certificateSource?: 'company' | 'deployment';
-  readonly environment: 'MOCK' | 'BETA' | 'PRODUCCION';
+  readonly environment: 'MOCK' | 'BETA' | 'PRODUCCION' | null;
   readonly endpoint: string;
   readonly consultEndpoint: string;
   readonly timeoutMs: number;
@@ -28,13 +28,7 @@ export function deploymentContext(
   companyId: string,
   ruc: string,
 ): IssuerContext {
-  const env = (process.env.SUNAT_ENV ?? 'MOCK').toUpperCase();
-  const environment =
-    env === 'PRODUCCION' || env === 'PRODUCTION'
-      ? 'PRODUCCION'
-      : env === 'BETA'
-        ? 'BETA'
-        : 'MOCK';
+  const environment = normalizarEntorno(process.env.SUNAT_ENV);
   const user = process.env.SUNAT_SOL_USER;
   const password = process.env.SUNAT_SOL_PASSWORD;
   const base64 = process.env.CERT_BASE64;
@@ -152,7 +146,7 @@ export class IssuerConfigResolver {
       });
     }
     const environment = company.issuer_environment ?? fallback.environment;
-    if (!['MOCK', 'BETA', 'PRODUCCION'].includes(environment))
+    if (environment !== null && !['MOCK', 'BETA', 'PRODUCCION'].includes(environment))
       throw new BadRequestException('ISSUER_ENV_INVALID');
     const endpoint = !company.issuer_environment
       ? fallback.endpoint
@@ -160,7 +154,7 @@ export class IssuerConfigResolver {
         ? SUNAT_BILL_SERVICE_URLS.produccion
         : environment === 'BETA'
           ? SUNAT_BILL_SERVICE_URLS.beta
-          : fallback.endpoint;
+          : endpointCoherente('MOCK', fallback.endpoint) ? fallback.endpoint : '';
     return Object.freeze({
       ...fallback,
       source: 'company',
@@ -170,7 +164,9 @@ export class IssuerConfigResolver {
       version: company.issuer_config_version ?? '',
       environment: environment as IssuerContext['environment'],
       endpoint,
-      consultEndpoint: company.issuer_environment
+      consultEndpoint: environment === 'MOCK'
+        ? endpointCoherente('MOCK', fallback.consultEndpoint) ? fallback.consultEndpoint : ''
+        : company.issuer_environment
         ? endpoint.replace(/\/billService$/, '/billConsultService')
         : fallback.consultEndpoint,
       sol,

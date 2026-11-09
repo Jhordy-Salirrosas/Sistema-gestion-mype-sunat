@@ -1,9 +1,16 @@
 # Deuda pendiente: validación de padrón RUC (ACTIVO / HABIDO)
 
-**Estado:** abierto. **Origen:** requisito de la tarea TA-34 (Eje 6) del documento
+**Estado:** integración técnica implementada; pendiente configurar proveedor.
+**Origen:** requisito de la tarea TA-34 (Eje 6) del documento
 de auditoría del M1. **Última revisión:** 31 oct 2026.
 
-## Qué falta
+## Estado actual
+
+Existe la tabla `padron_ruc_cache`, el endpoint protegido
+`GET /api/v1/sunat/ruc/:ruc`, validación Módulo 11, caché con TTL y un
+adaptador HTTP configurable. Para operar en un entorno real se debe configurar
+un proveedor autorizado en `SUNAT_RUC_SERVICE_URL`; sin esa configuración el
+endpoint responde `503` y no inventa estados tributarios.
 
 El documento pide que, antes de emitir una factura, además del Módulo 11 se
 compruebe que el RUC del adquirente esté **ACTIVO** y **HABIDO** según el padrón
@@ -26,26 +33,17 @@ de SUNAT, para evitar los rechazos 2027 y 2028.
 Verificado con RUC públicos reales: `20100066603` y `20553510661` pasan el
 Módulo 11; un dígito alterado lo rompe.
 
-## Qué falta exactamente, y por qué no se hizo
+## Qué falta para producción
 
-1. **No existe la tabla `padron_ruc_cache`.** El documento propone una migración
-   Prisma (`PadronRucCache` con `ruc`, `razon_social`, `estado_contribuyente`,
-   `condicion_domicilio`, `ubigeo`, `direccion_fiscal`, `es_agente_retencion`).
-   Crear la tabla es mecánico, pero una tabla vacía no valida nada, así que
-   añadir la migración sin el paso 2 daría la falsa impresión de que el control
-   existe.
-2. **No hay fuente de datos del padrón.** SUNAT publica el padrón en descargas
-   masivas periódicas y lo expone por servicio web con credenciales SOL. Ninguna
-   de las dos está disponible en el taller, y un cliente SOAP contra un endpoint
-   que no se puede autenticar no se puede probar ni demostrar en la exposición.
-3. **`.env` no declara una URL de consulta.** Sin ella habría que inventar un
-   servicio, y una consulta inventada devolvería ACTIVO/HABIDO de mentira:
-   peor que no validar, porque el sistema diría que verifica algo que no mira.
+1. **Configurar una fuente de datos del padrón.** SUNAT publica el padrón en
+   descargas masivas periódicas y lo expone por servicio web con credenciales
+   SOL. El proveedor debe devolver el contrato documentado en
+   `src/modules/sunat/README.md`.
+2. **Configurar `.env`.** Sin `SUNAT_RUC_SERVICE_URL`, el endpoint responde
+   `503`; no devuelve ACTIVO/HABIDO de mentira.
 
 ## Lo que NO se hizo, deliberadamente
 
-- No se creó una tabla `padron_ruc_cache` vacía para que el criterio "existe la
-  migración" apareciera cumplido.
 - No se devolvió ACTIVO/HABIDO por defecto cuando no hay padrón: un `true` por
   defecto haría pasar cualquier RUC y el validador perdería su sentido.
 - No se relajó la prueba del criterio para que saliera en verde.

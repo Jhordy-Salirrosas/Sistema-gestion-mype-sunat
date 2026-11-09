@@ -32,6 +32,7 @@ import {
 /** Parámetros mínimos que consume la compuerta. */
 function params(estado: InvoiceStatus = InvoiceStatus.EN_COLA) {
   return {
+    context: { environment: 'MOCK', endpoint: 'http://127.0.0.1/billService' } as never,
     invoiceId: 'f5f1a6c0-0000-4000-8000-000000000001',
     rucEmisor: '20123456786',
     tipoComprobante: '01',

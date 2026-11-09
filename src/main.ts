@@ -31,6 +31,7 @@ export async function bootstrap() {
       'Content-Type',
       'Authorization',
       'X-Tenant-Id', // Requerido por el interceptor del frontend de Carlos
+      'Idempotency-Key', // Requerido por la creación idempotente de comprobantes (M1)
       'Accept',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -54,6 +55,7 @@ export async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      validationError: { target: false, value: false },
       exceptionFactory: (errors) => {
         const formattedErrors = errors.map((error) => {
           const rule = Object.keys(error.constraints || {})[0];

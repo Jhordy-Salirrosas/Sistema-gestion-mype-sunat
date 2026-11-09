@@ -8,6 +8,8 @@
 import {
   INVOICE_DLQ,
   INVOICE_QUEUE,
+  SIRE_PERIODS_DLQ,
+  SIRE_PERIODS_QUEUE,
   QueueService,
 } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 
@@ -15,6 +17,11 @@ interface BossMock {
   send: jest.Mock;
   findJobs: jest.Mock;
   retry: jest.Mock;
+  on: jest.Mock;
+  start: jest.Mock;
+  createQueue: jest.Mock;
+  stop: jest.Mock;
+  work: jest.Mock;
 }
 
 function crearServicio(): { service: QueueService; boss: BossMock } {
@@ -23,6 +30,11 @@ function crearServicio(): { service: QueueService; boss: BossMock } {
     send: jest.fn(),
     findJobs: jest.fn(),
     retry: jest.fn(),
+    on: jest.fn(),
+    start: jest.fn().mockResolvedValue(undefined),
+    createQueue: jest.fn().mockResolvedValue(undefined),
+    stop: jest.fn().mockResolvedValue(undefined),
+    work: jest.fn().mockResolvedValue('worker-id'),
   };
 
   (service as unknown as { boss: BossMock }).boss = boss;
@@ -31,6 +43,38 @@ function crearServicio(): { service: QueueService; boss: BossMock } {
 }
 
 describe('HU-04 · QueueService (DLQ)', () => {
+  it('initializes the SIRE queues with retries and a dead-letter queue', async () => {
+    const { service, boss } = crearServicio();
+
+    await service.onModuleInit();
+
+    expect(boss.createQueue).toHaveBeenCalledWith(SIRE_PERIODS_DLQ, {
+      retryLimit: 0,
+    });
+    expect(boss.createQueue).toHaveBeenCalledWith(SIRE_PERIODS_QUEUE, {
+      retryLimit: 3,
+      retryDelay: 30,
+      retryBackoff: true,
+      retryDelayMax: 300,
+      deadLetter: SIRE_PERIODS_DLQ,
+    });
+  });
+
+  it('registers the SIRE periods worker with PgBoss', async () => {
+    const { service, boss } = crearServicio();
+    const handler = jest.fn().mockResolvedValue(undefined);
+
+    await expect(service.registerSirePeriodsWorker(handler)).resolves.toBe(
+      'worker-id',
+    );
+
+    expect(boss.work).toHaveBeenCalledWith(
+      SIRE_PERIODS_QUEUE,
+      { batchSize: 1 },
+      expect.any(Function),
+    );
+  });
+
   it('envía un job a la DLQ con el detalle y sin reintentos automáticos', async () => {
     const { service, boss } = crearServicio();
     boss.send.mockResolvedValue('dlq-job-1');

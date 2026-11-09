@@ -1,3 +1,4 @@
+import { redondearMoneda as r2 } from '../../money';
 /**
  * Asiento contable de una factura de venta, según el PCGE 2019 (TA-68).
  *
@@ -74,7 +75,7 @@ export interface DatosAsientoVenta {
 }
 
 /** Redondea a céntimos sin arrastrar error de coma flotante. */
-const r2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
 
 /** Línea de asiento ya construida, sin el orden. */
 type LineaSinOrden = Omit<AccountingLineDto, 'lineOrder'>;

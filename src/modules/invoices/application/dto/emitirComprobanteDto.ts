@@ -31,6 +31,8 @@ import {
   IsIn,
   IsNotEmpty,
   IsNumber,
+  IsObject,
+  IsInt,
   IsOptional,
   IsPositive,
   IsString,
@@ -65,6 +67,7 @@ export class CuotaEmisionDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'El vencimiento de la cuota debe tener el formato YYYY-MM-DD',
   })
+  @IsDateString({ strict: true })
   vencimiento: string;
 }
 
@@ -92,6 +95,7 @@ export class DescuentoGlobalEmisionDto {
 export class LineaEmisionDto {
   @IsString()
   @IsNotEmpty()
+  @Matches(/\S/, { message: 'La descripción no puede quedar en blanco' })
   descripcion: string;
 
   /**
@@ -116,7 +120,7 @@ export class LineaEmisionDto {
 
   /** Valor unitario SIN IGV (opcional cuando se envía precioUnitario con IGV). */
   @ValidateIf((o: LineaEmisionDto) => o.precioUnitario === undefined || o.valorUnitario !== undefined)
-  @IsNumber({ maxDecimalPlaces: 6 })
+  @IsNumber({ maxDecimalPlaces: 10 })
   @Min(0)
   valorUnitario: number;
 
@@ -132,6 +136,7 @@ export class LineaEmisionDto {
 
   /** Descuento explícito; null indica que no se registró uno. */
   @IsOptional()
+  @IsObject()
   @ValidateNested()
   @Type(() => DescuentoLineaEmisionDto)
   descuento?: DescuentoLineaEmisionDto | null;
@@ -146,6 +151,12 @@ export class LineaEmisionDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   icbper?: number;
+
+  /** Cantidad explícita de bolsas entregadas; el servidor calcula S/ 0.50 por bolsa. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  cantidadBolsas?: number;
 }
 
 /**
@@ -186,10 +197,11 @@ export class EmitirComprobanteDto {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/\S/, { message: 'El nombre del adquirente no puede quedar en blanco' })
   customer_legal_name: string;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   fecha_emision?: string;
 
   /** El cliente es agente de retención: se le retiene el 3 % del IGV. */
@@ -218,17 +230,20 @@ export class EmitirComprobanteDto {
    */
   @IsOptional()
   @IsArray()
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => CuotaEmisionDto)
   cuotas?: CuotaEmisionDto[];
 
   @IsOptional()
+  @IsObject()
   @ValidateNested()
   @Type(() => DescuentoGlobalEmisionDto)
   descuento_global?: DescuentoGlobalEmisionDto | null;
 
   @IsArray()
   @ArrayMinSize(1, { message: 'El comprobante necesita al menos una línea' })
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => LineaEmisionDto)
   items: LineaEmisionDto[];

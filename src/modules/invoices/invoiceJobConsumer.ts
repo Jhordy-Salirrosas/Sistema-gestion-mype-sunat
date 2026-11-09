@@ -1,3 +1,4 @@
+import { redondearMoneda as centimos } from './money';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -57,6 +58,11 @@ import { XsdValidatorService } from './xsdValidatorService';
 import { InvoiceAccountingBridgeService } from './application/services/invoiceAccountingBridgeService';
 import type { FacturaParaPuente } from './application/services/invoiceAccountingBridgeService';
 import { SignedXmlStorageService } from './application/services/signedXmlStorageService';
+
+const ESTADOS_FINALES: InvoiceStatus[] = [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO,
+  InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO];
+
+class ComprobanteFinalizado extends Error {}
 
 /** Payload que viaja en la cola: solo identifica el comprobante. */
 export interface InvoiceJobPayload {
@@ -172,6 +178,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
     try {
       aprobado = await this.preparar(invoiceId);
     } catch (error) {
+      // Una reentrega de la cola es un no-op, nunca un fallo de preparación.
+      if (error instanceof ComprobanteFinalizado) return null;
       if (error instanceof ErrorValidacionBloqueada) {
         return this.bloqueoDeInfraestructura(invoiceId, error);
       }
@@ -368,9 +376,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
       '34',
       '35',
       '36',
+      '37',
     ]);
 
-    const centimos = (n: number): number => Math.round(n * 100) / 100;
     const lineasXml = payload.lineas ?? (payload.linea ? [payload.linea] : []);
     const descuentos = lineasXml
       .flatMap((linea) => linea.descuentos ?? [])
@@ -632,13 +640,13 @@ export class InvoiceJobConsumer implements OnModuleInit {
       payloadIgv ??
       (totalIgv && totalIgv > 0
         ? totalIgv
-        : Math.round((total - total / 1.18) * 100) / 100);
+        : centimos(total - total / 1.18));
     const base =
       payloadBase && payloadBase > 0
         ? payloadBase
         : taxable && taxable > 0
           ? taxable
-          : Math.round((total - igv) * 100) / 100;
+          : centimos(total - igv);
 
     await this.accounting.execute({
       companyId: invoice.company_id,
@@ -672,6 +680,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     // Va antes de la compuerta XSL para que la copia exista incluso si el envío
     // se bloquea: el documento firmado ya es un hecho y hay que poder auditarlo.
     const hashGuardado = await this.xmlFirmado.guardar(invoiceId, xml);
+    if (!hashGuardado) throw new ErrorValidacionBloqueada('No se pudo persistir el XML firmado', 'XML_NO_PERSISTIDO');
     if (hashGuardado) {
       this.logger.log(
         `XML firmado de ${invoice.serie}-${invoice.correlativo} guardado (sha256 ${hashGuardado.slice(0, 16)}…)`,
@@ -761,14 +770,8 @@ export class InvoiceJobConsumer implements OnModuleInit {
       throw new Error(`Comprobante ${invoiceId} no existe en la base de datos`);
     }
 
-    const finales: InvoiceStatus[] = [
-      InvoiceStatus.ACEPTADO,
-      InvoiceStatus.OBSERVADO,
-      InvoiceStatus.RECHAZADO,
-      InvoiceStatus.ANULADO,
-    ];
-    if (finales.includes(invoice.estado)) {
-      throw new Error(
+    if (ESTADOS_FINALES.includes(invoice.estado)) {
+      throw new ComprobanteFinalizado(
         `Comprobante ${invoiceId} ya tiene estado final ${invoice.estado}: no se reenvia`,
       );
     }
@@ -802,20 +805,25 @@ export class InvoiceJobConsumer implements OnModuleInit {
     return xml;
   }
 
-  /** Firma XMLDSig X.509. Sin certificado configurado el XML viaja sin firmar. */
+  /** Firma XMLDSig X.509. Sin certificado o firma verificable el despacho se bloquea. */
   private firmar(
     invoice: InvoiceRow,
     xml: string,
     context?: IssuerContext,
   ): string {
-    if (xml.includes('<ds:Signature')) return xml;
-    if (context ? !context.certificate : !process.env.CERT_BASE64) {
-      this.logger.warn(
-        `[TA-28] ${invoice.id} viaja SIN firma: CERT_BASE64 no esta configurado`,
-      );
+    if (xml.includes('<ds:Signature')) {
+      if (!this.signature.verifySignature(xml)) throw new Error('Firma XML guardada inválida');
       return xml;
     }
-    return this.signature.signXml(xml, context).signedXml;
+    if (context ? !context.certificate : !process.env.CERT_BASE64) {
+      this.logger.warn(
+        `[TA-28] ${invoice.id} despacho bloqueado: CERT_BASE64 no esta configurado`,
+      );
+      throw new Error('Certificado no configurado: no se permite despachar XML sin firma');
+    }
+    const signed = this.signature.signXml(xml, context).signedXml;
+    if (!this.signature.verifySignature(signed)) throw new Error('Firma XML generada inválida');
+    return signed;
   }
 
   /** Empaqueta en el ZIP con la convencion de nombre que espera SUNAT. */
@@ -845,7 +853,11 @@ export class InvoiceJobConsumer implements OnModuleInit {
     estado: InvoiceStatus,
   ): Promise<void> {
     await this.prisma.invoice
-      .update({ where: { id: invoiceId }, data: { estado } })
+      .update({
+        // También protege la carrera: otro worker pudo concluir tras la lectura.
+        where: { id: invoiceId, estado: { notIn: ESTADOS_FINALES } },
+        data: { estado },
+      })
       .catch(() => null);
   }
 }

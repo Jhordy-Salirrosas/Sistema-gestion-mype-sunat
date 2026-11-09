@@ -1,3 +1,4 @@
+import { assertCdrReference } from './soap/cdrReferenceGuard';
 import { IssuerConfigResolver } from './issuerConfigResolver';
 /**
  * Orquestacion de TA-03: XML firmado -> peticion SOAP -> CDR -> estado.
@@ -34,6 +35,7 @@ import {
   SendInvoiceParams,
   ProcessCdrResult,
   resolveEndpoint,
+  endpointCoherente,
   resolveTimeout,
   buildSolUsername,
 } from './soap/sunatBillTypes';
@@ -134,6 +136,8 @@ export class SunatBillService {
       (context.companyId !== companyId || context.ruc !== params.rucEmisor)
     )
       throw new InternalServerErrorException('ISSUER_IDENTITY_MISMATCH');
+    if (context && !endpointCoherente(context.environment, context.endpoint))
+      throw new InternalServerErrorException('ISSUER_ENDPOINT_ENV_MISMATCH');
     let soapResponded = false;
     let httpStatusCode: number | null = null;
     let elapsedMs: number | null = null;
@@ -165,6 +169,7 @@ export class SunatBillService {
       }
 
       const cdr = parseCdr(applicationResponse);
+      assertCdrReference(cdr, params);
       const clasificacion = classifyCdr(cdr);
 
       this.logger.log(

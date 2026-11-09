@@ -1,32 +1,10 @@
 /**
- * Validador local con las XSL oficiales de SUNAT (TA-31).
- *
- * SUNAT publica una hoja XSL por tipo de comprobante que devuelve la lista de
- * errores de validación de un XML. Esa hoja es la referencia normativa:
- * reproducir sus reglas a mano sería duplicar (y desactualizar) el estándar,
- * así que aquí se EJECUTA la hoja.
- *
- * Decisiones de diseño:
- *
- *  - Las XSL se versionan en `assets/sunat-xsl/`. Al principio se dejaron
- *    fuera del repositorio (son material de SUNAT y cambian con el estándar),
- *    pero eso hacía que un clon nuevo no pudiera enviar nada: bloqueaba todos
- *    los comprobantes por falta de un archivo. Una validación que no funciona
- *    al instalar no es resiliencia, es un bug de empaquetado. Si SUNAT publica
- *    versiones nuevas, se reemplazan y se actualizan las huellas de
- *    `test/unit/invoices/ta31-xsl-oficial.spec.ts`.
- *    `SUNAT_XSL_DIR` sigue existiendo para apuntar a otra copia.
- *
- *  - Si falta la hoja o aparece un error inesperado, el envío se BLOQUEA.
- *    Solo la dependencia validate_utils ausente se declara no concluyente;
- *    el consumidor debe comprobar estructura y negocio y auditarlo.
- *
- *  - Las hojas oficiales no son XSLT estándar (usan funciones de IBM
- *    DataPower). La conversión vive en `sunatXslAdapter.ts`, para que este
- *    archivo se lea como lo que es: ejecutar la hoja y leer su salida.
- *
- *  - La traducción de cada código a un mensaje legible vive en
- *    `sunatValidationCatalog.ts`, no aquí.
+ * TA-70: validador local del juego completo del Facturador SUNAT.
+ * Por defecto ejecuta Python+lxml en un proceso cancelable: XSD 2.1 antes
+ * de XSL, adaptaciones solo en copia temporal y rechazo fail-fast del SFS.
+ * Los fallos de infraestructura/motor son NO concluyentes, nunca aprobaciones.
+ * SUNAT_XSL_DIR conserva la ruta heredada y su diagnóstico conservador;
+ * xslt-processor no puede acreditar validación con las hojas incompletas.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,6 +17,7 @@ import {
   reglaPorCodigo,
 } from './sunatValidationCatalog';
 import { nombreArchivoDesdeXml, normalizarHojaSunat, validaDeVerdad } from './sunatXslAdapter';
+import { ejecutarSfs } from './sunatSfsRunner';
 
 /** Resultado de ejecutar la hoja oficial sobre un XML. */
 export interface ResultadoValidacionXsl {
@@ -66,6 +45,7 @@ export interface ResultadoValidacionXsl {
 export interface ErrorValidacionXsl {
   codigo: string;
   mensaje: string;
+  nodo?: string | null;
   /** Regla del catálogo que lo explica, si se conoce. */
   regla: ReglaSunat | null;
 }
@@ -116,6 +96,22 @@ export class SunatXslValidatorService {
       return this.bloqueo(
         `No hay hoja XSL mapeada para el tipo de comprobante '${tipoComprobante}'`,
       );
+    }
+
+    // Las rutas explícitas antiguas conservan su diagnóstico no concluyente.
+    // El motor productivo por defecto utiliza el juego completo del SFS.
+    if (!process.env.SUNAT_XSL_DIR) {
+      try {
+        const resultado = await ejecutarSfs(xml, tipoComprobante);
+        const errores = resultado.errores.map(error => ({ ...error, regla: reglaPorCodigo(error.codigo) }));
+        return {
+          valido: validaDeVerdad(resultado) && errores.length === 0, errores,
+          codigosDesconocidos: errores.filter(e => !e.regla).map(e => e.codigo),
+          bloqueado: false, motivoBloqueo: null, validadoDeVerdad: validaDeVerdad(resultado),
+        };
+      } catch (error) {
+        return this.bloqueo(error instanceof Error ? error.message : 'Ejecutor SFS no disponible');
+      }
     }
 
     const hoja = this.cargarHoja(archivo);

@@ -40,6 +40,7 @@ export type GravedadAlerta = 'OK' | 'AVISO' | 'CRITICO' | 'SIN_DATOS';
 export interface AlertaCertificado {
   /** `false` cuando no hay .p12 configurado: no es un error, es un dato ausente. */
   evaluado: boolean;
+  estado: 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'AUN_NO_VIGENTE' | 'INVALIDO' | 'NO_CONFIGURADO';
   /** Días que le quedan al certificado, o `null` si no se pudo leer. */
   diasRestantes: number | null;
   /** Fecha de vencimiento en ISO, o `null`. */
@@ -176,24 +177,28 @@ export class InvoiceAlertService {
    */
   public estadoCertificado(context?: IssuerContext): AlertaCertificado {
     try {
-      const cert = this.certificado.getCertificate(context);
-      const gravedad = gravedadCertificado(cert.daysRemaining);
+      const cert = this.certificado.inspectCertificate(context);
+      const dias = Math.ceil((cert.validTo.getTime() - Date.now()) / 86400000) || 0;
+      const estado = cert.validFrom.getTime() > Date.now() ? 'AUN_NO_VIGENTE' : cert.validTo.getTime() < Date.now() ? 'VENCIDO' : dias <= 30 ? 'POR_VENCER' : 'VIGENTE';
+      const gravedad = estado === 'AUN_NO_VIGENTE' ? 'CRITICO' : gravedadCertificado(dias);
 
       return {
         evaluado: true,
-        diasRestantes: cert.daysRemaining,
+        estado,
+        diasRestantes: dias,
         venceEl: cert.validTo.toISOString(),
         gravedad,
-        mensaje: mensajeCertificado(cert.daysRemaining, cert.validTo),
+        mensaje: estado === 'AUN_NO_VIGENTE' ? `Certificado aún no vigente: inicia ${cert.validFrom.toISOString()}. No se puede firmar.` : mensajeCertificado(dias, cert.validTo),
       };
-    } catch (error: unknown) {
+    } catch {
       // Se registra en debug y no en error: en desarrollo es lo esperado.
       this.logger.debug(
-        `Certificado no evaluable: ${error instanceof Error ? error.message : 'motivo desconocido'}`,
+        'Certificado no evaluable; consulte Configuración',
       );
 
       return {
         evaluado: false,
+        estado: (context ? context.certificate : process.env.CERT_BASE64) ? 'INVALIDO' : 'NO_CONFIGURADO',
         diasRestantes: null,
         venceEl: null,
         gravedad: 'SIN_DATOS',
@@ -229,9 +234,9 @@ export class InvoiceAlertService {
         mensaje: mensajeDlq(pendientes, huerfanos),
         huerfanos,
       };
-    } catch (error: unknown) {
+    } catch {
       this.logger.warn(
-        `No se pudo leer la DLQ: ${error instanceof Error ? error.message : 'motivo desconocido'}`,
+        'No se pudo leer la DLQ',
       );
 
       return {

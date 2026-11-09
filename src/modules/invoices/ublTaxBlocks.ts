@@ -1,3 +1,4 @@
+import { redondearMoneda } from './money';
 /**
  * Bloques tributarios y totales del XML UBL 2.1 (M1).
  *
@@ -100,7 +101,7 @@ export const bloqueImpuestos = (
   }
 
   const totalTributos =
-    t.igv + t.icbper;
+    t.igv;
 
   const partes: string[] = [
     `  <cac:TaxTotal>
@@ -208,8 +209,8 @@ export const bloqueTotales = (
   moneda: string,
 ): string => {
   const base =
-    Math.round((t.gravado + t.exonerado + t.inafecto + t.exportado) * 100) / 100;
-  const totalConIgv = Math.round((base + t.igv + t.icbper) * 100) / 100;
+    redondearMoneda(t.gravado + t.exonerado + t.inafecto + t.exportado);
+  const totalConIgv = redondearMoneda(base + t.igv + t.icbper);
 
   return `  <cac:LegalMonetaryTotal>
     <cbc:LineExtensionAmount currencyID="${moneda}">${dinero(base)}</cbc:LineExtensionAmount>

@@ -1,3 +1,4 @@
+import { resolveEndpoint } from './sunatBillTypes';
 import type { IssuerContext } from '../issuerConfigResolver';
 /**
  * Cliente SOAP del billService de SUNAT (operacion sendBill).
@@ -22,7 +23,6 @@ import {
   SunatSoapFaultError,
 } from './soap-envelope';
 import {
-  SUNAT_BILL_SERVICE_URLS,
   SUNAT_DEFAULT_TIMEOUT_MS,
   SUNAT_SEND_BILL_SOAP_ACTION,
 } from './soap.constants';
@@ -126,7 +126,7 @@ export class SunatSoapClient {
   private readonly timeoutMs: number;
 
   constructor(options?: { endpoint?: string; timeoutMs?: number }) {
-    this.endpoint = options?.endpoint ?? SUNAT_BILL_SERVICE_URLS.beta;
+    this.endpoint = options?.endpoint ?? resolveEndpoint();
     this.timeoutMs = options?.timeoutMs ?? SUNAT_DEFAULT_TIMEOUT_MS;
   }
 

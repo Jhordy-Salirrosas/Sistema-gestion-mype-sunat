@@ -259,7 +259,7 @@ describe('TA-60 · configuración de facturación', () => {
     const { prisma } = crearPrismaFalso(0);
     const series = new InvoiceSeriesService(prisma as never);
     const certificado = {
-      getCertificate: () => ({
+      inspectCertificate: () => ({
         certificatePem: 'PEM',
         privateKeyPem: 'KEY',
         validFrom: new Date('2026-01-01'),
@@ -276,7 +276,7 @@ describe('TA-60 · configuración de facturación', () => {
     expect(json).not.toContain('clave-super-secreta-123');
     expect(json).not.toContain('MODDATOS');
     expect(resultado.entorno).toBe('BETA');
-    expect(resultado.listo_para_emitir).toBe(true);
+    expect(resultado.listo_para_emitir).toBe(false); // Dependencia XSL oficial ausente: no declarar disponibilidad ficticia.
   });
 
   it('reporta no listo para emitir cuando falta el usuario SOL', async () => {
@@ -286,7 +286,7 @@ describe('TA-60 · configuración de facturación', () => {
     const { prisma } = crearPrismaFalso(0);
     const series = new InvoiceSeriesService(prisma as never);
     const certificado = {
-      getCertificate: () => {
+      inspectCertificate: () => {
         throw new Error('Falta la variable de entorno CERT_BASE64');
       },
     };
@@ -306,7 +306,7 @@ describe('TA-60 · configuración de facturación', () => {
     const { prisma } = crearPrismaFalso(0, false);
     const series = new InvoiceSeriesService(prisma as never);
     const certificado = {
-      getCertificate: () => ({
+      inspectCertificate: () => ({
         validFrom: new Date('2026-01-01'),
         validTo: new Date('2027-01-01'),
         daysRemaining: 60,
@@ -339,7 +339,7 @@ describe('D1 · Config permite guardar y leer sin exponer secretos', () => {
     const config = new InvoiceConfigService(
       { listar: async () => [] } as never,
       {
-        getCertificate: () => {
+        inspectCertificate: () => {
           throw new Error('unavailable');
         },
       } as never,

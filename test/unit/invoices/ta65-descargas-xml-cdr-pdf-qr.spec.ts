@@ -291,7 +291,7 @@ describe('TA-65 · representación impresa en PDF', () => {
 describe('TA-65 · descargas', () => {
   it.each([undefined, '001'] as const)('regenera payload con medio %s sin inventar el medio histórico', async (medio) => {
     const payload = JSON.parse(JSON.stringify({ ...payloadMedioPago(), medioPagoDetraccion: medio }));
-    const d = servicio(filaComprobante({ payload_ubl: payload, xml_storage_url: null }), true);
+    const d = servicio(filaComprobante({ payload_ubl: payload, xml_storage_url: null, estado: 'EN_COLA' }), true);
     const archivo = await d.descargas.descargar('emp-1', 'inv-1', 'xml');
     expect(archivo.contenido.toString('utf8')).toContain(
       `<cbc:PaymentMeansCode>${medio ?? '999'}</cbc:PaymentMeansCode>`,
@@ -302,7 +302,7 @@ describe('TA-65 · descargas', () => {
   it.each(['1001', '014', 'sin-detraccion'])('descarga rechaza medio inválido %s antes de firmar o guardar', async (medio) => {
     const payload = { ...payloadMedioPago(), medioPagoDetraccion: medio === 'sin-detraccion' ? '001' : medio,
       ...(medio === 'sin-detraccion' ? { montoDetraccion: 0 } : {}) };
-    const d = servicio(filaComprobante({ payload_ubl: payload, xml_storage_url: null }), true);
+    const d = servicio(filaComprobante({ payload_ubl: payload, xml_storage_url: null, estado: 'EN_COLA' }), true);
     await expect(d.descargas.descargar('emp-1', 'inv-1', 'xml')).rejects.toThrow(/Catálogo 59|sin detracción efectiva/);
     expect(d.signXml).not.toHaveBeenCalled();
     expect(d.guardar).not.toHaveBeenCalled();
@@ -329,7 +329,7 @@ describe('TA-65 · descargas', () => {
 
   it('sin XML guardado se regenera desde el payload', async () => {
     const { descargas, generateInvoiceXml } = servicio(
-      filaComprobante({ xml_storage_url: null }),
+      filaComprobante({ xml_storage_url: null, estado: 'EN_COLA' }),
     );
 
     const archivo = await descargas.descargar('emp-1', 'inv-1', 'xml');
@@ -428,4 +428,63 @@ describe('TA-65 · descargas', () => {
     const archivo = await descargas.descargar('emp-1', 'inv-1', 'pdf');
     expect(archivo.contenido.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   });
+});
+
+it.each(['<?xml version="1.0"?><ApplicationResponse/>', { rawXml: '<?xml version="1.0"?><ApplicationResponse/>' }])('recupera el CDR conservado históricamente sin inventar uno', async (cdr_sunat) => {
+  const d = servicio(filaComprobante({ cdr_storage_url: null, cdr_sunat }));
+  const archivo = await d.descargas.descargar('emp-1', 'inv-1', 'cdr');
+  expect(archivo.contenido.toString()).toBe('<?xml version="1.0"?><ApplicationResponse/>');
+  expect(d.generateInvoiceXml).not.toHaveBeenCalled();
+});
+
+it.each(['ACEPTADO', 'OBSERVADO', 'ANULADO'])('no reconstruye XML original perdido de un comprobante %s', async (estado) => {
+  const d = servicio(filaComprobante({ xml_storage_url: null, estado }));
+  await expect(d.descargas.descargar('emp-1', 'inv-1', 'xml')).rejects.toThrow(/XML original no conservado/);
+  expect(d.generateInvoiceXml).not.toHaveBeenCalled();
+  expect(d.signXml).not.toHaveBeenCalled();
+  expect(d.guardar).not.toHaveBeenCalled();
+});
+it('el PDF usa los importes registrados, sin recalcular IGV ni inferir tipo de documento por longitud', async () => {
+  const generar = jest.fn().mockResolvedValue(Buffer.from('%PDF-prueba'));
+  const generarPng = jest.fn().mockResolvedValue('');
+  const fila = filaComprobante({ monto_total: 1.01, customer_identity_type: '6', customer_identity_number: '20100066603',
+    payload_ubl: { montoGravado: 0.86, montoIgv: 0.15, montoTotal: 1.01, razonSocialEmisor: 'Emisor registrado', hashCpe: 'hash-real-guardado' },
+    items: [{ description: 'Artículo', unit_code: 'NIU', quantity: 3, unit_value: 0.2838983051, igv_amount: 0.15, total_amount: 1.01, igv_affectation_type: '10' }] });
+  const s = new InvoiceDownloadService({ invoice: { findFirst: async () => fila } } as never, {} as never,
+    { generar, nombreArchivo: () => 'doc.pdf' } as never, { generarPng } as never, {} as never, {} as never);
+  await s.descargar('emp-1', 'inv-1', 'pdf');
+  expect(generar).toHaveBeenLastCalledWith(expect.objectContaining({ gravado: 0.86, igv: 0.15, total: 1.01 }), 'a4');
+  expect(generarPng).toHaveBeenLastCalledWith(expect.objectContaining({ tipoDocCliente: '6', total: 1.01 }));
+  (fila as any).customer_identity_type = null;
+  (fila as any).customer_legal_name = null;
+  (fila as any).customer_identity_number = null;
+  (fila as any).currency_code = null;
+  (fila as any).payload_ubl = {};
+  generarPng.mockClear();
+  await s.descargar('emp-1', 'inv-1', 'pdf');
+  expect(generarPng).not.toHaveBeenCalled();
+  expect(generar).toHaveBeenLastCalledWith(expect.objectContaining({ razonSocialEmisor: null, clienteRazonSocial: null, clienteDocumento: null, moneda: null, qrBase64: '', igv: 0.15, gravado: 0.86 }), 'a4');
+});
+it.each(['a4', 'ticket80mm'] as const)('el PDF %s representa datos ausentes sin nombres ficticios', async (formato) => {
+  const d = new InvoiceDownloadService({ invoice: { findFirst: async () => filaComprobante({ payload_ubl: {}, customer_legal_name: null, customer_identity_number: null, currency_code: null }) } } as never,
+    {} as never, new InvoicePdfService(), new InvoiceQrService(), {} as never, {} as never);
+  const archivo = await d.descargar('emp-1', 'inv-1', 'pdf', formato);
+  expect(archivo.contenido.subarray(0, 5).toString()).toBe('%PDF-');
+});
+it('PDF mixto conserva ICBPER registrado por líneas, inafectas y digest del XML guardado', async () => {
+ const generar = jest.fn().mockResolvedValue(Buffer.from('%PDF-prueba'));
+ const generarPng = jest.fn().mockResolvedValue('');
+ const fila = filaComprobante({ monto_total: 149.5, customer_identity_type: '6', customer_identity_number: '20100066603',
+   xml_storage_url: '<?xml version="1.0"?><Invoice><ds:DigestValue>digest-registrado=</ds:DigestValue></Invoice>',
+   payload_ubl: { montoGravado: 100, montoIgv: 18, lineas: [{ icbperLinea: 1.5 }, {}] },
+   items: [
+    { description: 'Gravado', unit_code: 'NIU', quantity: 1, unit_value: 100, igv_amount: 18, total_amount: 118, igv_affectation_type: '10' },
+    { description: 'Exonerado', unit_code: 'NIU', quantity: 1, unit_value: 20, igv_amount: 0, total_amount: 20, igv_affectation_type: '20' },
+    { description: 'Inafecto', unit_code: 'NIU', quantity: 1, unit_value: 10, igv_amount: 0, total_amount: 10, igv_affectation_type: '30' },
+   ] });
+ const s = new InvoiceDownloadService({ invoice: { findFirst: async () => fila } } as never, {} as never,
+   { generar, nombreArchivo: () => 'doc.pdf' } as never, { generarPng } as never, {} as never, {} as never);
+ await s.descargar('emp-1', 'inv-1', 'pdf');
+ expect(generar).toHaveBeenCalledWith(expect.objectContaining({ gravado: 100, igv: 18, exonerado: 20, inafecto: 10, icbper: 1.5, total: 149.5 }), 'a4');
+ expect(generarPng).toHaveBeenCalledWith(expect.objectContaining({ hashCpe: 'digest-registrado=', total: 149.5 }));
 });

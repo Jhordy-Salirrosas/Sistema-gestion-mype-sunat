@@ -45,26 +45,14 @@ export const DEPENDENCIAS_NO_PUBLICADAS = [
   'commons/error/error_utils.xsl',
 ] as const;
 
-/**
- * ¿La hoja normalizada puede validar de verdad? (TA-62)
- *
- * HOY SIEMPRE DEVUELVE `false`, y es a propósito. Una hoja oficial de SUNAT
- * delega toda la validación en plantillas que viven en
- * `commons/error/validate_utils.xsl`, archivo que SUNAT no distribuye; sin él
- * las llamadas se descartan y la salida no contiene ningún código de error.
- *
- * La función existe para que el llamador no tenga que razonar sobre esto: si
- * `validaDeVerdad()` es `false`, el validador NO puede afirmar que un XML es
- * válido. Un validador que aprueba todo es más peligroso que uno honesto
- * consigo mismo, porque el comprobante inválido llega a la DLQ y nadie sabe
- * por qué.
- *
- * Cuando se resuelva la dependencia (ver el diagnóstico en
- * `specs/DEUDA_VALIDADOR_XSL.md`), esta función pasará a comprobar que las
- * plantillas estén presentes y el resto del validador funcionará sin cambios.
+/** TA-70: solo la respuesta verificada de una ejecución acredita conclusión.
+ * Sin argumento se conserva false: configuración no equivale a validación.
+ * La ruta heredada de xslt-processor nunca aporta esta evidencia.
  */
-export function validaDeVerdad(): boolean {
-  return false;
+export function validaDeVerdad(resultado?: { completado: boolean }): boolean {
+  // Sin evidencia de ESTA ejecución (incluido el diagnóstico de configuración),
+  // no se acredita validación por instalar Python o por encontrar los assets.
+  return resultado?.completado === true;
 }
 
 /**

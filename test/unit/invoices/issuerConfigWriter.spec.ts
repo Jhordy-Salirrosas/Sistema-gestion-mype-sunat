@@ -256,11 +256,11 @@ describe('D1 issuer configuration write boundary', () => {
     );
     const cfg = await configService.obtener(h.company.id);
     expect(cfg.certificado).toEqual({
-      archivo: 'certificado-20000000001.p12 (custodia despliegue)',
+      archivo: null,
       configurado: true,
       estado: 'VIGENTE',
       vence_el: '2099-01-01',
-      dias_restantes: 60,
+      dias_restantes: Math.ceil((new Date('2099-01-01').getTime() - Date.now()) / 86400000),
       origen: 'deployment',
     });
   });

@@ -8,9 +8,45 @@ La clave SOL no se devuelve en las respuestas de registro. El registro audita el
 
 ## Límite de integración SUNAT
 
-No hay un cliente SIRE real implementado. `SUNAT_SIRE_ENV=mock` solo habilita el gateway simulado fuera de producción. `beta` y `produccion` permanecen en el gateway no soportado y fallan explícitamente. Producción rechaza la configuración `mock`.
+Las operaciones del gateway SIRE general continúan sin cliente real: `SUNAT_SIRE_ENV=mock` solo habilita el gateway simulado fuera de producción; `beta` y `produccion` fallan explícitamente. Existe aparte un cliente limitado a consultar períodos, que solo se activa con `SUNAT_SIRE_INTEGRATION_ENABLED=true`.
 
-El parser TXT de nueve columnas es provisional; no debe ofrecerse ni describirse como formato oficial RVIE/RCE. La exportación sigue marcada como `BORRADOR`. Antes de habilitar intercambio automático hay que verificar en publicaciones oficiales SUNAT los servicios, autenticación, anexos y layouts vigentes de cada libro, implementar sus validaciones y probarlos en Homologación. No se verificó conexión alguna contra Homologación.
+El endpoint autenticado `POST /api/v1/sire/consulta-manual` recibe un RUC, periodo y una clave SOL manual para facilitar pruebas del flujo backend. Es una simulación: no valida ni transmite la clave, no la persiste ni la registra, y devuelve ejemplos ficticios para RVIE y RCE ligados al RUC ingresado. La respuesta marca `mode: SIMULATED` y `sunatContacted: false`. Usar solo credenciales ficticias en este endpoint; no debe interpretarse como una consulta a SUNAT ni como una validación de credenciales.
+
+Solicitud de ejemplo, únicamente con datos ficticios:
+
+```json
+{
+  "ruc": "20100070970",
+  "period": "202611",
+  "solPassword": "CLAVE_SOL_FICTICIA"
+}
+```
+
+La clave es requerida solo para probar el formulario manual y se descarta en el controlador: el caso de uso recibe únicamente `ruc` y `period`.
+
+### Consulta de períodos SIRE (solo lectura)
+
+Existe la ruta autenticada `POST /api/v1/sire/periodos`, que devuelve HTTP 202 y `{ "messageId": "...", "status": "PENDING" }` al encolar la consulta de períodos de RVIE (`bookCode: "140000"`) o RCE (`bookCode: "080000"`). El RUC se obtiene de la empresa activa de la sesión; no se acepta un RUC enviado por el cliente. El usuario SOL y la clave SOL se reciben únicamente en el cuerpo HTTPS de esa solicitud. No se guardan en la tabla de consultas ni en texto plano en PgBoss: el payload persistido de la cola guarda las credenciales cifradas con `SOL_CREDENTIALS_ENCRYPTION_KEY`. El worker las descifra solo para realizar la autenticación y no las registra. `SUNAT_CLIENT_ID` y `SUNAT_CLIENT_SECRET` son credenciales de aplicación y deben inyectarse desde un secret manager.
+
+PgBoss reintenta los errores HTTP 500/502 de SUNAT hasta tres veces, con backoff exponencial desde 30 segundos y un máximo de 300 segundos. Al agotar los intentos, el trabajo pasa a la DLQ y la solicitud queda `FAILED`. Otros errores se marcan como fallidos sin reintento automático. La ruta autenticada `GET /api/v1/sire/periodos/status/:messageId` devuelve el estado y, al completarse, los períodos guardados; el acceso se limita a la empresa propietaria. Los errores presentados al cliente son genéricos y no incluyen cuerpos crudos de SUNAT ni credenciales.
+
+La integración permanece desactivada salvo que `SUNAT_SIRE_INTEGRATION_ENABLED=true`. Al activarla, la validación exige `SIRE_AUTH_HOST=https://api-seguridad.sunat.gob.pe`, `SIRE_API_HOST=https://api-sire.sunat.gob.pe`, `SUNAT_CLIENT_ID` y `SUNAT_CLIENT_SECRET`. Habilitar el switch puede transmitir las credenciales SOL a SUNAT y realizar consultas reales. Solo se aceptan los dos hosts exactos mediante HTTPS, en su puerto estándar y sin rutas adicionales. Las rutas OAuth y de consulta deben cotejarse con el manual vigente de SUNAT antes de activar la variable; no se verificó conexión real. Las variables se leen con `ConfigService`; no se codifican credenciales ni hosts en TypeScript.
+
+La tabla `sire_period_queries` requiere aplicar la migración `20261108180000_sire_period_queries` antes del despliegue. El payload de PgBoss conserva únicamente las credenciales SOL cifradas y los identificadores/códigos de empresa, RUC y libro; proteger también el acceso a la base de datos de PgBoss. Las credenciales cifradas siguen siendo sensibles mientras exista el job, por lo que la clave de cifrado debe permanecer disponible y restringida al backend.
+
+Solicitud de ejemplo con valores ficticios:
+
+```json
+{
+  "bookCode": "140000",
+  "solUser": "USUARIO_SOL_FICTICIO",
+  "solPassword": "CLAVE_SOL_FICTICIA"
+}
+```
+
+La consulta exitosa no sustituye una consulta independiente de existencia pública del RUC. Confirma únicamente que SUNAT autorizó la consulta y devolvió una respuesta de períodos para la empresa autenticada.
+
+El parser TXT de nueve columnas es provisional; no debe ofrecerse ni describirse como formato oficial RVIE/RCE. La exportación sigue marcada como `BORRADOR`. Antes de habilitar intercambio automático hay que verificar en publicaciones oficiales SUNAT los servicios, autenticación, anexos y layouts vigentes de cada libro. No se verificó conexión alguna contra SUNAT.
 
 Hasta completar esa verificación, el flujo seguro es importar datos para conciliación. No activar aceptación, reemplazo, complementación, generación ni cierre contra SUNAT. En producción, el backend rechaza peticiones no seguras; detrás de proxy confía en un salto, por lo que el backend debe quedar aislado de acceso directo y el proxy debe sobrescribir `X-Forwarded-Proto`. Configurar HTTPS entre frontend y proxy; no enviar credenciales por HTTP. La auditoría implementada cubre el almacenamiento inicial; aún no existe un servicio de lectura/descifrado ni auditoría de uso, porque ninguna operación SIRE real consume estas credenciales. Al integrar el cliente oficial, el acceso deberá quedar encapsulado por `companyId` y auditarse sin registrar valores.
 

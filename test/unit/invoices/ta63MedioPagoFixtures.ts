@@ -6,7 +6,7 @@ export const emisorMedioPago = { ruc: '20601012341', razonSocial: 'EMISOR S.A.C.
 
 export function formularioMedioPago(): EmitirComprobanteDto {
   return {
-    tipo_comprobante: '01', serie: 'F001', fecha_emision: '2026-11-01',
+    tipo_comprobante: '01', serie: 'F001', forma_pago: 'Contado', fecha_emision: '2026-11-01',
     customer_identity_type: '6', customer_identity_number: '20100066603',
     customer_legal_name: 'CLIENTE S.A.C.', cuenta_banco_nacion: '00019123456',
     items: [{ descripcion: 'Servicio', cantidad: 1, valorUnitario: 1000,

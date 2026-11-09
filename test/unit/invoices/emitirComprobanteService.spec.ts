@@ -781,10 +781,10 @@ describe('Corrección 6 — Comprobante origen colgado de la nota', () => {
       serie: 'F001',
       correlativo: 42,
       numero: 'F001-00000042',
-      cliente_documento: '20100070970',
-      cliente_nombre: 'FERRETERÍA LOS ANDES S.A.C.',
+      cliente_documento: null,
+      cliente_nombre: null,
       monto_total: null,
-      moneda: 'PEN',
+      moneda: null,
     });
   });
 });
@@ -999,5 +999,21 @@ describe('M1 permisos antes de reservar correlativo', () => {
       }),
     );
     expect(h.creadas).toHaveLength(1);
+  });
+});
+describe('M1 guardas estrictas sin inferir documentos', () => {
+  it.each([false, null, undefined])('has_credit %s no se sustituye por payment_terms', async (has_credit) => {
+    const h = montar();
+    h.prisma.businessPartner.findFirst.mockResolvedValue({ id: 'cli', has_credit, payment_terms: '30_DIAS', is_active: true });
+    await expect(h.servicio.emitir(factura({ forma_pago: 'Credito', cuotas: [{ monto: 118, vencimiento: '2027-01-01' }] }), COMPANY_ID)).rejects.toThrow('crédito habilitado');
+    expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
+  });
+  it.each(['credito', 'descuento'])('cliente sin documento no habilita %s', async (caso) => {
+    const h = montar();
+    await expect(h.servicio.emitir(factura({ tipo_comprobante: '03', serie: 'B001',
+      customer_identity_number: undefined, customer_identity_type: undefined,
+      ...(caso === 'credito' ? { forma_pago: 'Credito', cuotas: [{ monto: 118, vencimiento: '2027-01-01' }] } : { descuento_global: { codigo: '02', monto: 1 } }),
+    }), COMPANY_ID)).rejects.toThrow(/maestro/);
+    expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
   });
 });

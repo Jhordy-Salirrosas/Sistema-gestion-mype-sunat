@@ -65,11 +65,27 @@ export class CertificateService implements OnModuleInit {
     return certificate;
   }
 
+  /** Inspección para configuración: conserva vigencia aunque el certificado haya vencido.
+   * No devuelve clave privada ni autoriza a firmar. */
+  public inspectCertificate(context?: IssuerContext): Pick<ValidatedCertificate, 'validFrom' | 'validTo' | 'issuerRuc' | 'daysRemaining'> {
+    const c = this.loadCertificate(
+      context ? context.certificate?.base64 : process.env.CERT_BASE64,
+      context ? context.certificate?.password : process.env.CERT_PASSWORD,
+      context?.ruc ?? process.env.RUC_EMISOR, false,
+    );
+    return { validFrom: c.validFrom, validTo: c.validTo, issuerRuc: c.issuerRuc, daysRemaining: c.daysRemaining };
+  }
+
   public validarYCargarCertificado(
     certBase64 = process.env.CERT_BASE64,
     certPassword = process.env.CERT_PASSWORD,
     rucEmisor = process.env.RUC_EMISOR,
   ): ValidatedCertificate {
+    return this.loadCertificate(certBase64, certPassword, rucEmisor, true);
+  }
+
+  private loadCertificate(certBase64: string | undefined, certPassword: string | undefined,
+    rucEmisor: string | undefined, requireValidity: boolean): ValidatedCertificate {
     // 1. Comprobar la presencia de las variables de entorno.
     if (!certBase64) {
       throw new BadRequestException('Falta la variable de entorno CERT_BASE64');
@@ -133,7 +149,7 @@ export class CertificateService implements OnModuleInit {
       const validFrom = certificate.validity.notBefore;
       const validTo = certificate.validity.notAfter;
 
-      if (now < validFrom || now > validTo) {
+      if (requireValidity && (now < validFrom || now > validTo)) {
         this.logger.error(
           `Certificado digital no vigente. Vigencia: ${validFrom.toISOString()} a ${validTo.toISOString()}`,
         );
@@ -148,7 +164,7 @@ export class CertificateService implements OnModuleInit {
 
       if (daysRemaining <= 30) {
         this.logger.warn(
-          `El certificado vencerá en ${daysRemaining} días (${validTo.toISOString()})`,
+          `Vigencia del certificado: ${daysRemaining} días restantes (${validTo.toISOString()})`,
         );
       } else {
         this.logger.log(

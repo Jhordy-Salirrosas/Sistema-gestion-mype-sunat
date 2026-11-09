@@ -102,6 +102,7 @@ export class StockValidationService {
         description: true,
         sunat_unit_code: true,
         tax_affectation: true,
+        is_inventory: true,
       },
     });
 
@@ -132,7 +133,7 @@ export class StockValidationService {
         );
       }
 
-      if (item.cantidad > entrada.stock) {
+      if (entrada.isInventory && item.cantidad > entrada.stock) {
         faltantes.push({
           descripcion: entrada.descripcion,
           codigo,
@@ -171,6 +172,7 @@ export class StockValidationService {
       description: string;
       sunat_unit_code: string;
       tax_affectation?: string | null;
+      is_inventory?: boolean;
     }>,
     saldos: Array<{ product_id: string; _sum: { current_stock: unknown } }>,
   ): Map<
@@ -180,6 +182,7 @@ export class StockValidationService {
       stock: number;
       unidad: string;
       taxAffectation: string | null;
+      isInventory: boolean;
     }
   > {
     const totalPorProducto = new Map<string, number>();
@@ -195,6 +198,7 @@ export class StockValidationService {
         stock: number;
         unidad: string;
         taxAffectation: string | null;
+        isInventory: boolean;
       }
     >();
     for (const producto of productos) {
@@ -203,6 +207,7 @@ export class StockValidationService {
         stock: totalPorProducto.get(producto.id) ?? 0,
         unidad: producto.sunat_unit_code,
         taxAffectation: producto.tax_affectation?.trim() || null,
+        isInventory: producto.is_inventory !== false,
       });
     }
     return mapa;

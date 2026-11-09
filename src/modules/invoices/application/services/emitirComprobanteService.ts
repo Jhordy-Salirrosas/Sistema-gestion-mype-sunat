@@ -1,3 +1,4 @@
+import { multiplicarMoneda } from '../../money';
 import { verificarOrigenAceptado } from './creditNoteBalanceGuard';
 /**
  * Emisión de un comprobante desde la PANTALLA (M1, corrección del docente).
@@ -60,6 +61,7 @@ const TIPOS_NOTA = ['07', '08'] as const;
 
 /** Respuesta de la emisión para la pantalla. */
 export interface ResultadoEmision {
+  id: string;
   success: boolean;
   /** Número completo del comprobante (F001-00000001). */
   numero: string;
@@ -119,7 +121,7 @@ export class EmitirComprobanteService {
     const emisor = await this.datosDelEmisor(companyId);
     const determinacion = dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03'
       ? await resolverRetencionMaestro(this.prisma, { companyId, tipo: dto.customer_identity_type,
-          numero: dto.customer_identity_number, fecha: new Date(), enviado: dto.agente_retencion,
+          numero: dto.customer_identity_number, fecha: new Date((dto.fecha_emision ?? new Date().toISOString()).slice(0, 10) + 'T00:00:00Z'), enviado: dto.agente_retencion,
           correccion: dto.correccion_retencion })
       : null;
     if (determinacion) dto = { ...dto, agente_retencion: determinacion.aplica };
@@ -139,19 +141,7 @@ export class EmitirComprobanteService {
       { tipoComprobante: dto.tipo_comprobante, importeTotal: calculoPrevio.importes.total },
     );
 
-    // Validar descuentos antes de reservar un correlativo.
-    dto.items.forEach((item, i) => {
-      const d = item.descuento;
-      const baseUnitaria =
-        typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario)
-          ? (item.afectacion ?? '10').startsWith('10')
-            ? Math.round((item.precioUnitario / 1.18) * 100) / 100
-            : item.precioUnitario
-          : item.valorUnitario;
-      if (d && (!Number.isFinite(d.monto) || d.monto <= 0 || d.monto > item.cantidad * baseUnitaria || !['00', '01'].includes(d.codigo) || ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36'].includes(item.afectacion ?? ''))) {
-        throw new BadRequestException(`Descuento inválido en la línea ${i + 1}`);
-      }
-    });
+    // Los descuentos ya fueron validados por la liquidación decimal previa.
 
     // 2. La nota necesita un comprobante que exista de verdad.
     await this.verificarDocumentoOrigen(dto, companyId);
@@ -193,7 +183,7 @@ export class EmitirComprobanteService {
 
     const traducido = traducirEmision(dtoConCuenta, emisor, correlativo);
 
-    await this.persistir(traducido.dto, companyId, traducido.importes, determinacion?.mensaje);
+    const persistido = await this.persistir(traducido.dto, companyId, traducido.importes, determinacion?.mensaje);
     const numero = `${traducido.dto.serie}-${String(correlativo).padStart(8, '0')}`;
     this.logger.log(
       `[M1] Emitido ${numero} por S/ ${traducido.importes.total.toFixed(2)} ` +
@@ -201,6 +191,7 @@ export class EmitirComprobanteService {
     );
 
     return {
+      id: persistido.id,
       success: true,
       numero,
       serie: traducido.dto.serie,
@@ -313,7 +304,7 @@ export class EmitirComprobanteService {
       // de exceso: una nota de S/ 753,01 sobre una factura con S/ 703 libres se
       // aceptaba (verificado contra el servidor el 4 nov).
       const importeNota = this.totalConImpuestos(dto);
-      if (importeNota > saldo + 0.01) {
+      if (Math.round(importeNota * 100) > Math.round(saldo * 100)) {
         throw new BadRequestException(
           `La nota de crédito (S/ ${importeNota.toFixed(2)}) supera el saldo ` +
             `disponible de ${referencia} (S/ ${saldo.toFixed(2)}).`,
@@ -511,10 +502,8 @@ export class EmitirComprobanteService {
     if (dto.forma_pago !== 'Credito') return;
 
     const numero = dto.customer_identity_number?.trim();
-    const tipo =
-      dto.customer_identity_type?.trim() ||
-      (numero?.length === 11 ? '6' : '1');
-    const partner = numero
+    const tipo = dto.customer_identity_type?.trim();
+    const partner = numero && tipo
       ? ((await this.prisma.businessPartner.findFirst({
           where: {
             company_id: companyId,
@@ -535,14 +524,7 @@ export class EmitirComprobanteService {
         } | null)
       : null;
 
-    const tieneCredito =
-      partner && partner.is_active !== false
-        ? typeof partner.has_credit === 'boolean'
-          ? partner.has_credit
-          : Boolean(
-              partner.payment_terms && partner.payment_terms !== 'CONTADO',
-            )
-        : false;
+    const tieneCredito = partner?.is_active !== false && partner?.has_credit === true;
 
     if (!tieneCredito) {
       throw new BadRequestException(
@@ -566,10 +548,8 @@ export class EmitirComprobanteService {
     if (!llevaDescuento) return;
 
     const numero = dto.customer_identity_number?.trim();
-    const tipo =
-      dto.customer_identity_type?.trim() ||
-      (numero?.length === 11 ? '6' : '1');
-    const partner = numero
+    const tipo = dto.customer_identity_type?.trim();
+    const partner = numero && tipo
       ? ((await this.prisma.businessPartner.findFirst({
           where: {
             company_id: companyId,
@@ -736,7 +716,7 @@ export class EmitirComprobanteService {
         unit_price:
           linea.precioUnitario ??
           (linea.afectacion.startsWith('10')
-            ? Math.round(linea.valorUnitario * 1.18 * 100) / 100
+            ? multiplicarMoneda(linea.valorUnitario, 1.18)
             : linea.valorUnitario),
         igv_affectation_type: linea.afectacion,
         igv_amount: linea.igvLinea,

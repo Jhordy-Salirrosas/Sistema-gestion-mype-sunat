@@ -1,3 +1,4 @@
+import { CdrReferenceMismatch } from './cdrReferenceGuard';
 import { Logger } from '@nestjs/common';
 import { InvoiceStatus } from '../../../generated/client/enums';
 import { CdrPersistenceService } from '../cdr-persistence.service';
@@ -20,6 +21,11 @@ export async function handleSunatBillError(
     elapsedMs?: number | null;
   } = {},
 ): Promise<ProcessCdrResult> {
+  if (error instanceof CdrReferenceMismatch) {
+    return failure(params, error.message, InvoiceStatus.ENVIADO, null,
+      { status: InvoiceStatus.ENVIADO, kind: 'DESCONOCIDO', valido: false, reintentable: false },
+      false, persistence, logger, { ...observation, errorCode: 'CDR_REFERENCE_MISMATCH' });
+  }
   if (isSunatSoapFaultError(error)) {
     const codigo = error.sunatCode ?? '';
     const clasificacion = classifyResponseCode(codigo);

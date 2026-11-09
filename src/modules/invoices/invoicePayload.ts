@@ -21,6 +21,7 @@ export interface InvoicePayload extends DatosTributarios {
   departamentoEmisor?: string;
   provinciaEmisor?: string;
   distritoEmisor?: string;
+  codigoLocalAnexoEmisor?: string;
   /** Tipo del Catálogo 01: '01' Factura, '03' Boleta, '07' NC, '08' ND. */
   tipoComprobante: string;
   /** Serie según tipo: F001, B001, FC01, FD01. */

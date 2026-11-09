@@ -92,7 +92,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
     { invoice: { findUnique, update } } as never,
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
-    { signXml } as never,
+    { verifySignature: jest.fn(() => true), signXml } as never,
     // TA-58: el consumidor ahora aplica la compuerta XSL antes de enviar.
     // Aqui se devuelve "valido" para que estas pruebas sigan midiendo lo suyo
     // (recarga del payload, firma y empaquetado) y no la compuerta.
@@ -112,7 +112,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
     { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );
 
-  return {
+  return { verifySignature: jest.fn(() => true),
     consumidor,
     registerInvoiceWorker,
     processWithRetry,
@@ -234,6 +234,26 @@ describe('TA-28 InvoiceJobConsumer', () => {
     expect(d.processWithRetry).not.toHaveBeenCalled();
   });
 
+  it.each([InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO,
+    InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO])(
+    'una reentrega preserva %s sin firmar, enviar ni escribir', async (estado) => {
+      const d = crearDobles({ ...COMPROBANTE, estado });
+      expect(await d.consumidor.procesar({ invoice_id: 'inv-1' })).toBeNull();
+      expect(d.update).not.toHaveBeenCalled();
+      expect(d.signXml).not.toHaveBeenCalled();
+      expect(d.processWithRetry).not.toHaveBeenCalled();
+    },
+  );
+
+  it('condiciona el fallo de preparación para no sobrescribir un estado final concurrente', async () => {
+    const d = crearDobles(null);
+    await d.consumidor.procesar({ invoice_id: 'inv-1' });
+    expect(d.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'inv-1', estado: { notIn: [InvoiceStatus.ACEPTADO,
+        InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
+    }));
+  });
+
   it('deja ERROR_RED si el comprobante no se puede preparar', async () => {
     const d = crearDobles(null);
     const resultado = await d.consumidor.procesar({ invoice_id: 'inv-1' });
@@ -274,7 +294,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
         accountingEntry: { findFirst: jest.fn(async () => null) } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
-      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
       // TA-58: compuerta XSL, aquí siempre "válido".
       {
         validar: jest.fn(async () => ({
@@ -328,7 +348,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
       { invoice: { findUnique, update: jest.fn() } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
-      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null })) } as never,
       { persistFailure: jest.fn() } as never, { registrar } as never,
       { guardar: jest.fn(async () => 'hash') } as never, accounting as never,
@@ -349,7 +369,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
       { invoice: { findUnique, update: jest.fn() } } as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
-      { signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
+      { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null })) } as never,
       { persistFailure: jest.fn() } as never, { registrar } as never,
       { guardar: jest.fn(async () => 'hash') } as never,
@@ -363,4 +383,11 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const d = crearDobles();
     expect(d.consumidor.hashDelXml('abc')).toHaveLength(64);
   });
+});
+
+it('no propaga un fallo al marcar ERROR_RED cuando otro worker finalizó concurrentemente', async () => {
+  const d = crearDobles(null);
+  d.update.mockRejectedValueOnce(new Error('registro ya finalizado'));
+  await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).resolves.toBeNull();
+  expect(d.processWithRetry).not.toHaveBeenCalled();
 });

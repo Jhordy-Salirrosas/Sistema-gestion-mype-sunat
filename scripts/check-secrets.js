@@ -1,41 +1,38 @@
-const { execSync } = require('child_process');
-const path = require('path');
+const { execFileSync } = require('node:child_process');
+const { readFileSync } = require('node:fs');
+const path = require('node:path');
 
-console.log('🔍 Escaneando archivos rastreados por Git en busca de secretos...');
-
-try {
-    // Obtenemos solo los archivos que Git está rastreando (para ignorar tu .env local)
-    const output = execSync('git ls-files', { encoding: 'utf-8' });
-    const files = output.split('\n').filter(Boolean);
-
-    const forbiddenExtensions = ['.pfx', '.p12', '.jks', '.pem', '.key'];
-    const forbiddenExactFiles = ['.env', '.env.local', '.env.development', '.env.production'];
-
-    let secretsFound = false;
-
-    for (const file of files) {
-        const ext = path.extname(file).toLowerCase();
-        const basename = path.basename(file);
-
-        if (forbiddenExtensions.includes(ext)) {
-            console.error(`❌ SECRETO DETECTADO EN GIT: Archivo de certificado encontrado -> ${file}`);
-            secretsFound = true;
-        }
-
-        if (forbiddenExactFiles.includes(basename)) {
-            console.error(`❌ SECRETO DETECTADO EN GIT: Archivo de entorno encontrado -> ${file}`);
-            secretsFound = true;
-        }
-    }
-
-    if (secretsFound) {
-        console.error('\n🚨 ESCANEO FALLIDO: Se encontraron secretos que no deben estar versionados en Git.');
-        process.exit(1); // Falla el proceso (detiene el PR en Github Actions)
-    } else {
-        console.log('\n✅ ESCANEO EXITOSO: Tu repositorio está limpio de secretos.');
-        process.exit(0); // Proceso exitoso
-    }
-} catch (error) {
-    console.error('Error al ejecutar git ls-files. Asegúrate de estar en un repositorio git.', error.message);
-    process.exit(1);
+/** Devuelve categorías, nunca valores ni fragmentos del secreto. */
+function scanText(contents) {
+  const findings = [];
+  if (/-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----\s*(?:[A-Za-z0-9+/=\s]|\\n|\\r){64,}-----END (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/.test(contents)) findings.push('clave privada');
+  if (/\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{80,}|AKIA[A-Z0-9]{16})\b/.test(contents)) findings.push('token de acceso');
+  for (const line of contents.split(/\r?\n/)) {
+    const match = /^\s*(?:export\s+)?(?:SUNAT_SOL_PASSWORD|CERT_PASSWORD|CERT_BASE64|ISSUER_CONFIG_ENCRYPTION_KEY)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    const value = match[1].trim().replace(/^(['"])(.*)\1$/, '$2');
+    if (value && !/^(?:\$\{[^}]+\}|<[^>]+>|(?:CHANGE_ME|REPLACE_ME|YOUR_|TU_|FAKE_|OBVIOUSLY_FAKE_|GENERATE_).*)$/i.test(value)) findings.push('asignación literal de secreto');
+  }
+  return [...new Set(findings)];
 }
+function scanFile(file, contents) {
+  const findings = scanText(contents);
+  if (['.pfx', '.p12', '.jks', '.pem', '.key'].includes(path.extname(file).toLowerCase())) findings.push('archivo criptográfico');
+  if (['.env', '.env.local', '.env.development', '.env.production'].includes(path.basename(file))) findings.push('archivo de entorno privado');
+  return [...new Set(findings)];
+}
+function main() {
+  try {
+    const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+    let failed = false;
+    for (const file of files) {
+      const findings = scanFile(file, readFileSync(file, 'utf8'));
+      if (findings.length) { console.error(`${file}: ${findings.join(', ')}`); failed = true; }
+    }
+    if (failed) { console.error('Revisión requerida: coincidencias en archivos rastreados. No se muestran valores.'); return 1; }
+    console.log('Sin coincidencias en los patrones revisados; este control no garantiza ausencia de otros secretos.');
+    return 0;
+  } catch { console.error('No se pudo completar la revisión de archivos rastreados.'); return 1; }
+}
+module.exports = { scanText, scanFile, main };
+if (require.main === module) process.exitCode = main();
