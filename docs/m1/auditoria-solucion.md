@@ -40,7 +40,7 @@ La API de Resiliencia `encolarResumen` no admite cliente transaccional ni regist
 
 No se permite bypass ni resultado XSL no concluyente contra BETA/PRODUCCIÓN o un endpoint remoto. La excepción de pruebas exige contexto MOCK y host loopback explícito. Se bloquea XML sin certificado, firma inválida o copia firmada que no pudo persistirse. La verificación de firma usa ahora checkSignature real y rechaza alteraciones; el método anterior solo comprobaba nodos.
 
-La validación oficial completa sigue BLOQUEADA por dependencias XSL ausentes. No se afirma que las comprobaciones internas sean XSD oficial. Hasta resolver esa dependencia, los despachos externos quedan bloqueados de forma explícita. Tampoco se ha desplegado ese cambio.
+TA-70 añade validación estructural XSD 2.1 oficial y ejecución local del juego SFS completo, con pruebas positivas de Factura, Boleta, NC y ND (ver detalle al final). Los fallos del ejecutor siguen siendo no concluyentes y no permiten despachos externos. La compuerta de esta parte no se modifica ni se despliega.
 
 ## Parte 6: cotejo de CDR y consulta segura
 
@@ -111,3 +111,90 @@ Se alinea el código 37 (retiro a trabajadores) con la gratuidad que declara el 
 ## Validación de cierre
 
 Suite completa: 231 suites aprobadas, 2030 pruebas aprobadas, 20 omitidas en suites optativas BETA/BD. Build Nest, lint de M1/SUNAT y escáner de secretos aprobados. Cobertura global: sentencias 93.39%, ramas 80.13%, funciones 89.36%, líneas 93.98%. Ningún servicio M1 modificado redujo cobertura en su parte; creationGuards queda en 100% de sentencias, funciones y ramas. La cobertura local no acredita conectividad ni autenticación SUNAT real.
+
+
+## Integración TA-70: validador local concluyente con el SFS
+
+Fase 0: rama feat/m1-ta70-sfs desde dev
+`e14cc80d04d200ab119d62ab2523046ed1305618`. validate_utils.xsl tiene
+54.304 bytes y SHA-256
+`d3d4a1cac97a97101dba05bf7a88232894c776164ea6507238f1b171c71ce1d9`.
+Se leyeron README y verificacion/probar.py; se reprodujo BTC→3088 y PEN→3030
+(supera moneda, no acredita una factura válida). Python 3.12.14, lxml 6.1.1,
+libxslt 1.1.43 disponibles. Línea base: 236 suites aprobadas, 2078 pruebas
+aprobadas, 4 suites/20 pruebas omitidas; build y lint completos aprobados.
+Fue necesario generar el cliente Prisma local; no se aplicaron migraciones.
+
+El servicio usa scripts/m1/validate_sfs.py por stdin/stdout JSON, sin shell.
+Requiere Python 3 con lxml (scripts/m1/requirements.txt); SUNAT_SFS_PYTHON
+permite indicar el intérprete. Ejecutar desde la raíz que contiene scripts/ y
+assets/, también con node dist/main.js. Estos directorios deben empaquetarse
+junto a dist/; Nest no los copia. SUNAT_XSL_DIR explícito mantiene la ruta
+heredada, que nunca acredita validación positiva sin evidencia.
+
+Cada proceso valida primero con los XSD oficiales 2.1 vendorizados de Invoice,
+CreditNote o DebitNote. Una infracción estructural devuelve código local XSD,
+mensaje y nodo antes de ejecutar XSL; no se inventa un código SUNAT. Después
+selecciona ValidaExprRegFactura/Boleta/NC/ND según 01/03/07/08 y prepara una
+copia temporal con las tres adaptaciones documentadas (func, current-date(),
+matches()) y el cuarto patrón autorizado de renombrado de variables duplicadas.
+Resolver confinado a commons, sin recursos externos ni escrituras XSL; EXSLT
+regexp y dyn:evaluate siguen la prueba de referencia. Se calcula
+nombreArchivoEnviado desde emisor, tipo e ID, sin confundir IDs anidados ni
+completar datos ausentes.
+
+### Cuarta adaptación autorizada: instancias exactas
+
+Las rutas de la tabla son relativas a
+`assets/sunat-sfs/commons/xsl/validation/2.X/`; las líneas corresponden a los
+originales vendorizados. Solo se modifica el atributo name y las referencias
+locales indicadas. Cada fórmula, condición, código y mensaje conserva el texto
+original. Las hojas vendorizadas permanecen byte a byte intactas.
+
+| Archivo | Definiciones originales duplicadas | Renombrado temporal | Referencias modificadas |
+| --- | --- | --- | --- |
+| ValidaExprRegFactura-2.0.1.xsl | totalDescuentosGlobales: 4735 y 4771 | 4735 → totalDescuentosGlobalesInafectos | 4736, totalCalculado; intacta la fórmula IGV/IVAP de 4771–4774 |
+| ValidaExprRegBoleta-2.0.1.xsl | totalDescuentosGlobales: 5304 y 5348 | 5304 → totalDescuentosGlobalesInafectos | 5305, totalCalculado; intacta la fórmula IGV/IVAP de 5348–5351 |
+| ValidaExprRegNC-2.0.1.xsl | tipoComprobante: 71–72 y 81–93 | 81 → tipoComprobantePorSerie | Ninguna: no hay referencias ejecutables a esa variable |
+| ValidaExprRegND-2.0.1.xsl | tipoComprobante: 29 y 34 | 34 → tipoComprobantePorSerie | Ninguna: no hay referencias ejecutables a esa variable |
+| ValidaExprRegND-2.0.1.xsl | totalImpuestos: 1063 y 1073 | 1073 → totalImpuestosLocal | Ninguna: la referencia posterior solo aparece en comentarios |
+| ValidaExprRegND-2.0.1.xsl | SumatoriaImpuestos: 1064 y 1074 | 1074 → SumatoriaImpuestosLocal | Ninguna: la referencia posterior solo aparece en comentarios |
+| ValidaExprRegND-2.0.1.xsl | valorVentaLinea: 1917 y 1983 | 1983 → valorVentaLineaDuplicado | Ninguna: no hay referencias ejecutables a esa variable |
+
+La adaptación verifica la presencia de las definiciones y referencias en las
+líneas esperadas y falla de forma no concluyente si no coinciden. Una prueba
+independiente exige que solo cambien esas nueve líneas y que al revertir los
+identificadores se recupere exactamente el texto original; no se reescribe el
+XML con un serializador ni se cambian fórmulas. La autorización del usuario
+abarca exclusivamente este patrón de duplicación, no otras incompatibilidades.
+
+Solo el rechazo fatal del SFS devuelve su primer código, mensaje original y
+nodo; los avisos previos no se convierten en rechazos. Si falta Python/lxml,
+assets, función o recurso, hay error de motor, protocolo inválido o timeout de
+2000 ms, el resultado es bloqueado=true, valido=false, validadoDeVerdad=false.
+El timeout termina el proceso con SIGKILL. No se cachean conclusiones de otras
+invocaciones. validaDeVerdad() sin evidencia sigue false, incluido el diagnóstico
+de configuración. La compuerta de la Parte 5 permanece intacta.
+
+Pruebas reales de punta a punta: Factura, Boleta, Nota de Crédito y Nota de
+Débito completas pasan XSD y XSL, devuelven errores=[] y el servicio acredita
+valido=true/validadoDeVerdad=true. No se usan dobles para acreditar aprobación.
+BTC devuelve 3088 con mensaje/nodo; sin local del emisor devuelve 3030;
+NC con motivo 99 devuelve 2172; Factura con precio negativo devuelve 2369.
+También se verifica rechazo XSD previo al catálogo, XML mal formado, selección
+XSD por los cuatro tipos, ejecutor ausente y timeout real después de un éxito
+previo. Los fixtures sin firma de TA-31/TA-62 con ExtensionContent vacío se
+rechazan por XSD sin modificar el generador ni la compuerta.
+
+La validación local no acredita aceptación, conectividad, credenciales ni
+verificación de firma de SUNAT; las ramas DataPower de consulta/firma no se
+suplantan. Sin emisiones, acceso a credenciales, migraciones aplicadas,
+cambios de otros módulos, PR ni despliegue.
+
+Cierre TA-70 con la cuarta adaptación autorizada: suite completa con 237 suites
+y 2096 pruebas aprobadas; 4 suites/20 pruebas optativas omitidas. Las 18 pruebas
+Jest específicas incluyen dos comprobaciones Python del alcance del renombrado.
+Build Nest y lint completo aprobados. No se detectó otro bloqueo en los cuatro
+fixtures positivos ni en los negativos verificados. La integración queda en
+cuatro commits por partes; la autorización de la cuarta adaptación y sus
+pruebas/documentación se incorporan al commit de cierre de la Parte 4.
