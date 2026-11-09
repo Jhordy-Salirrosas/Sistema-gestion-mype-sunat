@@ -318,17 +318,7 @@ export default function InvoiceBajasPage() {
               </TableBody>
             </Table>}
 
-            {/*
-              D11: ENVÍO REAL del resumen diario.
-              Aquí decía «No hay botón de "enviar" porque el envío real pasa
-              por la cola de resúmenes, y fingirlo sería el mismo error que
-              inventar un CDR». La primera mitad era cierta; la segunda no: la
-              cola existe y el endpoint está conectado desde hace semanas. Lo
-              que faltaba era esta llamada.
-              Solo se ofrece para el RESUMEN DIARIO (boletas), que es lo que
-              pidió el docente; el flujo de baja (RA) es otro envío y no se
-              toca aquí.
-            */}
+            {/* RC conserva confirmación y respuesta literal; el Monitor sigue el ticket. */}
             {pestana === 'resumen' && (
               <div className="mt-3">
                 <EnviarResumenDiarioBoton

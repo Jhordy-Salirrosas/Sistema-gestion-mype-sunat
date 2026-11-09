@@ -40,9 +40,9 @@ it('presenta motivo de rechazo a la preparación sin afirmar aceptación', async
   render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={vi.fn()} />); fireEvent.click(screen.getByLabelText('Dar de baja F001-62')); fireEvent.click(screen.getByRole('button', { name: 'Ver XML de selección' })); await screen.findByText('XML de los documentos seleccionados'); fireEvent.click(screen.getByRole('button', { name: 'Enviar baja a SUNAT' })); fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja en SUNAT' }));
   expect((await screen.findByRole('status')).textContent).toContain('Validación XSD bloqueada');
 });
-it('Monitor muestra agregado, ticket, causa y consulta de ticket sin reenvío', async () => {
-  vi.mocked(invoicesApi.getAgregados).mockResolvedValue([{ id: 'a', kind: 'RA', identifier: 'RA-20261109-001', reference_date: '2026-11-09', state: 'POLLING', ticket: 'T-FAKE', transport_uncertain: false, result: null, error: 'SUNAT sigue procesando' }]);
+it.each(['RA', 'RC'] as const)('Monitor muestra %s, ticket, causa y consulta sin reenvío', async kind => {
+  vi.mocked(invoicesApi.getAgregados).mockResolvedValue([{ id: 'a', kind, identifier: `${kind}-20261109-001`, reference_date: '2026-11-09', state: 'POLLING', ticket: 'T-FAKE', transport_uncertain: false, result: null, error: 'SUNAT sigue procesando' }]);
   vi.mocked(invoicesApi.consultarAgregado).mockResolvedValue({ motivo: 'En proceso', status: '98' }); render(<InvoiceAggregateMonitor />);
-  expect(await screen.findByText(/Ticket: T-FAKE/)).toBeTruthy(); fireEvent.click(screen.getByRole('button', { name: 'Consultar ticket RA-20261109-001' }));
-  expect((await screen.findByRole('status')).textContent).toContain('En proceso'); expect(invoicesApi.consultarAgregado).toHaveBeenCalledExactlyOnceWith('RA-20261109-001'); expect(invoicesApi.enviarBaja).not.toHaveBeenCalled();
+  expect(await screen.findByText(/Ticket: T-FAKE/)).toBeTruthy(); fireEvent.click(screen.getByRole('button', { name: `Consultar ticket ${kind}-20261109-001` }));
+  expect((await screen.findByRole('status')).textContent).toContain('En proceso'); expect(invoicesApi.consultarAgregado).toHaveBeenCalledExactlyOnceWith(`${kind}-20261109-001`); expect(invoicesApi.enviarBaja).not.toHaveBeenCalled();
 });
