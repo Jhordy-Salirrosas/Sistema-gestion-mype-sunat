@@ -13,6 +13,7 @@ from lxml import etree
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets" / "sunat-sfs" / "commons"
 HOJAS = {"01": "Factura", "03": "Boleta", "07": "NC", "08": "ND"}
+ESQUEMAS = {"01": "Invoice", "03": "Invoice", "07": "CreditNote", "08": "DebitNote"}
 CBC = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 CAC = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
 
@@ -75,9 +76,20 @@ def validar(request):
     tipo = request["tipo"]
     hoja = HOJAS[tipo]
     parser_xml = etree.XMLParser(no_network=True, resolve_entities=False, load_dtd=False)
-    doc = etree.fromstring(request["xml"].encode("utf-8"), parser_xml)
+    try:
+        doc = etree.fromstring(request["xml"].encode("utf-8"), parser_xml)
+    except etree.XMLSyntaxError:
+        return {"completado": True, "errores": [{"codigo": "XSD", "mensaje": "XML mal formado", "nodo": None}]}
     if doc.getroottree().docinfo.doctype:
         raise ValueError("DTD no permitido")
+    # La estructura se verifica antes de compilar o ejecutar cualquier XSL.
+    parser_xsd = etree.XMLParser(no_network=True, resolve_entities=False, load_dtd=False)
+    parser_xsd.resolvers.add(Resolver(ASSETS))
+    schema_path = ASSETS / "xsd" / "2.1" / "maindoc" / f"UBL-{ESQUEMAS[tipo]}-2.1.xsd"
+    schema = etree.XMLSchema(etree.parse(str(schema_path), parser_xsd))
+    if not schema.validate(doc):
+        error = schema.error_log[0]
+        return {"completado": True, "errores": [{"codigo": "XSD", "mensaje": error.message, "nodo": error.path}]}
     ns = {"cbc": CBC, "cac": CAC}
     ruc = doc.findtext("cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID", namespaces=ns) or ""
     numero = doc.findtext("cbc:ID", namespaces=ns) or ""

@@ -28,7 +28,7 @@ export function ejecutarSfs(xml: string, tipo: string): Promise<ResultadoSfs> {
       try {
         const result = JSON.parse(salida) as ResultadoSfs;
         if (code !== 0 || result.completado !== true || !Array.isArray(result.errores) ||
-            result.errores.some(e => !/^\d{4}$/.test(e.codigo) || typeof e.mensaje !== 'string' || !(e.nodo === null || typeof e.nodo === 'string'))) {
+            result.errores.some(e => !/^(\d{4}|XSD)$/.test(e.codigo) || typeof e.mensaje !== 'string' || !(e.nodo === null || typeof e.nodo === 'string'))) {
           throw new Error();
         }
         resolve(result);
