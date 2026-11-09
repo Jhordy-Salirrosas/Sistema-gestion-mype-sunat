@@ -5,6 +5,7 @@
  * está OPEN no toca SUNAT y deja el job en cola; al agotar, ERROR_RED + DLQ.
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { PrismaService } from '../../../../database/prismaService';
 import { InvoiceStatus } from '../../../../generated/client/enums';
 import { SunatBillService } from '../../../sunat/sunat-bill.service';
 import {
@@ -89,6 +90,7 @@ export class InvoiceRetryService {
     @Optional()
     @Inject(CONSULTA_ESTADO_PORT)
     private readonly consultaEstado?: ConsultaEstadoPort,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
   /** Ejecuta el envío con reintentos; nunca lanza por un fallo de SUNAT. */
@@ -96,6 +98,9 @@ export class InvoiceRetryService {
     let estadoAnterior: InvoiceStatus | null =
       job.estadoActual ?? InvoiceStatus.PENDIENTE;
     let ultimo: ProcessCdrResult | null = null;
+    const anterior = await this.prisma?.invoice.findUnique({ where: { id: job.invoiceId }, select: { transport_uncertain: true, estado: true } });
+    // null conserva desconocimiento histórico: ENVIADO/ERROR_RED exige consultar.
+    let incierto = anterior?.transport_uncertain === true || (anterior?.transport_uncertain == null && ['ENVIADO', 'ERROR_RED'].includes(anterior?.estado ?? job.estadoActual ?? ''));
     for (let intento = 1; ; intento += 1) {
       // TA-33: con el circuito OPEN no se toca la red. El job no se marca
       // terminado ni va a la DLQ: queda en cola para cuando SUNAT se recupere.
@@ -109,6 +114,16 @@ export class InvoiceRetryService {
       }
 
       try {
+        if (incierto) {
+          const recuperado = await this.consultarAntesDeReenviar(job, intento);
+          if (recuperado) {
+            this.state.liberarEnvio();
+            return this.resultado(job.invoiceId, recuperado, intento - 1, false, false);
+          }
+        }
+        // Commit previo a abrir red: una caída del proceso también queda incierta.
+        await this.incertidumbre(job.invoiceId, true);
+        incierto = true;
         ultimo = await this.sunatBill.sendAndProcess({
           ...job,
           intento,
@@ -125,6 +140,8 @@ export class InvoiceRetryService {
         return this.terminarEnDlq(job, intento, estadoAnterior, ultimo, mensaje);
       }
 
+      incierto = requiereConciliacion(ultimo, null);
+      if (!incierto) await this.incertidumbre(job.invoiceId, false);
       estadoAnterior = ultimo.estado;
       // TA-33: los reintentables (red, timeout, 5xx, CDR ilegible) alimentan
       // el circuito; un CDR de negocio demuestra que SUNAT responde y lo cierra.
@@ -138,6 +155,7 @@ export class InvoiceRetryService {
         return this.resultado(job.invoiceId, conciliado, intento, false, false);
       }
 
+      incierto = false; // La consulta anterior confirmó ausencia o recuperó el CDR.
       const decision = decidirReintento(ultimo, intento);
 
       if (decision === 'DETENER') {
@@ -188,35 +206,30 @@ export class InvoiceRetryService {
     ultimo: ProcessCdrResult | null,
     intento: number,
   ): Promise<ProcessCdrResult | null> {
-    if (!this.consultaEstado) return null;
     if (!requiereConciliacion(ultimo, null)) return null;
+    return this.consultarAntesDeReenviar(job, intento);
+  }
 
-    try {
-      const consultado = await this.consultaEstado.consultarEstado({
-        invoiceId: job.invoiceId,
-        rucEmisor: job.rucEmisor,
-        tipoComprobante: job.tipoComprobante,
-        serie: job.serie,
-        correlativo: job.correlativo,
-        estadoActual: ultimo?.estado ?? null,
-        intento,
-      });
+  private async incertidumbre(invoiceId: string, value: boolean): Promise<void> {
+    if (this.prisma) await this.prisma.invoice.update({ where: { id: invoiceId }, data: { transport_uncertain: value } });
+  }
 
-      const recuperado = resultadoTrasConciliacion(consultado);
-      if (recuperado) {
-        this.logger.warn(
-          `[TA-32] ${job.invoiceId}: SUNAT ya había procesado el comprobante; se recupera el CDR (${recuperado.responseCode}) sin reenviar`,
-        );
-      }
-      return recuperado;
-    } catch (error) {
-      // Si la conciliación falla se sigue con el reintento: es el
-      // comportamiento previo y nunca peor que quedarse sin hacer nada.
-      this.logger.warn(
-        `[TA-32] ${job.invoiceId}: no se pudo conciliar el estado (${this.mensajeDe(error)}); se reintenta el envío`,
-      );
+  private async consultarAntesDeReenviar(job: RetryInvoiceJob, intento: number): Promise<ProcessCdrResult | null> {
+    if (!this.consultaEstado) throw new Error('TRANSPORT_UNCERTAIN_CONSULT_UNAVAILABLE');
+    // El puerto distingue ausencia confirmada (null) de consulta inconcluyente (throw).
+    // No capturar ese throw para reenviar: debe conservar el marcador y el job recuperable.
+    const consultado = await this.consultaEstado.consultarEstado({
+      invoiceId: job.invoiceId, rucEmisor: job.rucEmisor, tipoComprobante: job.tipoComprobante,
+      serie: job.serie, correlativo: job.correlativo, estadoActual: job.estadoActual ?? null, intento,
+    });
+    if (consultado === null) {
+      await this.incertidumbre(job.invoiceId, false);
       return null;
     }
+    const recuperado = resultadoTrasConciliacion(consultado);
+    if (!recuperado) throw new Error('TRANSPORT_UNCERTAIN_CONSULT_INCONCLUSIVE');
+    await this.incertidumbre(job.invoiceId, false);
+    return recuperado;
   }
 
   /** Devuelve el job sin tocarlo: el Circuit Breaker está OPEN. */

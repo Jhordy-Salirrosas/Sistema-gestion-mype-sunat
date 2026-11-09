@@ -91,6 +91,7 @@ function bloqueada(motivo: string): ResultadoValidacionXsl {
 /** Comprobante que devuelve Prisma. `xml_storage_url` trae el XML ya firmado. */
 function comprobante(serie = 'F001', correlativo = 1) {
   return {
+    fecha_emision: new Date('2026-11-08'),
     id: `inv-${serie}-${correlativo}`,
     ruc_emisor: '20601012341',
     tipo_comprobante: serie.startsWith('F') ? '01' : '03',
@@ -143,7 +144,7 @@ function crearConsumidor(
     { persistFailure } as never,
     // TA-68: el puente contable se ejercita en su propia suite; aqui es un
     // doble inerte para no mezclar dos responsabilidades en las mismas pruebas.
-    { registrar: jest.fn() } as never,
+    { registrar: jest.fn(async () => ({ completo: true, asientoOmitido: true })) } as never,
     // Guarda el XML firmado para que la descarga entregue el documento real.
     { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );

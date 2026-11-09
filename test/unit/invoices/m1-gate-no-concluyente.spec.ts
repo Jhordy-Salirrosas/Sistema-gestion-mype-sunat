@@ -59,14 +59,14 @@ describe('compuerta de despacho con XSL no concluyente', () => {
 
   it('bloquea el XML guardado que no cumple la estructura UBL', async () => {
     const d = escenario(xml.replace('<cbc:UBLVersionID>2.1</cbc:UBLVersionID>', ''));
-    await d.consumidor.procesar({ invoice_id: 'inv-1' });
+    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
     expect(d.enviar).not.toHaveBeenCalled();
     expect(d.comprobar).toHaveBeenCalled();
   });
 
   it('bloquea el XML guardado que incumple una regla interna', async () => {
     const d = escenario(xml.replace('20100070970', '20601012341'));
-    await d.consumidor.procesar({ invoice_id: 'inv-1' });
+    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
     expect(d.enviar).not.toHaveBeenCalled();
     expect(d.comprobar).toHaveBeenCalled();
   });
@@ -98,7 +98,7 @@ describe('compuerta de despacho con XSL no concluyente', () => {
   it('no despacha si no se puede persistir el aviso', async () => {
     const d = escenario(xml);
     d.auditar.mockImplementation(async () => { throw new Error('auditoría no disponible'); });
-    await d.consumidor.procesar({ invoice_id: 'inv-1' });
+    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
     expect(d.enviar).not.toHaveBeenCalled();
   });
 });

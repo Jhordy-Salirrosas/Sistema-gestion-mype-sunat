@@ -115,7 +115,7 @@ export function crearRetry(params: {
   const sunat =
     params.sunatBill ??
     new SunatBillService(params.persistence, params.soap);
-  return new InvoiceRetryService(dlq, sunat, params.state, params.sleep);
+  return new InvoiceRetryService(dlq, sunat, params.state, params.sleep, { consultarEstado: jest.fn().mockResolvedValue(null) });
 }
 
 export function aceptado(): ProcessCdrResult {

@@ -294,3 +294,70 @@ src/modules/resilience/infrastructure/queue/queue.service.ts. Ningún otro
 cambio de Resiliencia queda autorizado. El bloqueo RA/RC permanece intacto.
 Esta constancia debe comunicarse a Oliver, dueño del módulo, durante la
 revisión del equipo; Codex no envió mensajes a terceros.
+
+### Parte 2: recuperación e integridad del Outbox
+
+Segunda excepción expresa de Emma/Jhordy: se autoriza modificar
+src/modules/resilience/infrastructure/queue/invoiceRetryService.ts SOLO para
+2.4, persistencia de incertidumbre y consulta antes de reenviar. Fundamento:
+el docente permite reenviar cuando el comprobante no ingresó; una consulta
+inconcluyente nunca demuestra esa ausencia. Esta autorización amplía la
+excepción anterior, no habilita otros cambios de Resiliencia. Oliver debe
+recibir ambas excepciones y este fundamento durante la revisión del equipo.
+No se cambian las reglas del circuito ni el bloqueo de RA/RC.
+
+retryDlq publica un trabajo mínimo en INVOICE_QUEUE con la misma empresa y
+clave singleton del comprobante; solo después elimina el de DLQ. Si publicar
+falla, conserva DLQ; si falla la limpieza, el reintento usa la misma clave.
+Ya no se llama boss.retry sobre una cola sin consumidor. La política de la
+cola principal se crea y actualiza con 3 reintentos, demora 60 s, backoff y
+máximo 300 s, más su DLQ. Los intentos SOAP normales siguen perteneciendo a
+InvoiceRetryService; los throws de preparación, infraestructura, circuito
+abierto o contabilidad se recuperan por pg-boss. Los jobs ya creados pueden
+conservar opciones anteriores de pg-boss; el reintento manual crea el job con
+la política nueva.
+
+Invoice.transport_uncertain se escribe ANTES de cada llamada física. Un
+reinicio no borra la incertidumbre. El marcador es nullable: no se fabrica
+certeza para registros antiguos; ENVIADO/ERROR_RED sin marcador exige consulta.
+Solo el resultado del puerto que confirma NO_ENCONTRADO (null) autoriza
+reenviar; un CDR recuperado termina el flujo sin envío; una consulta fallida o
+sin CDR conserva el marcador y el trabajo recuperable. Se generó, sin aplicar,
+20261109043000_m1_transport_uncertainty mediante prisma migrate diff.
+Emma debe aplicar la migración antes de usar este código.
+
+Los fallos de firma, estructura y disponibilidad se relanzan tras conservar
+ERROR_RED, con causa en el registro existente; no se completa silenciosamente
+el job. Un circuito abierto también se relanza para reprogramación. No se
+modifica la clasificación de rechazos locales de negocio de la compuerta.
+
+Puente y respaldo de M1 pasan m1:invoice:<UUID> como idempotencyKey a
+GenerateAccountingEntryUseCase. Se usa la restricción ÚNICA ya existente de
+Contabilidad (company_id, idempotency_key); no se modifican sus archivos ni se
+crea una segunda política de unicidad. Se conservan consultas de referencias
+históricas M1_INVOICES/número e INVOICES/UUID para no duplicarlas. El respaldo
+vive en M1 y consume la interfaz existente de generación contable. Los errores
+de Kardex no se ocultan por haber recuperado un asiento.
+
+El mismo job durable conserva la tarea posterior a la aceptación: si falla la
+contabilización no se completa, y la reentrega de ACEPTADO/OBSERVADO intenta
+completar el puente/respaldo sin firmar ni reenviar. Tras agotar la política,
+queda en DLQ y el reintento manual conserva ese mismo comportamiento. Los
+casos que requieren revisión fiscal/contable tampoco se convierten en éxito
+silencioso. No se cambia la política de OBSERVADO como origen de notas.
+
+Pruebas: marcador confirmado antes de la red, recuperación tras reinicio sin
+sendBill, consulta inconcluyente sin segundo envío, ausencia confirmada antes
+del reenvío, misma clave para escritores, publicación fallida que conserva
+DLQ y reentrega contable sin transporte. Los escenarios anteriores de backoff
+usan ahora una respuesta explícita de ausencia confirmada en sus dobles.
+PostgreSQL real y concurrencia de infraestructura continúan en las suites
+optativas; ninguna migración o base de producción fue utilizada.
+
+Cierre Parte 2: suite completa 239 suites/2113 pruebas aprobadas, 4 suites/20
+pruebas optativas omitidas. Build Nest, lint y control de secretos aprobados.
+El frontend no cambia en esta parte (última verificación: 96 archivos/753 pruebas).
+Sin llamadas a SUNAT, migraciones aplicadas, cambios de Contabilidad, PR,
+fusiones ni despliegues. El detalle de archivos y pruebas queda en el diff del
+commit de Parte 2; las dos únicas fuentes modificadas de Resiliencia son las
+expresamente autorizadas arriba.
