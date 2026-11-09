@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE l>
+<l>
+<c id="DSG" ubigeo = "210402">CEBAF DESAGUADERO</c>
+<c id="EV1" ubigeo = "240302">CEBAF EJE VIAL N° 1</c>
+<c id="MCR" ubigeo = "200601">CEBAF MACARA</c>
+<c id="ALA" ubigeo = "200604">PCF EL ALAMOR</c>
+<c id="INP" ubigeo = "170301">PCF IÑAPARI</c>
+<c id="SRT" ubigeo = "230111">PCF SANTA ROSA</c>
+<c id="SRL" ubigeo = "160403">PCF SANTA ROSA</c>
+</l>
