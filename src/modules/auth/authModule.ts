@@ -63,6 +63,7 @@ import { SolCredentialCipher } from './infrastructure/security/solCredentialCiph
     TOKEN_SERVICE_PORT,
     HASHER_PORT,
     USER_REPOSITORY_PORT,
+    SOL_CREDENTIAL_CIPHER,
     AuthGuard,
     RolesGuard,
   ],

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { SireTxtParserAdapter } from '../../../src/modules/sire/infrastructure/parsers/sireTxtParserAdapter';
 import { SireTxtWriterAdapter } from '../../../src/modules/sire/infrastructure/parsers/sireTxtWriterAdapter';
 
@@ -17,6 +19,25 @@ describe('SIRE TXT adapters (provisional formats)', () => {
     expect(result.records[0].carSunat).toBe('CAR-1');
     expect(result.rejected).toEqual([
       { line: 2, reason: 'La fila no contiene las 9 columnas mínimas.' },
+    ]);
+  });
+
+  it('accepts the fictitious frontend demo upload file', () => {
+    const file = readFileSync(
+      join(
+        process.cwd(),
+        'fixtures',
+        'sire',
+        'sire-demo-provisional-202611.txt',
+      ),
+    );
+    const result = new SireTxtParserAdapter().parse(file);
+
+    expect(result.rejected).toEqual([]);
+    expect(result.records).toHaveLength(2);
+    expect(result.records.map((record) => record.carSunat)).toEqual([
+      'DEMO-RCE-202611-001',
+      'DEMO-RCE-202611-002',
     ]);
   });
 

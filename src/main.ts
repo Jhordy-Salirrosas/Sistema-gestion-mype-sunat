@@ -54,6 +54,7 @@ export async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      validationError: { target: false, value: false },
       exceptionFactory: (errors) => {
         const formattedErrors = errors.map((error) => {
           const rule = Object.keys(error.constraints || {})[0];

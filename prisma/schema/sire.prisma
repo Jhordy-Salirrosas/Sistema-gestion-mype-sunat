@@ -42,6 +42,13 @@ enum SirePeriodState {
   ERROR
 }
 
+enum SirePeriodQueryStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum SireRecordOrigin {
   SUNAT
   USUARIO
@@ -72,6 +79,23 @@ model SirePeriod {
   @@unique([company_id, period, book_type])
   @@index([state, ticket])
   @@map("sire_periods")
+}
+
+model SirePeriodQuery {
+  id           String                  @id @default(uuid())
+  company_id   String
+  company      Company                 @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  job_id       String?                 @unique
+  book_code    String
+  status       SirePeriodQueryStatus   @default(PENDING)
+  result       String?
+  error_code   String?
+  created_at   DateTime                @default(now())
+  updated_at   DateTime                @updatedAt
+  completed_at DateTime?
+
+  @@index([company_id, created_at])
+  @@map("sire_period_queries")
 }
 
 model SireReportUpload {
