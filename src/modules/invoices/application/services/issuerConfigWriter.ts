@@ -15,6 +15,13 @@ export type PerfilComercial = 'MAYORISTA' | 'MINORISTA';
 
 export interface IssuerConfigInput {
   action?: 'save' | 'reset';
+  local_anexo?: string | null;
+  domicilio_fiscal?: string | null;
+  ubigeo_fiscal?: string | null;
+  departamento_fiscal?: string | null;
+  provincia_fiscal?: string | null;
+  distrito_fiscal?: string | null;
+
   entorno?: 'MOCK' | 'BETA' | 'PRODUCCION';
   perfil_comercial?: PerfilComercial | null;
   sol_user?: string;
@@ -29,6 +36,13 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     throw new BadRequestException('CONFIG_INPUT_INVALID');
   const limits: Record<string, number> = {
     action: 5,
+    local_anexo: 4,
+    domicilio_fiscal: 500,
+    ubigeo_fiscal: 6,
+    departamento_fiscal: 100,
+    provincia_fiscal: 100,
+    distrito_fiscal: 100,
+
     entorno: 10,
     perfil_comercial: 12,
     sol_user: 64,
@@ -37,7 +51,7 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     cert_password: 256,
   };
   for (const [key, value] of Object.entries(body)) {
-    if (key === 'perfil_comercial' && value === null) continue;
+    if (['perfil_comercial', 'local_anexo', 'domicilio_fiscal', 'ubigeo_fiscal', 'departamento_fiscal', 'provincia_fiscal', 'distrito_fiscal'].includes(key) && value === null) continue;
     if (
       !Object.hasOwn(limits, key) ||
       typeof value !== 'string' ||
@@ -56,6 +70,9 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     !['MAYORISTA', 'MINORISTA'].includes(input.perfil_comercial)
   )
     throw new BadRequestException('CONFIG_PROFILE_INVALID');
+  for (const [campo, patron] of [['local_anexo', /^\d{4}$/], ['ubigeo_fiscal', /^\d{6}$/]] as const) {
+    if (input[campo] != null && input[campo]!.trim() && !patron.test(input[campo]!.trim())) throw new BadRequestException('CONFIG_FISCAL_INVALID');
+  }
   if (input.action === 'reset' && Object.keys(input).length !== 1)
     throw new BadRequestException('CONFIG_RESET_INVALID');
   return input;
@@ -83,7 +100,10 @@ export class IssuerConfigWriter {
           where: { id: companyId },
         });
         if (!company) throw new NotFoundException('ISSUER_COMPANY_NOT_FOUND');
-        if (input.action === 'reset') {
+        for (const [campo, patron] of [['local_anexo', /^\d{4}$/], ['ubigeo_fiscal', /^\d{6}$/]] as const) {
+    if (input[campo] != null && input[campo]!.trim() && !patron.test(input[campo]!.trim())) throw new BadRequestException('CONFIG_FISCAL_INVALID');
+  }
+  if (input.action === 'reset') {
           await tx.company.update({
             where: { id: companyId },
             data: {
@@ -96,6 +116,12 @@ export class IssuerConfigWriter {
         const active = Boolean(company.issuer_config_activated_at);
         // Preserve omitted fields, but only explicitly configured groups are eligible for resolution.
         const data = {
+          local_anexo: input.local_anexo === undefined ? company.local_anexo : input.local_anexo?.trim() || null,
+          domicilio_fiscal: input.domicilio_fiscal === undefined ? company.domicilio_fiscal : input.domicilio_fiscal?.trim() || null,
+          ubigeo_fiscal: input.ubigeo_fiscal === undefined ? company.ubigeo_fiscal : input.ubigeo_fiscal?.trim() || null,
+          departamento_fiscal: input.departamento_fiscal === undefined ? company.departamento_fiscal : input.departamento_fiscal?.trim() || null,
+          provincia_fiscal: input.provincia_fiscal === undefined ? company.provincia_fiscal : input.provincia_fiscal?.trim() || null,
+          distrito_fiscal: input.distrito_fiscal === undefined ? company.distrito_fiscal : input.distrito_fiscal?.trim() || null,
           sol_user: company.sol_user,
           sol_pass_encrypted: company.sol_pass_encrypted,
           cert_storage_url: company.cert_storage_url,

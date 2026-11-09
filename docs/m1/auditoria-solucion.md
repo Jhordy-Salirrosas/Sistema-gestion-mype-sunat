@@ -198,3 +198,99 @@ Build Nest y lint completo aprobados. No se detectó otro bloqueo en los cuatro
 fixtures positivos ni en los negativos verificados. La integración queda en
 cuatro commits por partes; la autorización de la cuarta adaptación y sus
 pruebas/documentación se incorporan al commit de cierre de la Parte 4.
+
+## Segunda corrección
+
+### Fase 0 y base autorizada
+
+Emma autorizó sustituir la base 24fb5a2 por main
+`af5a71fade3ca38125634a876a1c2bcbade8a572`, comprobado con ls-remote.
+24fb5a2 es ancestro; el delta de base contiene únicamente .env.example,
+prisma/seeds/auth.seed.ts y prismaAccountingRepository.ts. Rama de trabajo:
+fix/m1-auditoria-2. Front clonado por URL desde
+https://github.com/CarlosSoles/Fronted-sistema-mype-sunat.git, main
+`c22b923272e0de9248a8bcc32f10237e636e7f6d`.
+
+Línea base después de generar el cliente Prisma local (sin migraciones):
+237 suites/2096 pruebas aprobadas; 4 suites/20 pruebas optativas omitidas.
+Frontend: 96 archivos/747 pruebas aprobados. Python/lxml/assets operativos;
+la invocación local de validate_sfs.py con moneda BTC devolvió 3088.
+La auditoría adjunta se trató como evidencia, no como autorización adicional.
+
+### Parte 1: datos fiscales, precio y diagnósticos
+
+Se incorporan seis campos opcionales de Company: local_anexo,
+domicilio_fiscal, ubigeo_fiscal, departamento_fiscal, provincia_fiscal y
+distrito_fiscal. Configuración permite leerlos y guardarlos; omitir conserva
+el valor y vaciar guarda null. No hay valores predeterminados ni backfill.
+La migración 20261109040000_m1_issuer_fiscal_address fue GENERADA con
+`prisma migrate diff --from-schema <copia anterior> --to-schema prisma/schema --script`.
+No fue aplicada. Emma debe revisarla/aplicarla antes de usar el nuevo código.
+El equipo debe registrar los datos reales de cada emisor.
+
+Ambas rutas HTTP pasan por el mismo servicio, que carga esos campos de la
+empresa y bloquea con ISSUER_FISCAL_DATA_REQUIRED antes de reservar número
+si faltan datos o los códigos son inválidos. El adaptador transporta el anexo
+hasta AddressTypeCode y el domicilio hasta RegistrationAddress. Las pruebas
+usan datos ficticios explícitos exclusivamente en test/fixtures; no se copian
+a configuración real. Se verifica en ambas rutas la persistencia del payload,
+su XML generado, firma de prueba y ejecución SFS concluyente sin 3030 ni otros
+errores. No se emiten comprobantes ni se llama a SUNAT.
+
+Al seleccionar un producto el frontend conserva el valor sugerido por el
+catálogo e inicializa precioUnitario final con IGV para gravadas; las otras
+afectaciones conservan su precio. El payload siempre transporta precioUnitario,
+incluso al restaurar líneas anteriores con valorUnitario. La guarda backend
+permanece. Contrato cubierto: seleccionar, no editar, construir solicitud.
+La fuente existente del catálogo sigue siendo la valorización real expuesta
+por /invoices/products (averageUnitCost); esta parte no crea una política de
+márgenes o un maestro separado de precios de venta.
+
+La fila de validación usa un diagnóstico independiente: ejecutable Python,
+importación de lxml, archivos principales SFS, compilación de los tres XSD
+oficiales y prueba XSD mínima positiva y negativa. Retorna causas cerradas y
+sanitizadas para Python/lxml/assets/XSD, timeout o protocolo inválido. Una
+selección heredada por SUNAT_XSL_DIR se muestra como tal y no acredita SFS.
+Se verificaron también lxml ausente (python -S) y assets ausentes en una copia
+temporal del diagnóstico. No se modifica validaDeVerdad ni la compuerta por
+documento. scripts/m1/diagnose_sfs.py debe distribuirse junto a los demás scripts
+y assets; ejecutar desde la raíz sigue siendo requisito del empaquetado.
+
+La inspección conserva causas clasificadas sin publicar errores de parser,
+certificados, claves ni contraseñas. RUC_NO_COINCIDE muestra ambos RUC obtenidos
+del contexto y del sujeto; se mantiene la comprobación estricta. Cuando la
+inspección funciona, archivo contiene un identificador SHA256 del certificado.
+Configuración publica origen efectivo, causa y explicación. El front distingue
+INVALIDO y AUN_NO_VIGENTE y presenta origen y causa.
+
+Evidencia de producción aportada por Emma (no se accedió a producción en este
+trabajo): el certificado del XML histórico F001-00000060 corresponde al RUC
+20601234567; la empresa demo es 20614142503. Es una discrepancia de credenciales,
+no un defecto del chequeo de RUC. No se relaja el chequeo, no se modifica la
+política de respaldo y no se registra un certificado ajeno para la demo.
+Registrar un certificado propio es una decisión de datos del equipo.
+
+### Límite de alcance pendiente para Parte 2
+
+No se modificó Resiliencia ni Contabilidad. El reintento manual solicitado en
+2.1 llama boss.retry(INVOICE_DLQ, id) dentro de QueueService.retryDlq; la política
+de INVOICE_QUEUE (2.2) también se declara en ese archivo de Resiliencia.
+La conciliación antes de cada reintento de transporte (2.4) vive dentro del
+bucle de InvoiceRetryService, también en Resiliencia. Se solicitó aclarar si
+se autorizan esos cambios puntuales, dado el límite explícito de usar solo
+interfaces existentes. Las Partes 2 y 3 no se declaran implementadas.
+
+Validación de cierre Parte 1: backend 238 suites/2105 pruebas aprobadas;
+4 suites/20 pruebas optativas omitidas. Frontend 96 archivos/753 pruebas
+aprobados. Build y lint de ambos repos aprobados; control de secretos aprobado.
+Se descartaron ejecuciones solapadas con generación de Prisma/build y se
+repitieron las suites completas en serie sobre el estado final. Frontend se
+entrega mediante ferry/m1-auditoria-2-parte1, con rutas y procedimiento en FERRY.md.
+
+Autorización posterior de Emma/Jhordy para Parte 2: la excepción a «otros
+módulos intocados» se limita EXACTAMENTE a QueueService.retryDlq y a la
+declaración de reintentos de INVOICE_QUEUE en
+src/modules/resilience/infrastructure/queue/queue.service.ts. Ningún otro
+cambio de Resiliencia queda autorizado. El bloqueo RA/RC permanece intacto.
+Esta constancia debe comunicarse a Oliver, dueño del módulo, durante la
+revisión del equipo; Codex no envió mensajes a terceros.

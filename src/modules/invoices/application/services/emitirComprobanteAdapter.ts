@@ -45,6 +45,7 @@ export interface DatosEmisor {
   ruc: string;
   razonSocial: string;
   nombreComercial?: string;
+  codigoLocalAnexo?: string;
   ubigeo?: string;
   direccion?: string;
   departamento?: string;
@@ -332,6 +333,7 @@ export const traducirEmision = (
     rucEmisor: emisor.ruc,
     razonSocialEmisor: emisor.razonSocial,
     nombreComercialEmisor: emisor.nombreComercial,
+    codigoLocalAnexoEmisor: emisor.codigoLocalAnexo,
     ubigeoEmisor: emisor.ubigeo,
     direccionEmisor: emisor.direccion,
     departamentoEmisor: emisor.departamento,
