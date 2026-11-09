@@ -16,6 +16,7 @@ export interface IAccountingRepositoryPort {
   ): Promise<boolean>;
   /** Catálogo PCGE global. */
   findAccounts(): Promise<AccountingAccountEntity[]>;
+  createAccount(account: AccountingAccountEntity): Promise<AccountingAccountEntity>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;

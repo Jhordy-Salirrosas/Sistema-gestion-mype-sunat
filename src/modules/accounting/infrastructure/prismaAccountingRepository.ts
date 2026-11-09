@@ -133,6 +133,21 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     );
   }
 
+  async createAccount(account: { code: string; name: string; element: string; nature: 'Deudora' | 'Acreedora'; parentCode: string | null; level: number; isActive: boolean }) {
+    const row = await this.prisma.accountingAccount.create({
+      data: {
+        code: account.code,
+        name: account.name,
+        element: account.element,
+        nature: account.nature,
+        parent_code: account.parentCode,
+        level: account.level,
+        is_active: account.isActive,
+      },
+    });
+    return { code: row.code, name: row.name, element: row.element, nature: row.nature as 'Deudora' | 'Acreedora', parentCode: row.parent_code, level: row.level, isActive: row.is_active };
+  }
+
   async findAccounts() {
     const rows = await this.prisma.accountingAccount.findMany({
       where: { is_active: true },
