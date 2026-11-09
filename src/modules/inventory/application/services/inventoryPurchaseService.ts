@@ -344,6 +344,25 @@ export class InventoryPurchaseService {
     }));
   }
 
+  async listPayables(companyId: string) {
+    const compras = await this.prisma.nationalPurchase.findMany({
+      where: { company_id: companyId, status: { not: 'ANULADA' } },
+      select: { supplier_doc_number: true, supplier_name: true, total_amount: true, paid_amount: true },
+    });
+    const mapa = new Map<string, { supplierDocNumber: string; supplierName: string; total: number; paid: number; balance: number; count: number }>();
+    for (const c of compras) {
+      const actual = mapa.get(c.supplier_doc_number) ?? { supplierDocNumber: c.supplier_doc_number, supplierName: c.supplier_name, total: 0, paid: 0, balance: 0, count: 0 };
+      const total = Number(c.total_amount);
+      const paid = Number(c.paid_amount ?? 0);
+      actual.total += total;
+      actual.paid += paid;
+      actual.balance += total - paid;
+      actual.count += 1;
+      mapa.set(c.supplier_doc_number, actual);
+    }
+    return [...mapa.values()].map((c) => ({ ...c, total: Math.round(c.total * 100) / 100, paid: Math.round(c.paid * 100) / 100, balance: Math.round(c.balance * 100) / 100 }));
+  }
+
   /** Registra un pago total o parcial y su asiento CxP contra caja/banco. */
   async payPurchase(companyId: string, id: string, dto: { amount?: number; paymentDate?: string; paymentMethod?: string; bankName?: string }) {
     const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id, company_id: companyId }, include: { items: true } });
