@@ -199,4 +199,12 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
     await expect(repository.closeFiscalYear('c1', 2026)).resolves.toEqual([]);
     expect(prismaMock.accountingPeriod.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ year: 2026, status: 'ABIERTO' }) }));
   });
+
+  it('suma el saldo inicial de periodos anteriores por cuenta', async () => {
+    prismaMock.accountingEntry.findMany.mockResolvedValue([
+      { lines: [{ debit_amount: 300, credit_amount: 50 }] },
+      { lines: [{ debit_amount: 0, credit_amount: 100 }] },
+    ]);
+    await expect(repository.findLedgerOpeningBalance('c1', '2026-11', '1211')).resolves.toBe(150);
+  });
 });

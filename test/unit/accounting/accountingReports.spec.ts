@@ -13,6 +13,7 @@ describe('Reportes contables', () => {
       findAccounts: jest.fn().mockResolvedValue([
         { code: '1211', name: 'Cuentas por cobrar', element: 'Activo', nature: 'Deudora', parentCode: '12', level: 4, isActive: true },
       ]),
+      findLedgerOpeningBalance: jest.fn().mockResolvedValue(0),
       findLedgerMovements: jest.fn().mockResolvedValue([
         { entryId: 'e1', entryNumber: 1, entryDate: new Date('2026-11-01'), glosa: 'Venta', sourceModule: 'M1_INVOICES', accountCode: '1211', accountName: 'Cuentas por cobrar', debit: 118, credit: 0 },
         { entryId: 'e2', entryNumber: 2, entryDate: new Date('2026-11-02'), glosa: 'Cobro', sourceModule: 'MANUAL', accountCode: '1211', accountName: 'Cuentas por cobrar', debit: 0, credit: 50 },
@@ -30,6 +31,13 @@ describe('Reportes contables', () => {
     expect(result.totalDebit).toBe(118);
     expect(result.totalCredit).toBe(50);
     expect(result.closingBalance).toBe(68);
+  });
+
+  it('arrastra el saldo inicial de períodos anteriores', async () => {
+    repository.findLedgerOpeningBalance.mockResolvedValue(200);
+    const result = await new GetLedgerUseCase(repository).execute('c1', '2026-11', '1211');
+    expect(result.openingBalance).toBe(200);
+    expect(result.movements.map((m) => m.saldo)).toEqual([318, 268]);
   });
 
   it('rechaza una cuenta inexistente', async () => {
