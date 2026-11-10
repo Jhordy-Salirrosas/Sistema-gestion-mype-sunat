@@ -28,6 +28,7 @@ model Expense {
   base_amount      Decimal  @db.Decimal(14, 2)
   igv_amount       Decimal  @db.Decimal(14, 2)
   total_amount     Decimal  @db.Decimal(14, 2)
+  paid_amount      Decimal  @default(0.00) @db.Decimal(14, 2)
   status           String   @default("REGISTRADO")
   created_at       DateTime @default(now())
 
