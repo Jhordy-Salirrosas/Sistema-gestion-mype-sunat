@@ -155,6 +155,7 @@ export const CATALOGO_03_UNIDADES = {
   MIL: { nombre: 'Millar', simbolo: 'MLL' },
   KGM: { nombre: 'Kilogramo', simbolo: 'KG' },
   MTR: { nombre: 'Metro', simbolo: 'M' },
+  MTQ: { nombre: 'Metro cúbico', simbolo: 'm³' },
   BG: { nombre: 'Bolsa', simbolo: 'BLS' },
   BX: { nombre: 'Caja', simbolo: 'CJA' },
 } as const;
