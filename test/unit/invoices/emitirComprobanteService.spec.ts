@@ -197,6 +197,7 @@ const montar = (
 describe('EmitirComprobanteService — emisión de factura', () => {
   it.each([undefined, '003'] as const)('detracción efectiva con medio %s antes de reservar y persistir', async (medio) => {
     const d = montar();
+    d.prisma.company.findUnique.mockResolvedValue({ ruc: '20100070970', legal_name: 'FERRETERÍA LOS ANDES S.A.C.', ...fakeFiscalAddress, trade_name: null, detraction_account: '00019123456' } as never);
     const dto = factura({
       medio_pago_detraccion: medio,
       cuenta_banco_nacion: '00019123456',

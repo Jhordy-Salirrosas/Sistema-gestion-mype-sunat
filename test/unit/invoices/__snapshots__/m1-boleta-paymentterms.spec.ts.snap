@@ -5,6 +5,7 @@ exports[`SPOT conserva byte a byte PaymentMeans y PaymentTerms de detracción de
   "detraccion": "  <cac:PaymentTerms>
     <cbc:ID>Detraccion</cbc:ID>
     <cbc:PaymentMeansID>012</cbc:PaymentMeansID>
+    <cbc:PaymentPercent>12.00</cbc:PaymentPercent>
     <cbc:Amount currencyID="PEN">141.60</cbc:Amount>
   </cac:PaymentTerms>",
   "medio": "  <cac:PaymentMeans>

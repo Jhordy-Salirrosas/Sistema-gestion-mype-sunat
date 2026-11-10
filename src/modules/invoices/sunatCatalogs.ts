@@ -176,6 +176,7 @@ export const CATALOGO_53_DESCUENTOS = {
 
 /** Catálogo 54: código de bien o servicio sujeto a detracción (SPOT). */
 export const CATALOGO_54_DETRACCION = {
+  '009': { descripcion: 'Arena y piedra', porcentaje: 0.1 },
   '012': { descripcion: 'Intermediación laboral y tercerización', porcentaje: 0.12 },
   '019': { descripcion: 'Arrendamiento de bienes', porcentaje: 0.1 },
   '022': { descripcion: 'Otros servicios empresariales', porcentaje: 0.12 },

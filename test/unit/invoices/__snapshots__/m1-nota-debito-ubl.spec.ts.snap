@@ -18,6 +18,7 @@ exports[`SPOT completo y bloques de detracción conservan bytes de dev previo a 
   <cbc:IssueDate>2026-11-09</cbc:IssueDate>
 
   <cbc:InvoiceTypeCode listID="1001">01</cbc:InvoiceTypeCode>
+  <cbc:Note languageLocaleID="2006">Operación sujeta al Sistema de Pago de Obligaciones Tributarias con el Gobierno Central</cbc:Note>
   <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">PEN</cbc:DocumentCurrencyCode>
   <cac:AccountingSupplierParty>
     <cac:Party>
@@ -67,6 +68,7 @@ exports[`SPOT completo y bloques de detracción conservan bytes de dev previo a 
   <cac:PaymentTerms>
     <cbc:ID>Detraccion</cbc:ID>
     <cbc:PaymentMeansID>012</cbc:PaymentMeansID>
+    <cbc:PaymentPercent>12.00</cbc:PaymentPercent>
     <cbc:Amount currencyID="PEN">141.60</cbc:Amount>
   </cac:PaymentTerms>
   <cac:TaxTotal>

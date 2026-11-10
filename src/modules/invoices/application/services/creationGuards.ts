@@ -9,6 +9,7 @@ import { traducirEmision } from './emitirComprobanteAdapter';
 import { CATALOGO_09_MOTIVOS } from './invoiceNoteService';
 import { validarPago } from './paymentTermsAndSpotValidator';
 import { ESTADOS_NOTABLES } from './creditNoteBalanceGuard';
+import { validarClasificacionSpot, validarCuentaSpot } from './spotMinimo';
 import { resolverRetencionMaestro } from './retencionMaestro';
 import type { PrismaService } from '../../../../database/prismaService';
 
@@ -159,7 +160,12 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       enviado: dto.agente_retencion, correccion: dto.correccion_retencion });
     dto.agente_retencion = retencion.aplica;
   }
+  validarClasificacionSpot(dto);
   const liquidado = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0);
+  if (liquidado.importes.detraccion > 0) {
+    const empresa = await tx.company.findUnique({ where: { id: companyId }, select: { detraction_account: true } });
+    dto.cuenta_banco_nacion = validarCuentaSpot(dto, liquidado.importes.detraccion, empresa?.detraction_account) ?? undefined;
+  }
   validarPago({ formaPago: dto.forma_pago, cuotas: liquidado.dto.payload_ubl.cuotas as any,
     fechaEmision: liquidado.dto.payload_ubl.fechaEmision as string, montoTotal: liquidado.importes.total,
     detraccion: liquidado.importes.detraccion, retencion: liquidado.importes.retencion });

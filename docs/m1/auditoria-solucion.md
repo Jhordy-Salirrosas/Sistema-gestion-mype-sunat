@@ -1916,3 +1916,87 @@ M1 asocia errores de cliente y campos fiscales, ofrece navegación de productos/
 Nuevo POST /invoices/:id/forzar-reenvio ADMIN, motivo escrito y confirmado=true. Usuario se toma de sub del token, no del body. Bloquea empresa ajena, estados finales y CDR existente. Constancia inmutable en historial, marcador true antes de publicar, singleton de cola existente y reutilización de autorización pendiente (no se sobrescribe por un segundo clic). Publicación fallida conserva la constancia.
 
 El consumidor M1 consume la autorización bajo lock DESPUÉS de preparación/SFS y justo antes de InvoiceRetryService. Consumo vinculado al ID, una sola vez; marcador false solo para la entrada autorizada, luego el motor existente vuelve a true antes de abrir transporte. Timeout posterior retoma conciliación normal 5b y no reutiliza la constancia. Si ya hay un trabajo activo, la respuesta informa que no confirma envío/aceptación y la constancia queda pendiente recuperable. Historial presenta usuario/motivo y fecha real. No cambia retry-cdr, estados admitidos, colas ni ningún archivo de Resiliencia. Sin migración.
+
+#### Construcción — 6J, mínimo SPOT aprobado sin migración
+
+Factura PEN de arena/piedra, Catálogo 54 código 009, 10%, solo si el importe final
+es estrictamente mayor a S/700. Clasificación explícita en cada línea; no se
+infiere por nombre ni SKU. Ambas entradas comunes rechazan mezcla de líneas sin
+clasificar, otros códigos/regímenes, documentos distintos de factura y líneas
+no gravadas. Por debajo del umbral no hay detracción efectiva ni cuenta exigida.
+Las tablas de códigos anteriores se conservan para lectura/regeneración histórica;
+no son una oferta de regímenes nuevos en el formulario.
+
+Cuenta propia exclusivamente de Company.detraction_account, editable en
+Configuración M1 (campo existente de 11 dígitos); ausencia o discrepancia bloquea
+antes de reservar número. Nuevas altas efectivas exigen 001 depósito o 003
+transferencia: no se acepta 999 ni se sustituye una selección ausente. El
+adaptador congela código, tasa, importe, cuenta y medio en payload_ubl. La
+lectura en InvoiceConfigService consulta únicamente la cuenta existente y por
+empresa. IssuerConfigResolver, credenciales, respaldo y firma quedan intactos.
+
+UBL incluye PaymentPercent y Amount en PaymentTerms de detracción, cuenta en
+PayeeFinancialAccount y leyenda 2006 «Operación sujeta al Sistema de Pago de
+Obligaciones Tributarias con el Gobierno Central», no monto en letras (estos se conservan en su leyenda 1000). El total
+fiscal sigue siendo bruto; neto pendiente descuenta la detracción. Dos snapshots
+SPOT cambian intencionalmente por porcentaje/leyenda; los snapshots no SPOT
+permanecen idénticos. Las pruebas generan XML, lo firman con certificado ficticio
+y pasan XSD/XSL SFS real para 009 con ambos medios 001/003.
+
+Deuda expresa DIFERIDA: clasificación/tasa persistida POR PRODUCTO requiere
+migración y coordinación con Inventario; no se usa attributes ni otra tabla
+paralela. Fuera de este mínimo: otros bienes/servicios, divisas, transporte
+especial, ventas mixtas, depósitos/constancias bancarias y ajustes automáticos
+SPOT de notas. No se realizaron depósitos, emisiones ni llamadas reales SUNAT.
+
+#### Verificación final de Parte 6 (10 nov)
+
+Bases congeladas de Fase 0: back dev b20706f73ca2e0481cac3379cd1b5dc879c080c9;
+front dev a38c8729bf92e74ac5a6ae099872ae21938885c3. Una revisión por punto;
+fixups locales consolidados antes de publicar.
+
+| Verificación | Base | Final |
+|---|---:|---:|
+| Back, suites aprobadas | 271 | 274 |
+| Back, pruebas aprobadas | 2501 | 2532 |
+| Back, omitidas | 4 suites /38 pruebas | 4 suites /38 pruebas |
+| Back, snapshots | 12 | 12 |
+| Front, archivos de prueba aprobados | 105 | 112 |
+| Front, pruebas aprobadas | 829 | 848 |
+
+Cero fallos finales. Back: test:cov --runInBand, integraciones obligatorias en
+PostgreSQL 16 local desechable; únicamente migraciones YA existentes, ninguna
+nueva, ninguna conexión ni aplicación en bases compartidas. Base local eliminada
+tras la corrida. Build y lint back OK, sin avisos. Front: suite completa y build
+OK. ESLint del front conserva exactamente los 2 errores set-state-in-effect y
+5 avisos anteriores en dev en los archivos revisados; comprobados sobre las
+fuentes base por stdin, sin cambios de reglas/configuración ni silenciamientos.
+No se presenta ese lint previo como verde.
+
+Cobertura local de código nuevo back respecto de b20706f, intersección diff/LCOV:
+90/92 líneas (97.83%); 105/117 condiciones; combinada 195/209 = 93.30%. Es la
+medición local reproducible con scripts/m1/coverage_new_code.py, no un resultado
+remoto de Sonar. XML firmado con certificado ficticio → SFS real, errores []:
+Arena MTQ y SPOT 009 para 001/003. Snapshots no SPOT intactos; exactamente dos
+snapshots SPOT actualizados por PaymentPercent/leyenda normativa.
+
+| Punto | Resultado | Commit back | Commit front local |
+|---|---|---|---|
+| 6A | Construido, notas/precio/catálogo | 70c92f3 | 935b50d |
+| 6B | Diagnóstico real completo; limpieza solo Emma | 99e9b6e | — |
+| 6C | Decisión explícita/fusión compatible | 384433f | 6687654 |
+| 6D | MTQ, mapa M1 y SFS oficial | eef7633 | cbc3828 |
+| 6E | Sugerencia al precio final | 9ff24fe | ae83349 |
+| 6F | Gestión de series ADMIN | 8b8f8c4 | 9ab0d63 |
+| 6G | Validación, selección y atajos; excepción documentada | 58df551 | 6dbab5b |
+| 6H | OBSERVADO con saldo y guardas intactos | 2c942ec | 67c5f5b |
+| 6I | Decisión ADMIN durable, un uso, sin tocar Resiliencia | 5a21da5 | a02aab2 |
+| 6J | Mínimo SPOT aprobado; flag por producto diferido | Este commit | 4cd1e97 |
+
+Entrega front exclusivamente mediante ferry/m1-cierre-recorrido: 44 rutas,
+manifiesto SHA256 y conteos en FERRY.md; no se empuja al remoto front.
+No hay cambios de Resiliencia, Contabilidad, Inventario, esquema o migraciones.
+La única excepción de código fuera de M1 es la presentación de PartnerFormDialog
+aprobada expresamente; resolver compartido SUNAT intacto. Documentos históricos
+y datos maestros no se reescriben. Perfil MAYORISTA, limpieza y carga de cuenta BN
+son datos del equipo. No PR, fusión, despliegue, emisión ni llamada real SUNAT.

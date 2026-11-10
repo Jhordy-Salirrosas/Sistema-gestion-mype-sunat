@@ -44,6 +44,8 @@ export interface DescuentoLinea {
 }
 
 export interface LineaDetalle {
+  /** Clasificación SPOT explícita congelada, no inferida desde inventario. */
+  codigoDetraccion?: string;
   id: number;
   descripcion: string;
   codigo?: string;
@@ -320,7 +322,7 @@ export const bloqueFormaPago = (
 };
 
 /**
- * Leyenda 2006 del monto en letras para operaciones con detracción (TA-63).
+ * Leyenda 2006: operación sujeta al SPOT; no es el monto en letras.
  *
  * La regla 4265 la exige en cuanto el tipo de operación es 100x. Va como
  * `<cbc:Note languageLocaleID="2006">`, distinta de la Leyenda 1000 (importe

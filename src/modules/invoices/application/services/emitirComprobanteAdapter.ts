@@ -185,6 +185,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   if (item.icbper !== undefined && item.icbper !== icbper) throw new BadRequestException('ICBPER no coincide con la cantidad de bolsas');
   const linea: LineaDetalle = {
     id: indice + 1,
+    codigoDetraccion: item.codigoDetraccion?.trim() || undefined,
     descripcion: item.descripcion.trim(),
     codigo: item.codigo?.trim() || undefined,
     unidad,
@@ -385,23 +386,12 @@ export const traducirEmision = (
       ? dto.items.find((i) => i.codigoDetraccion?.trim())?.codigoDetraccion
       : undefined,
     montoDetraccion: detraccion > 0 ? detraccion : undefined,
+    tasaDetraccion: detraccion > 0 ? porcentajeDetraccion(dto.items.find(i => i.codigoDetraccion)?.codigoDetraccion ?? '') ?? undefined : undefined,
     ...(dto.medio_pago_detraccion !== undefined
       ? { medioPagoDetraccion: dto.medio_pago_detraccion }
       : {}),
     montoRetencion: retencion > 0 ? retencion : undefined,
-    /**
-     * Leyenda 2006: el importe en letras.
-     *
-     * SUNAT la exige cuando el comprobante lleva detracción y lo deja con la
-     * observación 4265 si falta:
-     *   "4265 - El XML no contiene el codigo de leyenda 2006 para tipo de
-     *    operacion de detracciones"
-     *
-     * El generador ya sabía emitir el bloque, pero solo si recibía este campo, y
-     * nadie lo calculaba: las facturas con detracción salían
-     * ACEPTADAS_CON_OBSERVACIONES. Se descubrió leyendo el CDR descargado el
-     * 31-10.
-     */
+    /** Importe en letras informativo; la leyenda 2006 es el texto SPOT normativo. */
     montoEnLetras: detraccion > 0 ? importeEnLetras(total) : undefined,
     /**
      * Cuenta del Banco de la Nación para depositar la detracción.

@@ -174,3 +174,18 @@ it('rechaza un precio distinto del catálogo sin sustituirlo ni numerar', async 
  await expect(h.run(dto)).rejects.toThrow('no coincide con el configurado');
  expect(dto.items[0].precioUnitario).toBe(15);
 });
+
+it('6J ambas entradas validan SPOT y congelan cuenta propia antes de crear/reservar', async () => {
+ for (const fiscal of [false, true]) {
+  const h = harness(); h.product.sale_price = 1180;
+  const company = { findUnique: jest.fn(async () => ({ detraction_account: '00019123456' })) };
+  Object.assign(h.tx, { company });
+  const entrada = { ...base(), medio_pago_detraccion: '001', items: [{ ...base().items[0], precioUnitario: 1180, codigoDetraccion: '009' }] };
+  const dto = fiscal ? fiscalToEmission({ ...raw(), customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente', payload_ubl: { ...raw().payload_ubl, medioPagoDetraccion: '001', lineas: entrada.items } } as never) : entrada;
+  const validado = await h.run(dto);
+  expect(validado.cuenta_banco_nacion).toBe('00019123456');
+  expect(company.findUnique).toHaveBeenCalledWith({ where: { id: 'empresa' }, select: { detraction_account: true } });
+  company.findUnique.mockResolvedValueOnce({ detraction_account: null } as never);
+  await expect(h.run(dto)).rejects.toThrow('falta la cuenta');
+ }
+});

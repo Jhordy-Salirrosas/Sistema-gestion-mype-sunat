@@ -547,7 +547,7 @@ describe('TA-63 · XML de la detracción SPOT', () => {
   it('emite la Leyenda 2006 que exige la regla 4265', () => {
     const xml = generador.generateInvoiceXml(facturaConDetraccion());
     expect(xml).toContain('<cbc:Note languageLocaleID="2006">');
-    expect(xml).toContain('MIL CIENTO OCHENTA CON 00/100 SOLES');
+    expect(xml).toContain('Operación sujeta al Sistema de Pago de Obligaciones Tributarias con el Gobierno Central');
   });
 
   /**

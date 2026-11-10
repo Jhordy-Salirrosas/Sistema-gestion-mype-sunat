@@ -1,3 +1,4 @@
+import { validarCuentaSpot } from './spotMinimo';
 import { multiplicarMoneda } from '../../money';
 import { verificarOrigenAceptado } from './creditNoteBalanceGuard';
 /**
@@ -443,53 +444,17 @@ export class EmitirComprobanteService {
     }
   }
 
-  /**
-   * Resuelve la cuenta del Banco de la Nación para la detracción.
-   *
-   * ORDEN DE PRECEDENCIA: empresa primero, formulario como respaldo.
-   *
-   * La cuenta es un dato fiscal FIJO del contribuyente. Pedirla en cada emisión
-   * obligaba a reescribirla y hacía posible teclearla mal, y SUNAT rechaza con
-   * 3034 consumiendo el correlativo. Por eso vive en `companies`.
-   *
-   * El formulario solo gana cuando el usuario escribe una cuenta distinta a la
-   * configurada: es el caso de una operación puntual con otra cuenta.
-   *
-   * Si no hay ni en la empresa ni en el formulario y la operación lleva
-   * detracción, se rechaza ANTES de reservar el número.
-   */
+  /** Cuenta fiscal propia de la empresa; solo se exige con detracción efectiva. */
   private async resolverCuentaDetraccion(
     dto: EmitirComprobanteDto,
     companyId: string,
   ): Promise<string | null> {
-    const llevaDetraccion = dto.items.some((item) =>
-      Boolean(item.codigoDetraccion?.trim()),
-    );
-    if (!llevaDetraccion) return null;
-
-    const deEmpresa = await this.cuentaDeEmpresa(companyId);
-    const deFormulario = dto.cuenta_banco_nacion?.trim() || null;
-
-    // El formulario sobrescribe solo si trae algo distinto de lo configurado.
-    if (deFormulario && deFormulario !== deEmpresa) return deFormulario;
-    if (deEmpresa) return deEmpresa;
-
-    throw new BadRequestException(
-      'La operación tiene detracción y no hay cuenta del Banco de la Nación ' +
-        'configurada para la empresa. Regístrela en la configuración de ' +
-        'facturación electrónica o indíquela en el formulario. SUNAT rechaza ' +
-        'el comprobante sin ella (código 3034).',
-    );
+    const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.detraccion;
+    if (!(importe > 0)) return null;
+    return validarCuentaSpot(dto, importe, await this.cuentaDeEmpresa(companyId));
   }
 
-  /**
-   * Cuenta configurada en la empresa.
-   *
-   * La lectura de `detraction_account` va aparte y tolera ausencia: si la
-   * migración aditiva todavía no se aplicó en este entorno, el campo no existe
-   * en el cliente generado y la emisión debe seguir funcionando con el
-   * formulario. Un fallo aquí no debe romper la facturación.
-   */
+  /** Ausencia o lectura fallida bloquea SPOT; nunca se toma una cuenta ajena del payload. */
   private async cuentaDeEmpresa(companyId: string): Promise<string | null> {
     try {
       const fila = (await this.prisma.company.findUnique({
@@ -498,10 +463,9 @@ export class EmitirComprobanteService {
       })) as { detraction_account?: string | null } | null;
 
       return fila?.detraction_account?.trim() || null;
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : String(error);
+    } catch {
       this.logger.warn(
-        `No se pudo leer la cuenta de detracción de la empresa ${companyId}: ${mensaje}`,
+        `No se pudo leer la cuenta de detracción de la empresa ${companyId}`,
       );
       return null;
     }
