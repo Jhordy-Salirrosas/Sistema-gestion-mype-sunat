@@ -1053,3 +1053,56 @@ y lint aprobados (solo aviso heredado en prueba de Contabilidad sin cambios).
 Sin migraciones nuevas, llamadas reales a SUNAT, emisiones, PR, fusiones ni
 despliegues. Base y suite final usaron PostgreSQL local aislado; su contenedor y
 volumen desechable se eliminaron al terminar las comprobaciones.
+
+### Parte 3c — Alinear el validador interno de preparación para ND
+
+Rama `fix/m1-nota-debito-validador` desde dev
+`8111cb71d787a50ffacc30a80d0a408c9073d832`. Fase 0: suite completa
+**257 suites / 2343 pruebas aprobadas**, 12 snapshots; 4 suites / 38 pruebas
+omitidas por las condiciones existentes. Base local PostgreSQL 16 nueva y
+exclusivamente desechable; sin acceso a base compartida o producción.
+
+La 3b corrigió el XML del generador, pero quedaron dos capas contradictorias:
+SFS oficial acepta DebitNote sin DebitNoteTypeCode y con RequestedMonetaryTotal;
+la tabla usada en preparación por XsdValidatorService todavía exigía
+DebitNoteTypeCode y LegalMonetaryTotal. Por eso el tipo 08 no podía completar el
+flujo: el generador antiguo fallaba en la compuerta y el corregido, en la
+preparación del Outbox. Se reprodujo localmente con el mismo payload/generador
+de la prueba 3b y certificado ficticio: SFS `{completado:true,errores:[]}` frente
+a los dos errores internos de nodos ausentes. Los tipos 01, 03 y 07 ya validaban
+sin errores, sin encontrar otro conflicto que ampliara el alcance.
+
+Cambio productivo limitado a tres entradas de xsdRules.ts: se elimina la regla
+DebitNoteTypeCode, LegalMonetaryTotal queda solo para 01/03/07 y se exige
+RequestedMonetaryTotal solo para 08, por presencia igual que la regla monetaria
+existente. No se modifica el servicio validador ni ninguna otra regla.
+
+Se extiende la spec de 3b, reutilizando su payload, generador y firma ficticia:
+ND sin firmar y firmada pasan la capa interna; el MISMO XML firmado pasa también
+el ejecutor SFS real. Regresión de 01/03/07: validan como antes y siguen fallando
+si se sustituye LegalMonetaryTotal. La ND sin RequestedMonetaryTotal falla; aun
+con LegalMonetaryTotal y PayableAmount presentes falla específicamente por la
+nueva regla. Antes del arreglo los tres casos ND fallaban y los otros pasaban;
+tras el arreglo la ejecución focalizada pasó 45 pruebas en 2 suites.
+Se conserva la advertencia interna existente (no error):
+«El comprobante declara IGV: verifique que el régimen del emisor lo permita».
+El generador y los snapshots XML de la 3b permanecen intactos.
+
+Exhibits históricos aportados por Emma, sin alteración, reemisión o reenvío:
+
+- FD01-00000001: bloqueo de la compuerta oficial por el generador anterior.
+- FD01-00000002: superó la compuerta, falló preparación interna y luego quedó
+  en DLQ por ISSUER_STATUS_UNCERTAIN al consultar ante una respuesta inconclusa
+  de BETA. Ese comportamiento conservador de statusConsultaService (ronda 2.4)
+  queda expresamente fuera de alcance y no se modifica.
+
+Sin cambios en Resiliencia, Contabilidad, migraciones, políticas de consulta o
+transporte; sin llamadas reales a SUNAT, PR, fusiones ni despliegues.
+
+Cierre 3c: suite completa con cobertura **257 suites / 2349 pruebas aprobadas**
+(+6 pruebas), 12 snapshots intactos; 4 suites / 38 pruebas omitidas por las mismas
+condiciones de la base. xsdRules.ts: 100% de cobertura de líneas y ramas. Build
+y lint aprobados (solo aviso heredado de Contabilidad, archivo sin cambios).
+No se generan migraciones: el juego existente se aplicó únicamente a la base
+local desechable autorizada. Su contenedor y volumen se eliminaron al terminar.
+La entrega solo cambia xsdRules.ts, la spec de 3b y este documento.
