@@ -8,6 +8,7 @@ import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
 import { CATALOGO_09_MOTIVOS } from './invoiceNoteService';
 import { validarPago } from './paymentTermsAndSpotValidator';
+import { ESTADOS_NOTABLES } from './creditNoteBalanceGuard';
 import { resolverRetencionMaestro } from './retencionMaestro';
 import type { PrismaService } from '../../../../database/prismaService';
 
@@ -127,8 +128,8 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     // Serializa las notas de un mismo origen antes de leer estado y saldo.
     await tx.$executeRaw`SELECT id FROM invoices WHERE id = ${origen.id} AND company_id = ${companyId} FOR UPDATE`;
     const actual = await tx.invoice.findFirst({ where: { id: origen.id, company_id: companyId } });
-    if (!actual || actual.estado !== 'ACEPTADO' || !['01', '03'].includes(actual.tipo_comprobante)) {
-      throw new BadRequestException('El origen debe ser factura o boleta aceptada por SUNAT');
+    if (!actual || !ESTADOS_NOTABLES.includes(actual.estado) || !['01', '03'].includes(actual.tipo_comprobante)) {
+      throw new BadRequestException('El origen debe ser factura o boleta aceptada u observada por SUNAT');
     }
     const bajas = await tx.invoiceAggregate?.findMany({ where: { company_id: companyId, kind: 'RA', state: { notIn: ['BLOCKED', 'REJECTED'] } }, select: { members: true } }) ?? [];
     if (bajas.some(b => (b.members as unknown as { id: string }[]).some(m => m.id === actual.id))) throw new ConflictException('BAJA_EN_PROCESO');

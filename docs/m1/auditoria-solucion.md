@@ -1858,3 +1858,7 @@ MTQ incorporado a los mapas M1 de back/front; dato de Inventario intacto. Prueba
 #### Construcción — 6E
 
 Sugerencia de producto muestra precioUnitario final (no valorUnitario neto), con dos decimales y etiqueta explícita. Prueba 118 final / 100 neto, selección sin edición. Contrato sale_price intacto.
+
+#### Construcción — 6H
+
+Decisión de Jhordy del 10 nov: OBSERVADO sí es origen de NC/ND. Guardas de saldo y transaccional común unificadas con ACEPTADO; selectores/vinculación front actualizados. Se conservan locks, saldo, baja pendiente, identidad y límites de motivos; negativos de otros estados siguen protegidos. Sin migración.

@@ -56,7 +56,7 @@ it('bloquea el origen antes de leer el saldo y asigna vínculo real', async () =
   expect(result.referenced_invoice_id).toBe('origin');
   expect(h.tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(h.tx.invoice.findMany.mock.invocationCallOrder[0]);
 });
-it.each(['PENDIENTE', 'EN_COLA', 'RECHAZADO', 'ERROR_RED', 'ANULADO', 'OBSERVADO'])(
+it.each(['PENDIENTE', 'EN_COLA', 'RECHAZADO', 'ERROR_RED', 'ANULADO'])(
   'bloquea origen %s', async (estado) => { const h = harness(); h.origin.estado = estado; await expect(h.run(note())).rejects.toThrow('aceptada'); },
 );
 it('bloquea un céntimo de exceso y consume las notas vigentes por UUID', async () => {

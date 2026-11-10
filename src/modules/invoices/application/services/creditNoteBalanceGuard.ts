@@ -27,7 +27,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { PrismaService } from '../../../../database/prismaService';
 
 /** Estados del comprobante origen que admiten una nota. */
-export const ESTADOS_NOTABLES = ['ACEPTADO'];
+export const ESTADOS_NOTABLES = ['ACEPTADO', 'OBSERVADO'];
 
 /** Regla compartida por la emisión 07/08 y la consulta de saldo. */
 export function verificarOrigenAceptado(estado: string): void {
@@ -35,7 +35,7 @@ export function verificarOrigenAceptado(estado: string): void {
     throw new BadRequestException({
       code: 'INVOICE_NO_NOTABLE',
       message:
-        `El comprobante no está aceptado por SUNAT (estado: ${estado}) ` +
+        `El comprobante no está aceptado u observado por SUNAT (estado: ${estado}) ` +
         'y por eso no admite notas de crédito ni de débito.',
     });
   }
