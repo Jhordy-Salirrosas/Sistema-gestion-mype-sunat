@@ -111,11 +111,11 @@ export class InvoiceQueryService {
   ) {}
 
   /** Catálogo M1: precio final PEN, nunca costo promedio como recambio. */
-  async catalogoProductos(companyId: string, almacen = 'ALM-01') {
+  async catalogoProductos(companyId: string, almacen = 'ALM-01', historicos = false) {
     const [productos, saldos] = await Promise.all([
       this.prisma.inventoryProduct.findMany({
-        where: { company_id: companyId, is_active: true },
-        select: { id: true, sku: true, description: true, sunat_unit_code: true, tax_affectation: true, sale_price: true },
+        where: { company_id: companyId, ...(historicos ? {} : { is_active: true }) },
+        select: { is_active: true, id: true, sku: true, description: true, sunat_unit_code: true, tax_affectation: true, sale_price: true },
         orderBy: { sku: 'asc' },
       }),
       this.prisma.inventoryBalance.findMany({
@@ -125,9 +125,9 @@ export class InvoiceQueryService {
     ]);
     return { balances: productos.map(p => {
       const precio = Number(p.sale_price);
-      const vendible = Number.isFinite(precio) && precio > 0;
+      const vendible = p.is_active !== false && Number.isFinite(precio) && precio > 0;
       const stock = saldos.filter(s => s.product_id === p.id).reduce((sum, s) => sum + (Number(s.current_stock) || 0), 0);
-      return { sku: p.sku, description: p.description, sunatUnitCode: p.sunat_unit_code,
+      return { activo: p.is_active !== false, sku: p.sku, description: p.description, sunatUnitCode: p.sunat_unit_code,
         taxAffectation: p.tax_affectation?.trim() || null, currentStock: stock,
         salePrice: vendible ? precio : null, vendible,
         motivo: vendible ? null : 'sin precio de venta configurado' };

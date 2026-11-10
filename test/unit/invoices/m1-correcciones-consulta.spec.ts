@@ -256,7 +256,7 @@ describe('M1 catálogo de productos para emisión', () => {
           sunatUnitCode: 'NIU',
           taxAffectation: '20',
           currentStock: 5.5,
-          salePrice: 35.4, vendible: true, motivo: null,
+          activo: true, salePrice: 35.4, vendible: true, motivo: null,
         },
         {
           sku: 'B',
@@ -264,7 +264,7 @@ describe('M1 catálogo de productos para emisión', () => {
           sunatUnitCode: 'KGM',
           taxAffectation: null,
           currentStock: 0,
-          salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
+          activo: true, salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
         },
         {
           sku: 'C',
@@ -272,7 +272,7 @@ describe('M1 catálogo de productos para emisión', () => {
           sunatUnitCode: 'NIU',
           taxAffectation: null,
           currentStock: 0,
-          salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
+          activo: true, salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
         },
       ],
     });
@@ -304,7 +304,7 @@ describe('M1 catálogo de productos para emisión', () => {
     expect(await controller.catalogoProductos(company)).toEqual({
       balances: [],
     });
-    expect(consultas.catalogoProductos).toHaveBeenCalledWith(company, 'ALM-01');
+    expect(consultas.catalogoProductos).toHaveBeenCalledWith(company, 'ALM-01', false);
   });
 });
 

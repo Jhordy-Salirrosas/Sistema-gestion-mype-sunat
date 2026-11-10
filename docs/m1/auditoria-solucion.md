@@ -1892,3 +1892,7 @@ son sus dueños y no los toca Emma en esta limpieza. La limpieza autorizada de
 Emma se limita al lado cliente de ejemplos no referenciados; no la ejecuta Codex.
 
 6B queda diagnosticado con la exportación real: sin cambios de datos ni código.
+
+#### Construcción — 6A
+
+Placeholder fiscal obsoleto eliminado. Campo monetario compartido presenta dos decimales sin mutar precisión histórica por foco/blur. Catálogo histórico M1 incluye inactivos sin volverlos vendibles; emisión mantiene filtro de sale_price. Ambas pantallas usan el mismo endpoint por almacén; carga fallida ya no simula una lista vacía exitosa. Avisos distinguen carga/error/histórico de inexistencia; notas no se reprecifican ni se validan como descarga de venta nueva. Sin migración ni cambios de Inventario.
