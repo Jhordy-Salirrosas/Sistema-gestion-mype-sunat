@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   INVENTORY_WAREHOUSE_REPOSITORY_PORT,
   type IInventoryWarehouseRepositoryPort,
@@ -18,6 +18,7 @@ import {
 import { MovingWeightedAverageEngine } from '../../domain/rules/MovingWeightedAverageEngine';
 import { InventoryMovementEntity } from '../../domain/entities/inventoryMovementEntity';
 import { InventoryBalanceEntity } from '../../domain/entities/inventoryBalanceEntity';
+import { InventoryCostLayerService } from '../services/inventoryCostLayerService';
 
 export interface ImportCostOrderItem {
   sku: string;
@@ -55,6 +56,8 @@ export class ProcessImportCostOrderUseCase {
     private readonly balanceRepository: IInventoryBalanceRepositoryPort,
     @Inject(INVENTORY_MOVEMENT_REPOSITORY_PORT)
     private readonly movementRepository: IInventoryMovementRepositoryPort,
+    @Optional()
+    private readonly costLayers?: InventoryCostLayerService,
   ) {}
 
   async execute(command: ProcessImportCostOrderCommand): Promise<ProcessImportCostOrderResult> {
@@ -64,6 +67,8 @@ export class ProcessImportCostOrderUseCase {
       ? (await this.warehouseRepository.findByCode(command.warehouseCode, companyId)) ||
         (await this.warehouseRepository.ensureDefaultWarehouse(companyId))
       : await this.warehouseRepository.ensureDefaultWarehouse(companyId);
+
+    const metodo = this.costLayers ? await this.costLayers.metodo(companyId) : 'PROMEDIO';
 
     let processedMovements = 0;
     let skippedFixedAssets = 0;
@@ -155,6 +160,16 @@ export class ProcessImportCostOrderUseCase {
       });
 
       await this.movementRepository.create(movementEntity);
+
+      if (metodo === 'FIFO' && this.costLayers) {
+        await this.costLayers.registrarEntrada(
+          companyId,
+          warehouse.id!,
+          product.id!,
+          item.receivedQuantity,
+          calculation.movementUnitCost,
+        );
+      }
 
       // 8. Actualizar Saldo
       await this.balanceRepository.upsertBalance(

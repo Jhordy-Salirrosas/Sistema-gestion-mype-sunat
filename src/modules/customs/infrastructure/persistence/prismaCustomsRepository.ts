@@ -42,7 +42,10 @@ export class PrismaCustomsRepository implements ICustomsRepositoryPort {
     companyId: string,
   ): Promise<CustomsDeclarationEntity | null> {
     const row = await this.prisma.customsDeclaration.findFirst({
-      where: { id, company_id: companyId },
+      where: {
+        company_id: companyId,
+        OR: [{ id }, { dua_number: id }],
+      },
       include: {
         items: {
           orderBy: { item_order: 'asc' },

@@ -53,6 +53,12 @@ export class PurchasesController {
     return this.purchasesService.payPurchase(companyId, id, dto);
   }
 
+  @Get('payables')
+  async listPayables(@CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.purchasesService.listPayables(companyId);
+  }
+
   @Get()
   async listPurchases(@CurrentCompany() companyId?: string) {
     if (!companyId) {

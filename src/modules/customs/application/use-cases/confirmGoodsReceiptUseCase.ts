@@ -61,7 +61,7 @@ export class ConfirmGoodsReceiptUseCase {
     const receipt = new GoodsReceiptEntity({
       companyId,
       receiptNumber: dto.receiptNumber,
-      declarationId: dto.declarationId,
+      declarationId: declaration.id ?? dto.declarationId,
       shipmentId: dto.shipmentId ?? declaration.shipmentId,
       warehouseCode: dto.warehouseCode ?? 'ALM-01',
       receptionType: dto.receptionType ?? 'TOTAL',

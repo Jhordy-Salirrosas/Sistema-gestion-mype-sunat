@@ -402,7 +402,7 @@ export class InventoryTransferService {
 
       return {
         adjustment,
-        totalValue: r2(itemRows.reduce((acc: number, i: any) => acc + Number(i.total_cost || 0), 0)),
+        totalValue: r2(movementRows.reduce((acc: number, m: any) => acc + Number(m.total_cost || 0), 0)),
       };
     });
 

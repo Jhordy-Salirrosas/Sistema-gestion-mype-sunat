@@ -50,6 +50,10 @@ describe('AccountingController', () => {
       execute: jest.fn(),
     } as unknown as jest.Mocked<ExportPleTxtUseCase>;
 
+    exportTaxPleUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<ExportTaxPleUseCase>;
+
     getEntriesUseCase = {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<GetAccountingEntriesUseCase>;

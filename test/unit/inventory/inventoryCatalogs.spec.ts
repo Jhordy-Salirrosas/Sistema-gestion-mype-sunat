@@ -1,6 +1,6 @@
 import { InventoryCatalogsService, SUNAT_OFFICIAL_UNITS } from '../../../src/modules/inventory/application/services/inventoryCatalogsService';
 import { InventoryCatalogsController } from '../../../src/modules/inventory/infrastructure/controllers/inventoryCatalogsController';
-import { ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 
 describe('InventoryCatalogsService & Controller (Fase 2 - Mantenedores)', () => {
   let service: InventoryCatalogsService;

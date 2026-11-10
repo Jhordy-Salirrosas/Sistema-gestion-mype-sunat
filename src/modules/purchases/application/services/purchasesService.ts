@@ -78,6 +78,12 @@ export class PurchasesService {
       throw new BadRequestException('No se puede repetir el mismo producto/SKU en la factura de compra.');
     }
 
+    const empresa = await (this.prisma as any).company?.findUnique?.({
+      where: { id: companyId },
+      select: { inventory_cost_method: true },
+    });
+    const usaFifo = empresa?.inventory_cost_method === 'FIFO';
+
     const result = await this.prisma.$transaction(async (tx: any) => {
       // 1. Validar almacén
       const warehouse = await tx.inventoryWarehouse.findFirst({
@@ -231,6 +237,18 @@ export class PurchasesService {
           },
         });
 
+        if (usaFifo) {
+          await tx.inventoryCostLayer.create({
+            data: {
+              company_id: companyId,
+              warehouse_id: warehouse.id,
+              product_id: product.id,
+              quantity_remaining: quantity,
+              unit_cost: r4(unitCostNet),
+            },
+          });
+        }
+
         preparedItems.push({
           product_id: product.id,
           sku,
@@ -334,6 +352,40 @@ export class PurchasesService {
       paymentMethod: p.payment_method,
       bankName: p.bank_name,
       concept: p.concept,
+    }));
+  }
+
+  async listPayables(companyId: string) {
+    const compras = await this.prisma.nationalPurchase.findMany({
+      where: { company_id: companyId, status: { not: 'ANULADA' } },
+      select: { supplier_doc_number: true, supplier_name: true, total_amount: true, paid_amount: true },
+    });
+    const mapa = new Map<
+      string,
+      { supplierDocNumber: string; supplierName: string; total: number; paid: number; balance: number; count: number }
+    >();
+    for (const c of compras) {
+      const actual = mapa.get(c.supplier_doc_number) ?? {
+        supplierDocNumber: c.supplier_doc_number,
+        supplierName: c.supplier_name,
+        total: 0,
+        paid: 0,
+        balance: 0,
+        count: 0,
+      };
+      const total = Number(c.total_amount);
+      const paid = Number(c.paid_amount ?? 0);
+      actual.total += total;
+      actual.paid += paid;
+      actual.balance += total - paid;
+      actual.count += 1;
+      mapa.set(c.supplier_doc_number, actual);
+    }
+    return [...mapa.values()].map((c) => ({
+      ...c,
+      total: Math.round(c.total * 100) / 100,
+      paid: Math.round(c.paid * 100) / 100,
+      balance: Math.round(c.balance * 100) / 100,
     }));
   }
 

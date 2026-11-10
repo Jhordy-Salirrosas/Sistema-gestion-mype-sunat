@@ -67,6 +67,7 @@ export class InventoryStocksController {
 
     const sku = dto.sku.trim().toUpperCase();
     const unitCode = dto.sunat_unit_code?.trim() || 'NIU';
+    const isService = dto.is_service ?? (dto.is_inventory !== undefined ? !dto.is_inventory : false);
 
     const created = await this.prisma.inventoryProduct.create({
       data: {
@@ -74,7 +75,8 @@ export class InventoryStocksController {
         sku,
         description: dto.description.trim(),
         origin_type: dto.origin_type || 'NACIONAL',
-        is_service: dto.is_service ?? false,
+        is_service: isService,
+        is_inventory: !isService,
         is_active: dto.is_active ?? true,
         sunat_type_code: dto.sunat_type_code || '01',
         sunat_unit_code: unitCode,
@@ -175,6 +177,48 @@ export class InventoryStocksController {
       }
     }
 
+    // Garantizar saldo inicial en 0 en el almacén principal para visibilidad en catálogo
+    if (!isService) {
+      let wh = await (this.prisma as any).inventoryWarehouse?.findFirst?.({
+        where: { company_id: companyId, is_active: true },
+        orderBy: { warehouse_code: 'asc' },
+      });
+      if (!wh && (this.prisma as any).inventoryWarehouse?.create) {
+        wh = await (this.prisma as any).inventoryWarehouse
+          .create({
+            data: {
+              company_id: companyId,
+              warehouse_code: 'ALM-01',
+              sunat_establishment_code: '0000',
+              description: 'Almacén Principal',
+            },
+          })
+          .catch(() => null);
+      }
+      if (wh && (this.prisma as any).inventoryBalance?.upsert) {
+        await (this.prisma as any).inventoryBalance
+          .upsert({
+            where: {
+              company_id_warehouse_id_product_id: {
+                company_id: companyId,
+                warehouse_id: wh.id,
+                product_id: created.id,
+              },
+            },
+            create: {
+              company_id: companyId,
+              warehouse_id: wh.id,
+              product_id: created.id,
+              current_stock: 0,
+              average_unit_cost: dto.cost_price ?? 0,
+              total_inventory_value: 0,
+            },
+            update: {},
+          })
+          .catch(() => {});
+      }
+    }
+
     return created;
   }
 
@@ -223,7 +267,11 @@ export class InventoryStocksController {
       data: {
         description: dto.description?.trim(),
         origin_type: dto.origin_type,
-        is_service: dto.is_service,
+        ...(dto.is_service !== undefined
+          ? { is_service: dto.is_service, is_inventory: !dto.is_service }
+          : dto.is_inventory !== undefined
+            ? { is_inventory: dto.is_inventory, is_service: !dto.is_inventory }
+            : {}),
         is_active: dto.is_active,
         sunat_type_code: dto.sunat_type_code,
         sunat_unit_code: dto.sunat_unit_code,

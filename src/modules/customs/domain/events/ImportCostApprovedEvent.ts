@@ -15,6 +15,7 @@ export interface ImportCostApprovedEventPayload {
   version: number;
   shipmentId: string;
   declarationId?: string | null;
+  duaNumber?: string | null;
   approvedAt: Date;
   totalCifPen: number;
   totalDutiesPen: number;

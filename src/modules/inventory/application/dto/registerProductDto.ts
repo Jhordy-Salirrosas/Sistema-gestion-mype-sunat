@@ -118,6 +118,10 @@ export class RegisterProductDto {
 
   @IsBoolean()
   @IsOptional()
+  is_inventory?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
   is_active?: boolean;
 
   @IsString()

@@ -65,8 +65,8 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
     const rows = await this.prisma.inventoryBalance.findMany({
       where: {
         company_id: companyId,
-        // Los servicios no forman parte del inventario comercial.
-        product: { is: { is_inventory: true } },
+        // Los servicios y productos descontinuados no forman parte del inventario comercial activo.
+        product: { is: { is_inventory: true, is_active: true } },
       },
       include: {
         product: true,
@@ -81,13 +81,27 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
         sku: r.product?.sku ?? 'SIN-SKU',
         productDescription: r.product?.description ?? 'Producto sin descripción',
         warehouseCode: r.warehouse?.warehouse_code ?? 'ALM-01',
+        origin_type: r.product?.origin_type ?? 'NACIONAL',
+        is_service: r.product?.is_service ?? false,
         brand: r.product?.brand ?? null,
         model: r.product?.model ?? null,
         category: r.product?.category ?? null,
+        manufacturer: r.product?.manufacturer ?? null,
+        country_of_origin: r.product?.country_of_origin ?? null,
+        tags: r.product?.tags ?? [],
         barcode: r.product?.barcode ?? null,
         hsCode: r.product?.hs_code ?? null,
         weightKg: r.product?.weight_kg ? Number(r.product.weight_kg) : null,
         volumeM3: r.product?.volume_m3 ? Number(r.product.volume_m3) : null,
+        taxAffectation: r.product?.tax_affectation ?? '10',
+        cost_price: r.product?.cost_price ? Number(r.product.cost_price) : null,
+        sale_price: r.product?.sale_price ? Number(r.product.sale_price) : null,
+        wholesale_price: r.product?.wholesale_price ? Number(r.product.wholesale_price) : null,
+        promo_price: r.product?.promo_price ? Number(r.product.promo_price) : null,
+        commission_rate: r.product?.commission_rate ? Number(r.product.commission_rate) : null,
+        min_price: r.product?.min_price ? Number(r.product.min_price) : null,
+        warehouse_location: r.product?.warehouse_location ?? null,
+        attributes: Array.isArray(r.product?.attributes) ? r.product.attributes : [],
         sunatTypeCode: r.product?.sunat_type_code ?? '01',
         sunatUnitCode: r.product?.sunat_unit_code ?? 'NIU',
         minStockAlert: r.product?.min_stock_alert ? Number(r.product.min_stock_alert) : 0,

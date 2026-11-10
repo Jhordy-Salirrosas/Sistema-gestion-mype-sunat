@@ -29,6 +29,12 @@ export class InventoryOpeningService {
       throw new BadRequestException('No se puede repetir el mismo SKU en el saldo inicial.');
     }
 
+    const empresa = await (this.prisma as any).company?.findUnique?.({
+      where: { id: companyId },
+      select: { inventory_cost_method: true },
+    });
+    const usaFifo = empresa?.inventory_cost_method === 'FIFO';
+
     return this.prisma.$transaction(async (tx: any) => {
       const warehouse = await tx.inventoryWarehouse.findFirst({
         where: { company_id: companyId, warehouse_code: warehouseCode },
@@ -133,6 +139,18 @@ export class InventoryOpeningService {
             last_movement_at: openingDate,
           },
         });
+
+        if (usaFifo && (tx as any).inventoryCostLayer?.create) {
+          await (tx as any).inventoryCostLayer.create({
+            data: {
+              company_id: companyId,
+              warehouse_id: warehouse.id,
+              product_id: product.id,
+              quantity_remaining: item.quantity,
+              unit_cost: r4(calc.movementUnitCost),
+            },
+          });
+        }
 
         resultItems.push({
           sku,
