@@ -84,6 +84,8 @@ export class InvoiceConfigController {
    * papel o en otro sistema, sin reutilizar ninguno.
    */
   @Post('series')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuard)
   @HttpCode(HttpStatus.CREATED)
   async crearSerie(
     @CurrentCompany() companyId: string,

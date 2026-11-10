@@ -1900,3 +1900,7 @@ Placeholder fiscal obsoleto eliminado. Campo monetario compartido presenta dos d
 #### Construcción — 6C
 
 La grilla compartida por página y modal pide Fusionar/Mantener separada/Cancelar al seleccionar o confirmar un SKU repetido. Fusión exige misma unidad, precio y condiciones fiscales/comerciales; cantidades se suman y sigue activa la validación de stock agregado. Condiciones diferentes deshabilitan fusión. Notas históricas excluidas de fusión automática. Pruebas de decisión explícita y SKU manual.
+
+#### Construcción — 6F
+
+POST /invoices/series exige ADMIN también en back; front muestra creación/reactivación solo para ADMIN. Tipos 01/03/07/08, serie y último correlativo usado (0 → siguiente 1), refresco de configuración, sin reiniciar numeración al reactivar. Endpoints y servicio de reserva existentes; sin migración. Pruebas de RolesGuard real y formulario con transporte simulado.
