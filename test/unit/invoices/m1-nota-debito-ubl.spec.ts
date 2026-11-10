@@ -1,3 +1,4 @@
+import { bloqueTotales } from '../../../src/modules/invoices/ublTaxBlocks';
 import { UblGeneratorService } from '../../../src/modules/invoices/ublGeneratorService';
 import { traducirEmision } from '../../../src/modules/invoices/application/services/emitirComprobanteAdapter';
 import { ejecutarSfs } from '../../../src/modules/invoices/application/services/sunatSfsRunner';
@@ -40,4 +41,20 @@ it('reintroducir el nodo anterior reproduce XSD DebitNoteTypeCode sobre XML gene
 it('reintroducir solo el total anterior reproduce el segundo error XSD', async () => {
   const xml = generator.generateInvoiceXml(payload('08')).replaceAll('RequestedMonetaryTotal', 'LegalMonetaryTotal');
   expect(await ejecutarSfs(signed(xml), '08')).toMatchObject({ completado: true, errores: [{ codigo: 'XSD', mensaje: expect.stringContaining('LegalMonetaryTotal') }] });
+});
+
+it('bloque monetario de dos argumentos conserva LegalMonetaryTotal y descuentos ausentes como cero', () => {
+  const totals = { ...generator.calcularTotales(payload('01')), otrosDescuentos: undefined };
+  const xml = bloqueTotales(totals, 'PEN');
+  expect(xml).toBe(generator.generateInvoiceXml(payload('01')).match(/  <cac:LegalMonetaryTotal>[\s\S]*?<\/cac:LegalMonetaryTotal>/)?.[0]);
+  expect(xml).toContain('<cbc:AllowanceTotalAmount currencyID="PEN">0.00</cbc:AllowanceTotalAmount>');
+  expect(xml).toContain('<cbc:PayableAmount currencyID="PEN">118.00</cbc:PayableAmount>');
+});
+it.each(['LegalMonetaryTotal', 'RequestedMonetaryTotal'] as const)('bloque %s conserva contenido monetario y descuento explícito', elemento => {
+  const totals = { ...generator.calcularTotales(payload('01')), otrosDescuentos: 10 };
+  const xml = bloqueTotales(totals, 'PEN', elemento);
+  expect(xml).toContain(`<cac:${elemento}>`); expect(xml).toContain(`</cac:${elemento}>`);
+  expect(xml).toContain('<cbc:AllowanceTotalAmount currencyID="PEN">10.00</cbc:AllowanceTotalAmount>');
+  expect(xml).toContain('<cbc:PayableAmount currencyID="PEN">108.00</cbc:PayableAmount>');
+  expect(xml.replaceAll(elemento, 'LegalMonetaryTotal')).toBe(bloqueTotales(totals, 'PEN'));
 });
