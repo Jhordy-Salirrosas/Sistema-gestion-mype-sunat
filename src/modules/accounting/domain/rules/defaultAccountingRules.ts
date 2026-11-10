@@ -23,4 +23,5 @@ export const DEFAULT_ACCOUNTING_RULES = [
   ['GASTO', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar'],
   ['AJUSTE', '*', 1, '65911', 'DEBE', 'COSTO', 'Pérdida por ajuste'],
   ['AJUSTE', '*', 2, '20111', 'HABER', 'COSTO', 'Mercaderías'],
+  ['AJUSTE', '*', 3, '75911', 'HABER', 'COSTO', 'Sobrantes de inventario'],
 ] as const;
