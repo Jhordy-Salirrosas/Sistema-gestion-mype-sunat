@@ -21,6 +21,13 @@ export class CollectionsService {
     if (!original) throw new BadRequestException('El cobro no tiene asiento contable; no se puede anular.');
     const fecha = new Date();
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    await this.prisma.treasuryMovement.create({ data: {
+      company_id: companyId, movement_date: fecha, direction: 'INGRESO',
+      document_reference: cobro.invoice_number ?? cobro.id, counterpart_name: cobro.customer_name,
+      concept: `Devolución por anulación de cobro ${cobro.id}`, amount: Number(cobro.amount),
+      source_module: 'COLLECTIONS', source_reference_id: cobro.id, payment_method: cobro.payment_method,
+      bank_name: cobro.bank_name ?? null,
+    } });
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación cobro ${cobro.customer_name}`,
       sourceModule: 'COLLECTIONS', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,
@@ -29,23 +36,34 @@ export class CollectionsService {
     return this.prisma.collection.update({ where: { id }, data: { status: 'ANULADO' } });
   }
 
+  /** Saldo real: total factura - notas de crédito - cobros. */
+  private async saldoFactura(companyId: string, invoiceId: string, total: number) {
+    const [notas, cobros] = await Promise.all([
+      this.prisma.invoice.aggregate({ where: { company_id: companyId, referenced_invoice_id: invoiceId, tipo_comprobante: '07', estado: { in: ['ACEPTADO', 'OBSERVADO'] } }, _sum: { monto_total: true } }),
+      this.prisma.collection.aggregate({ where: { company_id: companyId, invoice_id: invoiceId, status: { not: 'ANULADO' } }, _sum: { amount: true } }),
+    ]);
+    const acreditado = Number(notas._sum.monto_total ?? 0);
+    const cobrado = Number(cobros._sum.amount ?? 0);
+    return { acreditado, cobrado, saldo: Math.round((total - acreditado - cobrado) * 100) / 100 };
+  }
+
   async listReceivables(companyId: string) {
     const facturas = await this.prisma.invoice.findMany({
       where: { company_id: companyId, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
-      orderBy: [{ fecha_emision: 'desc' }],
-      take: 200,
+      orderBy: [{ fecha_emision: 'desc' }], take: 200,
       select: { id: true, serie: true, correlativo: true, customer_legal_name: true, customer_identity_number: true, monto_total: true, fecha_emision: true },
     });
-    if (facturas.length === 0) return [];
-    const cobros = await this.prisma.collection.groupBy({
-      by: ['invoice_id'], where: { company_id: companyId, invoice_id: { in: facturas.map((f) => f.id) }, status: { not: 'ANULADO' } }, _sum: { amount: true },
-    });
-    const pagado = new Map(cobros.map((c) => [c.invoice_id, Number(c._sum.amount ?? 0)]));
-    return facturas.map((f) => {
-      const paid = Math.round((pagado.get(f.id) ?? 0) * 100) / 100;
-      const total = Number(f.monto_total);
-      return { id: f.id, numero: `${f.serie}-${String(f.correlativo).padStart(8, '0')}`, customerName: f.customer_legal_name, customerDoc: f.customer_identity_number, total, paid, balance: Math.round((total - paid) * 100) / 100, date: f.fecha_emision };
-    }).filter((f) => f.balance > 0.005);
+    const resultado = [];
+    for (const f of facturas) {
+      const { acreditado, saldo } = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
+      if (saldo > 0.005) resultado.push({
+        id: f.id, numero: `${f.serie}-${String(f.correlativo).padStart(8, '0')}`,
+        customerName: f.customer_legal_name, customerDoc: f.customer_identity_number,
+        total: Number(f.monto_total), credited: acreditado, paid: Math.round((Number(f.monto_total) - acreditado - saldo) * 100) / 100,
+        balance: saldo, date: f.fecha_emision,
+      });
+    }
+    return resultado;
   }
 
   async create(companyId: string, dto: {
@@ -68,11 +86,7 @@ export class CollectionsService {
       });
       if (!invoice) throw new BadRequestException(`El comprobante ${numero} no existe en la empresa.`);
       if (!['ACEPTADO', 'OBSERVADO'].includes(invoice.estado)) throw new BadRequestException(`El comprobante ${numero} no está aceptado por SUNAT.`);
-      const cobrado = await this.prisma.collection.aggregate({
-        where: { company_id: companyId, invoice_id: invoice.id, status: { not: 'ANULADO' } },
-        _sum: { amount: true },
-      });
-      const saldo = Math.round((Number(invoice.monto_total) - Number(cobrado._sum.amount ?? 0)) * 100) / 100;
+      const { saldo } = await this.saldoFactura(companyId, invoice.id, Number(invoice.monto_total));
       if (monto > saldo + 0.005) throw new BadRequestException(`El cobro supera el saldo del comprobante (S/ ${saldo.toFixed(2)}).`);
       invoiceId = invoice.id;
     }
