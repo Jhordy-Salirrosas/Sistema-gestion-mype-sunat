@@ -947,3 +947,58 @@ aprobados. Entrega front por la rama `ferry/m1-bajas-resumenes-envio` del back,
 con FERRY.md y rutas exactas; no se empuja al repositorio front. Bases verificadas:
 back af5f4fb2, front 204d3da6. Entrega back `fix/m1-bajas-resumenes-envio`.
 Un commit de construcción por parte (2A y 2B); sin PR, fusiones ni despliegue.
+
+
+### Corrección CI del PR #224 — Reliability y cobertura de agregados
+
+Misma rama `fix/m1-bajas-resumenes-envio`, base de comparación
+`af5f4fb2b2440f91436a4a7657aae941bbdd1fca` (dev). Sin sincronizar mediante
+fusiones ni modificar la configuración de Sonar/CI o sus umbrales.
+
+Cambios productivos mínimos: los dos map del constructor XML llaman funciones
+flecha con `(linea, index)` explícitos; ambas funciones utilizan ese índice para
+LineID, de modo que los ordinales y snapshots se conservan. El normalizador del
+almacén toma el último guion y valida el sufijo con `^\d+$`, evitando la
+ambigüedad entre ceros y dígitos de la regex anterior. Comparación diferencial
+local: 335929 cadenas con resultados idénticos, incluidos ceros, múltiples
+guiones, sufijos inválidos y saltos de línea. Un sufijo inválido de 100001
+caracteres se procesó en 0,40 ms, sin ejecutar la regex antigua sobre ese caso.
+
+Se agregan unitarias sobre reserva/idempotencia/aislamiento, transiciones
+condicionales, hashes, cotejo de CDR y miembros, rechazo por línea, efectos
+transaccionales RA/RC y publicación contable fallida; también compuerta SFS,
+selección/vista previa, coordinación individual/RC, incertidumbre, reanudación
+por ticket y recuperación de preparación. Los harness sustituyen únicamente
+DB/cola/SOAP, manteniendo la lógica real de los servicios. Se conservan las
+pruebas existentes de XML firmado contra XSD/XSL reales y la integración de
+agregados con PostgreSQL, sin hacer que la cobertura dependa de habilitar esta
+última en CI.
+
+Verificación completa con cobertura y PostgreSQL 16 local nuevo/desechable,
+TEST_DATABASE_URL local, sin M1_AGGREGATE_TEST_DATABASE_URL (como la CI):
+**256 suites / 2326 pruebas aprobadas**, 6 snapshots sin cambios; 4 suites / 38
+pruebas omitidas por sus condiciones existentes (incluye 20 pruebas opcionales
+de integración de agregados). Son 5 suites y 124 pruebas aprobadas adicionales
+respecto del registro CI de Emma (251 / 2202). Build y lint aprobados; el único
+aviso de lint es heredado de una prueba de Contabilidad sin cambios.
+Las migraciones existentes solo se aplicaron a esa base local autorizada;
+ninguna migración nueva ni operación sobre bases compartidas.
+
+Medición de código nuevo, no del promedio global del repositorio: intersección
+de las líneas añadidas por `git diff --unified=0 <base> -- src` con DA/BRDA del
+LCOV completo, respetando la exclusión de código generado de Sonar. Resultado:
+
+- Líneas nuevas ejecutables: 354 / 359 cubiertas = **98,61%**.
+- Resultados de condiciones nuevos: 474 / 516 cubiertos = **91,86%**.
+- Cobertura combinada local: (354 + 474) / (359 + 516) = **94,63%**.
+- Almacén, despacho, preparación, compuerta y coordinación individual: 100%
+  de líneas de cada archivo en la suite completa (no solo líneas nuevas).
+
+Reproducción, tras ejecutar la suite completa con `--coverage`:
+`python3 scripts/m1/coverage_new_code.py af5f4fb2b2440f91436a4a7657aae941bbdd1fca`.
+Detalle por archivo en `docs/m1/auditoria-ci-cobertura.json`. Es una medición
+local desde LCOV y el diff, no una afirmación de que el Quality Gate remoto ya
+pasó: la API de SonarCloud devolvió 403 desde el entorno y el análisis remoto
+corresponde al siguiente push del PR #224. No se rebajó ninguna exigencia.
+Sin cambios front/ferry, Resiliencia, Contabilidad, envíos reales, PR nuevo,
+fusiones ni despliegues.

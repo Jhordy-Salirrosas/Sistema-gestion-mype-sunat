@@ -16,7 +16,13 @@ export const membersOf = (row: Pick<InvoiceAggregate, 'members'>): AggregateMemb
 export const resumenFingerprint = (kind: string, fecha: string, selection: SeleccionBaja[]) => createHash('sha256').update(JSON.stringify([kind, fecha, [...selection].sort((a, b) => a.id.localeCompare(b.id))])).digest('hex');
 export const hoyLima = () => new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
 const numberOf = (m: AggregateMember) => `${m.serie}-${Number(m.correlativo)}`;
-const normalizeNumber = (s: string) => s.replace(/-(0*)(\d+)$/, (_, _zero, n) => `-${Number(n)}`);
+const normalizeNumber = (s: string) => {
+  const separator = s.lastIndexOf('-');
+  const suffix = s.slice(separator + 1);
+  return separator >= 0 && /^\d+$/.test(suffix)
+    ? `${s.slice(0, separator + 1)}${Number(suffix)}`
+    : s;
+};
 
 @Injectable()
 export class SummaryAggregateStore {

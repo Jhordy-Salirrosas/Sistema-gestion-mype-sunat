@@ -10,8 +10,9 @@ function harness() {
   const despacho = { encolar: jest.fn(async () => 'job' as string | null) };
   const firma = { signXml: jest.fn((xml: string) => ({ signedXml: xml + '<!--firmado-->' })) };
   const gate = { validar: jest.fn(async () => undefined) };
-  const svc = new SummaryEnvioService({ vistaResumenDiario: async () => ({ lineas: [] }) } as never, despacho as never, firma as never, { resolve: async () => context } as never, store as never, gate as never);
-  return { row, view, context, store, despacho, firma, gate, svc };
+  const resumenes = { vistaResumenDiario: jest.fn(async () => ({ ...view, lineas: [] as typeof view.lineas })), vistaComunicacionBaja: jest.fn(async () => view) };
+  const svc = new SummaryEnvioService(resumenes as never, despacho as never, firma as never, { resolve: async () => context } as never, store as never, gate as never);
+  return { row, view, context, store, despacho, firma, gate, svc, resumenes };
 }
 it('sin selección explícita no hay reserva, firma ni cola', async () => {
   const h = harness(); await expect(h.svc.enviarComunicacionBaja('empresa', '2026-11-09')).rejects.toThrow('Seleccione');
@@ -67,4 +68,45 @@ it('una reserva fallida no impide recuperar las de otras empresas', async () => 
   h.gate.validar.mockRejectedValueOnce(new Error('Contexto no disponible'));
   await h.svc.recuperar(); expect(h.despacho.encolar).toHaveBeenCalledTimes(1);
   expect(h.despacho.encolar).toHaveBeenCalledWith(expect.objectContaining({identificador:'RC-second'}));
+});
+
+it.each(['RA','RC'])('%s vuelve a leer la selección en la transacción antes de preparar', async kind => {
+  const h=harness(); h.row.kind=kind; h.resumenes.vistaResumenDiario.mockResolvedValue(h.view);
+  h.store.reservar.mockImplementation(async (_c,_k,_date,_sel,_ctx,preview) => { await preview('tx',2,'aggregate'); return {row:h.row,vista:h.view}; });
+  const result=kind==='RA' ? await h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection) : await h.svc.enviarResumenDiario('empresa','2026-11-09');
+  expect(result.enviado).toBe(true); expect(h.gate.validar).toHaveBeenCalledWith(expect.any(String),kind,h.context,h.row.identifier);
+  expect(kind==='RA'?h.resumenes.vistaComunicacionBaja:h.resumenes.vistaResumenDiario).toHaveBeenCalledWith('empresa','2026-11-09',2,kind==='RA'?selection:[{id:'invoice',motivo:''}],'tx','aggregate');
+});
+it.each(['QUEUED','POLLING'])('preparación concurrente que ya pasó a %s no se vuelve a publicar', async state => {
+  const h=harness(); h.store.artefacto.mockResolvedValue({...h.row,state,job_id:'existing'} as never);
+  const result=await h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection); expect(result.enviado).toBe(state==='QUEUED'); expect(h.despacho.encolar).not.toHaveBeenCalled();
+});
+it('PREPARED reutiliza XML y compuerta, sin volver a firmar', async () => {
+  const h=harness(); h.row.state='PREPARED'; h.row.xml=h.view.xml; h.store.reservar.mockResolvedValue({row:h.row,vista:undefined});
+  expect((await h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection)).enviado).toBe(true); expect(h.firma.signXml).not.toHaveBeenCalled(); expect(h.gate.validar).toHaveBeenCalledWith(h.row.xml,'RA',h.context,h.row.identifier);
+});
+it('HTTP deliberado de RC no se convierte en fallo genérico; fallo inesperado sí se controla', async () => {
+  const { BadRequestException }=await import('@nestjs/common'); const h=harness();
+  h.resumenes.vistaResumenDiario.mockRejectedValueOnce(new BadRequestException('Selección no elegible'));
+  await expect(h.svc.enviarResumenDiario('empresa','2026-11-09')).rejects.toThrow('Selección no elegible');
+  h.resumenes.vistaResumenDiario.mockRejectedValueOnce(new Error('contexto no disponible'));
+  expect(await h.svc.enviarResumenDiario('empresa','2026-11-09')).toMatchObject({enviado:false,motivo:'contexto no disponible'});
+});
+it('RA conserva HTTP deliberado y rechaza selecciones no objeto', async () => {
+  const { BadRequestException }=await import('@nestjs/common');const h=harness();h.store.reservar.mockRejectedValue(new BadRequestException('No elegible'));
+  await expect(h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection)).rejects.toThrow('No elegible');expect(()=>seleccionBaja([null])).toThrow('inválida');
+});
+it('ciclo de recuperación instala y retira timer, sin solaparse', async () => {
+  jest.useFakeTimers();const h=harness(); let finish: (rows: never[])=>void=()=>undefined;
+  h.store.pendientes.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  h.svc.onModuleInit();jest.advanceTimersByTime(60_000);await h.svc.recuperar();expect(h.store.pendientes).toHaveBeenCalledTimes(1);finish([]);await Promise.resolve();await Promise.resolve();h.svc.onModuleDestroy();expect(jest.getTimerCount()).toBe(0);jest.useRealTimers();
+});
+it.each(['RA','RC'])('RESERVED %s se recupera por la misma ruta y selección', async kind => {
+  const h=harness();h.store.pendientes.mockResolvedValue([{...h.row,kind,state:'RESERVED',reference_date:'2026-11-09',members:[{id:'invoice',motivo:'Motivo guardado'}]}] as never);
+  const method=kind==='RA'?jest.spyOn(h.svc,'enviarComunicacionBaja'):jest.spyOn(h.svc,'enviarResumenDiario');method.mockResolvedValue({enviado:true,identificador:'same',jobId:'job',incluidos:1,motivo:null});
+  await h.svc.recuperar();expect(method).toHaveBeenCalledWith('empresa','2026-11-09',[{id:'invoice',motivo:kind==='RA'?'Motivo guardado':''}]);
+});
+it('recuperación omite contexto cambiado y conserva PREPARED si cola no responde', async () => {
+  const h=harness();h.store.pendientes.mockResolvedValue([{...h.row,state:'PREPARED',environment:'MOCK'},{...h.row,state:'PREPARED'}] as never);h.despacho.encolar.mockResolvedValue(null);
+  await h.svc.recuperar();expect(h.despacho.encolar).toHaveBeenCalledTimes(1);expect(h.store.encolado).not.toHaveBeenCalled();h.store.pendientes.mockRejectedValue(new Error('base caída'));await expect(h.svc.recuperar()).resolves.toBeUndefined();
 });

@@ -345,7 +345,7 @@ export const construirResumenDiario = (
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
-${incluidos.map(lineaResumen).join('\n')}
+${incluidos.map((linea, index) => lineaResumen(linea, index)).join('\n')}
 </SummaryDocuments>`;
 };
 
@@ -424,6 +424,6 @@ export const construirComunicacionBaja = (
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
-${comprobantes.map(lineaBaja).join('\n')}
+${comprobantes.map((linea, index) => lineaBaja(linea, index)).join('\n')}
 </VoidedDocuments>`;
 };
