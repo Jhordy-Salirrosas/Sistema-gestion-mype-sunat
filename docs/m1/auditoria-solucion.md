@@ -1862,3 +1862,33 @@ Sugerencia de producto muestra precioUnitario final (no valorUnitario neto), con
 #### Construcción — 6H
 
 Decisión de Jhordy del 10 nov: OBSERVADO sí es origen de NC/ND. Guardas de saldo y transaccional común unificadas con ACEPTADO; selectores/vinculación front actualizados. Se conservan locks, saldo, baja pendiente, identidad y límites de motivos; negativos de otros estados siguen protegidos. Sin migración.
+
+#### Cierre 6B — exportación real recibida de Emma (10 nov)
+
+Fuente: Supabase en solo lectura por Emma; 18 filas de business_partners de la
+empresa demo. Contraste del seed anterior confirmado con una fila adicional
+TAX_ID 91440300MA5 Shenzhen Tech Electronics del seed de Aduanas. Distribución:
+10 filas de semilla (7 proveedores, 3 clientes), 3 clientes reales del 7 nov,
+Empresa Demo doc 204813697 (9 dígitos, cinco roles, creada el 9 nov 16:43), y
+4 proveedores exteriores de prueba de Aduanas (9 nov 21:37): Shenzhen Tech Global
+CN91440300MA5XYZ12, Silicon Valley Components US942857193, Hamburg Logistics
+DE301948275 y Taipei Semiconductor TW53892014. No se infiere que los dos registros
+CN91440300MA5XYZ12 tengan el mismo tipo documental ni que se deban deduplicar.
+
+Los 27 comprobantes referencian identidades en payload_ubl.cliente.numeroDocumento:
+12345678, 20100070970, 20131312955, 20481234566 y 45896325. La consulta ilustrativa
+anterior basada solo en columnas planas NO basta para los históricos: el cruce
+real usa también el snapshot cliente del payload, como verificó Emma.
+
+Referenciados del maestro (PROTEGER): José Pérez 12345678 (semilla pero usado),
+Ferretería Los Andes 20100070970, Distribuidora Callao 20131312955 y Supermercados
+Peruanos 20481234566. Receptor histórico 45896325 Juan Perez Gonzales NO está en
+el maestro; no se crea ni reescribe nada. Clientes de seed no referenciados por
+M1: Constructora Los Andes 20500000001 e Inmobiliaria Miraflores 20500000002.
+Empresa Demo no aparece entre los receptores; al tener cinco roles no se presume
+segura la eliminación de toda su fila: requiere decisión del equipo por sus
+otros usos. Ningún proveedor está referenciado por M1, pero Compras/Aduanas
+son sus dueños y no los toca Emma en esta limpieza. La limpieza autorizada de
+Emma se limita al lado cliente de ejemplos no referenciados; no la ejecuta Codex.
+
+6B queda diagnosticado con la exportación real: sin cambios de datos ni código.
