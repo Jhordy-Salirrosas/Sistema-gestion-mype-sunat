@@ -1904,3 +1904,9 @@ La grilla compartida por página y modal pide Fusionar/Mantener separada/Cancela
 #### Construcción — 6F
 
 POST /invoices/series exige ADMIN también en back; front muestra creación/reactivación solo para ADMIN. Tipos 01/03/07/08, serie y último correlativo usado (0 → siguiente 1), refresco de configuración, sin reiniciar numeración al reactivar. Endpoints y servicio de reserva existentes; sin migración. Pruebas de RolesGuard real y formulario con transporte simulado.
+
+#### Construcción — 6G y excepción autorizada del 10 nov
+
+Excepción puntual autorizada por Emma/Jhordy el 10 nov para aviso al equipo: `front/src/modules/customs/components/PartnerFormDialog.tsx` SOLO presentación. Se conservan exactamente campos, reglas (documento/nombre no vacíos y roles) y mutationFn/envío/botón deshabilitado; se añaden marcadores, aria-required/invalid/describedby, mensajes asociados y foco al primer inválido. Ningún otro archivo ajeno a M1 se modifica.
+
+M1 asocia errores de cliente y campos fiscales, ofrece navegación de productos/clientes por flechas/Enter y mantiene escritura sin selección como escritura, no selección implícita. Ayuda visible de atajos Alt+C/P/L y Ctrl+Enter para revisión explícita (no envío directo); Escape no descarta el borrador. Manejadores ligados al formulario/dialog activo, ignoran IME y emisión en curso. Pruebas de presentación/foco, bloqueo del alta intacto, selección teclado, revisión sin envío y regresiones de selección de cliente.
