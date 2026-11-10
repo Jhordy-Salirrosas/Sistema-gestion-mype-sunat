@@ -21,7 +21,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       },
       treasuryMovement: { create: jest.fn(), findMany: jest.fn() },
       company: { findUnique: jest.fn().mockResolvedValue({ inventory_cost_method: 'PROMEDIO' }) },
-      accountingRule: { findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '421' }, { line_order: 2, account_code: '1041' }]) },
+      accountingRule: { findMany: jest.fn(({ where }: any) => Promise.resolve(where?.process_code === 'PAGO' ? [{ line_order: 1, account_code: '421' }, { line_order: 2, account_code: '1041' }] : [{ line_order: 1, account_code: '601' }, { line_order: 2, account_code: '40111' }, { line_order: 3, account_code: '421' }, { line_order: 4, account_code: '201' }, { line_order: 5, account_code: '611' }])) },
       inventoryCostLayer: { create: jest.fn().mockResolvedValue({}) },
       accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
       businessPartner: {
@@ -252,6 +252,9 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
   it('aplica mapeador dinámico de cuentas PCGE (60111, 42121, 20111, 61111) cuando existe configuración', async () => {
     const accounting = { execute: jest.fn().mockResolvedValue({}) };
     mockPrisma.accountingEntry = { findFirst: jest.fn().mockResolvedValue(null) };
+    mockPrisma.accountingRule.findMany.mockResolvedValue([
+      { line_order: 1, account_code: '60111' }, { line_order: 2, account_code: '40111' }, { line_order: 3, account_code: '42121' }, { line_order: 4, account_code: '20111' }, { line_order: 5, account_code: '61111' },
+    ]);
     mockPrisma.accountingMapping = {
       findMany: jest.fn().mockResolvedValue([
         { role_code: 'GASTO_COMPRA', account_code: '60111' },
