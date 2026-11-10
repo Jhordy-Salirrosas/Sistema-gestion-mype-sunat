@@ -90,7 +90,7 @@ ${p.extensiones}
   <cbc:ID>${p.documentoId}</cbc:ID>
   <cbc:IssueDate>${p.fecha}</cbc:IssueDate>
 ${p.hora ? `  <cbc:IssueTime>${p.hora}</cbc:IssueTime>\n` : ''}
-  <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>${p.notas}
+${p.raiz === 'DebitNote' ? '' : `  <cbc:${p.raiz}TypeCode listID="${p.tipoOperacion}">${p.tipo}</cbc:${p.raiz}TypeCode>`}${p.notas}
   <cbc:DocumentCurrencyCode listID="ISO 4217 Alpha">${p.moneda}</cbc:DocumentCurrencyCode>${p.referenciaNota ? `\n${p.referenciaNota}` : ''}
 ${p.emisor}${p.cliente}${p.mediosPago ? `\n${p.mediosPago}` : ''}
 ${p.formaPago}${p.retenciones ? `\n${p.retenciones}` : ''}${p.descuentoGlobal ? `\n${p.descuentoGlobal}` : ''}

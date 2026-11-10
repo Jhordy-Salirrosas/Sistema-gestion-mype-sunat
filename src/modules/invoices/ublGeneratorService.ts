@@ -244,7 +244,7 @@ export class UblGeneratorService {
         '  </cac:AllowanceCharge>',
       ].join('\n') : '',
       impuestos,
-      totales: bloqueTotales(totales, moneda),
+      totales: bloqueTotales(totales, moneda, raiz === 'DebitNote' ? 'RequestedMonetaryTotal' : 'LegalMonetaryTotal'),
       /**
        * Las NOTAS no llevan `cac:InvoiceLine`: el esquema UBL 2.1 usa
        * `cac:CreditNoteLine` para la Nota de Crédito (07) y `cac:DebitNoteLine`
