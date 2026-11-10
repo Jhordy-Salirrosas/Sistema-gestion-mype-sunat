@@ -1854,3 +1854,7 @@ expresa del mínimo 6J sin migración frente a automatización por producto dete
 #### Construcción aprobada — 6D
 
 MTQ incorporado a los mapas M1 de back/front; dato de Inventario intacto. Prueba de generador firmado con certificado ficticio y SFS oficial. La Fase 0 anterior fue aprobada en bloque; límites 6G/6J resueltos en el hilo del 10 nov.
+
+#### Construcción — 6E
+
+Sugerencia de producto muestra precioUnitario final (no valorUnitario neto), con dos decimales y etiqueta explícita. Prueba 118 final / 100 neto, selección sin edición. Contrato sale_price intacto.
