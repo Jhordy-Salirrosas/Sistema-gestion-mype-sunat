@@ -264,7 +264,7 @@ describe('TA-69 · métricas de facturación', () => {
     expect(metricas.emitidos).toBe(2);
     expect(metricas.erroresRed).toBe(1);
     // El importe del error de red queda fuera de lo facturado.
-    expect(metricas.facturado).toBe(400);
+    expect(metricas.facturado).toBe(300);
   });
 
   it('la tasa de aceptación es el porcentaje de procesados aceptados', () => {

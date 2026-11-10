@@ -1,3 +1,4 @@
+import { presentarResultado, type EventoPresentacion } from './invoiceResultPresentation';
 /**
  * Mapeadores de modelo a DTO (TA-29).
  *
@@ -19,6 +20,7 @@ import type { InvoiceStatus } from '../../../../generated/client/enums';
 
 /** Fila del listado (lo que se le pide a Prisma con `select`). */
 export interface FilaListado {
+  history?: EventoPresentacion[];
   id: string;
   tipo_comprobante: string;
   serie: string;
@@ -86,6 +88,7 @@ export function numeroComprobante(serie: string, correlativo: number): string {
 export function aListado(fila: FilaListado): ComprobanteListadoDto {
   const cdr = aCdr(fila.cdr_sunat);
   return {
+    resultado_presentacion: presentarResultado(fila.estado, cdr, fila.history),
     id: fila.id,
     tipo_comprobante: fila.tipo_comprobante,
     serie: fila.serie,
