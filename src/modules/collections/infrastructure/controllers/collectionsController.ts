@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateCollectionDto } from '../../application/dto/createCollectionDto';
@@ -8,6 +8,13 @@ import { CollectionsService } from '../../application/services/collectionsServic
 @UseGuards(AuthGuard)
 export class CollectionsController {
   constructor(private readonly collections: CollectionsService) {}
+
+  @Post(':id/annul')
+  @HttpCode(HttpStatus.OK)
+  annul(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.annul(companyId, id);
+  }
 
   @Get('receivables')
   receivables(@CurrentCompany() companyId?: string) {
