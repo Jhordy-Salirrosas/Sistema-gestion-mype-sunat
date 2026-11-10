@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
   Query,
   UnauthorizedException,
@@ -11,6 +13,10 @@ import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InventoryKardexService } from '../../application/services/inventoryKardexService';
 import { InventoryCostLayerService } from '../../application/services/inventoryCostLayerService';
+import {
+  RecalculateCostingDto,
+  UpdateCostMethodDto,
+} from '../../application/dto/costConfigDto';
 
 @Controller('api/v1/inventory/kardex')
 @UseGuards(AuthGuard)
@@ -69,18 +75,20 @@ export class InventoryKardexController {
   }
 
   @Post('config/method')
+  @HttpCode(HttpStatus.OK)
   updateCostMethod(
     @CurrentCompany() companyId: string | undefined,
-    @Body() body: { method: 'PROMEDIO' | 'FIFO' },
+    @Body() body: UpdateCostMethodDto,
   ) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.costLayers.updateCostMethod(companyId, body?.method);
   }
 
   @Post('config/recalculate')
+  @HttpCode(HttpStatus.OK)
   recalculateCosting(
     @CurrentCompany() companyId: string | undefined,
-    @Body() body: { method?: 'PROMEDIO' | 'FIFO' },
+    @Body() body: RecalculateCostingDto,
   ) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.costLayers.recalculateCosting(companyId, body?.method);
