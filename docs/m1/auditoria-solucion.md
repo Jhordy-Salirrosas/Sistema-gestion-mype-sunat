@@ -2153,3 +2153,11 @@ respuesta nueva y marca obsoletas métricas M1. Cargando/resultado visibles;
 fallo conserva la lista con aviso honesto. Lecturas normales conservan caché
 offline; archivo común intacto. Focales: front 2 archivos/3 pruebas aprobadas,
 incluidos clic repetido, invalidaciones y lectura estricta que propaga fallo.
+
+#### Construcción — 6b-4
+
+Número visible proviene de configuración en ambos formularios; sin dato muestra
+«no disponible». Retirada toda llamada al estimador desde el modal; correlativo
+interno no enviado queda 0, nunca se presenta como reserva. Lectura de configuración
+se refresca al abrir desde bandeja. Focal: front 1 archivo/3 pruebas aprobadas
+(66→67, 0→1, sin dato y cableado de ambas pantallas), sin escritura de numeración.
