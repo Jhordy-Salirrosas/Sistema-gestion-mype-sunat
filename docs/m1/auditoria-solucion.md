@@ -1187,3 +1187,84 @@ existente usó únicamente PostgreSQL local nuevo/desechable con las migraciones
 existentes; el contenedor y su volumen ya se eliminaron. No se aplicó nada a
 bases compartidas. Entrega front solo por `ferry/m1-resumenes-timeout` con su
 FERRY.md; sin push al repositorio front.
+
+### Parte 4 — Precio de venta real y almacén explícito (opción B)
+
+Autorización de Jhordy comunicada por Emma: construcción desde dev af8584af,
+con la deuda de las dos pruebas de Compras reconocida como línea base ajena.
+Solo M1; sin modificar Inventario, Contabilidad ni Resiliencia, sin migración
+nueva, sin operaciones reales ante SUNAT y sin cambios retroactivos.
+
+**Contrato de precio:** `inventory_products.sale_price` es el precio unitario
+FINAL en PEN, con IGV incluido. El catálogo M1 entrega `salePrice`, `vendible`
+y el motivo «sin precio de venta configurado» para NULL/no positivo. El front
+solo ofrece productos vendibles y nunca recurre a `/inventory/stocks` ni a
+`average_unit_cost` para fijar el precio. Seleccionar sin editar conserva ese
+precio final; para gravadas el servidor desglosa el valor / 1.18 con su precisión
+unitaria existente y redondea los importes como antes. Exoneradas, inafectas y
+gratuitas conservan su tratamiento fiscal (incluidos los valores referenciales
+de las gratuitas). No se modifica la estructura ni las fórmulas del generador.
+
+Ambas rutas pasan por la guarda común: un producto sin precio impide numerar,
+persistir y encolar. Un precio de venta enviado que difiere del catálogo se
+rechaza con petición de actualizarlo: tampoco se sustituye silenciosamente un
+precio obsoleto. Los descuentos siguen su contrato existente. Las notas 07/08
+quedan expresamente fuera del cotejo de precio de catálogo y no se reprecian:
+conservan las líneas/precios del origen, incluso si hoy no hay sale_price.
+
+**Almacén:** los dos formularios muestran el selector, con ALM-01 inicial
+explícito, y consultan los almacenes activos de la empresa en M1. No se elige
+el primero ni el de mayor stock; si no existe/está inactivo el elegido, la
+guarda devuelve una causa clara antes de numerar. Se normaliza el código y se
+congela como `payload_ubl.almacen` en ambas rutas. La consulta del catálogo y
+la validación de stock filtran ese almacén (sumando cantidades de SKU repetidos,
+no saldos de otros almacenes). El consumidor lee el valor persistido y lo
+entrega al puente M1, cuya interfaz existente lo transporta a Kardex. El costo
+mantiene `quantity * previous_unit_cost` de los movimientos reales registrados
+por ese puente: no se toma del precio de venta ni se cambia Contabilidad.
+Los históricos sin este metadato conservan su comportamiento anterior; no se
+reescriben XML, payloads, movimientos ni asientos ya emitidos.
+
+**Pantalla:** Configuración → Precios de venta, protegida por ADMIN como la
+configuración existente. Lista los productos activos, incluidos los que aún no
+tienen precio, y edita solamente `sale_price` mediante el PATCH existente
+`/inventory/stocks/products/:sku`, con importe positivo de hasta dos decimales,
+estado de guardado y resultado visible. No se crea una tarifa paralela ni se
+cargan precios demo: esa carga posterior corresponde a Emma. Entrega front
+exclusivamente por `ferry/m1-precio-venta-almacen`, con rutas exactas y FERRY.md.
+
+Verificación local usa únicamente una base PostgreSQL desechable nueva con el
+juego de migraciones YA existente, bajo la excepción local previamente concedida;
+no se genera/aplica una migración de esta parte ni se accede a bases compartidas.
+El build back hereda un error de tipo en inventoryPurchasesController:55 por
+`listPayables` inexistente, la misma deuda de Compras aceptada por Emma. El lint
+front global hereda 64 errores/25 advertencias (idénticos en la base); no se
+corrigen módulos ajenos ni se cambia configuración para ocultarlos.
+
+Pruebas back completas (con cobertura, heap local 4 GB; sin cambiar CI):
+base **259 suites / 2393 pruebas aprobadas**; cierre **260 suites / 2407 pruebas
+aprobadas**, +14 pruebas. En ambos: exactamente 1 suite / 2 pruebas fallidas de
+`test/unit/inventory/inventoryPurchaseService.spec.ts`, deuda de Compras aceptada;
+4 suites / 38 pruebas omitidas. Los **12 snapshots fiscales pasan sin modificación**.
+Cobertura local nueva contra af8584af: **18/18 líneas instrumentadas y 29/29
+resultados de condiciones**, combinado 100%; estimación LCOV+diff, no resultado
+remoto de Sonar. Lint back aprobado con tres avisos heredados; build back conserva
+únicamente el error ajeno de listPayables descrito arriba.
+
+Los tests cubren catálogo sin recambio de costo, precios nulos/cero/negativos,
+precio obsoleto, aislamiento del almacén, bloqueo previo a numerar en ambas
+rutas, payload congelado en ambas rutas, consumidor→puente con ALM-02, stock
+agregado por SKU solo en el almacén elegido y costo desde previous_unit_cost,
+así como ambas notas sin repricing aunque no exista precio de catálogo.
+
+Front base: **100 archivos / 788 pruebas** (dev 7b60fe4). Cierre:
+**101 archivos / 797 pruebas aprobadas**, +9, build aprobado. Nuevos tests:
+selección→precio final→payload para afectaciones gravada/exonerada/inafecta/gratuita;
+almacén principal explícito, selección de ALM-02 en página y modal y conservación
+al reintentar; pantalla de precios (PATCH exclusivo de sale_price, éxito, error y
+validación). Los harness previos incorporan la lectura de almacenes sin cambiar
+sus aserciones tributarias/SPOT. La bandeja carga el catálogo principal al abrir
+el modal; un cambio de almacén carga su stock y descarta respuestas obsoletas.
+La base local desechable usada para la verificación ya se eliminó. Los precios
+reales de los productos demo siguen pendientes de carga por Emma, fuera de esta
+entrega; no se inventó ni sustituyó ningún precio.

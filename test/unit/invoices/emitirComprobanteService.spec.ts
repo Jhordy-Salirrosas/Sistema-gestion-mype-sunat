@@ -480,6 +480,7 @@ describe('EmitirComprobanteService — stock antes que correlativo', () => {
       expect.arrayContaining([
         expect.objectContaining({ codigo: 'CEM-001', cantidad: 2 }),
       ]),
+      'ALM-01',
     );
   });
 });
@@ -953,7 +954,7 @@ describe('M1 permisos antes de reservar correlativo', () => {
     });
     expect(h.stock.validar).toHaveBeenCalledWith(COMPANY_ID, [
       expect.objectContaining({ codigo: 'SKU', afectacion: '10' }),
-    ]);
+    ], 'ALM-01');
   });
 
   it('un descuento superior a la base desglosada del precio final se rechaza antes de consultar permisos', async () => {

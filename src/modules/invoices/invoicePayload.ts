@@ -13,6 +13,8 @@ import type { DatosTributarios } from './ublTotalesHelper';
 import type { MedioPagoDetraccion } from './domain/rules/medioPagoDetraccion';
 
 export interface InvoicePayload extends DatosTributarios {
+  /** Almacén congelado al crear; los históricos pueden no tenerlo. */
+  almacen?: string;
   rucEmisor: string;
   razonSocialEmisor: string;
   nombreComercialEmisor?: string;

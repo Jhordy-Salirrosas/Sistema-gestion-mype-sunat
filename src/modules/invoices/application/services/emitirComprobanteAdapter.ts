@@ -341,6 +341,7 @@ export const traducirEmision = (
     provinciaEmisor: emisor.provincia,
     distritoEmisor: emisor.distrito,
 
+    almacen: dto.almacen,
     tipoComprobante: dto.tipo_comprobante,
     serie: dto.serie.toUpperCase(),
     numero: correlativo,

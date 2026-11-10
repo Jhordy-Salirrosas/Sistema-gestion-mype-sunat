@@ -14,7 +14,7 @@ const pantalla = { tipo_comprobante: '01', serie: 'F001', customer_identity_type
 
 function harness() {
   const requests = new Map<string, any>();
-  const tx = {
+  const tx = { inventoryWarehouse: { findFirst: jest.fn(async () => ({ id: 'warehouse' })) },
     $executeRaw: jest.fn(async () => 1),
     $queryRaw: jest.fn(async () => [{ current_correlative: 10 }]),
     invoiceCreationRequest: {
@@ -26,7 +26,7 @@ function harness() {
     },
     company: { findUnique: jest.fn(async () => ({ ruc: '20100070970', legal_name: 'Empresa', ...fakeFiscalAddress })) },
     businessPartner: { findFirst: jest.fn(async () => null) },
-    inventoryProduct: { findMany: jest.fn(async () => [{ id: 'p1', sku: 'SERV', description: 'Servicio', sunat_unit_code: 'NIU', tax_affectation: '10', is_inventory: false }]) },
+    inventoryProduct: { findMany: jest.fn(async () => [{ sale_price: 118, id: 'p1', sku: 'SERV', description: 'Servicio', sunat_unit_code: 'NIU', tax_affectation: '10', is_inventory: false }]) },
     inventoryBalance: { groupBy: jest.fn(async () => []) },
     invoice: {
       findUniqueOrThrow: jest.fn(async () => ({ id: 'inv-10', estado: 'PENDIENTE', created_at: new Date('2026-11-08') })),
@@ -132,4 +132,24 @@ it.each(['pantalla', 'fiscal'])('transporta la configuración persistida en %s h
   const certificate = fakeIssuerCertificate('20100070970');
   const xml = new SignatureService({ getCertificate: () => ({ certificatePem: certificate.pem, privateKeyPem: certificate.privateKeyPem }) }).signXml(new UblGeneratorService().generateInvoiceXml(payload)).signedXml;
   expect(await ejecutarSfs(xml, '01')).toEqual({ completado: true, errores: [] });
+});
+
+it('congela el almacén no principal tanto en la ruta de pantalla como en la fiscal', async () => {
+  for (const ruta of ['pantalla', 'fiscal']) {
+    const h = harness();
+    if (ruta === 'pantalla') await h.service.emitir({ ...pantalla, almacen: 'ALM-02' } as never, 'empresa', 'warehouse-test-key');
+    else await h.service.create({ ...fiscal, payload_ubl: { ...fiscal.payload_ubl, almacen: 'ALM-02' } } as never, 'empresa', 'warehouse-test-key');
+    expect(h.tx.invoice.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ payload_ubl: expect.objectContaining({ almacen: 'ALM-02' }) }) }));
+    expect(h.tx.inventoryBalance.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ company_id: 'empresa', warehouse: { warehouse_code: 'ALM-02' } }) }));
+  }
+});
+
+it.each(['pantalla', 'fiscal'])('sin sale_price bloquea %s antes de numerar o persistir', async ruta => {
+  const h = harness();
+  h.tx.inventoryProduct.findMany.mockResolvedValueOnce([{ sale_price: null, id: 'p1', sku: 'SERV', description: 'Servicio', sunat_unit_code: 'NIU', tax_affectation: '10', is_inventory: false }] as never);
+  const trabajo = ruta === 'pantalla' ? h.service.emitir(pantalla as never, 'empresa', 'missing-price-key') : h.service.create(fiscal as never, 'empresa', 'missing-price-key');
+  await expect(trabajo).rejects.toThrow('sin precio de venta configurado');
+  expect(h.tx.$queryRaw).not.toHaveBeenCalled();
+  expect(h.tx.invoice.create).not.toHaveBeenCalled();
+  expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
 });
