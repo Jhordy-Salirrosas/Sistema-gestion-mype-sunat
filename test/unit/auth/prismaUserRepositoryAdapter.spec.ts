@@ -212,6 +212,7 @@ describe('PrismaUserRepositoryAdapter', () => {
       company: { create: jest.fn().mockResolvedValue(companyRow) },
       user: { create: jest.fn().mockResolvedValue(userRow) },
       refreshToken: { create: jest.fn().mockResolvedValue({}) },
+      accountingRule: { createMany: jest.fn().mockResolvedValue({ count: 23 }) },
       auditLog,
     };
     const prisma = {

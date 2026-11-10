@@ -13,6 +13,28 @@ enum AccountingPeriodStatus {
 
 /// Catálogo PCGE 2019. Es global: no depende de la empresa.
 
+
+/// Gasto operativo con su asiento contable automático.
+model Expense {
+  id               String   @id @default(uuid())
+  company_id       String
+  company          Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  expense_date     DateTime
+  supplier_name    String
+  supplier_doc     String?
+  document_type    String   @default("01")
+  document_number  String?
+  description      String
+  base_amount      Decimal  @db.Decimal(14, 2)
+  igv_amount       Decimal  @db.Decimal(14, 2)
+  total_amount     Decimal  @db.Decimal(14, 2)
+  status           String   @default("REGISTRADO")
+  created_at       DateTime @default(now())
+
+  @@index([company_id, expense_date])
+  @@map("expenses")
+}
+
 /// Ejercicio fiscal por empresa. Agrupa los períodos mensuales.
 model AccountingFiscalYear {
   id         String   @id @default(uuid())
