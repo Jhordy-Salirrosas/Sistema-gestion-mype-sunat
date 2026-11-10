@@ -1,31 +1,7 @@
 import type { PrismaClient } from '../../src/generated/client/client';
 
 /** Reglas base PCGE para una MYPE ferretera. Se pueden ajustar por empresa. */
-const RULES: Array<[string, string, number, string, 'DEBE' | 'HABER', string, string]> = [
-  ['VENTA', '*', 1, '12121', 'DEBE', 'TOTAL', 'Cuentas por cobrar emitidas'],
-  ['VENTA', '*', 2, '40111', 'HABER', 'IGV', 'IGV cuenta propia'],
-  ['VENTA', '*', 3, '70121', 'HABER', 'BASE', 'Ventas gravadas'],
-  ['VENTA', '*', 4, '70321', 'HABER', 'EXONERADO', 'Ventas exoneradas'],
-  ['VENTA', '*', 5, '70521', 'HABER', 'INAFECTO', 'Ventas inafectas'],
-  ['VENTA', '*', 6, '74111', 'HABER', 'ICBPER', 'ICBPER por pagar'],
-  ['VENTA', '*', 7, '12129', 'DEBE', 'DETRACCION', 'Detracción por cobrar'],
-  ['VENTA', '*', 8, '40114', 'DEBE', 'RETENCION', 'Retención IGV'],
-  ['VENTA', '*', 9, '74', 'DEBE', 'DESCUENTO', 'Descuentos concedidos'],
-  ['VENTA', '*', 10, '69111', 'DEBE', 'COSTO', 'Costo de ventas'],
-  ['VENTA', '*', 11, '20111', 'HABER', 'COSTO', 'Mercaderías'],
-  ['COMPRA', '*', 1, '60111', 'DEBE', 'BASE', 'Compras de mercaderías'],
-  ['COMPRA', '*', 2, '40111', 'DEBE', 'IGV', 'IGV crédito fiscal'],
-  ['COMPRA', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar comerciales'],
-  ['COMPRA', '*', 4, '20111', 'DEBE', 'BASE', 'Ingreso a almacén'],
-  ['COMPRA', '*', 5, '61111', 'HABER', 'BASE', 'Variación de existencias'],
-  ['PAGO', '*', 1, '42121', 'DEBE', 'MONTO_PAGADO', 'Pago a proveedor'],
-  ['PAGO', '*', 2, '1041', 'HABER', 'MONTO_PAGADO', 'Cuenta corriente'],
-  ['GASTO', '*', 1, '63111', 'DEBE', 'BASE', 'Gastos de servicios'],
-  ['GASTO', '*', 2, '40111', 'DEBE', 'IGV', 'IGV crédito fiscal'],
-  ['GASTO', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar'],
-  ['AJUSTE', '*', 1, '65911', 'DEBE', 'COSTO', 'Pérdida por ajuste'],
-  ['AJUSTE', '*', 2, '20111', 'HABER', 'COSTO', 'Mercaderías'],
-];
+import { DEFAULT_ACCOUNTING_RULES as RULES } from '../../src/modules/accounting/domain/rules/defaultAccountingRules';
 
 export async function seedAccountingRules(prisma: PrismaClient): Promise<void> {
   const companies = await prisma.company.findMany({ select: { id: true } });

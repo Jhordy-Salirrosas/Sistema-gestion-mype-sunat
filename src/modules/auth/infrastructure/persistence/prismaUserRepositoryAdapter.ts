@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../database/prismaService';
+import { DEFAULT_ACCOUNTING_RULES } from '../../../accounting/domain/rules/defaultAccountingRules';
 import { UserEntity, type UserRole } from '../../domain/entities/userEntity';
 import { CompanyEntity } from '../../domain/entities/companyEntity';
 import { RefreshTokenEntity } from '../../domain/entities/refreshTokenEntity';
@@ -144,6 +145,19 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           cert_pass_encrypted: params.company.certPassEncrypted,
           is_active: params.company.isActive,
         },
+      });
+
+      await tx.accountingRule.createMany({
+        data: DEFAULT_ACCOUNTING_RULES.map(([process_code, document_type, line_order, account_code, side, base_calculation, description]) => ({
+          company_id: createdCompany.id,
+          process_code,
+          document_type,
+          line_order,
+          account_code,
+          side,
+          base_calculation,
+          description,
+        })),
       });
 
       const createdUser = await tx.user.create({
