@@ -1,3 +1,4 @@
+import { IsRucValid } from '../../../invoices/application/validators/isRucValidDecorator';
 import {
   IsEmail,
   IsNotEmpty,
@@ -12,6 +13,7 @@ export class RegisterDto {
   @IsString({ message: 'El RUC debe ser una cadena de texto.' })
   @IsNotEmpty({ message: 'El RUC de la empresa es obligatorio.' })
   @Length(11, 11, { message: 'El RUC debe tener exactamente 11 dígitos.' })
+  @IsRucValid({ message: 'El RUC no supera la validación módulo 11 de SUNAT.' })
   ruc!: string;
 
   @IsString({ message: 'La razón social debe ser una cadena de texto.' })
