@@ -55,6 +55,8 @@ const SELECT_LISTADO = {
   xml_hash_sha256: true,
   payload_ubl: true,
   cdr_sunat: true,
+  history: { where: { estado_nuevo: 'RECHAZADO' as const }, orderBy: { created_at: 'desc' as const }, take: 20,
+    select: { estado_nuevo: true, codigo_error: true, mensaje_error: true, created_at: true } },
 } as const;
 
 /** Proyección del detalle: la del listado más ficha, CDR e historial. */

@@ -1,3 +1,4 @@
+import type { ResultadoPresentacion } from '../services/invoiceResultPresentation';
 /**
  * Contrato de los endpoints de consulta de comprobantes (TA-29).
  *
@@ -31,6 +32,8 @@ export interface ComprobanteOrigenNotaDto {
 
 /** Un comprobante del listado, con lo justo para la grilla. */
 export interface ComprobanteListadoDto {
+  /** Lectura derivada del CDR/historial, sin alterar el estado fiscal. */
+  resultado_presentacion?: ResultadoPresentacion;
   id: string;
   tipo_comprobante: string;
   serie: string;

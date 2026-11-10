@@ -1369,3 +1369,18 @@ Se preserva emitidos para consumidores anteriores y no se cambia la bandeja.
 Pruebas: aceptadas, NC, ND, pendiente 118 y todos los tipos/estados sin confirmar;
 conteo total y criterio visible en el panel. Validación focalizada pendiente
 solo de consolidar el cierre completo al final de 5A–5D.
+
+**5B — Presentación del bloqueo local:** se deriva resultado_presentacion del
+CDR y del historial ya persistidos, sin tocar estados ni datos históricos.
+Marcador explícito «Bloqueado antes de enviar por la validación XSL» (incluye
+los diagnósticos XSD del ejecutor) → VALIDACION_LOCAL. CDR de rechazo o SOAP
+Fault reconocido → SUNAT. Código aislado o falta de CDR no prueban origen:
+NO_DETERMINADO. Una decisión posterior no reconocida no revive un bloqueo
+anterior. El listado consulta un historial acotado y el detalle usa el mismo
+clasificador. Front transporta esa lectura, hidrata los datos del detalle y
+unifica badge, motivo y auditoría: local no dice «SUNAT rechazó» ni «todavía
+no respondió». La presentación de origen incierto es neutral.
+Pruebas focalizadas: 3128, XSD, CDR, SOAP Fault, evidencia insuficiente,
+cronología, marcadores operativos y conservación del estado RECHAZADO;
+lectura coherente en listado y detalle, con motivo visible. Generador y
+compuertas fiscales permanecen intactos.
