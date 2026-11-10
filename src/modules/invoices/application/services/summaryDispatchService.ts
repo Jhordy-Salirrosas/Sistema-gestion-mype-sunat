@@ -3,13 +3,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IssuerConfigResolver } from '../../../sunat/issuerConfigResolver';
 import { detalleErrorConsulta } from '../../../sunat/statusConsultaError';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
-import { CODIGOS_EN_PROCESO, SunatSummaryClient, parseGetStatusResponse, type CredencialesSol } from '../../../sunat/soap/sunatSummaryOperations';
+import { CODIGOS_EN_PROCESO, SunatSummaryClient, resolveSummaryTimeout, parseGetStatusResponse, type CredencialesSol } from '../../../sunat/soap/sunatSummaryOperations';
 import { SummaryAggregateStore } from './summaryAggregateStore';
 import { SummaryGate, hashSummary } from './summaryGate';
 export type TipoEnvioResumen = 'RESUMEN_DIARIO' | 'COMUNICACION_BAJA';
 export interface SummaryJobData { tipo: TipoEnvioResumen; identificador: string; zipBase64: string; fileName: string; companyId: string; }
 export interface ResultadoEnvioResumen { enviado: boolean; identificador: string; ticket: string | null; status: string | null; contenido: string | null; consultas: number; error: string | null; }
-export interface OpcionesEnvio { credentials?: CredencialesSol | null; maxConsultas?: number; esperaMs?: number; }
+export interface OpcionesEnvio { credentials?: CredencialesSol | null; maxConsultas?: number; esperaMs?: number; ticketEsperado?: string; }
 export const SUMMARY_QUEUE = 'sunat-summary-queue';
 export const CONSULTAS_POR_DEFECTO = 30;
 export const ESPERA_POR_DEFECTO_MS = 1000;
@@ -25,6 +25,7 @@ export class SummaryDispatchService {
   async procesar(job: SummaryJobData, opciones: OpcionesEnvio = {}): Promise<ResultadoEnvioResumen> {
     const base: ResultadoEnvioResumen = { enviado: false, identificador: job.identificador, ticket: null, status: null, contenido: null, consultas: 0, error: null };
     const row = await this.store.cargar(job.companyId, job.identificador);
+    if (opciones.ticketEsperado && row.ticket !== opciones.ticketEsperado) return { ...base, ticket: row.ticket, status: 'BLOQUEADO', error: 'SUMMARY_POLL_TICKET_MISMATCH: no se reenvía un sondeo sin su ticket persistido' };
     if (row.kind !== (job.tipo === 'COMUNICACION_BAJA' ? 'RA' : 'RC')) throw new Error('SUMMARY_JOB_KIND_MISMATCH');
     if (['ACCEPTED', 'REJECTED'].includes(row.state)) {
       const result = row.result as Record<string, string | null> | null;
@@ -33,7 +34,7 @@ export class SummaryDispatchService {
     if (!row.ticket && (row.transport_uncertain || ['SENDING', 'UNCERTAIN', 'REVIEW'].includes(row.state))) return { ...base, error: row.error ?? 'Intento incierto sin ticket: revisión requerida; no se reenvía a ciegas' };
     let context: Awaited<ReturnType<IssuerConfigResolver['resolve']>>;
     try {
-      context = await this.issuerConfig.resolve(job.companyId);
+      context = Object.freeze({ ...await this.issuerConfig.resolve(job.companyId), timeoutMs: resolveSummaryTimeout() });
       if (context.ruc !== row.issuer_ruc || context.environment !== row.environment) throw new Error('SUMMARY_CONTEXT_CHANGED');
       if (!row.xml || hashSummary(row.xml) !== row.xml_hash || !row.zip_base64) throw new Error('SUMMARY_ARTIFACT_UNAVAILABLE');
       const entries = new AdmZip(Buffer.from(row.zip_base64, 'base64')).getEntries();
