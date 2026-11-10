@@ -44,6 +44,8 @@ export interface ResultadoPuente {
   asientoOmitido: boolean;
   /** Asiento de costo de ventas, si se pudo determinar el costo. */
   asientoCostoId?: string;
+  /** Sin escritura de asiento de costo en esta pasada. */
+  asientoCostoOmitido?: boolean;
   /** Costo total contabilizado. */
   costoVenta?: number;
   /** Errores no bloqueantes, con la fase en la que ocurrieron. */
@@ -288,13 +290,13 @@ export class InvoiceAccountingBridgeService {
     factura: FacturaParaPuente,
     numero: string,
     errores: string[],
-  ): Promise<{ asientoCostoId?: string; costoVenta?: number }> {
+  ): Promise<{ asientoCostoId?: string; costoVenta?: number; asientoCostoOmitido?: boolean }> {
     const referencia = `${factura.id}:COSTO-REV`;
     const existente = await this.prisma.accountingEntry.findFirst({
       where: { company_id: factura.companyId, source_module: MODULO_ORIGEN, source_reference_id: referencia },
       select: { id: true },
     });
-    if (existente) return { asientoCostoId: existente.id };
+    if (existente) return { asientoCostoId: existente.id, asientoCostoOmitido: true };
 
     const originalId = factura.documentoAfectadoId;
     if (!originalId) {
@@ -323,7 +325,7 @@ export class InvoiceAccountingBridgeService {
       const unitario = costoPorSku.get(item.itemCode?.trim() ?? '') ?? 0;
       return sum + Math.max(0, item.cantidad) * unitario;
     }, 0) * 100) / 100;
-    if (costo <= 0) return { costoVenta: 0 };
+    if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
     try {
       const asiento = await this.generadorAsientos.execute({
@@ -339,7 +341,7 @@ export class InvoiceAccountingBridgeService {
           { lineOrder: 2, accountCode: '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
         ],
       });
-      return { asientoCostoId: asiento.id, costoVenta: -costo };
+      return { asientoCostoId: asiento.id, costoVenta: -costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Reverso costo: ${(error as Error).message}`);
       return {};
@@ -351,20 +353,20 @@ export class InvoiceAccountingBridgeService {
     factura: FacturaParaPuente,
     numero: string,
     errores: string[],
-  ): Promise<{ asientoCostoId?: string; costoVenta?: number }> {
+  ): Promise<{ asientoCostoId?: string; costoVenta?: number; asientoCostoOmitido?: boolean }> {
     const referencia = `${factura.id}:COSTO`;
     const existente = await this.prisma.accountingEntry.findFirst({
       where: { company_id: factura.companyId, source_module: MODULO_ORIGEN, source_reference_id: referencia },
       select: { id: true },
     });
-    if (existente) return { asientoCostoId: existente.id };
+    if (existente) return { asientoCostoId: existente.id, asientoCostoOmitido: true };
 
     const movimientos = await this.prisma.inventoryMovement.findMany({
       where: { company_id: factura.companyId, source_reference_id: numero, operation_type_code: '01' },
       select: { quantity: true, previous_unit_cost: true },
     });
     const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.quantity) * Number(m.previous_unit_cost), 0) * 100) / 100;
-    if (costo <= 0) return { costoVenta: 0 };
+    if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
     const mappings = (await (this.prisma as any).accountingMapping?.findMany({
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
@@ -384,7 +386,7 @@ export class InvoiceAccountingBridgeService {
           { lineOrder: 2, accountCode: roles.get('INVENTARIO') || '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
         ],
       });
-      return { asientoCostoId: asiento.id, costoVenta: costo };
+      return { asientoCostoId: asiento.id, costoVenta: costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Costo de ventas: ${(error as Error).message}`);
       return { costoVenta: costo };

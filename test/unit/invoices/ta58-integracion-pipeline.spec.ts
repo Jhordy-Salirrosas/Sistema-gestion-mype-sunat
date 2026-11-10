@@ -144,7 +144,7 @@ function crearConsumidor(
     { persistFailure } as never,
     // TA-68: el puente contable se ejercita en su propia suite; aqui es un
     // doble inerte para no mezclar dos responsabilidades en las mismas pruebas.
-    { registrar: jest.fn(async () => ({ completo: true, asientoOmitido: true })) } as never,
+    { registrar: jest.fn(async () => ({ completo: true, asientoOmitido: true, errores: [], movimientosRegistrados: 0, movimientosOmitidos: 0 })) } as never,
     // Guarda el XML firmado para que la descarga entregue el documento real.
     { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );

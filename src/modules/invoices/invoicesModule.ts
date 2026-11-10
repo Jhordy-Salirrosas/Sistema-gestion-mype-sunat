@@ -1,3 +1,5 @@
+import { InvoiceBridgeCoordinatorService } from './application/services/invoiceBridgeCoordinatorService';
+import { InvoiceBridgeReprocessController } from './infrastructure/controllers/invoiceBridgeReprocessController';
 import { SummaryAggregateStore } from './application/services/summaryAggregateStore';
 import { SummaryGate } from './application/services/summaryGate';
 import { InvoiceAccountingFallbackService } from './application/services/invoiceAccountingFallbackService';
@@ -65,6 +67,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    InvoiceBridgeReprocessController,
     InvoiceSunatConsultController,
     InvoicesController,
     // ORDEN IMPORTANTE. `InvoiceQueryController` declara `GET :id`, que actúa
@@ -81,6 +84,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    InvoiceBridgeCoordinatorService,
     AtomicInvoiceCreationService,
     IssuerConfigWriter,
     CreateInvoiceUseCase,
