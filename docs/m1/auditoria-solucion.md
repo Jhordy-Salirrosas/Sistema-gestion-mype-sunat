@@ -1367,8 +1367,7 @@ infla. Se añade total de documentos registrados en el período (todos los
 estados), explícitamente rotulado en el panel junto a aceptados/observados.
 Se preserva emitidos para consumidores anteriores y no se cambia la bandeja.
 Pruebas: aceptadas, NC, ND, pendiente 118 y todos los tipos/estados sin confirmar;
-conteo total y criterio visible en el panel. Validación focalizada pendiente
-solo de consolidar el cierre completo al final de 5A–5D.
+conteo total y criterio visible en el panel. Validación focalizada aprobada; cierre completo de 5A–5D al final de esta sección.
 
 **5B — Presentación del bloqueo local:** se deriva resultado_presentacion del
 CDR y del historial ya persistidos, sin tocar estados ni datos históricos.
@@ -1412,3 +1411,35 @@ principal, segundo clic sin publicación y estado ACEPTADO protegido. También
 fallos de publicación/limpieza, concurrencia, compañía ajena, callback ausente
 y publicación no comprobada. La ejecución real sobre F001-00000057 corresponde
 solo a Emma tras el despliegue; no se ejecutó en producción.
+
+**5D — No reproducible en dev:** las seis pruebas nuevas cubren página estándar
+y modal, cada uno con selección por clic, foco de sugerencia mediante Tab y
+Enter (teclado nativo), y texto escrito sin confirmar selección. Preparan la
+línea, eligen/escriben al cliente y pulsan Emitir UNA vez sin retocar nombre ni
+documento. El primer payload contiene documento 20100070970, tipo 6 y razón
+social Ferretería Los Andes S.A.C.; no aparece «Falta la razón social del
+cliente». Se conservan los setters existentes: NO se cambia el código de
+CustomerLookupField ni los formularios por una causa no demostrada. No se
+agregan atajos ni confirmación implícita de sugerencias. Esto no niega el
+síntoma verificado por Emma en el main desplegado de las emisiones -64/-65;
+la evidencia nueva corresponde exclusivamente al dev probado.
+
+Cierre completo: back **267 suites / 2469 pruebas aprobadas**, cero fallos
+(+3 suites / +24 pruebas). Se conservan 4 suites / 38 pruebas omitidas y los
+**12 snapshots fiscales intactos**. Front **105 archivos / 827 pruebas aprobadas**,
+cero fallos (+3 archivos / +16 pruebas). Build de ambos aprobado; lint back sin
+errores/avisos; lint front de archivos modificados sin errores y solo el aviso
+preexistente de Fast Refresh por exportar estadoDeMonitor junto al componente.
+Cobertura local nueva (LCOV + diff contra f8cea8c): **38/38 líneas (100%)**,
+64/71 resultados de condiciones; combinado **93,58%**. No se modifican umbrales,
+configuración de CI/Sonar, esquemas, compuertas ni matemática UBL.
+
+Se entregan commits por 5A/5B/5C y la documentación/regresión de 5D. El único
+cambio productivo en Resiliencia es el método reenqueueInvoiceIfIdle autorizado;
+no se cambia retryDlq, políticas de reintentos, reconciliador automático ni
+invoiceRetryService. En M1, retry-cdr conserva ruta y estados admitidos; solo
+activa el rescate explícito y asegura el marcador previo a publicar en las
+ramas ya existentes. La base PostgreSQL local desechable se eliminó tras las
+pruebas. Ninguna base compartida fue tocada. Entrega front solo por ferry con
+FERRY.md y manifest de rutas exactas. El rescate de la F001-00000057 real queda
+para Emma después del despliegue; no se ejecutó en esta ronda.
