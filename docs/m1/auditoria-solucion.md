@@ -2138,3 +2138,10 @@ Proyección literal de montoDetraccion/montoRetencion del payload persistido en
 listado y detalle; inválido/ausente conserva null en contrato. Normalizadores
 transportan los importes hasta la celda sin tasas ni reglas nuevas. Total fiscal
 intacto. Pruebas focales: back 1 suite/8 tests, front 1 archivo/1 test.
+
+#### Construcción — 6b-2
+
+Helper exclusivamente visual de depósito/pago directo; página y resumen lo usan.
+Reparto fiscal, neto de cuotas, payload y XML intactos. Depósito indicado es un
+cálculo de presentación, no constancia bancaria. Focales: front 2 archivos/10
+pruebas aprobadas, incluida regresión del neto fiscal S657.15 y pago S657.17.
