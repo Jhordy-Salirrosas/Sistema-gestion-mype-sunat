@@ -21,6 +21,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       },
       treasuryMovement: { create: jest.fn(), findMany: jest.fn() },
       company: { findUnique: jest.fn().mockResolvedValue({ inventory_cost_method: 'PROMEDIO' }) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '421' }, { line_order: 2, account_code: '1041' }]) },
       inventoryCostLayer: { create: jest.fn().mockResolvedValue({}) },
       accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
       businessPartner: {
