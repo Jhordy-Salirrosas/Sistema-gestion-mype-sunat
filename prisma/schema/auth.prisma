@@ -67,6 +67,7 @@ model Company {
   accounting_entries    AccountingEntry[]
   accounting_periods    AccountingPeriod[]
   accounting_fiscal_years AccountingFiscalYear[]
+  expenses              Expense[]
   accounting_rules      AccountingRule[]
   ple_books             PleBook[]
   audit_logs            AuditLog[]
