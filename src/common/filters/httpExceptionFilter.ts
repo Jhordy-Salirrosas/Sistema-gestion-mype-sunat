@@ -62,14 +62,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      this.logger.error(
-        `Error no controlado en ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message}`,
-        exception.stack,
-      );
+      this.logger.error('Error no controlado.');
     } else {
-      this.logger.error(
-        `Error no controlado de tipo desconocido en ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${JSON.stringify(exception)}`,
-      );
+      this.logger.error('Error no controlado de tipo desconocido.');
     }
 
     const slug = title.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
@@ -87,3 +82,4 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(problem);
   }
 }
+
