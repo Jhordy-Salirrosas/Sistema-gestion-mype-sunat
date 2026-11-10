@@ -55,6 +55,22 @@ model InventoryProduct {
   default_supplier_id   String?
   default_supplier      BusinessPartner?    @relation("ProductDefaultSupplier", fields: [default_supplier_id], references: [id], onDelete: SetNull)
 
+  // Fase 2: Clasificación, origen y mantenedores
+  origin_type           String              @default("NACIONAL") // NACIONAL | IMPORTADO
+  is_service            Boolean             @default(false)
+  manufacturer          String?
+  tags                  String[]            @default([])
+  country_of_origin     String?             @default("PE")
+
+  // Precios y reglas comerciales
+  cost_price            Decimal?            @db.Decimal(14, 4)
+  sale_price            Decimal?            @db.Decimal(14, 2)
+  wholesale_price       Decimal?            @db.Decimal(14, 2)
+  promo_price           Decimal?            @db.Decimal(14, 2)
+  commission_rate       Decimal?            @db.Decimal(5, 2)
+  min_price             Decimal?            @db.Decimal(14, 2)
+  warehouse_location    String?
+
   is_active             Boolean             @default(true)
   created_at            DateTime            @default(now())
   updated_at            DateTime            @updatedAt
@@ -63,6 +79,10 @@ model InventoryProduct {
   balances              InventoryBalance[]
   movements             InventoryMovement[]
   purchase_items        NationalPurchaseItem[]
+  suppliers             InventoryProductSupplier[]
+  presentations         InventoryProductPresentation[]
+  variants              InventoryProductVariant[]
+  attributes            Json?               // Atributos de variación: ["Color", "Medida", "Acabado"]
 
   @@unique([company_id, sku])
   @@index([company_id])
@@ -355,6 +375,168 @@ model TreasuryMovement {
   @@index([company_id, direction])
   @@map("treasury_movements")
 }
+
+// ---------------------------------------------------------------------------
+// Fase 2: Mantenedores de Catálogo, Variantes, Proveedores y Reglas de Precio
+// ---------------------------------------------------------------------------
+
+model InventoryBrand {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  code        String
+  name        String
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([company_id, code])
+  @@unique([company_id, name])
+  @@index([company_id])
+  @@map("inventory_brands")
+}
+
+model InventoryModel {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  code        String
+  name        String
+  brand_name  String?
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([company_id, code])
+  @@index([company_id])
+  @@map("inventory_models")
+}
+
+model InventoryCategory {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  code        String
+  name        String
+  sunat_code  String?  // Código oficial según catálogo SUNAT
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([company_id, code])
+  @@index([company_id])
+  @@map("inventory_categories")
+}
+
+model InventoryManufacturer {
+  id           String   @id @default(uuid())
+  company_id   String
+  company      Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  name         String
+  country_code String   @default("PE")
+  website      String?
+  contact_info String?
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([company_id, name])
+  @@index([company_id])
+  @@map("inventory_manufacturers")
+}
+
+model InventoryTag {
+  id         String   @id @default(uuid())
+  company_id String
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  name       String
+  color      String?  @default("emerald")
+  created_at DateTime @default(now())
+
+  @@unique([company_id, name])
+  @@index([company_id])
+  @@map("inventory_tags")
+}
+
+model SunatUnitMeasurement {
+  code        String   @id // NIU, KGM, BX, LTR, DZN, etc. (Tabla 6 SUNAT)
+  name        String   // UNIDAD, KILOGRAMO, CAJA, LITRO...
+  symbol      String?  // u, kg, cja, l...
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  @@map("sunat_unit_measurements")
+}
+
+model InventoryProductSupplier {
+  id                    String          @id @default(uuid())
+  company_id            String
+  company               Company         @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  product_id            String
+  product               InventoryProduct @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  supplier_id           String
+  supplier              BusinessPartner @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
+  supplier_product_code String?
+  purchase_cost         Decimal?        @db.Decimal(14, 4)
+  currency_code         String          @default("PEN")
+  lead_time_days        Int?            @default(0)
+  is_preferred          Boolean         @default(false)
+  notes                 String?
+  created_at            DateTime        @default(now())
+  updated_at            DateTime        @updatedAt
+
+  @@unique([product_id, supplier_id])
+  @@index([company_id, product_id])
+  @@index([supplier_id])
+  @@map("inventory_product_suppliers")
+}
+
+model InventoryProductPresentation {
+  id                String           @id @default(uuid())
+  company_id        String
+  company           Company          @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  product_id        String
+  product           InventoryProduct @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  presentation_name String           // "Caja x 50", "Caja x 100", "Fardo x 24"
+  factor            Decimal          @db.Decimal(12, 4) // 50, 100, 24...
+  sunat_unit_code   String           @default("BX") // BX, C62, etc.
+  barcode           String?
+  sale_price        Decimal?         @db.Decimal(14, 2)
+  is_default        Boolean          @default(false)
+  is_active         Boolean          @default(true)
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+
+  @@unique([product_id, presentation_name])
+  @@index([company_id, product_id])
+  @@map("inventory_product_presentations")
+}
+
+model InventoryProductVariant {
+  id                String           @id @default(uuid())
+  company_id        String
+  company           Company          @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  product_id        String
+  product           InventoryProduct @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  sku               String
+  variant_name      String           // ej: "Color: Blanco / Medida: 1/2 pulgada"
+  attribute_values  Json?            // ej: { "Color": "Blanco", "Medida": "1/2 pulgada" }
+  barcode           String?
+  additional_cost   Decimal?         @default(0.0000) @db.Decimal(14, 4)
+  price_override    Decimal?         @db.Decimal(14, 2)
+  current_stock     Decimal?         @default(0.0000) @db.Decimal(12, 4)
+  is_active         Boolean          @default(true)
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+
+  @@unique([company_id, sku])
+  @@index([company_id, product_id])
+  @@map("inventory_product_variants")
+}
+
 
 
 

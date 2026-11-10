@@ -146,6 +146,30 @@ export class CreatePartnerDto {
   @IsString()
   @Length(3, 3)
   currencyCode?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  accountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  swiftCode?: string;
 }
 
 export class UpdatePartnerDto {
@@ -210,6 +234,30 @@ export class UpdatePartnerDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  accountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  swiftCode?: string;
 }
 
 export class AddPartnerAddressDto {
@@ -371,4 +419,50 @@ export class UpsertPartnerTaxStatusDto {
   @IsOptional()
   @IsString()
   updatedBy?: string;
+}
+
+export class UpsertCountryDto {
+  @IsString()
+  @Length(2, 3)
+  code!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+export class UpsertPortDto {
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string; // ORIGEN, DESTINO, AMBOS
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+export class UpdateExchangeRateDto {
+  @IsNumber()
+  @Min(0.000001)
+  rate!: number;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
 }

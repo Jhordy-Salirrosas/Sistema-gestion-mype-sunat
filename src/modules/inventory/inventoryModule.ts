@@ -17,6 +17,8 @@ import { InventoryOpeningController } from './infrastructure/controllers/invento
 import { InventoryPurchaseService } from './application/services/inventoryPurchaseService';
 import { InventoryCostLayerService } from './application/services/inventoryCostLayerService';
 import { InventoryPurchasesController } from './infrastructure/controllers/inventoryPurchasesController';
+import { InventoryCatalogsController } from './infrastructure/controllers/inventoryCatalogsController';
+import { InventoryCatalogsService } from './application/services/inventoryCatalogsService';
 
 // Use Cases
 import { ProcessImportCostOrderUseCase } from './application/use-cases/processImportCostOrderUseCase';
@@ -58,8 +60,10 @@ import { Ple13_1FlatFileWriterAdapter } from './infrastructure/adapters/ple13_1F
     InventoryKardexController,
     InventoryOpeningController,
     InventoryPurchasesController,
+    InventoryCatalogsController,
   ],
   providers: [
+    InventoryCatalogsService,
     InventoryTransferService,
     InventoryKardexService,
     InventoryOpeningService,

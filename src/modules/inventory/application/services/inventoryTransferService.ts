@@ -286,7 +286,7 @@ export class InventoryTransferService {
     });
     if (duplicate) throw new ConflictException('Ya existe un ajuste con ese número.');
 
-    return this.prisma.$transaction(async (tx: any) => {
+    const result = await this.prisma.$transaction(async (tx: any) => {
       const warehouse = await tx.inventoryWarehouse.findFirst({
         where: { company_id: companyId, warehouse_code: warehouseCode },
       });
@@ -324,7 +324,10 @@ export class InventoryTransferService {
           );
         }
 
-        const unitCost = dto.type === 'ENTRADA' ? Number(item.unitCost ?? currentCost) : currentCost;
+        const fallbackCost = currentCost > 0 ? currentCost : Number((product as any).cost_price || 0);
+        const unitCost = dto.type === 'ENTRADA'
+          ? (item.unitCost && item.unitCost > 0 ? Number(item.unitCost) : fallbackCost)
+          : currentCost;
         const calc = MovingWeightedAverageEngine.calculate({
           previousStock: currentStock,
           previousAverageCost: currentCost,
@@ -397,8 +400,86 @@ export class InventoryTransferService {
         await this.upsertBalance(tx, companyId, update.warehouseId, update.productId, update.calc, update.date);
       }
 
-      return adjustment;
+      return {
+        adjustment,
+        totalValue: r2(itemRows.reduce((acc: number, i: any) => acc + Number(i.total_cost || 0), 0)),
+      };
     });
+
+    await this.registrarAsientoAjuste(companyId, result.adjustment, result.totalValue);
+    return result.adjustment;
+  }
+
+  /** Asiento por ajuste: merma/faltante (debe 659 / haber 201) o sobrante (debe 201 / haber 759). */
+  private async registrarAsientoAjuste(
+    companyId: string,
+    adjustment: { id: string; adjustment_number: string; adjustment_date: Date; warehouse_code: string; reason?: string | null; type: 'ENTRADA' | 'SALIDA' },
+    valor: number,
+  ): Promise<void> {
+    if (!this.accounting || valor <= 0) return;
+    try {
+      const existente = await this.prisma.accountingEntry.findFirst({
+        where: { company_id: companyId, source_reference_id: adjustment.id },
+      });
+      if (existente) return;
+
+      const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+        where: { company_id: companyId, process_code: 'INVENTARIO', is_active: true },
+      })) ?? [];
+      const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+      const cuentaExistencias = roles.get('MERCADERIAS') || '201';
+      const cuentaGastoMerma = roles.get('GASTO_MERMA') || '659';
+      const cuentaIngresoSobrante = roles.get('INGRESO_SOBRANTE') || '759';
+
+      const lines = adjustment.type === 'SALIDA'
+        ? [
+            {
+              lineOrder: 1,
+              accountCode: cuentaGastoMerma,
+              accountName: 'Otros gastos de gestión (Pérdidas de inventario/Merma)',
+              debitAmount: valor,
+              creditAmount: 0,
+            },
+            {
+              lineOrder: 2,
+              accountCode: cuentaExistencias,
+              accountName: `Mercaderías Almacén ${adjustment.warehouse_code}`,
+              debitAmount: 0,
+              creditAmount: valor,
+            },
+          ]
+        : [
+            {
+              lineOrder: 1,
+              accountCode: cuentaExistencias,
+              accountName: `Mercaderías Almacén ${adjustment.warehouse_code}`,
+              debitAmount: valor,
+              creditAmount: 0,
+            },
+            {
+              lineOrder: 2,
+              accountCode: cuentaIngresoSobrante,
+              accountName: 'Otros ingresos de gestión (Sobrantes de inventario)',
+              debitAmount: 0,
+              creditAmount: valor,
+            },
+          ];
+
+      await this.accounting.execute({
+        companyId,
+        period: adjustment.adjustment_date.toISOString().slice(0, 7),
+        entryDate: adjustment.adjustment_date.toISOString().slice(0, 10),
+        glosa: `Ajuste ${adjustment.adjustment_number} (${adjustment.reason || adjustment.type}): Almacén ${adjustment.warehouse_code}`,
+        sourceModule: 'INVENTORY',
+        sourceReferenceId: adjustment.id,
+        idempotencyKey: `adjustment:${adjustment.id}`,
+        lines,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Ajuste ${adjustment.adjustment_number} sin asiento: ${(error as Error).message}`,
+      );
+    }
   }
 
   private movementData(params: {

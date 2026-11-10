@@ -102,6 +102,7 @@ describe('Inventory Controllers (Additional Coverage)', () => {
   describe('InventoryKardexController', () => {
     let controller: InventoryKardexController;
     let mockKardexService: any;
+    let mockCostLayerService: any;
 
     beforeEach(() => {
       mockKardexService = {
@@ -109,13 +110,21 @@ describe('Inventory Controllers (Additional Coverage)', () => {
         getCashAndBanks: jest.fn().mockResolvedValue({ items: [] }),
         getConsolidated: jest.fn().mockResolvedValue({ products: [] }),
       };
-      controller = new InventoryKardexController(mockKardexService);
+      mockCostLayerService = {
+        getCostConfig: jest.fn().mockResolvedValue({ currentMethod: 'PROMEDIO' }),
+        updateCostMethod: jest.fn().mockResolvedValue({ success: true }),
+        recalculateCosting: jest.fn().mockResolvedValue({ success: true, differencePen: 0 }),
+      };
+      controller = new InventoryKardexController(mockKardexService, mockCostLayerService);
     });
 
     it('valida companyId requerido', () => {
       expect(() => controller.getKardex(undefined)).toThrow(UnauthorizedException);
       expect(() => controller.getCashAndBanks(undefined)).toThrow(UnauthorizedException);
       expect(() => controller.getConsolidated(undefined)).toThrow(UnauthorizedException);
+      expect(() => controller.getCostConfig(undefined)).toThrow(UnauthorizedException);
+      expect(() => controller.updateCostMethod(undefined, { method: 'PROMEDIO' })).toThrow(UnauthorizedException);
+      expect(() => controller.recalculateCosting(undefined, {})).toThrow(UnauthorizedException);
     });
 
     it('delega en getKardex, getCashAndBanks y getConsolidated', async () => {
@@ -126,6 +135,16 @@ describe('Inventory Controllers (Additional Coverage)', () => {
       expect(mockKardexService.getKardex).toHaveBeenCalled();
       expect(mockKardexService.getCashAndBanks).toHaveBeenCalled();
       expect(mockKardexService.getConsolidated).toHaveBeenCalledWith(companyId);
+    });
+
+    it('delega en getCostConfig, updateCostMethod y recalculateCosting', async () => {
+      await controller.getCostConfig(companyId);
+      await controller.updateCostMethod(companyId, { method: 'FIFO' });
+      await controller.recalculateCosting(companyId, { method: 'FIFO' });
+
+      expect(mockCostLayerService.getCostConfig).toHaveBeenCalledWith(companyId);
+      expect(mockCostLayerService.updateCostMethod).toHaveBeenCalledWith(companyId, 'FIFO');
+      expect(mockCostLayerService.recalculateCosting).toHaveBeenCalledWith(companyId, 'FIFO');
     });
   });
 
@@ -201,6 +220,11 @@ describe('Inventory Controllers (Additional Coverage)', () => {
         },
         inventoryMovement: {
           count: jest.fn(),
+        },
+        inventoryProductVariant: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+          findMany: jest.fn().mockResolvedValue([]),
+          create: jest.fn().mockResolvedValue({ id: 'v-1' }),
         },
         inventoryBalance: {
           deleteMany: jest.fn().mockResolvedValue({ count: 1 }),

@@ -2,6 +2,7 @@ import { LandedCostStatus } from '../enums/landedCostStatus.enum';
 
 export interface CreateLocalExpenseData {
   shipmentId: string;
+  purchaseId?: string;
   supplierRuc: string;
   supplierName: string;
   expenseConcept: string; // ALMACENAJE, AGENCIA, TRANSPORTE_LOCAL...

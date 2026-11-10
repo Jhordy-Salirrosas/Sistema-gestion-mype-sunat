@@ -15,6 +15,10 @@ export class AddLocalExpenseDto {
   @IsString()
   shipment_id: string;
 
+  @IsOptional()
+  @IsString()
+  purchase_id?: string;
+
   @IsNotEmpty({ message: 'El RUC del proveedor local es obligatorio' })
   @IsString()
   @Matches(/^\d{11}$/, { message: 'El RUC del proveedor debe tener exactamente 11 dígitos' })

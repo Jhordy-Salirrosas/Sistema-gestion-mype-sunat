@@ -11,3 +11,4 @@ export * from './confirmGoodsReceiptDto';
 export * from './approveLandedCostDto';
 export * from './adjustLateImportCostDto';
 export * from './simulateDamTaxesDto';
+export * from './addDeclarationDocumentDto';

@@ -12,6 +12,8 @@ export class ForeignSupplierDto {
   @IsOptional() @IsString() defaultCurrency?: string;
   @IsOptional() @IsBoolean() isRelated?: boolean;
   @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() postalCode?: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() contactName?: string;
