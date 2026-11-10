@@ -308,6 +308,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     }));
   });
 
+
   it('lista el historial de pagos de una compra', async () => {
     mockPrisma.nationalPurchase.findFirst.mockResolvedValue({ purchase_number: 'COM-1' });
     mockPrisma.treasuryMovement.findMany.mockResolvedValue([{ id: 'm1', movement_date: new Date('2026-11-09'), amount: 50, payment_method: 'TRANSFERENCIA', bank_name: 'BCP', concept: 'Pago parcial' }]);
@@ -325,5 +326,14 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     mockPrisma.treasuryMovement.create.mockResolvedValue({ id: 'mov-1' });
     await expect(serviceConPago.payPurchase(companyId, 'p2', { amount: 50 })).resolves.toMatchObject({ status: 'PAGO_PARCIAL', paidAmount: 50, balance: 68 });
     expect(mockPrisma.nationalPurchase.update).toHaveBeenCalledWith({ where: { id: 'p2' }, data: { status: 'PAGO_PARCIAL', paid_amount: 50 } });
+  });
+
+  it('consolida cuentas por pagar por proveedor', async () => {
+    mockPrisma.nationalPurchase.findMany.mockResolvedValue([
+      { supplier_doc_number: '20100000001', supplier_name: 'Proveedor', total_amount: 118, paid_amount: 50 },
+      { supplier_doc_number: '20100000001', supplier_name: 'Proveedor', total_amount: 100, paid_amount: 0 },
+    ]);
+    const r = await service.listPayables(companyId);
+    expect(r).toEqual([{ supplierDocNumber: '20100000001', supplierName: 'Proveedor', total: 218, paid: 50, balance: 168, count: 2 }]);
   });
 });
