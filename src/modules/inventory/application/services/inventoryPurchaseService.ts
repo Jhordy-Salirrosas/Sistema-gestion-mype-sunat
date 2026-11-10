@@ -17,3 +17,4 @@ export class InventoryPurchaseService extends PurchasesService {
     super(prisma, accounting);
   }
 }
+
