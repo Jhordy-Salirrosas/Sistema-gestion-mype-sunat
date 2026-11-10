@@ -19,4 +19,16 @@ describe('CollectionsService', () => {
     await expect(service.create('co1', { customerName: 'Cliente', amount: 0 })).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.create('co1', { customerName: 'Cliente', amount: 10 })).rejects.toThrow('No hay reglas contables para COBRO');
   });
+
+  it('valida comprobante y saldo del cobro', async () => {
+    const prisma = {
+      invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', monto_total: 118, estado: 'ACEPTADO' }) },
+      collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 18 } }), create: jest.fn() },
+      accountingRule: { findMany: jest.fn() },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    await expect(service.create('c1', { customerName: 'Cliente', invoiceNumber: 'F001-00000001', amount: 200 })).rejects.toThrow('supera el saldo');
+    prisma.invoice.findFirst.mockResolvedValue(null);
+    await expect(service.create('c1', { customerName: 'Cliente', invoiceNumber: 'F001-00000001', amount: 10 })).rejects.toThrow('no existe');
+  });
 });

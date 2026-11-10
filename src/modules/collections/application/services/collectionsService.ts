@@ -18,12 +18,32 @@ export class CollectionsService {
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('El monto del cobro debe ser mayor a cero.');
     const fecha = dto.collectionDate ? new Date(dto.collectionDate) : new Date();
     const monto = Math.round(Number(dto.amount) * 100) / 100;
+
+    let invoiceId: string | null = null;
+    if (dto.invoiceNumber?.trim()) {
+      const numero = dto.invoiceNumber.trim().toUpperCase();
+      const match = /^([A-Z0-9]+)-0*(\d+)$/.exec(numero);
+      if (!match) throw new BadRequestException('El comprobante debe tener formato F001-00000001.');
+      const invoice = await this.prisma.invoice.findFirst({
+        where: { company_id: companyId, serie: match[1], correlativo: Number(match[2]) },
+        select: { id: true, monto_total: true, estado: true },
+      });
+      if (!invoice) throw new BadRequestException(`El comprobante ${numero} no existe en la empresa.`);
+      if (invoice.estado === 'ANULADO') throw new BadRequestException(`El comprobante ${numero} está anulado.`);
+      const cobrado = await this.prisma.collection.aggregate({
+        where: { company_id: companyId, invoice_id: invoice.id, status: { not: 'ANULADO' } },
+        _sum: { amount: true },
+      });
+      const saldo = Math.round((Number(invoice.monto_total) - Number(cobrado._sum.amount ?? 0)) * 100) / 100;
+      if (monto > saldo + 0.005) throw new BadRequestException(`El cobro supera el saldo del comprobante (S/ ${saldo.toFixed(2)}).`);
+      invoiceId = invoice.id;
+    }
     const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
 
     const cobro = await this.prisma.collection.create({
       data: {
         company_id: companyId, collection_date: fecha, customer_name: dto.customerName.trim(),
-        customer_doc: dto.customerDoc?.trim() || null, invoice_number: dto.invoiceNumber?.trim() || null,
+        customer_doc: dto.customerDoc?.trim() || null, invoice_number: dto.invoiceNumber?.trim() || null, invoice_id: invoiceId,
         description: dto.description?.trim() || `Cobro a ${dto.customerName.trim()}`, amount: monto,
         payment_method: metodo, bank_name: dto.bankName?.trim() || null, status: 'REGISTRADO',
       },

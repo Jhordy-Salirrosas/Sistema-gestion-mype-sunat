@@ -45,6 +45,7 @@ model Collection {
   customer_name   String
   customer_doc    String?
   invoice_number  String?
+  invoice_id      String?
   description     String
   amount          Decimal  @db.Decimal(14, 2)
   payment_method  String   @default("TRANSFERENCIA")
