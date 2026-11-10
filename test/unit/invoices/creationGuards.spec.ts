@@ -149,3 +149,8 @@ it.each([{ fecha_emision: '2026-02-31' }, { cuotas: [{ monto: 118, vencimiento: 
  const h = harness(); await expect(h.run({ ...base(), ...changes })).rejects.toMatchObject({ status: 400 });
  expect(h.tx.inventoryProduct.findMany).not.toHaveBeenCalled();
 });
+
+it('no permite crear una nota mientras el origen está reservado en una RA', async () => {
+  const h = harness(); Object.assign(h.tx, { invoiceAggregate: { findMany: jest.fn(async () => [{ members: [{ id: 'origin' }] }]) } });
+  await expect(h.run(note())).rejects.toThrow('BAJA_EN_PROCESO');
+});

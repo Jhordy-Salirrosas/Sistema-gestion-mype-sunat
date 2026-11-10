@@ -1,3 +1,4 @@
+import { claimIndividualSummaryChannel } from './application/services/summaryIndividualClaim';
 import { redondearMoneda as centimos } from './money';
 import {
   IssuerConfigResolver,
@@ -171,6 +172,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       return null;
     }
 
+    if (!await claimIndividualSummaryChannel(this.prisma, invoiceId)) return null;
     let aprobado: JobAprobado;
     try {
       aprobado = await this.preparar(invoiceId);

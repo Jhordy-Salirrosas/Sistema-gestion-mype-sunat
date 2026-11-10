@@ -833,7 +833,7 @@ describe('Corrección 7 — Bajas y Resúmenes con tipo, estado SUNAT y marca re
         id: 'inv-red-1',
         tipoComprobante: '03',
         estado: 'ERROR_RED',
-        reenviable: true,
+        reenviable: false,
       }),
     );
     expect(vista.lineas[1]).toEqual(

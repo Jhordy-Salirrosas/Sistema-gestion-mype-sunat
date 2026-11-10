@@ -1,0 +1,20 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`RA conserva secuencia, ordinales y motivos por miembro 1`] = `
+[
+  "<sac:VoidedDocumentsLine>
+      <cbc:LineID>1</cbc:LineID>
+      <cbc:DocumentTypeCode>01</cbc:DocumentTypeCode>
+      <sac:DocumentSerialID>F001</sac:DocumentSerialID>
+      <sac:DocumentNumberID>1</sac:DocumentNumberID>
+      <sac:VoidReasonDescription>Anulación de la operación</sac:VoidReasonDescription>
+    </sac:VoidedDocumentsLine>",
+  "<sac:VoidedDocumentsLine>
+      <cbc:LineID>2</cbc:LineID>
+      <cbc:DocumentTypeCode>01</cbc:DocumentTypeCode>
+      <sac:DocumentSerialID>F001</sac:DocumentSerialID>
+      <sac:DocumentNumberID>2</sac:DocumentNumberID>
+      <sac:VoidReasonDescription>Error &amp; corrección</sac:VoidReasonDescription>
+    </sac:VoidedDocumentsLine>",
+]
+`;

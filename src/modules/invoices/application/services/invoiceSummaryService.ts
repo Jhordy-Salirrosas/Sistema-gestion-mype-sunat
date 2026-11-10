@@ -24,6 +24,9 @@
  */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
+import { Prisma } from '../../../../generated/client/client';
+import { fiscalResumen } from './summaryFiscal';
+import type { SeleccionBaja } from './summaryAggregateStore';
 import {
   construirComunicacionBaja,
   construirResumenDiario,
@@ -101,11 +104,15 @@ export class InvoiceSummaryService {
     companyId: string,
     fecha: string,
     correlativo = 1,
+    seleccion?: SeleccionBaja[],
+    transaction?: Prisma.TransactionClient,
+    excludeAggregateId?: string,
   ): Promise<VistaPrevia> {
     const desde = new Date(`${fecha}T00:00:00.000Z`);
     const hasta = new Date(`${fecha}T23:59:59.999Z`);
 
-    const filas = await this.prisma.invoice.findMany({
+    const db = transaction ?? this.prisma;
+    const filas = await db.invoice.findMany({
       where: {
         company_id: companyId,
         fecha_emision: { gte: desde, lte: hasta },
@@ -123,24 +130,35 @@ export class InvoiceSummaryService {
       orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }],
     });
 
-    const agregados = filas.map((f) => this.aAgregado(f, fecha));
+    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RC', db);
+    const reservas = await db.invoiceAggregate?.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(excludeAggregateId ? { id: { not: excludeAggregateId } } : {}) }, select: { members: true } }) ?? [];
+    const reservados = new Set(reservas.flatMap(r => (r.members as unknown as { id: string }[]).map(m => m.id)));
+    const fiscal = new Map<string, ComprobanteAgregado>();
+    const agregados = filas.map(f => {
+      const l = this.aAgregado(f, fecha);
+      const days = diasDesdeEmision(fechaCorta(f.fecha_emision), cabecera.fechaGeneracion);
+      let motivo = l.motivoExclusion;
+      if (!motivo && (f.estado !== 'PENDIENTE' || f.transport_uncertain !== false)) motivo = 'Despacho individual en curso o transporte no confirmado como seguro.';
+      if (!motivo && reservados.has(f.id)) motivo = 'Ya reservado en un agregado.';
+      if (!motivo && f.ruc_emisor !== cabecera.rucEmisor) motivo = 'RUC histórico distinto al emisor efectivo.';
+      if (!motivo && (days === null || days < 0 || days > 7)) motivo = 'Fuera del plazo respecto de la fecha de generación.';
+      if (!motivo && seleccion && !seleccion.some(m => m.id === f.id)) motivo = 'No seleccionado en la reserva.';
+      if (!motivo) {
+        try { fiscal.set(f.id, { ...this.aComprobante(f), documentoAfectado: f.referenced_series_correlative ?? undefined, fiscal: fiscalResumen(f.payload_ubl, Number(f.monto_total)) }); }
+        catch (error) { motivo = this.mensajeDe(error); }
+      }
+      return { ...l, incluido: !motivo, motivoExclusion: motivo, reenviable: false };
+    });
     const errores: string[] = [];
-
-    const incluidos = agregados.filter((l) => l.incluido);
+    const incluidos = agregados.filter(l => l.incluido);
+    if (seleccion && incluidos.length !== seleccion.length) errores.push('Los miembros reservados ya no son elegibles para RC');
     let xml: string | null = null;
-
-    // La cabecera se construye SIEMPRE, no solo cuando hay algo que informar:
-    // su `fechaGeneracion` es la que da nombre al identificador, y la tarjeta
-    // debe mostrar el mismo que el XML aunque la lista venga vacía. Además
-    // valida que la empresa exista, cosa que conviene saber aquí y no a mitad
-    // de generar el documento.
-    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RC');
 
     if (incluidos.length > 0) {
       try {
         xml = construirResumenDiario(
           cabecera,
-          filas.filter((_, i) => agregados[i].incluido).map((f) => this.aComprobante(f)),
+          incluidos.map(l => fiscal.get(l.id)!),
         );
       } catch (error: unknown) {
         errores.push(this.mensajeDe(error));
@@ -181,11 +199,15 @@ export class InvoiceSummaryService {
     companyId: string,
     fecha: string,
     correlativo = 1,
+    seleccion?: SeleccionBaja[],
+    transaction?: Prisma.TransactionClient,
+    excludeAggregateId?: string,
   ): Promise<VistaPrevia> {
     const desde = new Date(`${fecha}T00:00:00.000Z`);
     const hasta = new Date(`${fecha}T23:59:59.999Z`);
 
-    const filas = await this.prisma.invoice.findMany({
+    const db = transaction ?? this.prisma;
+    const filas = await db.invoice.findMany({
       where: {
         company_id: companyId,
         fecha_emision: { gte: desde, lte: hasta },
@@ -194,13 +216,22 @@ export class InvoiceSummaryService {
       orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }],
     });
 
+    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RA', db);
+    const notas = await db.invoice.findMany({ where: { company_id: companyId, tipo_comprobante: '07', referenced_invoice_id: { in: filas.map(f => f.id) }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } }, select: { referenced_invoice_id: true, estado: true, monto_total: true } });
+    const reservas = await db.invoiceAggregate?.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(excludeAggregateId ? { id: { not: excludeAggregateId } } : {}) }, select: { members: true } }) ?? [];
+    const reservados = new Set(reservas.flatMap(r => (r.members as unknown as { id: string }[]).map(m => m.id)));
     const agregados = filas.map((f) => {
       const linea = this.aAgregado(f, fecha);
-      const admiteBaja = f.estado === 'ACEPTADO' || f.estado === 'OBSERVADO';
+      const creditos = notas.filter(n => n.referenced_invoice_id && n.referenced_invoice_id === f.id);
+      const neutralizado = Number(f.monto_total) > 0 && creditos.filter(n => ['ACEPTADO', 'OBSERVADO'].includes(n.estado)).reduce((sum, n) => sum + Math.round(Number(n.monto_total) * 100), 0) >= Math.round(Number(f.monto_total) * 100);
+      const pendiente = creditos.some(n => !['ACEPTADO', 'OBSERVADO'].includes(n.estado));
+      const diasHastaHoy = diasDesdeEmision(fechaCorta(f.fecha_emision), cabecera.fechaGeneracion);
+      const motivo = f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : neutralizado ? 'Neutralizado por nota de crédito de saldo completo.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
+      const admiteBaja = !motivo && (!seleccion || seleccion.some(l => l.id === f.id));
       return {
         ...linea,
         incluido: admiteBaja,
-        motivoExclusion: admiteBaja ? '' : `Estado ${f.estado}: solo comprobantes aceptados u observados admiten baja.`,
+        motivoExclusion: motivo || (admiteBaja ? '' : 'No seleccionado.'),
       };
     });
 
@@ -212,13 +243,11 @@ export class InvoiceSummaryService {
     // La cabecera se construye SIEMPRE, no solo cuando hay algo que informar:
     // su `fechaGeneracion` es la que da nombre al identificador, y la tarjeta
     // tiene que mostrar el mismo que el XML aunque la lista venga vacía.
-    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RA');
-
     if (incluidos.length > 0) {
       try {
         xml = construirComunicacionBaja(
           cabecera,
-          filas.filter((_, i) => agregados[i].incluido).map((f) => this.aComprobante(f)),
+          filas.filter((_, i) => agregados[i].incluido).map((f) => ({ ...this.aComprobante(f), motivoBaja: seleccion?.find(l => l.id === f.id)?.motivo ?? 'Anulación de la operación' })),
         );
       } catch (error: unknown) {
         errores.push(this.mensajeDe(error));
@@ -323,8 +352,9 @@ export class InvoiceSummaryService {
     fechaReferencia: string,
     correlativo: number,
     _prefijo: 'RC' | 'RA',
+    db: Pick<PrismaService, 'company'> = this.prisma,
   ): Promise<CabeceraResumen> {
-    const empresa = await this.prisma.company.findUnique({
+    const empresa = await db.company.findUnique({
       where: { id: companyId },
       select: { ruc: true, legal_name: true },
     });
@@ -338,7 +368,7 @@ export class InvoiceSummaryService {
       razonSocialEmisor: empresa.legal_name,
       correlativo,
       fechaResumen: fechaReferencia,
-      fechaGeneracion: fechaCorta(new Date()),
+      fechaGeneracion: new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10),
     };
   }
 

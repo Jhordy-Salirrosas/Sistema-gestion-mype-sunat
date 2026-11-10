@@ -134,3 +134,33 @@ model InvoiceCreationRequest {
   @@unique([company_id, request_key])
   @@map("invoice_creation_requests")
 }
+
+// M1 RA/RC: reserva, artefacto inmutable, miembros y recuperación de ticket.
+model InvoiceAggregate {
+  id                  String   @id @default(uuid())
+  company_id          String
+  kind                String   @db.VarChar(2)
+  identifier          String   @db.VarChar(32)
+  fingerprint         String   @db.VarChar(64)
+  reference_date      String   @db.VarChar(10)
+  generation_date     String   @db.VarChar(10)
+  state               String   @default("RESERVED")
+  issuer_ruc          String   @db.VarChar(11)
+  environment         String
+  xml                 String?
+  xml_hash            String?
+  zip_base64          String?
+  members             Json
+  ticket              String?
+  transport_uncertain Boolean  @default(false)
+  result              Json?
+  error               String?
+  job_id              String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@unique([company_id, kind, identifier])
+  @@unique([company_id, kind, fingerprint])
+  @@index([company_id, state, created_at])
+  @@map("invoice_aggregates")
+}

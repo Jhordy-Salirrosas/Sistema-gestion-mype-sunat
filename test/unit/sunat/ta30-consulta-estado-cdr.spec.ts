@@ -188,8 +188,9 @@ describe('TA-30 - sobre SOAP de getStatusCdr', () => {
 
 describe('TA-30 - parseo de la respuesta', () => {
   it('extrae el CDR en Base64', () => {
-    const parsed = parseGetStatusCdrResponse(sobreConCdr(cdrAceptadoZip()));
-    expect(parsed.applicationResponse).toBe(cdrAceptadoZip());
+    const cdr = cdrAceptadoZip();
+    const parsed = parseGetStatusCdrResponse(sobreConCdr(cdr));
+    expect(parsed.applicationResponse).toBe(cdr);
   });
 
   it('extrae el código 0127 cuando SUNAT no tiene el comprobante', () => {

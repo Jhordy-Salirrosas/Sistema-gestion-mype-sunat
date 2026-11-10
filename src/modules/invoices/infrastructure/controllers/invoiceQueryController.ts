@@ -1,3 +1,7 @@
+import { SummaryAggregateStore } from '../../application/services/summaryAggregateStore';
+import { SummaryDispatchService } from '../../application/services/summaryDispatchService';
+import { seleccionBaja } from '../../application/services/summaryEnvioService';
+import { BadRequestException } from '@nestjs/common';
 /**
  * Endpoints de consulta de comprobantes (TA-29).
  *
@@ -44,6 +48,8 @@ export class InvoiceQueryController {
     private readonly clientes: InvoiceCustomerService,
     private readonly resumenes: InvoiceSummaryService,
     private readonly envioResumenes: SummaryEnvioService,
+    private readonly aggregates: SummaryAggregateStore,
+    private readonly aggregateDispatch: SummaryDispatchService,
   ) {}
 
   /**
@@ -183,11 +189,29 @@ export class InvoiceQueryController {
   enviarBaja(
     @CurrentCompany() companyId: string,
     @Query('fecha') fecha?: string,
+    @Body() body?: { lineas?: unknown },
   ) {
     return this.envioResumenes.enviarComunicacionBaja(
       companyId,
       this.fechaDe(fecha),
+      body?.lineas,
     );
+  }
+
+  @Post('resumenes/baja/vista')
+  vistaSeleccionBaja(@CurrentCompany() companyId: string, @Query('fecha') fecha?: string, @Body() body?: { lineas?: unknown }) {
+    return this.resumenes.vistaComunicacionBaja(companyId, this.fechaDe(fecha), 1, seleccionBaja(body?.lineas));
+  }
+
+  @Get('resumenes/envios')
+  listarAgregados(@CurrentCompany() companyId: string) { return this.aggregates.listar(companyId); }
+
+  @Post('resumenes/envios/:id/consultar')
+  async consultarAgregado(@CurrentCompany() companyId: string, @Param('id') identifier: string) {
+    const row = await this.aggregates.cargar(companyId, identifier);
+    if (!row.ticket) throw new BadRequestException('No hay ticket para consultar; no se reenvía un intento incierto');
+    const result = await this.aggregateDispatch.procesar({ companyId, identificador: identifier, tipo: row.kind === 'RA' ? 'COMUNICACION_BAJA' : 'RESUMEN_DIARIO', fileName: '', zipBase64: '' }, { maxConsultas: 0 });
+    return { identificador: identifier, ticket: result.ticket, status: result.status, motivo: result.error, obtenido: result.enviado };
   }
 
   /** Fecha del día de hoy en hora de Perú si no se indica otra. */

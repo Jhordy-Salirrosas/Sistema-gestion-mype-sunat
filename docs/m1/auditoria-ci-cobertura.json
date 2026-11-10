@@ -1,0 +1,98 @@
+{
+  "base": "af5f4fb2b2440f91436a4a7657aae941bbdd1fca",
+  "method": "git diff added lines intersected with LCOV DA/BRDA; combined=(covered lines+covered condition outcomes)/(lines to cover+condition outcomes)",
+  "totals": {
+    "lines_to_cover": 359,
+    "covered_lines": 354,
+    "conditions_to_cover": 516,
+    "covered_conditions": 474,
+    "line_coverage_pct": 98.61,
+    "combined_coverage_pct": 94.63
+  },
+  "files": [
+    {
+      "file": "src/modules/invoices/application/services/creationGuards.ts",
+      "lines_to_cover": 2,
+      "covered_lines": 2,
+      "conditions_to_cover": 4,
+      "covered_conditions": 4
+    },
+    {
+      "file": "src/modules/invoices/application/services/invoiceSummaryService.ts",
+      "lines_to_cover": 37,
+      "covered_lines": 37,
+      "conditions_to_cover": 75,
+      "covered_conditions": 74
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryAggregateStore.ts",
+      "lines_to_cover": 94,
+      "covered_lines": 94,
+      "conditions_to_cover": 134,
+      "covered_conditions": 123
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryDispatchService.ts",
+      "lines_to_cover": 64,
+      "covered_lines": 64,
+      "conditions_to_cover": 89,
+      "covered_conditions": 81
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryDocumentsBuilder.ts",
+      "lines_to_cover": 10,
+      "covered_lines": 10,
+      "conditions_to_cover": 10,
+      "covered_conditions": 9
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryEnvioService.ts",
+      "lines_to_cover": 78,
+      "covered_lines": 78,
+      "conditions_to_cover": 98,
+      "covered_conditions": 88
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryFiscal.ts",
+      "lines_to_cover": 28,
+      "covered_lines": 28,
+      "conditions_to_cover": 56,
+      "covered_conditions": 51
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryGate.ts",
+      "lines_to_cover": 16,
+      "covered_lines": 16,
+      "conditions_to_cover": 27,
+      "covered_conditions": 27
+    },
+    {
+      "file": "src/modules/invoices/application/services/summaryIndividualClaim.ts",
+      "lines_to_cover": 12,
+      "covered_lines": 12,
+      "conditions_to_cover": 13,
+      "covered_conditions": 13
+    },
+    {
+      "file": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+      "lines_to_cover": 14,
+      "covered_lines": 9,
+      "conditions_to_cover": 8,
+      "covered_conditions": 3
+    },
+    {
+      "file": "src/modules/invoices/invoiceJobConsumer.ts",
+      "lines_to_cover": 2,
+      "covered_lines": 2,
+      "conditions_to_cover": 2,
+      "covered_conditions": 1
+    },
+    {
+      "file": "src/modules/invoices/invoicesModule.ts",
+      "lines_to_cover": 2,
+      "covered_lines": 2,
+      "conditions_to_cover": 0,
+      "covered_conditions": 0
+    }
+  ]
+}

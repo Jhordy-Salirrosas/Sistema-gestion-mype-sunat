@@ -777,3 +777,228 @@ Build y lint backend aprobados, sin diagnósticos nuevos (solo advertencia
 contable heredada). Sin emisiones reales, llamadas SUNAT, migraciones, PR,
 fusiones ni despliegues. La clasificación/presentación del rechazo local queda
 como el único ítem secundario abierto de esta parte.
+
+## Construcción autorizada de agregados — 2A RA y 2B RC
+
+Emma confirmó el diseño y Jhordy autorizó UNA tabla aditiva M1. Base backend:
+af5f4fb2b2440f91436a4a7657aae941bbdd1fca; frontend:
+204d3da6e620f80d0533debc8b629e2bf3a3a574. Rama fix/m1-bajas-resumenes-envio.
+Base completa: back 248 suites/2179 pruebas aprobadas, 4 suites/20 optativas
+omitidas; front 98 archivos/779 pruebas aprobados. No se modifican Resiliencia,
+Contabilidad ni los assets oficiales. SPOT permanece aparcado.
+
+### 2A — comunicación de baja
+
+Modelo InvoiceAggregate y migración 20261110000000_m1_invoice_aggregates,
+GENERADA con prisma migrate diff desde el esquema anterior. El SQL crea SOLO
+invoice_aggregates y sus índices. No añade columnas ni relaciones en otra tabla.
+Contiene reserva e identificador único por empresa/tipo/identificador, huella de
+solicitud, fecha, contexto, XML/hash/ZIP, miembros y motivos en JSON, ticket,
+incertidumbre, estado, resultado y job. Emma aplica el SQL a mano antes de
+integrar/desplegar. No se aplicó a una base compartida. Para verificar transacciones
+se creó PostgreSQL 16 local nuevo y desechable, enlazado solo a 127.0.0.1:5436;
+allí se aplicaron las migraciones existentes y esta migración de prueba.
+
+RA exige selección explícita, sin ella responde 400 antes de reservar/firmar.
+El servidor vuelve a seleccionar dentro de una transacción, bloquea los miembros
+y reserva correlativo bajo advisory lock de empresa; no acepta empresa por body.
+Excluye ANULADO, RUC histórico ajeno, plazo inválido, reserva previa y la factura
+neutralizada por NC aceptadas/observadas de saldo completo. Las NC pendientes
+bloquean la baja mientras se resuelven. La trampa F001-61/FC01-13 está reproducida
+en PostgreSQL local. Una nota nueva tampoco puede crearse mientras su origen
+está reservado en RA; el bloqueo se comprueba en la guarda común bajo el mismo
+bloqueo del origen. No cambia OBSERVADO como origen de notas.
+
+El usuario captura un motivo por documento (inicial «Anulación de la operación»).
+Se transporta, escapa y valida (1–100 caracteres); no se acepta vacío. El front
+previsualiza exclusivamente la selección, invalida esa vista al editarla y exige
+confirmación antes de publicar. La vista de candidatos/exclusiones se conserva.
+
+RA genera LineID ordinal y cabecera UBL 2.0 con CustomerAssignedAccountID,
+AdditionalAccountID=6 y RegistrationName. Extensión del ejecutor local para
+RA/RC: XSD 2.0 seguido de las hojas 1.X correspondientes, mismas adaptaciones de
+motor que TA-70, sin editar ni omitir reglas oficiales. HOJAS y adaptaciones de
+los cuatro tipos individuales permanecen separadas para proteger sus tests.
+El RA generado y firmado con certificado ficticio pasa XSD Y XSL oficiales.
+
+SummaryGate se ejecuta en preparación y despacho. Comprueba destino/entorno,
+RUC, identificador, firma presente y SFS; no usa bypass de demostración.
+MOCK solo puede ir a localhost; BETA debe ir al endpoint BETA coherente. El ZIP
+se conserva en la tabla y el worker coteja nombre, hash y XML contra ese artefacto,
+no confía en un ZIP inyectado por el job. Ninguna credencial se guarda en el job.
+
+La reserva se conserva antes de publicar; un PREPARED sin publicación se recupera
+por un barrido M1 de 60 s usando la interfaz existente de cola. Publicaciones
+repetidas no duplican sendSummary: update condicional reclama el agregado y
+confirma incertidumbre ANTES de abrir red. El ticket se persiste inmediatamente;
+la reentrega retoma getStatus. Si se pierde la respuesta sin ticket, permanece
+UNCERTAIN y no se reenvía a ciegas, aunque la cola reentregue el job. El Monitor
+lo presenta para revisión; no se inventa un ticket. Con ticket, ofrece consulta
+explícita sin reenvío. Cola y consumidor de Resiliencia permanecen intactos.
+
+Un CDR debe corresponder al RUC/nombre de archivo y al identificador reservado.
+La lista del XML firmado/hash debe coincidir con los miembros reservados, tipos
+y ordinales; si el CDR enumera documentos, la lista también debe corresponder
+exactamente. Un CDR global acredita el agregado único y su XML inmutable.
+Solo código 0 permite actualizar a ANULADO. El resultado del agregado y TODAS
+las anulaciones se guardan en la misma transacción; si cambia un miembro,
+rollback completo. CDR ajeno no anula y deja revisión visible.
+
+GET /invoices/resumenes/envios añade el listado M1 al Monitor con ticket,
+estado, código y motivo; no expone XML/ZIP/CDR completos en el listado ni datos
+de otra empresa. POST /invoices/resumenes/envios/:identificador/consultar solo
+opera si ya existe ticket. La respuesta de envío sigue significando ENCOLADO,
+no aceptación. Durante 2A RC continúa cerrado hasta terminar 2B.
+
+Pruebas de aceptación 2A: RA firmado contra XSD+XSL, snapshot del orden/motivos,
+destinos incoherentes bloqueados, selección/motivos, XML anterior a publicación,
+cola caída, idempotencia y reserva incierta. En PostgreSQL real se comprueban
+NC completa, aislamiento, doble clic concurrente, reclamación única del envío,
+ticket durable, marca antes de red, CDR válido/ajeno, rollback de anulación y
+recuperación PREPARED. Front: selección/confirmación, motivo, preview invalidado,
+resultado visible y Monitor con consulta por ticket, siempre con API simulada.
+
+El primer pase completo descubrió una flaqueza heredada de TA-30: comparaba dos
+ZIP generados en instantes distintos y sus timestamps podían variar. Se conserva
+una sola entrada ZIP para afirmar el contrato del parser, sin cambiar su lógica.
+Los dobles de las pruebas antiguas se actualizaron al repositorio/compuerta nuevos;
+no hay una ruta de compatibilidad productiva que omita persistencia o validación.
+
+Cierre 2A: back 251 suites / 2201 pruebas aprobadas (3 suites / 18 pruebas
+omitidas por sus condiciones existentes), con PostgreSQL 16 local desechable y
+la integración real de agregados habilitada. Front 99 archivos / 784 pruebas
+aprobadas. Build de ambos repos y lint de los archivos modificados aprobados
+(solo avisos heredados). La recuperación también cubre reservas sin artefacto
+tras reinicio, conservando identificador y miembros. Los fallos previsibles de
+contexto se registran sanitizados y quedan visibles como bloqueo/revisión.
+La migración no se aplicó a bases compartidas. Sin llamadas reales a SUNAT.
+
+### 2B — RC sin competir con despacho individual
+
+Se abre RC con la misma reserva, artefacto firmado, compuerta XSD+XSL, cola,
+ticket y finalización durable de 2A. Solo entra PENDIENTE con incertidumbre
+explícitamente falsa, RUC coherente, plazo válido y detalle fiscal verificable.
+EN_COLA, PROCESANDO, ENVIADO, ERROR_RED, incertidumbre true/null, informados y
+miembros de agregados activos quedan visibles como excluidos. Por tanto las
+boletas que hoy se emiten por el canal individual NO se vuelven a informar por
+RC. No se añade un canal nuevo de creación de boletas.
+
+El consumidor individual M1 y la reserva RC toman el mismo bloqueo transaccional
+por empresa: si gana RC el job individual no despacha; si gana el individual,
+PENDIENTE pasa a PROCESANDO y RC lo excluye. Se conservan ERROR_RED/ENVIADO y la
+marca null histórica para que la conciliación individual existente siga
+reconociendo incertidumbre. Resiliencia solo se usa por sus interfaces, sin
+modificar sus archivos. La recuperación de RESERVED también reconstruye RC
+con los mismos miembros e identificador, no una selección nueva del día.
+
+XML RC: ordinales, emisor UBL 2.0 completo, PaidAmount antes de InstructionID,
+Catálogo 11 (01/02/03/04/05) desde afectaciones persistidas, tributos separados,
+referencia de notas a boletas y descuentos fiscales 02. Sin detalle/referencia
+real o si el total no concuerda, se excluye y se explica; no se inventa GRAVADA.
+La hoja oficial exige TaxTotal IGV aun en gratuitas/exoneradas: se declara IGV
+cero junto al tributo real. La hoja solo admite AllowanceCharge con indicador
+true (cargo); por eso los descuentos no afectos 03/01 no se disfrazan de cargos:
+se mantienen bases fiscales y total cobrado reales, sin AllowanceCharge falso.
+La discrepancia de su fórmula antigua 4027 es observación no bloqueante cuando
+corresponde; no se modifica ni se debilita la hoja oficial.
+
+Un CDR aceptado y cotejado de RC actualiza los miembros a ACEPTADO y publica el
+trabajo contable por enqueueInvoiceInTx en la MISMA transacción que el resultado
+del agregado. La reentrega individual final completa el puente existente sin
+sendBill. Si falla esa publicación, rollback; el reintento retoma getStatus con
+el ticket persistido. Sin cambios de Contabilidad ni tablas adicionales.
+
+Front: RC conserva confirmación, motivo literal y resultado en cola; Monitor
+muestra ambos tipos y permite consultar solo tickets existentes. Un false
+explícito de reenviable se respeta; la vista no ofrece reenvío individual de
+miembros reservados/inciertos. Error de transporte no afirma que SUNAT no lo vio.
+La explicación de RC vacío incluye exclusiones reales, no atribuye CDR a todos.
+
+Pruebas: XML firmado con certificado ficticio y SFS real para gravado, mixto,
+exonerado, inafecto, exportación, gratuito, ICBPER, NC/ND con referencia y
+descuentos; snapshots de orden y contenido. PostgreSQL local: carrera de ambos
+canales, estados excluidos, recuperación de reserva, incertidumbre sin reenvío,
+aislamiento y rollback contable seguido de consulta de ticket sin segundo envío.
+
+Resto operativo deliberado: un sendSummary incierto SIN ticket queda UNCERTAIN
+visible y requiere conciliación externa por el equipo; getStatus necesita un
+ticket y el protocolo no ofrece aquí una consulta segura por identificador.
+Nunca se libera automáticamente esa reserva ni se vuelve a enviar a ciegas.
+Los documentos con RUC histórico/credenciales ajenas continúan bloqueados.
+La migración aditiva sigue pendiente de aplicación compartida por Emma; durante
+esta construcción solo se aplicó al PostgreSQL local nuevo y desechable.
+
+Checksum SHA-256 de la única migración generada
+`20261110000000_m1_invoice_aggregates/migration.sql`:
+`28a4df36738f93b6cdcd91b0230414603dba63754ec84c04565e92aede723b67`.
+La recuperación se aísla por registro: una empresa con contexto bloqueado no
+impide recuperar las siguientes. En una carrera perdida de RC la relectura
+puede devolver HTTP 400 «Los miembros reservados ya no son elegibles para RC»;
+no hay publicación ni reserva residual en ese caso.
+
+Cierre de verificación back 2B: 252 suites / 2222 pruebas aprobadas, 6 snapshots;
+3 suites / 18 pruebas omitidas por sus condiciones existentes. Build y lint
+aprobados (único aviso heredado en prueba de Contabilidad, archivo sin cambios).
+El contenedor PostgreSQL 16 y su volumen desechable fueron eliminados al acabar.
+Ninguna prueba de esta entrega llama realmente a SUNAT; SOAP y cola se simulan,
+con persistencia transaccional real local en la integración de agregados.
+Front 2B: 99 archivos / 785 pruebas aprobadas; build y lint de archivos modificados
+aprobados. Entrega front por la rama `ferry/m1-bajas-resumenes-envio` del back,
+con FERRY.md y rutas exactas; no se empuja al repositorio front. Bases verificadas:
+back af5f4fb2, front 204d3da6. Entrega back `fix/m1-bajas-resumenes-envio`.
+Un commit de construcción por parte (2A y 2B); sin PR, fusiones ni despliegue.
+
+
+### Corrección CI del PR #224 — Reliability y cobertura de agregados
+
+Misma rama `fix/m1-bajas-resumenes-envio`, base de comparación
+`af5f4fb2b2440f91436a4a7657aae941bbdd1fca` (dev). Sin sincronizar mediante
+fusiones ni modificar la configuración de Sonar/CI o sus umbrales.
+
+Cambios productivos mínimos: los dos map del constructor XML llaman funciones
+flecha con `(linea, index)` explícitos; ambas funciones utilizan ese índice para
+LineID, de modo que los ordinales y snapshots se conservan. El normalizador del
+almacén toma el último guion y valida el sufijo con `^\d+$`, evitando la
+ambigüedad entre ceros y dígitos de la regex anterior. Comparación diferencial
+local: 335929 cadenas con resultados idénticos, incluidos ceros, múltiples
+guiones, sufijos inválidos y saltos de línea. Un sufijo inválido de 100001
+caracteres se procesó en 0,40 ms, sin ejecutar la regex antigua sobre ese caso.
+
+Se agregan unitarias sobre reserva/idempotencia/aislamiento, transiciones
+condicionales, hashes, cotejo de CDR y miembros, rechazo por línea, efectos
+transaccionales RA/RC y publicación contable fallida; también compuerta SFS,
+selección/vista previa, coordinación individual/RC, incertidumbre, reanudación
+por ticket y recuperación de preparación. Los harness sustituyen únicamente
+DB/cola/SOAP, manteniendo la lógica real de los servicios. Se conservan las
+pruebas existentes de XML firmado contra XSD/XSL reales y la integración de
+agregados con PostgreSQL, sin hacer que la cobertura dependa de habilitar esta
+última en CI.
+
+Verificación completa con cobertura y PostgreSQL 16 local nuevo/desechable,
+TEST_DATABASE_URL local, sin M1_AGGREGATE_TEST_DATABASE_URL (como la CI):
+**256 suites / 2326 pruebas aprobadas**, 6 snapshots sin cambios; 4 suites / 38
+pruebas omitidas por sus condiciones existentes (incluye 20 pruebas opcionales
+de integración de agregados). Son 5 suites y 124 pruebas aprobadas adicionales
+respecto del registro CI de Emma (251 / 2202). Build y lint aprobados; el único
+aviso de lint es heredado de una prueba de Contabilidad sin cambios.
+Las migraciones existentes solo se aplicaron a esa base local autorizada;
+ninguna migración nueva ni operación sobre bases compartidas.
+
+Medición de código nuevo, no del promedio global del repositorio: intersección
+de las líneas añadidas por `git diff --unified=0 <base> -- src` con DA/BRDA del
+LCOV completo, respetando la exclusión de código generado de Sonar. Resultado:
+
+- Líneas nuevas ejecutables: 354 / 359 cubiertas = **98,61%**.
+- Resultados de condiciones nuevos: 474 / 516 cubiertos = **91,86%**.
+- Cobertura combinada local: (354 + 474) / (359 + 516) = **94,63%**.
+- Almacén, despacho, preparación, compuerta y coordinación individual: 100%
+  de líneas de cada archivo en la suite completa (no solo líneas nuevas).
+
+Reproducción, tras ejecutar la suite completa con `--coverage`:
+`python3 scripts/m1/coverage_new_code.py af5f4fb2b2440f91436a4a7657aae941bbdd1fca`.
+Detalle por archivo en `docs/m1/auditoria-ci-cobertura.json`. Es una medición
+local desde LCOV y el diff, no una afirmación de que el Quality Gate remoto ya
+pasó: la API de SonarCloud devolvió 403 desde el entorno y el análisis remoto
+corresponde al siguiente push del PR #224. No se rebajó ninguna exigencia.
+Sin cambios front/ferry, Resiliencia, Contabilidad, envíos reales, PR nuevo,
+fusiones ni despliegues.

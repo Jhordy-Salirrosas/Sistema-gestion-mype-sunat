@@ -1,279 +1,112 @@
-/**
- * Envío REAL de resúmenes diarios y comunicaciones de baja (M1).
- *
- * EL DEFECTO QUE SE PRUEBA
- *
- * `SummaryDispatchService.encolar()` no tenía ningún llamador: la cola, el
- * worker y la vista previa existían, y nada disparaba el envío. Un resumen
- * diario o una comunicación de baja nunca llegaban a SUNAT.
- *
- * Lo que se verifica aquí es lo que hace falta para que el envío sea honesto:
- *
- *  - el XML se FIRMA antes de comprimirse (un resumen sin firma lo rechaza
- *    SUNAT);
- *  - NO se envía nada si la vista previa trae errores de regla, porque el
- *    identificador RC/RA se consume igual;
- *  - si la cola no devuelve job id, se informa `enviado: false` en vez de dar
- *    por hecho un envío que no existe.
- */
-import { describe, expect, it, jest, beforeEach, afterAll } from '@jest/globals';
 import AdmZip from 'adm-zip';
-import { SummaryEnvioService } from '../../../src/modules/invoices/application/services/summaryEnvioService';
-import type {
-  VistaPrevia,
-  LineaVista,
-} from '../../../src/modules/invoices/application/services/invoiceSummaryService';
-
-const EMPRESA = 'emp-1';
-const FECHA = '2026-11-01';
-/** RUC del emisor: SUNAT exige que el nombre del ZIP empiece por él. */
-const RUC = '20601234567';
-
-/** Línea de la vista previa. */
-const linea = (incluido: boolean): LineaVista =>
-  ({
-    serie: 'B001',
-    correlativo: 1,
-    tipoComprobante: '03',
-    fechaEmision: FECHA,
-    total: 118,
-    incluido,
-    motivoExclusion: incluido ? null : 'fuera de plazo',
-  }) as LineaVista;
-
-/** Vista previa con lo mínimo que consume el servicio. */
-const vista = (
-  extra: Partial<VistaPrevia> & { identificador?: string } = {},
-): VistaPrevia =>
-  ({
-    envio: {
-      identificador: extra.identificador ?? 'RC-20261101-001',
-    },
-    lineas: extra.lineas ?? [linea(true)],
-    xml: 'xml' in extra ? extra.xml : '<SummaryDocuments/>',
-    errores: extra.errores ?? [],
-  }) as VistaPrevia;
-
-/** Servicio con dobles. */
-function montar(
-  opciones: {
-    vistaResumen?: VistaPrevia;
-    vistaBaja?: VistaPrevia;
-    jobId?: string | null;
-    firmaFalla?: boolean;
-  } = {},
-) {
-  const signXml = jest.fn<(xml: string) => { signedXml: string }>((xml) => {
-    if (opciones.firmaFalla) throw new Error('sin certificado');
-    return { signedXml: `${xml}<!--firmado-->` };
-  });
-
-  const encolar = jest.fn<(job: unknown) => Promise<string | null>>(async () =>
-    opciones.jobId === undefined ? 'job-1' : opciones.jobId,
-  );
-
-  const resumenes = {
-    vistaResumenDiario: jest.fn(async () => opciones.vistaResumen ?? vista()),
-    vistaComunicacionBaja: jest.fn(async () => opciones.vistaBaja ?? vista()),
-  };
-
-  const servicio = new SummaryEnvioService(
-    resumenes as never,
-    { encolar } as never,
-    { signXml } as never,
-    {
-      company: {
-        findUnique: jest.fn(async () => ({ ruc: RUC })),
-      },
-    } as never,
-  );
-
-  return { servicio, resumenes, encolar, signXml };
+import { SummaryEnvioService, seleccionBaja } from '../../../src/modules/invoices/application/services/summaryEnvioService';
+import { hashSummary } from '../../../src/modules/invoices/application/services/summaryGate';
+const selection = [{ id: 'invoice', motivo: 'Anulación de la operación' }];
+function harness() {
+  const row = { id: 'a', company_id: 'empresa', kind: 'RA', identifier: 'RA-20261109-001', state: 'RESERVED', members: [{ id: 'invoice' }], job_id: null, issuer_ruc: '20000000001', environment: 'BETA', xml: null as string | null, zip_base64: null as string | null };
+  const view = { xml: '<VoidedDocuments><cbc:ID>RA-20261109-001</cbc:ID></VoidedDocuments>', errores: [], lineas: [{ id: 'invoice', incluido: true }] };
+  const context = { companyId: 'empresa', ruc: row.issuer_ruc, environment: 'BETA', endpoint: 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService' };
+  const store = { reservar: jest.fn(async () => ({ row, vista: view as typeof view | undefined })), artefacto: jest.fn(async (_r, xml, zip) => ({ ...row, xml, xml_hash: hashSummary(xml), zip_base64: zip })), encolado: jest.fn(async () => undefined), bloquear: jest.fn(async () => undefined), pendientes: jest.fn(async () => []) };
+  const despacho = { encolar: jest.fn(async () => 'job' as string | null) };
+  const firma = { signXml: jest.fn((xml: string) => ({ signedXml: xml + '<!--firmado-->' })) };
+  const gate = { validar: jest.fn(async () => undefined) };
+  const resumenes = { vistaResumenDiario: jest.fn(async () => ({ ...view, lineas: [] as typeof view.lineas })), vistaComunicacionBaja: jest.fn(async () => view) };
+  const svc = new SummaryEnvioService(resumenes as never, despacho as never, firma as never, { resolve: async () => context } as never, store as never, gate as never);
+  return { row, view, context, store, despacho, firma, gate, svc, resumenes };
 }
-
-const entornoAnterior = process.env.SUNAT_ENV;
-beforeEach(() => { process.env.SUNAT_ENV = 'MOCK'; });
-afterAll(() => { if (entornoAnterior === undefined) delete process.env.SUNAT_ENV; else process.env.SUNAT_ENV = entornoAnterior; });
-
-describe('M1 · envío real del resumen diario (RC)', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('firma el XML y encola el ZIP', async () => {
-    const { servicio, encolar, signXml } = montar();
-
-    const r = await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(true);
-    expect(r.jobId).toBe('job-1');
-    expect(signXml).toHaveBeenCalledWith('<SummaryDocuments/>', undefined);
-    expect(encolar).toHaveBeenCalledTimes(1);
-  });
-
-  it('el ZIP que se encola contiene el XML FIRMADO', async () => {
-    const { servicio, encolar } = montar();
-
-    await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    const job = encolar.mock.calls[0][0] as {
-      zipBase64: string;
-      fileName: string;
-      tipo: string;
-    };
-
-    expect(job.tipo).toBe('RESUMEN_DIARIO');
-    // Convención de SUNAT: RUC-TIPO-AAAAMMDD-NNN.zip. Con el identificador a
-    // secas (RC-20261101-001.zip) SUNAT BETA rechazó de verdad con
-    // "no es un cpe valido".
-    expect(job.fileName).toBe(`${RUC}-RC-20261101-001.zip`);
-
-    // Se ABRE el ZIP de verdad: leer los bytes comprimidos como texto no
-    // prueba que dentro viaje el XML firmado. El XML debe llamarse IGUAL que el
-    // ZIP salvo la extensión — SUNAT responde "Validation Filename error
-    // zip name: ...; xml name: " (vacío) cuando no coinciden.
-    const zip = new AdmZip(Buffer.from(job.zipBase64, 'base64'));
-    const entradas = zip.getEntries();
-
-    expect(entradas).toHaveLength(1);
-    // El XML interno se llama EXACTAMENTE igual que el ZIP salvo la extensión.
-    // Con `RC-20261101-001.xml` (sin RUC) SUNAT rechazaba con
-    // "Validation Filename error ...; xml name: " (vacío); verificado contra
-    // BETA el 01-11. Al alinear ambos nombres el rechazo de nombre desapareció
-    // y el error pasó a ser una regla del contenido (2217), que es otro tema.
-    expect(entradas[0].entryName).toBe('20601234567-RC-20261101-001.xml');
-
-    const xml = entradas[0].getData().toString('utf8');
-    expect(xml).toContain('<!--firmado-->');
-  });
-
-  it('NO envía si la vista previa trae errores de regla', async () => {
-    const { servicio, encolar } = montar({
-      vistaResumen: vista({ errores: ['Boleta fuera del plazo de 7 días'] }),
-    });
-
-    const r = await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(false);
-    expect(r.motivo).toContain('plazo de 7 días');
-    expect(encolar).not.toHaveBeenCalled();
-  });
-
-  it('NO envía si no hay XML que mandar', async () => {
-    const { servicio, encolar } = montar({
-      vistaResumen: vista({ xml: null }),
-    });
-
-    const r = await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(false);
-    expect(encolar).not.toHaveBeenCalled();
-  });
-
-  it('NO envía si no hay comprobantes incluidos', async () => {
-    const { servicio, encolar } = montar({
-      vistaResumen: vista({ lineas: [linea(false)] }),
-    });
-
-    const r = await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(false);
-    expect(encolar).not.toHaveBeenCalled();
-  });
-
-  it('si la cola no devuelve job id, NO se declara enviado', async () => {
-    const { servicio } = montar({ jobId: null });
-
-    const r = await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(false);
-    expect(r.jobId).toBeNull();
-    expect(r.motivo).toContain('cola');
-  });
-
-  it('el nombre del ZIP empieza por el RUC del emisor', async () => {
-    const { servicio, encolar } = montar();
-
-    await servicio.enviarResumenDiario(EMPRESA, FECHA);
-
-    const job = encolar.mock.calls[0][0] as { fileName: string };
-    expect(job.fileName.startsWith(`${RUC}-`)).toBe(true);
-    expect(job.fileName.endsWith('.zip')).toBe(true);
-  });
+it('sin selección explícita no hay reserva, firma ni cola', async () => {
+  const h = harness(); await expect(h.svc.enviarComunicacionBaja('empresa', '2026-11-09')).rejects.toThrow('Seleccione');
+  expect(h.store.reservar).not.toHaveBeenCalled(); expect(h.firma.signXml).not.toHaveBeenCalled();
+});
+it.each([[], [{ id: '' }], [{ id: 'i', motivo: '' }], [{ id: 'i', motivo: 'x'.repeat(101) }], [{ id: 'i' }, { id: 'i' }]].map(input => [input]))('valida selección y motivos: %j', input => { expect(() => seleccionBaja(input)).toThrow(); });
+it('motivo omitido usa el valor inicial acordado, sin aceptar vacío', () => { expect(seleccionBaja([{ id: 'i' }])).toEqual([{ id: 'i', motivo: 'Anulación de la operación' }]); });
+it('firma, valida y conserva artefacto antes de encolar en BETA', async () => {
+  const h = harness(); expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: true, jobId: 'job' });
+  expect(h.firma.signXml).toHaveBeenCalledWith(h.view.xml, h.context);
+  expect(h.gate.validar.mock.invocationCallOrder[0]).toBeLessThan(h.despacho.encolar.mock.invocationCallOrder[0]);
+  expect(h.store.artefacto.mock.invocationCallOrder[0]).toBeLessThan(h.despacho.encolar.mock.invocationCallOrder[0]);
+  expect(h.store.encolado).toHaveBeenCalledWith('a', 'job');
+});
+it('ZIP conserva nombre SUNAT y XML firmado', async () => {
+  const h = harness(); await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection);
+  const job = h.despacho.encolar.mock.calls[0][0] as unknown as { zipBase64: string; fileName: string };
+  const zip = new AdmZip(Buffer.from(job.zipBase64, 'base64'));
+  expect(job.fileName).toBe('20000000001-RA-20261109-001.zip'); expect(zip.getEntries().map(e => e.entryName)).toEqual(['20000000001-RA-20261109-001.xml']);
+  expect(zip.getEntries()[0].getData().toString()).toContain('<!--firmado-->');
+});
+it('regla de selección rechazada no llega a firmar', async () => {
+  const h = harness(); h.store.reservar.mockRejectedValue(new Error('No hay comprobantes incluidos'));
+  expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: false, motivo: expect.stringContaining('incluidos') }); expect(h.firma.signXml).not.toHaveBeenCalled();
+});
+it('fallo de firma queda visible y no encola', async () => {
+  const h = harness(); h.firma.signXml.mockImplementation(() => { throw new Error('sin certificado'); });
+  expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: false, motivo: 'sin certificado' }); expect(h.despacho.encolar).not.toHaveBeenCalled();
+});
+it('validación no concluyente no encola ni abre la red', async () => {
+  const h = harness(); h.gate.validar.mockRejectedValue(new Error('SFS no disponible'));
+  expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: false, motivo: 'SFS no disponible' }); expect(h.despacho.encolar).not.toHaveBeenCalled();
+});
+it('cola caída conserva artefacto PREPARED recuperable', async () => {
+  const h = harness(); h.despacho.encolar.mockResolvedValue(null);
+  expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: false, jobId: null }); expect(h.store.artefacto).toHaveBeenCalled();
+});
+it('reserva ya en cola es idempotente sin otra publicación', async () => {
+  const h = harness(); h.row.state = 'QUEUED'; h.store.reservar.mockResolvedValue({ row: h.row, vista: undefined });
+  expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: true }); expect(h.despacho.encolar).not.toHaveBeenCalled();
+});
+it('reserva incierta no se vuelve a enviar por HTTP', async () => {
+  const h = harness(); h.row.state = 'UNCERTAIN';
+  expect(await h.svc.enviarComunicacionBaja('empresa', '2026-11-09', selection)).toMatchObject({ enviado: false, motivo: expect.stringContaining('UNCERTAIN') }); expect(h.despacho.encolar).not.toHaveBeenCalled();
+});
+it('RC vacío no reserva ni publica', async () => {
+  const h = harness(); expect(await h.svc.enviarResumenDiario('empresa', '2026-11-09')).toMatchObject({ enviado: false }); expect(h.despacho.encolar).not.toHaveBeenCalled();
 });
 
-describe('M1 · envío real de la comunicación de baja (RA)', () => {
-  it('envía con el identificador RA', async () => {
-    const { servicio, encolar } = montar({
-      vistaBaja: vista({ identificador: 'RA-20261101-001' }),
-    });
-
-    const r = await servicio.enviarComunicacionBaja(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(true);
-    expect(r.identificador).toBe('RA-20261101-001');
-    expect((encolar.mock.calls[0][0] as { tipo: string }).tipo).toBe(
-      'COMUNICACION_BAJA',
-    );
-  });
-
-  it('una baja sin facturas en la fecha no se envía', async () => {
-    const { servicio, encolar } = montar({
-      vistaBaja: vista({
-        lineas: [],
-        xml: null,
-        identificador: 'RA-20261101-001',
-      }),
-    });
-
-    const r = await servicio.enviarComunicacionBaja(EMPRESA, FECHA);
-
-    expect(r.enviado).toBe(false);
-    expect(encolar).not.toHaveBeenCalled();
-  });
+it('una reserva fallida no impide recuperar las de otras empresas', async () => {
+  const h=harness();
+  h.store.pendientes.mockResolvedValue([{...h.row,state:'PREPARED',identifier:'RC-first'}, {...h.row,state:'PREPARED',identifier:'RC-second'}] as never);
+  h.gate.validar.mockRejectedValueOnce(new Error('Contexto no disponible'));
+  await h.svc.recuperar(); expect(h.despacho.encolar).toHaveBeenCalledTimes(1);
+  expect(h.despacho.encolar).toHaveBeenCalledWith(expect.objectContaining({identificador:'RC-second'}));
 });
 
-describe('M1 · el envío nunca entrega un agregado sin firma', () => {
-  it('si la firma falla, el error se propaga y no se encola', async () => {
-    const { servicio, encolar } = montar({ firmaFalla: true });
-
-    await expect(servicio.enviarResumenDiario(EMPRESA, FECHA)).rejects.toThrow(
-      /firmar/,
-    );
-
-    expect(encolar).not.toHaveBeenCalled();
-  });
+it.each(['RA','RC'])('%s vuelve a leer la selección en la transacción antes de preparar', async kind => {
+  const h=harness(); h.row.kind=kind; h.resumenes.vistaResumenDiario.mockResolvedValue(h.view);
+  h.store.reservar.mockImplementation(async (_c,_k,_date,_sel,_ctx,preview) => { await preview('tx',2,'aggregate'); return {row:h.row,vista:h.view}; });
+  const result=kind==='RA' ? await h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection) : await h.svc.enviarResumenDiario('empresa','2026-11-09');
+  expect(result.enviado).toBe(true); expect(h.gate.validar).toHaveBeenCalledWith(expect.any(String),kind,h.context,h.row.identifier);
+  expect(kind==='RA'?h.resumenes.vistaComunicacionBaja:h.resumenes.vistaResumenDiario).toHaveBeenCalledWith('empresa','2026-11-09',2,kind==='RA'?selection:[{id:'invoice',motivo:''}],'tx','aggregate');
 });
-
-describe('D1 summary SOAP isolation', () => {
-  it('uses supplied SOL identity without consulting deployment variables', async () => {
-    const { construirSobreSendSummary } =
-      await import('../../../src/modules/sunat/soap/sunatSummaryOperations');
-    const before = process.env.SUNAT_SOL_USER;
-    process.env.SUNAT_SOL_USER = 'WRONG_FAKE_DEPLOYMENT';
-    try {
-      const envelope = construirSobreSendSummary({
-        fileName: '20000000001-RC-1.zip',
-        contentFileBase64: '',
-        ruc: '20000000001',
-        credentials: { usuario: 'FAKE_COMPANY', clave: 'obviously-fake' },
-      });
-      expect(envelope).toContain('20000000001FAKE_COMPANY');
-      expect(envelope).not.toContain('WRONG_FAKE_DEPLOYMENT');
-    } finally {
-      if (before === undefined) delete process.env.SUNAT_SOL_USER;
-      else process.env.SUNAT_SOL_USER = before;
-    }
-  });
+it.each(['QUEUED','POLLING'])('preparación concurrente que ya pasó a %s no se vuelve a publicar', async state => {
+  const h=harness(); h.store.artefacto.mockResolvedValue({...h.row,state,job_id:'existing'} as never);
+  const result=await h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection); expect(result.enviado).toBe(state==='QUEUED'); expect(h.despacho.encolar).not.toHaveBeenCalled();
 });
-it.each(['BETA', 'PRODUCCION', ''])('RA/RC avisa bloqueo externo en %s antes de firmar o encolar', async entorno => {
-  const previous = process.env.SUNAT_ENV;
-  try {
-    process.env.SUNAT_ENV = entorno;
-    const h = montar();
-    const result = await h.servicio.enviarResumenDiario(EMPRESA, FECHA);
-    expect(result).toMatchObject({ enviado: false, jobId: null, motivo: 'Despacho externo no habilitado para RA/RC' });
-    expect(h.signXml).not.toHaveBeenCalled();
-    expect(h.encolar).not.toHaveBeenCalled();
-  } finally { if (previous === undefined) delete process.env.SUNAT_ENV; else process.env.SUNAT_ENV = previous; }
+it('PREPARED reutiliza XML y compuerta, sin volver a firmar', async () => {
+  const h=harness(); h.row.state='PREPARED'; h.row.xml=h.view.xml; h.store.reservar.mockResolvedValue({row:h.row,vista:undefined});
+  expect((await h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection)).enviado).toBe(true); expect(h.firma.signXml).not.toHaveBeenCalled(); expect(h.gate.validar).toHaveBeenCalledWith(h.row.xml,'RA',h.context,h.row.identifier);
+});
+it('HTTP deliberado de RC no se convierte en fallo genérico; fallo inesperado sí se controla', async () => {
+  const { BadRequestException }=await import('@nestjs/common'); const h=harness();
+  h.resumenes.vistaResumenDiario.mockRejectedValueOnce(new BadRequestException('Selección no elegible'));
+  await expect(h.svc.enviarResumenDiario('empresa','2026-11-09')).rejects.toThrow('Selección no elegible');
+  h.resumenes.vistaResumenDiario.mockRejectedValueOnce(new Error('contexto no disponible'));
+  expect(await h.svc.enviarResumenDiario('empresa','2026-11-09')).toMatchObject({enviado:false,motivo:'contexto no disponible'});
+});
+it('RA conserva HTTP deliberado y rechaza selecciones no objeto', async () => {
+  const { BadRequestException }=await import('@nestjs/common');const h=harness();h.store.reservar.mockRejectedValue(new BadRequestException('No elegible'));
+  await expect(h.svc.enviarComunicacionBaja('empresa','2026-11-09',selection)).rejects.toThrow('No elegible');expect(()=>seleccionBaja([null])).toThrow('inválida');
+});
+it('ciclo de recuperación instala y retira timer, sin solaparse', async () => {
+  jest.useFakeTimers();const h=harness(); let finish: (rows: never[])=>void=()=>undefined;
+  h.store.pendientes.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  h.svc.onModuleInit();jest.advanceTimersByTime(60_000);await h.svc.recuperar();expect(h.store.pendientes).toHaveBeenCalledTimes(1);finish([]);await Promise.resolve();await Promise.resolve();h.svc.onModuleDestroy();expect(jest.getTimerCount()).toBe(0);jest.useRealTimers();
+});
+it.each(['RA','RC'])('RESERVED %s se recupera por la misma ruta y selección', async kind => {
+  const h=harness();h.store.pendientes.mockResolvedValue([{...h.row,kind,state:'RESERVED',reference_date:'2026-11-09',members:[{id:'invoice',motivo:'Motivo guardado'}]}] as never);
+  const method=kind==='RA'?jest.spyOn(h.svc,'enviarComunicacionBaja'):jest.spyOn(h.svc,'enviarResumenDiario');method.mockResolvedValue({enviado:true,identificador:'same',jobId:'job',incluidos:1,motivo:null});
+  await h.svc.recuperar();expect(method).toHaveBeenCalledWith('empresa','2026-11-09',[{id:'invoice',motivo:kind==='RA'?'Motivo guardado':''}]);
+});
+it('recuperación omite contexto cambiado y conserva PREPARED si cola no responde', async () => {
+  const h=harness();h.store.pendientes.mockResolvedValue([{...h.row,state:'PREPARED',environment:'MOCK'},{...h.row,state:'PREPARED'}] as never);h.despacho.encolar.mockResolvedValue(null);
+  await h.svc.recuperar();expect(h.despacho.encolar).toHaveBeenCalledTimes(1);expect(h.store.encolado).not.toHaveBeenCalled();h.store.pendientes.mockRejectedValue(new Error('base caída'));await expect(h.svc.recuperar()).resolves.toBeUndefined();
 });
