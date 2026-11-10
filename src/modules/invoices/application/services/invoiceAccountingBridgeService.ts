@@ -87,6 +87,9 @@ export interface FacturaParaPuente {
   almacen?: string;
   /** Motivo Catálogo 09 SUNAT si es Nota de Crédito. */
   motivoNota?: string;
+  /** Comprobante original que modifica una nota. */
+  documentoAfectadoId?: string;
+  documentoAfectadoNumero?: string;
 }
 
 @Injectable()
@@ -115,9 +118,13 @@ export class InvoiceAccountingBridgeService {
       ? (errores.push(factura.motivoBloqueoAsiento), { asientoOmitido: true })
       : await this.registrarAsiento(factura, numero, errores);
 
-    const costo = factura.motivoBloqueoAsiento || !['01', '03'].includes(factura.tipoComprobante)
+    const costo = factura.motivoBloqueoAsiento
       ? {}
-      : await this.registrarCostoVenta(factura, numero, errores);
+      : factura.tipoComprobante === '07'
+        ? await this.revertirCostoNota(factura, numero, errores)
+        : !['01', '03'].includes(factura.tipoComprobante)
+          ? {}
+          : await this.registrarCostoVenta(factura, numero, errores);
 
     const completo = errores.length === 0;
 
@@ -273,6 +280,69 @@ export class InvoiceAccountingBridgeService {
     } catch (error) {
       errores.push(`Contabilidad: ${(error as Error).message}`);
       return { asientoOmitido: false };
+    }
+  }
+
+  /** Revierte el costo original de las líneas devueltas por una nota de crédito. */
+  private async revertirCostoNota(
+    factura: FacturaParaPuente,
+    numero: string,
+    errores: string[],
+  ): Promise<{ asientoCostoId?: string; costoVenta?: number }> {
+    const referencia = `${factura.id}:COSTO-REV`;
+    const existente = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: factura.companyId, source_module: MODULO_ORIGEN, source_reference_id: referencia },
+      select: { id: true },
+    });
+    if (existente) return { asientoCostoId: existente.id };
+
+    const originalId = factura.documentoAfectadoId;
+    if (!originalId) {
+      errores.push('Costo de nota: falta el comprobante original que se devuelve.');
+      return {};
+    }
+    const original = await this.prisma.invoice.findUnique({
+      where: { id: originalId },
+      select: { serie: true, correlativo: true },
+    });
+    if (!original) {
+      errores.push('Costo de nota: el comprobante original no existe.');
+      return {};
+    }
+    const numeroOriginal = factura.documentoAfectadoNumero ?? `${original.serie}-${String(original.correlativo).padStart(8, '0')}`;
+    const movimientos = await this.prisma.inventoryMovement.findMany({
+      where: { company_id: factura.companyId, source_reference_id: numeroOriginal, operation_type_code: '01' },
+      select: { quantity: true, previous_unit_cost: true, product: { select: { sku: true } } },
+    });
+    const costoPorSku = new Map<string, number>();
+    for (const m of movimientos) {
+      const sku = m.product?.sku;
+      if (sku) costoPorSku.set(sku, Number(m.previous_unit_cost));
+    }
+    const costo = Math.round(factura.items.reduce((sum, item) => {
+      const unitario = costoPorSku.get(item.itemCode?.trim() ?? '') ?? 0;
+      return sum + Math.max(0, item.cantidad) * unitario;
+    }, 0) * 100) / 100;
+    if (costo <= 0) return { costoVenta: 0 };
+
+    try {
+      const asiento = await this.generadorAsientos.execute({
+        companyId: factura.companyId,
+        period: periodoDe(factura.fechaEmision),
+        entryDate: new Date(`${factura.fechaEmision}T00:00:00Z`).toISOString(),
+        glosa: `Reverso costo de ventas según ${numero}`,
+        sourceModule: MODULO_ORIGEN,
+        sourceReferenceId: referencia,
+        idempotencyKey: `m1:invoice-cost-rev:${factura.id}`,
+        lines: [
+          { lineOrder: 1, accountCode: '201', accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
+        ],
+      });
+      return { asientoCostoId: asiento.id, costoVenta: -costo };
+    } catch (error) {
+      errores.push(`Reverso costo: ${(error as Error).message}`);
+      return {};
     }
   }
 
