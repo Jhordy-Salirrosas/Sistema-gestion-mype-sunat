@@ -3,10 +3,10 @@ const base = () => ({ tipo_comprobante: '01', serie: 'F001', customer_legal_name
   customer_identity_type: '6', customer_identity_number: '20100070970', forma_pago: 'Contado', fecha_emision: '2026-11-07',
   items: [{ codigo: 'SERV', descripcion: 'Servicio', precioUnitario: 118, cantidad: 1 }] });
 function harness() {
-  const product = { sku: 'SERV', tax_affectation: '10', sunat_unit_code: 'NIU' };
+  const product = { sale_price: 118, sku: 'SERV', tax_affectation: '10', sunat_unit_code: 'NIU' };
   const origin = { id: 'origin', tipo_comprobante: '01', serie: 'F001', correlativo: 1, estado: 'ACEPTADO',
     monto_total: 118, customer_identity_type: '6', customer_identity_number: '20100070970' };
-  const tx = { inventoryProduct: { findMany: jest.fn(async () => [product]) },
+  const tx = { inventoryWarehouse: { findFirst: jest.fn(async () => ({ id: 'warehouse' })) }, inventoryProduct: { findMany: jest.fn(async () => [product]) },
     businessPartner: { findFirst: jest.fn(async () => ({ id: 'cli', has_credit: true, allows_discount: true })) },
     partnerTaxStatus: { findFirst: jest.fn(async () => null) }, $executeRaw: jest.fn(async () => 1),
     invoice: { findFirst: jest.fn(async () => origin), findMany: jest.fn(async () => [] as any[]) } };
@@ -109,7 +109,8 @@ it('la ruta fiscal conserva montos y fechas de cuotas UBL numeradas y acepta su 
  const dto = raw() as any; Object.assign(dto, { customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente' });
  dto.payload_ubl.formaPago = 'Credito'; dto.payload_ubl.cuotas = [{ numero: 'Cuota001', monto: 30, vencimiento: '2026-12-01' }];
  Object.assign(dto.payload_ubl.lineas[0], { precioUnitario: 10, valorUnitario: 8.4745762712, cantidad: 3 });
- const r = await harness().run(fiscalToEmission(dto));
+ const h = harness(); h.product.sale_price = 10;
+ const r = await h.run(fiscalToEmission(dto));
  expect(r.cuotas).toEqual([{ monto: 30, vencimiento: '2026-12-01' }]);
 });
 it.each([1, [null], [{ numero: 'Cuota099', monto: 118, vencimiento: '2026-12-01' }]])('rechaza cronograma fiscal mal formado %j', (cuotas) => {
@@ -153,4 +154,23 @@ it.each([{ fecha_emision: '2026-02-31' }, { cuotas: [{ monto: 118, vencimiento: 
 it('no permite crear una nota mientras el origen está reservado en una RA', async () => {
   const h = harness(); Object.assign(h.tx, { invoiceAggregate: { findMany: jest.fn(async () => [{ members: [{ id: 'origin' }] }]) } });
   await expect(h.run(note())).rejects.toThrow('BAJA_EN_PROCESO');
+});
+
+it.each([null, 0, -1])('bloquea ventas sin precio configurado %s antes de numerar', async sale_price => {
+  const h = harness(); h.product.sale_price = sale_price as never;
+  await expect(h.run()).rejects.toThrow('sin precio de venta configurado');
+});
+it('resuelve el principal explícito, normaliza el elegido y rechaza uno ajeno/inactivo', async () => {
+  const h = harness();
+  expect((await h.run()).almacen).toBe('ALM-01');
+  expect((await h.run({ ...base(), almacen: ' alm-02 ' })).almacen).toBe('ALM-02');
+  expect(h.tx.inventoryWarehouse.findFirst).toHaveBeenLastCalledWith({ where: { company_id: 'empresa', warehouse_code: 'ALM-02', is_active: true }, select: { id: true } });
+  h.tx.inventoryWarehouse.findFirst.mockResolvedValueOnce(null as never);
+  await expect(h.run({ ...base(), almacen: 'OTRO' })).rejects.toThrow('Almacén no disponible');
+});
+
+it('rechaza un precio distinto del catálogo sin sustituirlo ni numerar', async () => {
+ const h = harness(); const dto = base(); dto.items[0].precioUnitario = 15;
+ await expect(h.run(dto)).rejects.toThrow('no coincide con el configurado');
+ expect(dto.items[0].precioUnitario).toBe(15);
 });

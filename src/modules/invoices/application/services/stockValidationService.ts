@@ -12,7 +12,7 @@
  *  - Se valida contra `InventoryBalance` (el saldo por almacén) y no contra
  *    `InventoryProduct`, porque el producto no tiene stock propio: el stock
  *    vive en el saldo de cada almacén. Cuando la empresa tiene un solo
- *    almacén, el total coincide; cuando tiene varios, se suma.
+ *    almacén, el total coincide; se valida únicamente el almacén elegido.
  *
  *  - Un fallo de stock es un error de NEGOCIO, no del servidor. Se lanza una
  *    excepción con el detalle de qué producto falta, para que el front muestre
@@ -71,7 +71,7 @@ export class StockValidationService {
    *
    * @throws BadRequestException con el detalle de los faltantes.
    */
-  async validar(companyId: string, items: ItemAValidar[]): Promise<ResultadoStock> {
+  async validar(companyId: string, items: ItemAValidar[], almacen = 'ALM-01'): Promise<ResultadoStock> {
     const conCodigo = items.filter(
       (item) => typeof item.codigo === 'string' && item.codigo.trim() !== '',
     );
@@ -83,13 +83,14 @@ export class StockValidationService {
 
     const codigos = [...new Set(conCodigo.map((item) => item.codigo!.trim()))];
 
-    // Saldo por SKU, sumando todos los almacenes de la empresa. El filtro por
+    // Saldo por SKU del almacén elegido. El filtro por
     // `company_id` es imprescindible: sin él se leería el stock de otra empresa
     // que use el mismo SKU (Anti-IDOR).
     const saldos = await this.prisma.inventoryBalance.groupBy({
       by: ['product_id'],
       where: {
         company_id: companyId,
+        warehouse: { warehouse_code: almacen },
         product: { sku: { in: codigos }, is_active: true },
       },
       _sum: { current_stock: true },

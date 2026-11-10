@@ -4,6 +4,7 @@ import { PrismaClient } from '../src/generated/client/client';
 import { seedAuth } from './seeds/auth.seed';
 import { seedCustoms } from './seeds/customs.seed';
 import { seedAccounting } from './seeds/accounting.seed';
+import { seedAccountingRules } from './seeds/accountingRules.seed';
 import { seedInventory } from './seeds/inventory.seed';
 
 const connectionString = process.env.DATABASE_URL;
@@ -18,6 +19,7 @@ async function main() {
     await seedInventory(prisma);
     await seedCustoms(prisma);
     await seedAccounting(prisma);
+    await seedAccountingRules(prisma);
     console.log('Proceso de seed finalizado exitosamente.');
   } catch (error) {
     console.error('Error durante la ejecución del seed:', error);
