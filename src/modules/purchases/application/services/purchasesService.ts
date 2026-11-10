@@ -440,8 +440,13 @@ export class PurchasesService {
           where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
         })) ?? [];
       const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
-      const cxp = roles.get('CXP') || '421';
-      const caja = metodo === 'EFECTIVO' ? roles.get('CAJA') || '101' : roles.get('BANCO') || '1041';
+      const reglasPago = (await (this.prisma as any).accountingRule?.findMany({
+        where: { company_id: companyId, process_code: 'PAGO', is_active: true },
+        orderBy: { line_order: 'asc' },
+      })) ?? [];
+      const porOrdenPago = new Map<number, string>(reglasPago.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+      const cxp = porOrdenPago.get(1) ?? roles.get('CXP') ?? '421';
+      const caja = metodo === 'EFECTIVO' ? (roles.get('CAJA') ?? '101') : (porOrdenPago.get(2) ?? roles.get('BANCO') ?? '1041');
       const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       await this.accounting.execute({
         companyId,
@@ -505,11 +510,17 @@ export class PurchasesService {
       })) ?? [];
     const mapRoles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
 
-    const accGastoCompra = mapRoles.get('GASTO_COMPRA') || '601';
-    const accIgvCredito = mapRoles.get('IGV_CREDITO') || '40111';
-    const accCxp = mapRoles.get('CXP') || '421';
-    const accDestinoInv = mapRoles.get('DESTINO_INVENTARIO') || '201';
-    const accVariacionExist = mapRoles.get('VARIACION_EXISTENCIA') || '611';
+    const reglas = (await (this.prisma as any).accountingRule?.findMany({
+      where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
+      orderBy: { line_order: 'asc' },
+    })) ?? [];
+    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+
+    const accGastoCompra = porOrden.get(1) ?? mapRoles.get('GASTO_COMPRA') ?? '601';
+    const accIgvCredito = porOrden.get(2) ?? mapRoles.get('IGV_CREDITO') ?? '40111';
+    const accCxp = porOrden.get(3) ?? mapRoles.get('CXP') ?? '421';
+    const accDestinoInv = porOrden.get(4) ?? mapRoles.get('DESTINO_INVENTARIO') ?? '201';
+    const accVariacionExist = porOrden.get(5) ?? mapRoles.get('VARIACION_EXISTENCIA') ?? '611';
 
     const periodo = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}`;
     try {
