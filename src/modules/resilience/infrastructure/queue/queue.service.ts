@@ -446,9 +446,11 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
    * quien llama pueda informarlo; no se espera el resultado dentro de la misma
    * petición HTTP porque el CDR de un resumen puede tardar.
    */
-  async encolarResumen(job: SummaryJobData): Promise<string | null> {
+  async encolarResumen(job: SummaryJobData, startAfter?: Date): Promise<string | null> {
     try {
-      return await this.boss.send(SUMMARY_QUEUE, job);
+      return startAfter === undefined
+        ? await this.boss.send(SUMMARY_QUEUE, job)
+        : await this.boss.send(SUMMARY_QUEUE, job, { startAfter });
     } catch (error) {
       this.logger.error(
         `No se pudo encolar el ${job.tipo} ${job.identificador}: ${

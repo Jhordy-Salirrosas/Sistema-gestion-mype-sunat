@@ -19,7 +19,6 @@ import type { IssuerContext } from '../issuerConfigResolver';
  * (document/literal, una sola operación) para no añadir una librería SOAP.
  */
 import {
-  SUNAT_DEFAULT_TIMEOUT_MS,
   SUNAT_SEND_BILL_SOAP_ACTION,
 } from './soap.constants';
 
@@ -211,10 +210,15 @@ export class SunatSummaryTransportError extends Error {
  * de TA-28 y TA-30: agregar métodos a una clase con esa cobertura y esos tests
  * obliga a revisar todas sus dependencias en cada cambio.
  */
+/** Presupuesto exclusivo de agregados; no modifica SUNAT_TIMEOUT_MS. */
+export function resolveSummaryTimeout(): number {
+  const value = Number(process.env.SUNAT_SUMMARY_TIMEOUT_MS);
+  return Number.isSafeInteger(value) && value > 0 && value <= 2_147_483_647 ? value : 90_000;
+}
 export class SunatSummaryClient {
   constructor(
     private readonly endpoint: string,
-    private readonly timeoutMs = SUNAT_DEFAULT_TIMEOUT_MS,
+    private readonly timeoutMs = resolveSummaryTimeout(),
   ) {}
 
   /** Envía el resumen o la baja y devuelve el número de ticket. */
@@ -272,7 +276,7 @@ export class SunatSummaryClient {
     };
   }
 
-  /** POST al billService con la misma política de timeout que `sendBill`. */
+  /** POST al billService con presupuesto propio de agregados. */
   private async post(
     sobre: string,
     context?: IssuerContext,
@@ -282,6 +286,7 @@ export class SunatSummaryClient {
     ms: number;
   }> {
     const inicio = Date.now();
+    const timeoutMs = context?.timeoutMs ?? this.timeoutMs;
 
     try {
       const respuesta = await fetch(context?.endpoint ?? this.endpoint, {
@@ -294,7 +299,7 @@ export class SunatSummaryClient {
         body: sobre,
         // Sin este timeout, un cuelgue de SUNAT bloquea el worker hasta 300 s
         // por el headersTimeout de undici.
-        signal: AbortSignal.timeout(context?.timeoutMs ?? this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       const crudo = await respuesta.text();
@@ -307,7 +312,7 @@ export class SunatSummaryClient {
 
       if (nombre === 'TimeoutError' || nombre === 'AbortError') {
         throw new SunatSummaryTransportError(
-          `Timeout de ${this.timeoutMs} ms esperando al billService`,
+          `Timeout de ${timeoutMs} ms esperando al billService`,
           error,
         );
       }

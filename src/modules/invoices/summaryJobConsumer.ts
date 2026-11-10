@@ -1,91 +1,65 @@
-/**
- * Consumidor de la cola de resúmenes y bajas (TA-67).
- *
- * Registra el `boss.work` de `sunat-summary-queue` y delega el envío en
- * `SummaryDispatchService`, que es quien conoce la secuencia
- * `sendSummary` -> `getStatus(ticket)` y la distinción entre "en proceso"
- * (98/99) y un resultado final.
- *
- * IGUAL QUE EL CONSUMIDOR DE FACTURAS, NO LANZA HACIA PG-BOSS
- *
- * Un `throw` aquí haría que el transporte marcara el job como fallido y lo
- * reintentara con su propia política, saltándose la que ya decidió
- * `SummaryDispatchService`. La única excepción es cuando el envío se quedó sin
- * completar por un motivo REINTENTABLE (timeout, red caída, SUNAT procesando):
- * en ese caso sí se relanza, porque devolver `null` dejaría el resumen
- * perdido y sin volver a intentarse, y el día quedaría sin informar.
- */
+/** Consumidor M1: una consulta por corrida y sondeos diferidos durables. */
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-// Valor, no `import type`: Nest necesita el metatipo del constructor.
-import {
-  QueueService,
-  type SummaryJobData,
-} from '../resilience/infrastructure/queue/queue.service';
-import {
-  SummaryDispatchService,
-  type ResultadoEnvioResumen,
-} from './application/services/summaryDispatchService';
+import { QueueService, type SummaryJobData } from '../resilience/infrastructure/queue/queue.service';
+import { SummaryDispatchService, type ResultadoEnvioResumen } from './application/services/summaryDispatchService';
+import { SummaryAggregateStore } from './application/services/summaryAggregateStore';
+
+export interface SummaryPollingJob extends SummaryJobData {
+  /** Se conserva en el payload de pg-boss entre procesos/reinicios. */
+  sondeoIntento?: number;
+  ticketConsulta?: string;
+}
+export const MAX_SUMMARY_POLL_ATTEMPTS = 24;
+export const summaryPollDelay = (attempt: number) => ([5, 15, 30][attempt - 1] ?? 60) * 60_000;
 
 @Injectable()
 export class SummaryJobConsumer implements OnModuleInit {
   private readonly logger = new Logger(SummaryJobConsumer.name);
-
-  constructor(
-    private readonly queue: QueueService,
-    private readonly despachador: SummaryDispatchService,
-  ) {}
+  constructor(private readonly queue: QueueService, private readonly despachador: SummaryDispatchService,
+    private readonly store: SummaryAggregateStore) {}
 
   async onModuleInit(): Promise<void> {
-    // Las pruebas e2e usan un doble de QueueService que puede no exponer el
-    // método: en ese caso no hay cola de resúmenes que consumir.
     if (typeof this.queue.registerSummaryWorker !== 'function') {
-      this.logger.warn(
-        'QueueService sin registerSummaryWorker: el consumidor de resumenes no se registra',
-      );
+      this.logger.warn('QueueService sin registerSummaryWorker: el consumidor de resumenes no se registra');
       return;
     }
-
-    await this.queue.registerSummaryWorker((job) => this.procesar(job));
+    await this.queue.registerSummaryWorker(job => this.procesar(job));
     this.logger.log('Consumidor de resumenes registrado');
   }
 
-  /**
-   * Procesa un job de la cola.
-   *
-   * @throws cuando el fallo es reintentable, para que pg-boss aplique sus 3
-   *   reintentos y, agotados, lo deje en `sunat-summary-dlq`.
-   */
-  async procesar(job: SummaryJobData): Promise<ResultadoEnvioResumen | null> {
+  async procesar(job: SummaryPollingJob): Promise<ResultadoEnvioResumen | null> {
     if (!job?.identificador) {
       this.logger.error('Job de resumen sin identificador: se descarta');
       return null;
     }
-
-    const resultado = await this.despachador.procesar(job);
-
+    const attempt = job.sondeoIntento ?? 1;
+    if (!Number.isInteger(attempt) || attempt < 1 || attempt > MAX_SUMMARY_POLL_ATTEMPTS) throw new Error('SUMMARY_POLL_ATTEMPT_INVALID');
+    if (attempt > 1 && !job.ticketConsulta) throw new Error('SUMMARY_POLL_TICKET_REQUIRED');
+    const resultado = await this.despachador.procesar(job, { maxConsultas: 0, ticketEsperado: job.ticketConsulta });
     if (resultado.enviado) {
-      this.logger.log(
-        `[TA-67] ${job.identificador}: CDR obtenido con estado ${resultado.status ?? 'desconocido'}`,
-      );
+      this.logger.log(`[TA-67] ${job.identificador}: CDR obtenido con estado ${resultado.status ?? 'desconocido'}`);
       return resultado;
     }
-
-    // "SUNAT sigue procesando" y los fallos de red se reintentan: el resumen
-    // todavía puede informarse. Un rechazo definitivo, no.
-    const reintentable =
-      resultado.ticket === null ||
-      resultado.status === null ||
-      ['98', '99'].includes(resultado.status);
-
-    if (reintentable) {
-      throw new Error(
-        `${job.identificador}: ${resultado.error ?? 'envio incompleto, se reintenta'}`,
-      );
+    const reintentable = resultado.status === null || ['98', '99'].includes(resultado.status);
+    if (resultado.ticket && reintentable) {
+      if (attempt === MAX_SUMMARY_POLL_ATTEMPTS) {
+        const error = `Sondeo automático agotado tras ${attempt} intentos. El agregado permanece en POLLING; consulte el ticket manualmente. Último motivo: ${resultado.error ?? resultado.status}`;
+        const row = await this.store.cargar(job.companyId, job.identificador);
+        await this.store.pendiente(row.id, error, resultado.ticket);
+        this.logger.warn(`[${job.identificador}] ${error}`);
+        return { ...resultado, error };
+      }
+      const next: SummaryPollingJob = { ...job, sondeoIntento: attempt + 1, ticketConsulta: resultado.ticket, maxConsultas: 0 };
+      const startAfter = new Date(Date.now() + summaryPollDelay(attempt));
+      const id = await this.queue.encolarResumen(next, startAfter);
+      if (!id) throw new Error('SUMMARY_POLL_ENQUEUE_FAILED: ticket conservado; publicación pendiente');
+      this.logger.log(`[${job.identificador}] sondeo ${attempt + 1}/${MAX_SUMMARY_POLL_ATTEMPTS} programado para ${startAfter.toISOString()}`);
+      return resultado;
     }
-
-    this.logger.error(
-      `[TA-67] ${job.identificador}: SUNAT respondio ${resultado.status} sin CDR; no se reintenta`,
-    );
+    // Sin ticket no existe una consulta segura: conserva la política previa
+    // de infraestructura/DLQ, sin liberar la incertidumbre ni reenviar a ciegas.
+    if (resultado.ticket === null || reintentable) throw new Error(`${job.identificador}: ${resultado.error ?? 'envío incompleto, se reintenta'}`);
+    this.logger.error(`[TA-67] ${job.identificador}: ${resultado.error ?? resultado.status}`);
     return resultado;
   }
 }

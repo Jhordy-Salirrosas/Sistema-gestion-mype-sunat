@@ -1106,3 +1106,84 @@ y lint aprobados (solo aviso heredado de Contabilidad, archivo sin cambios).
 No se generan migraciones: el juego existente se aplicó únicamente a la base
 local desechable autorizada. Su contenedor y volumen se eliminaron al terminar.
 La entrega solo cambia xsdRules.ts, la spec de 3b y este documento.
+
+### Parte 2b — Presupuesto y sondeo espaciado de agregados RA/RC
+
+Bases verificadas: back `cb878d9fddf1be994f51d617a261a5b81eb21b8b`, front
+`87a980d771d4a31c66d4b44a006c6871cd7f6d1c`; rama `fix/m1-resumenes-timeout`.
+Líneas base completas: back **257 suites / 2349 pruebas aprobadas**, 12
+snapshots (4 suites / 38 pruebas omitidas); front **99 archivos / 785 pruebas**.
+
+Fase 0: Axios global imponía 15000 ms sin override de consultarAgregado.
+El endpoint de ticket valida empresa/ticket y llama al despacho con una sola
+consulta. El transporte sendSummary/getStatus tomaba context.timeoutMs antes
+que el constructor, ambos provenientes del timeout general (30000 por defecto,
+SUNAT_TIMEOUT_MS); además su error mostraba el constructor aunque no fuera el
+valor efectivo. El consumidor relanzaba y la cola aplicaba tres reintentos sin
+retraso configurado (cuatro ejecuciones totales), acabando en DLQ. Con 98/99 el
+despacho podía hacer 31 consultas por corrida separadas por un segundo; ante
+timeout cortaba tras la primera. El ticket sí era durable y evitaba reenviar,
+pero la recuperación de preparación no retomaba POLLING. QueueService no
+exponía startAfter a pesar de que pg-boss lo soporta.
+
+**Excepción quirúrgica autorizada por Jhordy el 9 de noviembre de 2026**, según
+confirmación de Emma en este hilo, para aviso a **Oliver, dueño de Resiliencia**:
+únicamente encolarResumen en queue.service.ts acepta startAfter opcional y lo
+pasa como opción a boss.send. Sin ese argumento conserva exactamente la llamada
+anterior de dos argumentos. No se toca ninguna otra función, política de cola,
+archivo ni comportamiento de Resiliencia. Las pruebas cubren ambas firmas y el
+retorno null ante fallo de publicación.
+
+Transporte exclusivo de agregados: SUNAT_SUMMARY_TIMEOUT_MS, defecto 90000 ms;
+valores ausentes/inválidos/no enteros/no positivos o fuera del rango de timer
+vuelven al defecto. El proveedor de SunatSummaryClient y el snapshot de contexto
+M1 de resúmenes usan el mismo resolver; el contexto fiscal original no se muta.
+El timeout y el mensaje de error del POST comparten el valor efectivo. No se
+modifican SUNAT_TIMEOUT_MS, el resolver general ni el cliente SOAP individual.
+
+El consumidor hace una consulta por corrida. Con ticket y respuesta 98/99 o
+fallo recuperable de consulta publica el siguiente job con startAfter: tras el
+intento 1 espera 5 minutos; tras el 2, 15; tras el 3, 30; luego una hora. El
+contador sondeoIntento y ticketConsulta viajan en el payload persistido de
+pg-boss, sin temporizador en memoria ni campos/tablas nuevos. Los sondeos
+diferidos cotejan el ticket esperado antes de cualquier transporte: si falta o
+cambió, no pueden convertirse en sendSummary. Al intento 24 no se publica otro:
+se conserva POLLING con «Sondeo automático agotado tras 24 intentos… consulte el
+ticket manualmente» y la causa última. La consulta manual permanece operativa.
+Si falla publicar el siguiente job, se relanza para recuperación de
+infraestructura; cualquier reentrega retoma el ticket, no una emisión.
+
+Se preservan compuerta, artefactos, incertidumbre y persistencia de la Parte 2:
+se usan cargar/pendiente existentes sin modificar su implementación. Un fallo
+sin ticket conserva el circuito previo de infraestructura/DLQ y nunca se libera
+su incertidumbre para reenviar a ciegas. Los 24 son los intentos programados del
+payload: pg-boss conserva su semántica de entrega al menos una vez; una caída
+entre publicar y completar el job padre puede repetir una consulta, siempre
+con el mismo ticket. No se modifica ese contrato transaccional en esta parte.
+Los trabajos ya agotados en DLQ antes del parche no se reactivan automáticamente;
+el equipo puede consultar sus tickets manualmente, sin reenviar el agregado.
+
+Front por ferry: solo consultarAgregado tiene timeout 120000; axios.ts global
+sigue en 15000. El Monitor muestra «Consultando…» y deshabilita duplicados hasta
+resolver/rechazar; después conserva el resultado o el motivo visible.
+
+Pruebas: defecto/override/valores inválidos y aislamiento del timeout individual;
+presupuesto efectivo de ambas operaciones y mensaje; tres recorridos completos
+de 24 sondeos simulados (timeout, 98, 99), fechas de startAfter, instancia nueva
+por corrida tras serializar payload, ticket fijo y un solo sendSummary;
+consulta manual después del agotamiento, publicación fallida, metadatos inválidos,
+ticket perdido y CDR finalizado. Front: timeout propio, global intacto y estado
+visible durante promesa pendiente tanto con respuesta como con error. Ninguna
+llamada real a SUNAT. Sin migraciones nuevas, PR, fusiones ni despliegues.
+
+Cierre: back **258 suites / 2374 pruebas aprobadas** (+25), 12 snapshots intactos;
+4 suites / 38 pruebas omitidas por las condiciones existentes. Front **100
+archivos / 788 pruebas aprobadas** (+3). Build de ambos y lint de los archivos
+front modificados aprobados; lint back solo conserva el aviso heredado en una
+prueba de Contabilidad sin cambios. Cobertura local nueva (LCOV + diff frente a
+cb878d9f): 42/42 líneas y 54/61 resultados de condiciones; combinado **93,20%**.
+No se cambian umbrales/configuración de CI o Sonar. La prueba de integración
+existente usó únicamente PostgreSQL local nuevo/desechable con las migraciones
+existentes; el contenedor y su volumen ya se eliminaron. No se aplicó nada a
+bases compartidas. Entrega front solo por `ferry/m1-resumenes-timeout` con su
+FERRY.md; sin push al repositorio front.
