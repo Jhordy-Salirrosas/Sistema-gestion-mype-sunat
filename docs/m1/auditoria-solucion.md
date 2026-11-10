@@ -2145,3 +2145,11 @@ Helper exclusivamente visual de depósito/pago directo; página y resumen lo usa
 Reparto fiscal, neto de cuotas, payload y XML intactos. Depósito indicado es un
 cálculo de presentación, no constancia bancaria. Focales: front 2 archivos/10
 pruebas aprobadas, incluida regresión del neto fiscal S657.15 y pago S657.17.
+
+#### Construcción — 6b-3
+
+Clic explícito usa GET de red sin fallback, cancela/invalida listado, publica
+respuesta nueva y marca obsoletas métricas M1. Cargando/resultado visibles;
+fallo conserva la lista con aviso honesto. Lecturas normales conservan caché
+offline; archivo común intacto. Focales: front 2 archivos/3 pruebas aprobadas,
+incluidos clic repetido, invalidaciones y lectura estricta que propaga fallo.
