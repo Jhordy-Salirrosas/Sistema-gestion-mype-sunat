@@ -1,3 +1,5 @@
+import { InvoiceForcedResendService } from './application/services/invoiceForcedResendService';
+import { InvoiceForcedResendController } from './infrastructure/controllers/invoiceForcedResendController';
 import { InvoiceBridgeCoordinatorService } from './application/services/invoiceBridgeCoordinatorService';
 import { InvoiceBridgeReprocessController } from './infrastructure/controllers/invoiceBridgeReprocessController';
 import { SummaryAggregateStore } from './application/services/summaryAggregateStore';
@@ -67,6 +69,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    InvoiceForcedResendController,
     InvoiceBridgeReprocessController,
     InvoiceSunatConsultController,
     InvoicesController,
@@ -84,6 +87,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    InvoiceForcedResendService,
     InvoiceBridgeCoordinatorService,
     AtomicInvoiceCreationService,
     IssuerConfigWriter,
