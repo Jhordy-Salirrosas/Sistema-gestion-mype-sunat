@@ -530,6 +530,7 @@ describe('TA-68 · servicio puente', () => {
     movimientoYaExiste?: boolean;
     asientoYaExiste?: boolean;
     costoVenta?: number;
+    originalExiste?: boolean;
   } = {}) {
     const movimientoCreado = jest.fn<(dto: unknown) => Promise<unknown>>(
       async () => ({ id: 'mov-1' }),
@@ -549,13 +550,16 @@ describe('TA-68 · servicio puente', () => {
           opciones.movimientoYaExiste ? { id: 'mov-0' } : null,
         ),
         findMany: jest.fn(async () => opciones.costoVenta
-          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2 }]
+          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2, product: { sku: 'CEM-001' } }]
           : []),
       },
       accountingEntry: {
         findFirst: jest.fn(async () =>
           opciones.asientoYaExiste ? { id: 'asiento-0' } : null,
         ),
+      },
+      invoice: {
+        findUnique: jest.fn(async () => opciones.originalExiste === false ? null : ({ serie: 'F001', correlativo: 100 })),
       },
     };
 
@@ -586,6 +590,37 @@ describe('TA-68 · servicio puente', () => {
     expect(resultado.costoVenta).toBe(600);
     expect(resultado.asientoCostoId).toBe('asiento-1');
     expect(asientoCreado).toHaveBeenCalledTimes(2);
+  });
+
+  it('revierte el costo original en una nota de crédito por devolución', async () => {
+    const { puente, asientoCreado } = dobles({ costoVenta: 600 });
+    const resultado = await puente.registrar({
+      ...facturaPrueba(),
+      tipoComprobante: '07',
+      motivoNota: '06',
+      documentoAfectadoId: 'inv-original',
+    });
+    expect(resultado.costoVenta).toBe(-6000);
+    expect(resultado.asientoCostoId).toBe('asiento-1');
+    expect(asientoCreado).toHaveBeenCalledTimes(2);
+  });
+
+  it('avisa si la nota no tiene comprobante original para revertir costo', async () => {
+    const { puente } = dobles();
+    const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06' });
+    expect(resultado.errores.join(' ')).toContain('falta el comprobante original');
+  });
+
+  it('avisa si el comprobante original de la nota no existe', async () => {
+    const { puente } = dobles({ originalExiste: false });
+    const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
+    expect(resultado.errores.join(' ')).toContain('el comprobante original no existe');
+  });
+
+  it('no genera costo si la venta original no tuvo salida valorizada', async () => {
+    const { puente } = dobles();
+    const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
+    expect(resultado.costoVenta).toBe(0);
   });
 
   it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
