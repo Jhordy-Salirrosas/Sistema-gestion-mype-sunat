@@ -1268,3 +1268,86 @@ el modal; un cambio de almacén carga su stock y descarta respuestas obsoletas.
 La base local desechable usada para la verificación ya se eliminó. Los precios
 reales de los productos demo siguen pendientes de carga por Emma, fuera de esta
 entrega; no se inventó ni sustituyó ningún precio.
+
+### Reproceso del puente para comprobantes aceptados — 10 nov 2026
+
+Autorización de Emma/Jhordy tras Fase 0: rama `fix/m1-reproceso-puente`, base
+back dev `23981b1da5f3bb7889a36e25ff1de5ef707848e9` y front dev
+`27731aa76de8f23d3de7ee05f35ff3833de3e905`. Línea base back: **263 suites /
+2433 pruebas aprobadas, cero fallos**, 4 suites / 38 pruebas omitidas, 12
+snapshots fiscales; build aprobado. Front: **101 archivos / 797 pruebas**.
+
+**Objetivo operativo:** la F001-00000064 NO es un exhibit que deba permanecer
+bloqueado. Tras el despliegue del equipo, Emma podrá ejecutar el endpoint nuevo
+sobre el ID real de ESA factura y recuperar el movimiento de Kardex de ALM-02 y
+el asiento de costo pendiente de S/ 15.00, conservando el asiento de venta
+001-202611-039 existente. La F001-00000065 ya probó que el motor normal funciona:
+esta ronda aporta la vía de recuperación que faltaba. No se ejecutó ese
+reproceso contra producción ni se afirma aquí que la factura real ya esté
+recuperada: la comprobación de ese resultado corresponde a Emma tras su tren.
+
+**Una sola lógica:** `InvoiceBridgeCoordinatorService` concentra la carga del
+comprobante/payload, liquidación de sus importes persistidos, invocación de
+`InvoiceAccountingBridgeService` y respaldo del asiento de venta. El consumidor
+usa ese coordinador y conserva la semántica de relanzar efectos pendientes
+(M1_KARDEX_PENDING / revisión / fallo de respaldo); una reentrega aceptada no
+vuelve a preparar ni enviar. La liquidación fiscal y los importes no se
+recalculan desde el catálogo actual, y se respeta `payload_ubl.almacen`.
+
+**Ruta exclusiva local:** `POST /api/v1/invoices/:id/reprocesar-puente`, ADMIN,
+con empresa tomada del token, rechazo si falta empresa y 404 para un ID ajeno.
+Solo ACEPTADO/OBSERVADO; los demás estados reciben 400 con causa clara, antes
+de ejecutar el puente. El controlador y el coordinador no tienen dependencias
+de cola, firma, consulta ni transporte SUNAT. `retry-cdr` y su lista de estados
+reintentables permanecen intactos.
+
+Respuesta: `{ completo, yaCompleto, asientoId, asientoOmitido, asientoCostoId,
+costoVenta, kardex, movimientosRegistrados, movimientosOmitidos, errores }`.
+Los campos de asiento/costo son opcionales según el caso. Se reutilizan las
+guardas e identidades existentes por documento/producto y referencia contable;
+solo se añade al resultado interno M1 `asientoCostoOmitido` para distinguir
+costo ya existente de costo creado en esta pasada. «Ya completo» requiere no
+haber creado movimiento ni asiento de venta/costo. No escribe marcas de
+reproceso ni consume una capa adicional. Si falta FIFO, devuelve pendiente y
+la causa; corregida la capa, otro reproceso completa lo que faltaba. Se
+conserva la semántica actual por fases del puente, sin prometer una nueva
+transacción global ni alterar la implementación de Inventario/Contabilidad.
+
+**Front, solo detalle:** botón ADMIN «Reprocesar puente» para ACEPTADO/OBSERVADO,
+deshabilitado mientras espera, con resultado completo / ya estaba completo /
+sigue pendiente y motivos en la misma vista. Llama únicamente al endpoint nuevo;
+no dispara «Consultar SUNAT», reenvío, `retry-cdr` ni otra pantalla. Entrega por
+`ferry/m1-reproceso-puente` y FERRY.md; ningún push al repositorio front.
+
+**Pruebas:** escenario equivalente a F001-64 con asiento de venta existente,
+una unidad CEM-001 en ALM-02, capas FIFO reales del motor con repositorios
+simulados, recuperación de Kardex y costo 15.00, y segunda ejecución sin
+escrituras de movimiento, asiento, saldo ni consumo de capa. Sin capa: ninguna
+escritura de salida/costo, resultado pendiente; añadida la capa simulada, el
+mismo comprobante se recupera. Estados no admitidos, OBSERVADO, empresa ajena,
+empresa ausente, autorización HTTP 401/403 y endpoint sin proveedores SUNAT.
+Las pruebas previas del consumidor mantienen sus aserciones. Front: estados,
+roles, éxito/no-op/pendiente, error HTTP, doble clic y endpoint exclusivo.
+
+Sin migraciones nuevas ni cambios en Resiliencia, Inventario o Contabilidad;
+no se reescriben estado fiscal, CDR, XML, numeración ni precios del comprobante.
+La suite usa solo PostgreSQL local desechable con migraciones existentes bajo
+la excepción local previamente autorizada. Sin emisiones reales, llamadas
+reales a SUNAT, PR, fusiones ni despliegues.
+
+Cierre: back **264 suites / 2445 pruebas aprobadas, cero fallos** (+1 suite,
++12 pruebas), con las mismas 4 suites / 38 pruebas omitidas y **12 snapshots
+fiscales intactos**. Build y lint back aprobados. Cobertura local nueva contra
+23981b1da: 153/160 líneas instrumentadas (**95,62%**) y 165/210 resultados de
+condiciones; combinado **85,95%**, medido por LCOV + diff, sin cambiar umbrales
+ni configuración de Sonar/CI. El harness de TA-58 ahora entrega los campos
+obligatorios de ResultadoPuente (errores y contadores), sin debilitar ninguna
+aserción de envío.
+
+Front **102 archivos / 811 pruebas aprobadas** (+1 archivo, +14 pruebas), build
+y lint de los cuatro archivos modificados aprobados. La base local desechable
+utilizada para las pruebas ya se eliminó; ninguna base compartida fue tocada.
+La acción productiva pendiente es exclusivamente de Emma tras el despliegue:
+ejecutar el nuevo endpoint para la F001-00000064 y comprobar Kardex ALM-02,
+asiento de venta conservado y asiento de costo de S/ 15.00. Esta entrega no
+realiza esa operación ni la sustituye por una reentrega del comprobante.
