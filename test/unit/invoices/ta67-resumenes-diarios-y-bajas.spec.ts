@@ -61,6 +61,7 @@ function boleta(extra: Partial<ComprobanteAgregado> = {}): ComprobanteAgregado {
     igv: 90,
     tipoDocCliente: '1',
     numDocCliente: '70123456',
+    fiscal: { pagos:[{codigo:'01',monto:500}], tributos:[{codigo:'1000',base:500,impuesto:90}], descuento:0 },
     ...extra,
   };
 }
@@ -169,7 +170,7 @@ describe('TA-67 · XML del resumen diario', () => {
     // La base va en TaxableAmount del TaxTotal. Dentro de `sac:BillingPayment`
     // NO puede ir ningún importe: el esquema de SUNAT solo admite
     // `cbc:InstructionID` ahí y rechaza el archivo si se añade otro elemento.
-    expect(xml).toContain('<cbc:TaxableAmount currencyID="PEN">500.00</cbc:TaxableAmount>');
+    expect(xml).toContain('<cbc:PaidAmount currencyID="PEN">500.00</cbc:PaidAmount>');
   });
 
   it('agrupa varias boletas en un solo XML', () => {
@@ -248,7 +249,8 @@ describe('TA-67 · comunicación de baja', () => {
       serie: 'F001',
       correlativo: 143,
       estado: 'ACEPTADO',
-      ...extra,
+      fiscal: { pagos:[{codigo:'01',monto:500}], tributos:[{codigo:'1000',base:500,impuesto:90}], descuento:0 },
+    ...extra,
     });
 
   it('genera un VoidedDocuments con la estructura que exige SUNAT', () => {

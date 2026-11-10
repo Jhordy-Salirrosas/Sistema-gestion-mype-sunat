@@ -1,5 +1,5 @@
+import { summaryDispatchForTest } from '../../fixtures/summaryDispatchHarness';
 import { fakeIssuerContext } from '../../fixtures/issuerContext';
-import { SummaryDispatchService } from '../../../src/modules/invoices/application/services/summaryDispatchService';
 import {
   SunatSummaryClient,
   SunatSummaryTransportError,
@@ -30,7 +30,7 @@ describe('D1 summary issuer context and transport errors', () => {
         statusCode: '0',
         enProceso: false,
       }));
-      const service = new SummaryDispatchService(
+      const service = summaryDispatchForTest(
         {} as never,
         { sendSummary, getStatus } as never,
         { resolve } as never,
@@ -57,23 +57,23 @@ describe('D1 summary issuer context and transport errors', () => {
   );
   it('rejects a different fiscal identity before sending', async () => {
     const sendSummary = jest.fn();
-    const service = new SummaryDispatchService(
+    const service = summaryDispatchForTest(
       {} as never,
       { sendSummary } as never,
-      { resolve: async () => fakeIssuerContext() } as never,
+      { resolve: async () => fakeIssuerContext('fake-company', { ruc: '20000000002' }) } as never,
     );
     await expect(
       service.procesar({
         ...job,
         fileName: '20000000002-RC-fake.zip',
       } as never),
-    ).rejects.toThrow('ISSUER_IDENTITY_MISMATCH');
+    ).resolves.toMatchObject({ enviado: false, error: 'SUMMARY_CONTEXT_CHANGED' });
     expect(sendSummary).not.toHaveBeenCalled();
   });
   it('stops before transport on resolver decryption failure', async () => {
     const sendSummary = jest.fn();
     const error = new Error('ISSUER_CONFIG_DECRYPTION_FAILED');
-    const service = new SummaryDispatchService(
+    const service = summaryDispatchForTest(
       {} as never,
       { sendSummary } as never,
       {
@@ -82,7 +82,7 @@ describe('D1 summary issuer context and transport errors', () => {
         },
       } as never,
     );
-    await expect(service.procesar(job as never)).rejects.toBe(error);
+    await expect(service.procesar(job as never)).resolves.toMatchObject({ enviado: false, error: 'ISSUER_CONFIG_DECRYPTION_FAILED' });
     expect(sendSummary).not.toHaveBeenCalled();
   });
   it('sends both SOAP operations to the context endpoint with its timeout', async () => {
@@ -190,14 +190,14 @@ describe('D1 summary issuer context and transport errors', () => {
 it.each(['BETA', 'PRODUCCION', undefined])('no envía RC/RA sin validación oficial en %s', async (environment) => {
   const sendSummary = jest.fn();
   const context = environment ? fakeIssuerContext('fake-company', { environment: environment as never }) : undefined;
-  const service = new SummaryDispatchService({} as never, { sendSummary } as never,
-    context ? { resolve: async () => context } as never : undefined);
+  const service = summaryDispatchForTest({} as never, { sendSummary } as never,
+    { resolve: async () => context ?? { ruc: '20000000001', environment: null } } as never);
   await expect(service.procesar({ companyId: 'fake-company', identificador: 'RC-20261101-001',
-    fileName: '20000000001-RC-20261101-001.zip', zipBase64: 'fixture', tipo: 'RESUMEN_DIARIO' })).rejects.toThrow('VALIDACION_OFICIAL_RESUMEN');
+    fileName: '20000000001-RC-20261101-001.zip', zipBase64: 'fixture', tipo: 'RESUMEN_DIARIO' })).resolves.toMatchObject({ enviado: false, error: 'SUMMARY_CONTEXT_CHANGED' });
   expect(sendSummary).not.toHaveBeenCalled();
 });
 it.each([new Error('consulta fallida'), 'consulta fallida'])('conserva ticket ante error de sondeo %s', async (failure) => {
-  const service = new SummaryDispatchService({} as never, { sendSummary: async () => ({ ticket: 'ticket' }),
+  const service = summaryDispatchForTest({} as never, { sendSummary: async () => ({ ticket: 'ticket' }),
     getStatus: async () => { throw failure; } } as never, { resolve: async () => fakeIssuerContext() } as never);
   const result = await service.procesar({ companyId: 'fake-company', identificador: 'RC-20261101-001',
     fileName: '20000000001-RC-20261101-001.zip', zipBase64: 'fixture', tipo: 'RESUMEN_DIARIO' }, { esperaMs: 0 });

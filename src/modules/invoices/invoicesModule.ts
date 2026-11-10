@@ -1,3 +1,5 @@
+import { SummaryAggregateStore } from './application/services/summaryAggregateStore';
+import { SummaryGate } from './application/services/summaryGate';
 import { InvoiceAccountingFallbackService } from './application/services/invoiceAccountingFallbackService';
 import { InvoiceSunatConsultController } from './infrastructure/controllers/invoiceSunatConsultController';
 import { AtomicInvoiceCreationService } from './application/services/atomicInvoiceCreationService';
@@ -117,6 +119,8 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceAccountingBridgeService,
     InvoiceAccountingFallbackService,
     // TA-67: encolado y sondeo del ticket de resumenes y bajas.
+    SummaryAggregateStore,
+    SummaryGate,
     SummaryDispatchService,
     // M1: el envío REAL de resumenes diarios (RC) y comunicaciones de baja (RA).
     // Antes `SummaryDispatchService.encolar()` no tenia ningun llamador, asi que
