@@ -10,6 +10,7 @@ import { CustomsModule } from './modules/customs/customsModule';
 import { AuthModule } from './modules/auth/authModule';
 import { SireModule } from './modules/sire/sireModule';
 import { AccountingModule } from './modules/accounting/accountingModule';
+import { ExpensesModule } from './modules/expenses/expensesModule';
 import { InventoryModule } from './modules/inventory/inventoryModule';
 import { PurchasesModule } from './modules/purchases/purchasesModule';
 
@@ -29,6 +30,7 @@ import { PurchasesModule } from './modules/purchases/purchasesModule';
     AuthModule,
     SireModule,
     AccountingModule,
+    ExpensesModule,
     InventoryModule,
     PurchasesModule,
   ],
