@@ -8,6 +8,8 @@ import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
 import { CATALOGO_09_MOTIVOS } from './invoiceNoteService';
 import { validarPago } from './paymentTermsAndSpotValidator';
+import { ESTADOS_NOTABLES } from './creditNoteBalanceGuard';
+import { validarClasificacionSpot, validarCuentaSpot } from './spotMinimo';
 import { resolverRetencionMaestro } from './retencionMaestro';
 import type { PrismaService } from '../../../../database/prismaService';
 
@@ -127,8 +129,8 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     // Serializa las notas de un mismo origen antes de leer estado y saldo.
     await tx.$executeRaw`SELECT id FROM invoices WHERE id = ${origen.id} AND company_id = ${companyId} FOR UPDATE`;
     const actual = await tx.invoice.findFirst({ where: { id: origen.id, company_id: companyId } });
-    if (!actual || actual.estado !== 'ACEPTADO' || !['01', '03'].includes(actual.tipo_comprobante)) {
-      throw new BadRequestException('El origen debe ser factura o boleta aceptada por SUNAT');
+    if (!actual || !ESTADOS_NOTABLES.includes(actual.estado) || !['01', '03'].includes(actual.tipo_comprobante)) {
+      throw new BadRequestException('El origen debe ser factura o boleta aceptada u observada por SUNAT');
     }
     const bajas = await tx.invoiceAggregate?.findMany({ where: { company_id: companyId, kind: 'RA', state: { notIn: ['BLOCKED', 'REJECTED'] } }, select: { members: true } }) ?? [];
     if (bajas.some(b => (b.members as unknown as { id: string }[]).some(m => m.id === actual.id))) throw new ConflictException('BAJA_EN_PROCESO');
@@ -158,7 +160,12 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       enviado: dto.agente_retencion, correccion: dto.correccion_retencion });
     dto.agente_retencion = retencion.aplica;
   }
+  validarClasificacionSpot(dto);
   const liquidado = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0);
+  if (liquidado.importes.detraccion > 0) {
+    const empresa = await tx.company.findUnique({ where: { id: companyId }, select: { detraction_account: true } });
+    dto.cuenta_banco_nacion = validarCuentaSpot(dto, liquidado.importes.detraccion, empresa?.detraction_account) ?? undefined;
+  }
   validarPago({ formaPago: dto.forma_pago, cuotas: liquidado.dto.payload_ubl.cuotas as any,
     fechaEmision: liquidado.dto.payload_ubl.fechaEmision as string, montoTotal: liquidado.importes.total,
     detraccion: liquidado.importes.detraccion, retencion: liquidado.importes.retencion });

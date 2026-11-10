@@ -1,3 +1,4 @@
+import { PrismaService } from '../../../../database/prismaService';
 import { diagnosticarSfs } from './sunatSfsDiagnostics';
 import { normalizarEntorno, resolveEndpoint, endpointCoherente } from '../../../sunat/soap/sunatBillTypes';
 import {
@@ -47,6 +48,7 @@ export interface ConfiguracionFiscal {
   cert_password_configurada?: boolean;
   ruc?: string;
   local_anexo?: string | null;
+  cuenta_banco_nacion?: string | null;
   domicilio_fiscal?: string | null;
   ubigeo_fiscal?: string | null;
   departamento_fiscal?: string | null;
@@ -74,6 +76,7 @@ export class InvoiceConfigService {
     private readonly certificado: CertificateService,
     @Optional() private readonly resolver?: IssuerConfigResolver,
     @Optional() private readonly writer?: IssuerConfigWriter,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
   /**
@@ -84,6 +87,7 @@ export class InvoiceConfigService {
    */
   async obtener(companyId: string): Promise<ConfiguracionFiscal> {
     const context = await this.resolver?.resolve(companyId);
+    const empresa = await this.prisma?.company.findUnique({ where: { id: companyId }, select: { detraction_account: true } });
     const entorno = context ? context.environment : normalizarEntorno(process.env.SUNAT_ENV);
     const billEndpoint = context?.endpoint ?? resolveEndpoint();
     const consultEndpoint = context?.consultEndpoint ?? process.env.SUNAT_CONSULT_SERVICE_URL ?? billEndpoint.replace(/\/billService$/, '/billConsultService');
@@ -119,6 +123,7 @@ export class InvoiceConfigService {
         : Boolean(process.env.CERT_PASSWORD),
       ruc: context?.ruc,
       local_anexo: context?.local_anexo ?? null,
+      cuenta_banco_nacion: empresa?.detraction_account ?? null,
       domicilio_fiscal: context?.domicilio_fiscal ?? null,
       ubigeo_fiscal: context?.ubigeo_fiscal ?? null,
       departamento_fiscal: context?.departamento_fiscal ?? null,

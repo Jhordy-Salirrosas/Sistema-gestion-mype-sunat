@@ -50,3 +50,8 @@ it.each(['07', '08'])('la nota %s conserva precio histórico aunque no exista sa
   const h = harness(); h.dto.tipo_comprobante = tipo; h.product.sale_price = null as never;
   expect((await h.run()).items[0].precioUnitario).toBe(118);
 });
+
+it.each(['07', '08'])('6H ruta común %s admite origen observado conservando líneas y saldo', async tipo => {
+ const h = harness(); h.origin.estado = 'OBSERVADO'; h.dto.tipo_comprobante = tipo;
+ await expect(h.run()).resolves.toMatchObject({ items: [expect.objectContaining({ precioUnitario: 118 })] });
+});

@@ -1,3 +1,7 @@
+function mensajeHistorial(codigo: string | null, mensaje: string | null): string | null {
+ if (codigo !== 'M1_FORCE_RESEND_AUTHORIZED') return mensaje;
+ try { const data = JSON.parse(mensaje ?? '{}'); return `Reenvío forzado por decisión registrada. Usuario: ${data.usuarioId}; motivo: ${data.motivo}`; } catch { return mensaje; }
+}
 import { presentarResultado, type EventoPresentacion } from './invoiceResultPresentation';
 /**
  * Mapeadores de modelo a DTO (TA-29).
@@ -235,7 +239,7 @@ export function aHistorial(
       estado_anterior: fila.estado_anterior,
       estado_nuevo: fila.estado_nuevo,
       codigo_error: fila.codigo_error,
-      mensaje_error: fila.mensaje_error,
+      mensaje_error: mensajeHistorial(fila.codigo_error, fila.mensaje_error),
       tiempo_respuesta_ms: fila.tiempo_respuesta_ms,
       created_at: fila.created_at.toISOString(),
     }));

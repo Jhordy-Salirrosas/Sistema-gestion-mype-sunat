@@ -15,6 +15,7 @@ export type PerfilComercial = 'MAYORISTA' | 'MINORISTA';
 
 export interface IssuerConfigInput {
   action?: 'save' | 'reset';
+  cuenta_banco_nacion?: string | null;
   local_anexo?: string | null;
   domicilio_fiscal?: string | null;
   ubigeo_fiscal?: string | null;
@@ -36,6 +37,7 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     throw new BadRequestException('CONFIG_INPUT_INVALID');
   const limits: Record<string, number> = {
     action: 5,
+    cuenta_banco_nacion: 11,
     local_anexo: 4,
     domicilio_fiscal: 500,
     ubigeo_fiscal: 6,
@@ -51,7 +53,7 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     cert_password: 256,
   };
   for (const [key, value] of Object.entries(body)) {
-    if (['perfil_comercial', 'local_anexo', 'domicilio_fiscal', 'ubigeo_fiscal', 'departamento_fiscal', 'provincia_fiscal', 'distrito_fiscal'].includes(key) && value === null) continue;
+    if (['cuenta_banco_nacion', 'perfil_comercial', 'local_anexo', 'domicilio_fiscal', 'ubigeo_fiscal', 'departamento_fiscal', 'provincia_fiscal', 'distrito_fiscal'].includes(key) && value === null) continue;
     if (
       !Object.hasOwn(limits, key) ||
       typeof value !== 'string' ||
@@ -70,7 +72,7 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     !['MAYORISTA', 'MINORISTA'].includes(input.perfil_comercial)
   )
     throw new BadRequestException('CONFIG_PROFILE_INVALID');
-  for (const [campo, patron] of [['local_anexo', /^\d{4}$/], ['ubigeo_fiscal', /^\d{6}$/]] as const) {
+  for (const [campo, patron] of [['cuenta_banco_nacion', /^\d{11}$/], ['local_anexo', /^\d{4}$/], ['ubigeo_fiscal', /^\d{6}$/]] as const) {
     if (input[campo] != null && input[campo]!.trim() && !patron.test(input[campo]!.trim())) throw new BadRequestException('CONFIG_FISCAL_INVALID');
   }
   if (input.action === 'reset' && Object.keys(input).length !== 1)
@@ -100,7 +102,7 @@ export class IssuerConfigWriter {
           where: { id: companyId },
         });
         if (!company) throw new NotFoundException('ISSUER_COMPANY_NOT_FOUND');
-        for (const [campo, patron] of [['local_anexo', /^\d{4}$/], ['ubigeo_fiscal', /^\d{6}$/]] as const) {
+        for (const [campo, patron] of [['cuenta_banco_nacion', /^\d{11}$/], ['local_anexo', /^\d{4}$/], ['ubigeo_fiscal', /^\d{6}$/]] as const) {
     if (input[campo] != null && input[campo]!.trim() && !patron.test(input[campo]!.trim())) throw new BadRequestException('CONFIG_FISCAL_INVALID');
   }
   if (input.action === 'reset') {
@@ -116,6 +118,7 @@ export class IssuerConfigWriter {
         const active = Boolean(company.issuer_config_activated_at);
         // Preserve omitted fields, but only explicitly configured groups are eligible for resolution.
         const data = {
+          detraction_account: input.cuenta_banco_nacion === undefined ? company.detraction_account : input.cuenta_banco_nacion?.trim() || null,
           local_anexo: input.local_anexo === undefined ? company.local_anexo : input.local_anexo?.trim() || null,
           domicilio_fiscal: input.domicilio_fiscal === undefined ? company.domicilio_fiscal : input.domicilio_fiscal?.trim() || null,
           ubigeo_fiscal: input.ubigeo_fiscal === undefined ? company.ubigeo_fiscal : input.ubigeo_fiscal?.trim() || null,

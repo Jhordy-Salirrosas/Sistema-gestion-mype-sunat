@@ -7,6 +7,7 @@ import { redondearMoneda } from './money';
  * `LegalMonetaryTotal`. Se separa de `ublTotalesHelper` para que ese archivo
  * solo calcule los importes.
  */
+import { CATALOGO_54_DETRACCION } from './sunatCatalogs';
 import { dinero } from './xmlNodesHelper';
 import type { TotalesCalculados } from './ublTotalesHelper';
 
@@ -157,6 +158,7 @@ export const bloqueRetenciones = (
   t: TotalesCalculados,
   moneda: string,
   codigoDetraccion?: string,
+  tasaDetraccion?: number,
 ): string[] => {
   const partes: string[] = [];
 
@@ -172,6 +174,7 @@ export const bloqueRetenciones = (
       partes.push(`  <cac:PaymentTerms>
     <cbc:ID>Detraccion</cbc:ID>
     <cbc:PaymentMeansID>${codigo}</cbc:PaymentMeansID>
+    <cbc:PaymentPercent>${dinero((tasaDetraccion ?? CATALOGO_54_DETRACCION[codigo as keyof typeof CATALOGO_54_DETRACCION]?.porcentaje ?? 0) * 100)}</cbc:PaymentPercent>
     <cbc:Amount currencyID="${moneda}">${dinero(t.detraccion)}</cbc:Amount>
   </cac:PaymentTerms>`);
     }

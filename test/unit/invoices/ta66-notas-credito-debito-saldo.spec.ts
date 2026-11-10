@@ -263,12 +263,12 @@ describe('TA-66 · autorización de Nota de Crédito', () => {
     ).rejects.toThrow(/01, 02, 03/);
   });
 
-  it.each(['ERROR_RED', 'DLQ', 'OBSERVADO', 'EN_COLA', 'RECHAZADO', 'ANULADO'])(
+  it.each(['ERROR_RED', 'DLQ', 'EN_COLA', 'RECHAZADO', 'ANULADO'])(
     'saldo sobre %s devuelve 400 con el motivo específico', async (estado) => {
       const { notas } = servicio({ estado });
       await expect(notas.saldo('emp-1', 'inv-1')).rejects.toMatchObject({
         status: 400,
-        message: `El comprobante no está aceptado por SUNAT (estado: ${estado}) y por eso no admite notas de crédito ni de débito.`,
+        message: `El comprobante no está aceptado u observado por SUNAT (estado: ${estado}) y por eso no admite notas de crédito ni de débito.`,
       });
     },
   );
@@ -413,4 +413,10 @@ describe('TA-66 · autorización de Nota de Débito', () => {
     expect(notas.serieDeNota('08', 'F001')).toBe('FD01');
     expect(notas.serieDeNota('08', 'B001')).toBe('BD01');
   });
+});
+
+it('6H observado admite NC con el mismo saldo de aceptado', async () => {
+ const s = servicio({ estado: 'OBSERVADO', notas: [180] });
+ await expect(s.notas.autorizarCredito('empresa', { comprobanteOrigenId: 'inv-1', motivoCodigo: '07', importe: 100 })).resolves.toMatchObject({ tipo: '07', importe: 100 });
+ await expect(s.notas.autorizarCredito('empresa', { comprobanteOrigenId: 'inv-1', motivoCodigo: '07', importe: 1001 })).rejects.toThrow();
 });

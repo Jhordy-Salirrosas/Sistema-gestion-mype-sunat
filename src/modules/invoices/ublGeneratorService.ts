@@ -153,9 +153,11 @@ export class UblGeneratorService {
 
     const conDetraccion = esOperacionConDetraccion(tipoOperacion);
     const leyenda2006 =
-      conDetraccion && payload.montoEnLetras
-        ? `\n${bloqueLeyenda2006(payload.montoEnLetras)}`
+      conDetraccion
+        ? `\n${bloqueLeyenda2006('Operación sujeta al Sistema de Pago de Obligaciones Tributarias con el Gobierno Central')}`
         : '';
+    const leyenda1000 = conDetraccion && payload.montoEnLetras
+      ? `\n  <cbc:Note languageLocaleID="1000">${esc(payload.montoEnLetras)}</cbc:Note>` : '';
     const mediosPago = conDetraccion
       ? bloquePaymentMeansDetraccion(payload.cuentaBancoNacion, medioPagoDetraccion)
       : '';
@@ -233,6 +235,7 @@ export class UblGeneratorService {
         totales,
         moneda,
         payload.codigoDetraccion,
+        payload.tasaDetraccion,
       ).join('\n'),
       descuentoGlobal: payload.descuentoGlobal ? [
         '  <cac:AllowanceCharge>',
@@ -257,7 +260,7 @@ export class UblGeneratorService {
       lineas: this.lineasDe(payload, raiz).join('\n'),
       // `cbc:Note` (leyenda 2006 y observaciones) va antes de
       // DocumentCurrencyCode; la referencia de nota, después de las partes.
-      notas: `${leyenda2006}${observaciones}`,
+      notas: `${leyenda1000}${leyenda2006}${observaciones}`,
       referenciaNota: `${ordenCompra}${referenciaNota}`,
     });
   }

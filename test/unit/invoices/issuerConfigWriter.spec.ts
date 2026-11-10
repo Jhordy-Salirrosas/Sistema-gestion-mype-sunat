@@ -43,6 +43,16 @@ describe('D1 issuer configuration write boundary', () => {
       expect(h.db.$transaction).not.toHaveBeenCalled();
     },
   );
+  it('6J guarda cuenta BN propia, conserva al omitir y expone sin respaldo ajeno', async () => {
+    await h.writer.save(h.company.id, { cuenta_banco_nacion: '00019123456' });
+    expect(h.company).toMatchObject({ detraction_account: '00019123456' });
+    await h.writer.save(h.company.id, { local_anexo: '0000' });
+    expect(h.company).toMatchObject({ detraction_account: '00019123456' });
+    const reader = new InvoiceConfigService({ listar: async () => [] } as never, { inspectCertificate: () => ({ validFrom: new Date('2020-01-01'), validTo: new Date('2099-01-01'), daysRemaining: 100 }) } as never, h.resolver, h.writer, h.db as never);
+    expect((await reader.obtener(h.company.id)).cuenta_banco_nacion).toBe('00019123456');
+    await h.writer.save(h.company.id, { cuenta_banco_nacion: null });
+    expect((await reader.obtener(h.company.id)).cuenta_banco_nacion).toBeNull();
+  });
   it('accepts only the closed DTO at its documented limits', () => {
     const input = {
       action: 'save',

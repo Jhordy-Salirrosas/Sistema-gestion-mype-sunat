@@ -114,8 +114,8 @@ export class InvoiceQueryController {
   almacenes(@CurrentCompany() companyId: string) { return this.consultas.almacenes(companyId); }
 
   @Get('products')
-  catalogoProductos(@CurrentCompany() companyId: string, @Query('almacen') almacen?: string) {
-    return this.consultas.catalogoProductos(companyId, almacen?.trim().toUpperCase() || 'ALM-01');
+  catalogoProductos(@CurrentCompany() companyId: string, @Query('almacen') almacen?: string, @Query('historicos') historicos?: string) {
+    return this.consultas.catalogoProductos(companyId, almacen?.trim().toUpperCase() || 'ALM-01', historicos === 'true');
   }
 
   /**
