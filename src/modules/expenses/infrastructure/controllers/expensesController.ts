@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateExpenseDto } from '../../application/dto/createExpenseDto';
@@ -13,6 +13,19 @@ export class ExpensesController {
   list(@CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.expenses.list(companyId);
+  }
+
+  @Get(':id/payments')
+  listPayments(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.expenses.listPayments(companyId, id);
+  }
+
+  @Post(':id/pay')
+  @HttpCode(HttpStatus.OK)
+  pay(@Param('id') id: string, @Body() dto: { amount?: number; paymentMethod?: string; bankName?: string }, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.expenses.pay(companyId, id, dto);
   }
 
   @Post()
