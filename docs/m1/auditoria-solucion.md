@@ -1896,3 +1896,7 @@ Emma se limita al lado cliente de ejemplos no referenciados; no la ejecuta Codex
 #### Construcción — 6A
 
 Placeholder fiscal obsoleto eliminado. Campo monetario compartido presenta dos decimales sin mutar precisión histórica por foco/blur. Catálogo histórico M1 incluye inactivos sin volverlos vendibles; emisión mantiene filtro de sale_price. Ambas pantallas usan el mismo endpoint por almacén; carga fallida ya no simula una lista vacía exitosa. Avisos distinguen carga/error/histórico de inexistencia; notas no se reprecifican ni se validan como descarga de venta nueva. Sin migración ni cambios de Inventario.
+
+#### Construcción — 6C
+
+La grilla compartida por página y modal pide Fusionar/Mantener separada/Cancelar al seleccionar o confirmar un SKU repetido. Fusión exige misma unidad, precio y condiciones fiscales/comerciales; cantidades se suman y sigue activa la validación de stock agregado. Condiciones diferentes deshabilitan fusión. Notas históricas excluidas de fusión automática. Pruebas de decisión explícita y SKU manual.
