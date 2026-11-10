@@ -1,0 +1,41 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import InvoicePricesPage from '@/modules/invoices/pages/InvoicePricesPage';
+import { InvoiceWarehouseSelect } from '@/modules/invoices/components/InvoiceWarehouseSelect';
+import { apiClient } from '@/lib/axios';
+import { borradorInicial } from '@/modules/invoices/lib/invoiceEmitDraft';
+import { borradorAPayloadEmision } from '@/modules/invoices/lib/invoiceEmitPayload';
+vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(), patch: vi.fn() } }));
+afterEach(() => { cleanup(); vi.resetAllMocks(); });
+it('principal explícito y selección de un almacén de empresa quedan en el payload', async () => {
+  vi.mocked(apiClient.get).mockResolvedValue({ data: [{ warehouse_code: 'ALM-01', description: 'Principal' }, { warehouse_code: 'ALM-02', description: 'Sucursal' }] });
+  const borrador = borradorInicial('01', '2026-11-10');
+  expect(borradorAPayloadEmision(borrador).almacen).toBe('ALM-01');
+  const cambiar = vi.fn();
+  render(<InvoiceWarehouseSelect value={borrador.almacen!} onChange={cambiar} />);
+  await screen.findByRole('option', { name: 'ALM-02 — Sucursal' });
+  expect((screen.getByLabelText('Almacén de salida') as HTMLSelectElement).value).toBe('ALM-01');
+  fireEvent.change(screen.getByLabelText('Almacén de salida'), { target: { value: 'ALM-02' } });
+  expect(cambiar).toHaveBeenCalledWith('ALM-02');
+  expect(borradorAPayloadEmision({ ...borrador, almacen: 'ALM-02' }).almacen).toBe('ALM-02');
+});
+it('lista productos sin precio y guarda solo el precio final PEN por PATCH de Inventario', async () => {
+  vi.mocked(apiClient.get).mockResolvedValue({ data: { balances: [{ sku: 'CEM-001', description: 'Cemento', salePrice: null, vendible: false }] } });
+  vi.mocked(apiClient.patch).mockResolvedValue({ data: {} });
+  render(<InvoicePricesPage />);
+  const campo = await screen.findByLabelText('Precio de CEM-001');
+  fireEvent.change(campo, { target: { value: '35.40' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  expect((await screen.findByRole('status')).textContent).toContain('Precio guardado');
+  expect(apiClient.patch).toHaveBeenCalledWith('/inventory/stocks/products/CEM-001', { sale_price: 35.4 });
+});
+it('un precio no positivo no se guarda y el fallo de PATCH queda visible', async () => {
+  vi.mocked(apiClient.get).mockResolvedValue({ data: { balances: [{ sku: 'P', description: 'Producto', salePrice: null }] } });
+  render(<InvoicePricesPage />);
+  const campo = await screen.findByLabelText('Precio de P');
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  expect((await screen.findByRole('status')).textContent).toContain('positivo'); expect(apiClient.patch).not.toHaveBeenCalled();
+  vi.mocked(apiClient.patch).mockRejectedValue(new Error('fallo'));
+  fireEvent.change(campo, { target: { value: '10' } }); fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toContain('No se pudo guardar'));
+});
