@@ -38,7 +38,7 @@ export class ImportCostApprovedEventListener implements OnModuleInit {
             await this.processImportCostOrderUseCase.execute({
               companyId: event.payload.companyId,
               shipmentId: event.payload.shipmentId,
-              damNumber: event.payload.declarationId || 'DAM-IMPORT',
+              damNumber: event.payload.duaNumber || event.payload.declarationId || 'DAM-IMPORT',
               items: event.payload.costItems.map((i) => ({
                 sku: i.productCode,
                 description: i.commercialDescription,

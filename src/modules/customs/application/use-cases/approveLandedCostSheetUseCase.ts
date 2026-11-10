@@ -55,6 +55,8 @@ export class ApproveLandedCostSheetUseCase {
         const totalCost = Number((qty * unitCost).toFixed(2));
 
         costItems.push({
+          itemId: item.id,
+          allocatedLocalCostPen: Number(item.allocated_local_cost_pen ?? 0),
           productCode: item.product_code ?? item.hs_code,
           commercialDescription: item.commercial_description,
           quantity: qty,
@@ -74,11 +76,13 @@ export class ApproveLandedCostSheetUseCase {
       totalInventoryCostPen: Number(sheet.total_inventory_cost_pen),
       status: LandedCostStatus.DEFINITIVO,
       approvedByAccountant: true,
-      itemsProration: (costItems || []).map((ci: any) => ({
-        itemId: ci.productCode,
-        allocatedLocalCostPen: 0,
-        finalLandedCostUnitPen: ci.unitLandedCostPen,
-      })),
+      itemsProration: (costItems || [])
+        .filter((ci: any) => Boolean(ci.itemId))
+        .map((ci: any) => ({
+          itemId: ci.itemId,
+          allocatedLocalCostPen: ci.allocatedLocalCostPen,
+          finalLandedCostUnitPen: ci.unitLandedCostPen,
+        })),
     });
 
     // 4. Publicar evento de dominio hacia Inventario
@@ -89,12 +93,13 @@ export class ApproveLandedCostSheetUseCase {
         version: sheet.version ?? 1,
         shipmentId: dto.shipmentId,
         declarationId: dto.declarationId ?? (declarations[0]?.id || null),
+        duaNumber: declarations[0]?.dua_number ?? null,
         approvedAt: new Date(),
         totalCifPen: Number(sheet.total_cif_pen),
         totalDutiesPen: Number(sheet.total_duties_pen),
         totalLocalExpensesPen: Number(sheet.total_local_expenses_pen),
         totalInventoryCostPen: Number(sheet.total_inventory_cost_pen),
-        costItems,
+        costItems: costItems.map(({ itemId: _id, allocatedLocalCostPen: _loc, ...rest }) => rest),
       }),
     );
 

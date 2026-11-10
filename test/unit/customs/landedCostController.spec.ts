@@ -156,4 +156,26 @@ describe('LandedCostController', () => {
       'AdjustLateImportCostUseCase no está inyectado',
     );
   });
+
+  it('consulta facturas y embarques elegibles con y sin Prisma', async () => {
+    await expect(controller.getEligibleInvoices(undefined)).rejects.toThrow(UnauthorizedException);
+    await expect(controller.getEligibleShipments(undefined)).rejects.toThrow(UnauthorizedException);
+    expect(await controller.getEligibleInvoices('comp-1')).toEqual([]);
+    expect(await controller.getEligibleShipments('comp-1')).toEqual([]);
+
+    const mockPrisma = {
+      nationalPurchase: { findMany: jest.fn().mockResolvedValue([{ id: 'np-1' }]) },
+      customsShipment: { findMany: jest.fn().mockResolvedValue([{ id: 'sh-1' }]) },
+    };
+    const prismaCtrl = new LandedCostController(
+      mockAddExpense,
+      mockCalculateLandedCost,
+      mockLandedCostRepo,
+      mockApproveSheet,
+      mockAdjustLateCost,
+      mockPrisma as any,
+    );
+    expect(await prismaCtrl.getEligibleInvoices('comp-1')).toEqual([{ id: 'np-1' }]);
+    expect(await prismaCtrl.getEligibleShipments('comp-1')).toEqual([{ id: 'sh-1' }]);
+  });
 });

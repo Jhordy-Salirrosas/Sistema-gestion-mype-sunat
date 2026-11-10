@@ -85,6 +85,8 @@ model ForeignSupplier {
   default_currency String          @default("USD")
   is_related       Boolean         @default(false)
   address          String?
+  city             String?
+  postal_code      String?
   email            String?
   phone            String?
   contact_name     String?
@@ -215,10 +217,28 @@ model CustomsDeclaration {
   settlements               CustomsSettlement[]
   goods_receipts            GoodsReceipt[]
   landed_cost_sheets        LandedCostSheet[]
+  documents                 CustomsDeclarationDocument[]
 
   @@unique([company_id, dua_number])
   @@index([company_id, numeration_date, status])
   @@map("customs_declarations")
+}
+
+model CustomsDeclarationDocument {
+  id              String             @id @default(uuid())
+  declaration_id  String
+  declaration     CustomsDeclaration @relation(fields: [declaration_id], references: [id], onDelete: Cascade)
+  format_type     String             // FORMATO_A, FORMATO_B, FORMATO_C, SUSTENTO
+  document_number String?
+  file_name       String
+  storage_url     String
+  mime_type       String?            @default("application/pdf")
+  file_size_bytes Int?
+  uploaded_by     String?
+  created_at      DateTime           @default(now())
+
+  @@index([declaration_id])
+  @@map("customs_declaration_documents")
 }
 
 model CustomsItem {
@@ -338,6 +358,7 @@ model LocalExpenseInvoice {
   id                      String              @id @default(uuid())
   shipment_id             String
   shipment                CustomsShipment     @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  purchase_id             String?
   supplier_ruc            String              // 11 dígitos
   supplier_name           String
   expense_concept         String              // AGENCIA, ALMACENAJE, TRANSPORTE_LOCAL, CUADRILLA

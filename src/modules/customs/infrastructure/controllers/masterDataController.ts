@@ -25,6 +25,9 @@ import {
   UpsertCurrencyDto,
   UpsertDocumentTypeDto,
   UpsertIncotermDto,
+  UpsertCountryDto,
+  UpsertPortDto,
+  UpdateExchangeRateDto,
 } from '../../application/dto/masterDataDto';
 
 /**
@@ -65,9 +68,51 @@ export class MasterDataController {
     return this.masterData.createExchangeRate(dto);
   }
 
+  @Put('exchange-rates/:id')
+  updateExchangeRate(@Param('id') id: string, @Body() dto: UpdateExchangeRateDto) {
+    return this.masterData.updateExchangeRate(id, dto);
+  }
+
+  @Post('exchange-rates/sync-today')
+  syncTodayExchangeRate() {
+    return this.masterData.syncTodayExchangeRate();
+  }
+
   @Delete('exchange-rates/:id')
   deleteExchangeRate(@Param('id') id: string) {
     return this.masterData.deleteExchangeRate(id);
+  }
+
+  // Países
+  @Get('countries')
+  listCountries() {
+    return this.masterData.listCountries();
+  }
+
+  @Put('countries')
+  upsertCountry(@Body() dto: UpsertCountryDto) {
+    return this.masterData.upsertCountry(dto);
+  }
+
+  @Delete('countries/:code')
+  deleteCountry(@Param('code') code: string) {
+    return this.masterData.deleteCountry(code);
+  }
+
+  // Puertos
+  @Get('ports')
+  listPorts(@Query('type') type?: string) {
+    return this.masterData.listPorts(type);
+  }
+
+  @Put('ports')
+  upsertPort(@Body() dto: UpsertPortDto) {
+    return this.masterData.upsertPort(dto);
+  }
+
+  @Delete('ports/:code')
+  deletePort(@Param('code') code: string) {
+    return this.masterData.deletePort(code);
   }
 
   // Incoterms

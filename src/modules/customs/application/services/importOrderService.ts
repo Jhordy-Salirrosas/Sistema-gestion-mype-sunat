@@ -186,7 +186,7 @@ export class ImportOrderService {
         current_stage: initialStageName,
         current_stage_index: initialStageIndex,
         status: 'APROBADA',
-        proformaNumber: dto.proformaNumber?.trim(),
+        proforma_number: dto.proformaNumber?.trim(),
         notes: dto.notes,
         responsible: dto.responsible,
         items: {
@@ -273,7 +273,7 @@ export class ImportOrderService {
           event_timestamp: new Date(),
           registered_by: dto.uploadedBy ?? 'USUARIO',
           reference_code: dto.documentNumber,
-          eventValue: `Checklist [${dto.stageName}]: ${dto.documentType} - ${dto.fileName}`,
+          event_value: `Checklist [${dto.stageName}]: ${dto.documentType} - ${dto.fileName}`,
         },
       });
     }
@@ -464,7 +464,7 @@ export class ImportOrderService {
           event_timestamp: new Date(),
           registered_by: dto.userName,
           reference_code: order.order_number,
-          eventValue: `Generado automáticamente desde la Orden de Importación ${order.order_number}`,
+          event_value: `Generado automáticamente desde la Orden de Importación ${order.order_number}`,
         },
       });
     }
@@ -554,7 +554,7 @@ export class ImportOrderService {
         event_timestamp: new Date(),
         registered_by: 'USUARIO',
         reference_code: order.order_number,
-        eventValue: `Expediente generado para Orden ${order.order_number}`,
+        event_value: `Expediente generado para Orden ${order.order_number}`,
       },
     });
 

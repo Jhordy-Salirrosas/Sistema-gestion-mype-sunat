@@ -88,14 +88,15 @@ export class CalculateLandedCostUseCase {
     );
 
     // 5. Persistir hoja de liquidación y actualizar costos unitarios de los ítems
+    const isApproved = Boolean(dto.approved_by_accountant);
     const savedSheet = await this.landedCostRepository.saveLandedCostSheet({
       shipmentId: dto.shipment_id,
       totalCifPen: prorationResult.totalCifPen,
       totalDutiesPen: prorationResult.totalDutiesPen,
       totalLocalExpensesPen: prorationResult.totalLocalExpensesPen,
       totalInventoryCostPen: prorationResult.totalInventoryCostPen,
-      status: LandedCostStatus.DEFINITIVO,
-      approvedByAccountant: dto.approved_by_accountant ?? true,
+      status: isApproved ? LandedCostStatus.DEFINITIVO : LandedCostStatus.PROVISIONAL,
+      approvedByAccountant: isApproved,
       itemsProration: prorationResult.items.map((p) => ({
         itemId: p.itemId,
         allocatedLocalCostPen: p.totalAllocatedLocalExpensesPen,

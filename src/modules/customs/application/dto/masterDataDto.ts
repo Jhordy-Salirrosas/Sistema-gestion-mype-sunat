@@ -81,7 +81,86 @@ export class UpsertIncotermDto {
   isActive?: boolean;
 }
 
-export class CreatePartnerDto {
+class BasePartnerOptionalFieldsDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  tradeName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 2)
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  roles?: string[];
+
+  @IsOptional()
+  @IsString()
+  paymentTerms?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  hasCredit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowsDiscount?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  creditLimit?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  currencyCode?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  accountNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  swiftCode?: string;
+}
+
+export class CreatePartnerDto extends BasePartnerOptionalFieldsDto {
   @IsString()
   @IsIn(['0', '1', '4', '6'])
   docType!: string;
@@ -97,119 +176,13 @@ export class CreatePartnerDto {
   @IsNotEmpty()
   @MaxLength(200)
   legalName!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  tradeName?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(2, 2)
-  countryCode?: string;
-
-  @IsOptional()
-  @IsString()
-  address?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  website?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  roles?: string[];
-
-  @IsOptional()
-  @IsString()
-  paymentTerms?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  hasCredit?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  allowsDiscount?: boolean;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  creditLimit?: number;
-
-  @IsOptional()
-  @IsString()
-  @Length(3, 3)
-  currencyCode?: string;
 }
 
-export class UpdatePartnerDto {
+export class UpdatePartnerDto extends BasePartnerOptionalFieldsDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
   legalName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  tradeName?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(2, 2)
-  countryCode?: string;
-
-  @IsOptional()
-  @IsString()
-  address?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  website?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  roles?: string[];
-
-  @IsOptional()
-  @IsString()
-  paymentTerms?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  hasCredit?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  allowsDiscount?: boolean;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  creditLimit?: number;
-
-  @IsOptional()
-  @IsString()
-  @Length(3, 3)
-  currencyCode?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -375,4 +348,50 @@ export class UpsertPartnerTaxStatusDto {
   @IsOptional()
   @IsString()
   updatedBy?: string;
+}
+
+export class UpsertCountryDto {
+  @IsString()
+  @Length(2, 3)
+  code!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+export class UpsertPortDto {
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string; // ORIGEN, DESTINO, AMBOS
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
+
+export class UpdateExchangeRateDto {
+  @IsNumber()
+  @Min(0.000001)
+  rate!: number;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
 }
