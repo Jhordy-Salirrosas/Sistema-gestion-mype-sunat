@@ -1,7 +1,7 @@
 import { classifyResponseCode } from '../../../sunat/soap/cdr-classifier';
 
 export interface ResultadoPresentacion {
-  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO';
+  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO';
   codigo: string | null;
   motivo: string | null;
 }
@@ -13,7 +13,13 @@ export interface EventoPresentacion {
 }
 /** Solo lectura. Un código SUNAT también puede surgir del XSL local: no basta por sí solo. */
 export function presentarResultado(estado: string, cdr: { codigo: string | null; descripcion: string | null } | null,
-  history: readonly EventoPresentacion[] = []): ResultadoPresentacion | undefined {
+  history: readonly EventoPresentacion[] = [], transportUncertain?: boolean | null): ResultadoPresentacion | undefined {
+  if (transportUncertain && ['ENVIADO', 'ERROR_RED', 'EN_COLA', 'PENDIENTE', 'PROCESANDO'].includes(estado)) {
+    const consultas = history.filter(e => e.codigo_error === 'M1_TRANSPORT_UNCERTAIN');
+    const ultima = [...consultas].sort((a, b) => (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0))[0];
+    return { origen: 'TRANSPORTE_INCIERTO', codigo: 'M1_TRANSPORT_UNCERTAIN',
+      motivo: ultima?.mensaje_error ?? 'Incertidumbre de transporte: no hay resultado concluyente; consultar antes de reenviar.' };
+  }
   if (estado !== 'RECHAZADO') return undefined;
   if (cdr?.codigo && classifyResponseCode(cdr.codigo).status === 'RECHAZADO') {
     return { origen: 'SUNAT', codigo: cdr.codigo, motivo: cdr.descripcion };

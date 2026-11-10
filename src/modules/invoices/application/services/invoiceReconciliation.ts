@@ -78,3 +78,10 @@ export function resultadoTrasConciliacion(
   if (consultado.cdr === null) return null;
   return consultado;
 }
+
+
+/** La consulta inconclusa es un resultado, nunca permiso para reenviar. */
+export type DesenlaceConciliacion =
+  | { tipo: 'RECUPERADO'; resultado: ProcessCdrResult }
+  | { tipo: 'NO_ENCONTRADO' }
+  | { tipo: 'INCIERTO'; motivo: string };

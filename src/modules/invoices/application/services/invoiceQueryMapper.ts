@@ -20,6 +20,7 @@ import type { InvoiceStatus } from '../../../../generated/client/enums';
 
 /** Fila del listado (lo que se le pide a Prisma con `select`). */
 export interface FilaListado {
+  transport_uncertain?: boolean | null;
   history?: EventoPresentacion[];
   id: string;
   tipo_comprobante: string;
@@ -88,7 +89,7 @@ export function numeroComprobante(serie: string, correlativo: number): string {
 export function aListado(fila: FilaListado): ComprobanteListadoDto {
   const cdr = aCdr(fila.cdr_sunat);
   return {
-    resultado_presentacion: presentarResultado(fila.estado, cdr, fila.history),
+    resultado_presentacion: presentarResultado(fila.estado, cdr, fila.history, fila.transport_uncertain),
     id: fila.id,
     tipo_comprobante: fila.tipo_comprobante,
     serie: fila.serie,
