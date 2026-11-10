@@ -243,6 +243,10 @@ export class InvoiceAccountingBridgeService {
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
       orderBy: { line_order: 'asc' },
     })) ?? [];
+    if (reglas.length === 0) {
+      errores.push('Contabilidad: no hay reglas de contabilización para VENTA. Configúrelas antes de emitir.');
+      return { asientoOmitido: false };
+    }
     const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
     const cuentaRegla = (orden: number, rol: string, nombre: string) => {
       const codigo = porOrden.get(orden) ?? roles.get(rol);
