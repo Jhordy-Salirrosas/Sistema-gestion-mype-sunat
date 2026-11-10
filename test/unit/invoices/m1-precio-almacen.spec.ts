@@ -33,3 +33,11 @@ it('el catálogo marca precios ausentes sin exponer costo como precio y filtra e
   await query.almacenes('empresa');
   expect(warehouses).toHaveBeenCalledWith(expect.objectContaining({ where: { company_id: 'empresa', is_active: true } }));
 });
+
+it('6A catálogo histórico usa misma fuente por empresa sin habilitar venta de inactivos', async () => {
+ const { InvoiceQueryService } = await import('../../../src/modules/invoices/application/services/invoiceQueryService');
+ const productos = jest.fn(async () => [{ id: 'p', sku: 'HIST', description: 'Histórico', is_active: false, sale_price: null, sunat_unit_code: 'NIU' }]);
+ const service = new InvoiceQueryService({ inventoryProduct: { findMany: productos }, inventoryBalance: { findMany: async () => [{ product_id: 'p', current_stock: 1 }] } } as never, {} as never);
+ expect((await service.catalogoProductos('empresa', 'ALM-02', true)).balances[0]).toMatchObject({ sku: 'HIST', vendible: false, currentStock: 1 });
+ expect(productos).toHaveBeenCalledWith(expect.objectContaining({ where: { company_id: 'empresa' } }));
+});

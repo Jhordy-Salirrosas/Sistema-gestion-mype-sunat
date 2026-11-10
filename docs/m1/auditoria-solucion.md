@@ -1536,3 +1536,467 @@ llamadas reales a SUNAT. Las migraciones ya existentes se aplicaron únicamente
 a una base PostgreSQL local nueva y desechable para reproducir la suite bajo la
 excepción local previamente autorizada; ninguna base compartida fue tocada.
 SPOT, reglas fiscales, generadores UBL, Contabilidad e Inventario intactos.
+
+### Parte 6 — Fase 0: cierre del recorrido (10 nov 2026, pendiente de aprobación)
+
+SOLO reconocimiento y diseño. Rama back `fix/m1-cierre-recorrido` desde dev
+`b20706f73ca2e0481cac3379cd1b5dc879c080c9`; front local en rama homónima desde
+`a38c8729bf92e74ac5a6ae099872ae21938885c3`. Sin cambios de implementación,
+commits, push, PR, fusiones, despliegues, emisiones ni consultas a servicios
+transaccionales SUNAT. Las fuentes normativas consultadas son públicas.
+
+Línea base completa ejecutada: **back 271 suites / 2501 pruebas aprobadas**, cero
+fallos, 4 suites / 38 pruebas omitidas y 12 snapshots; **front 105 archivos /
+829 pruebas aprobadas**, cero fallos. PostgreSQL exclusivamente local y
+desechable, migraciones EXISTENTES bajo la excepción local previamente aprobada;
+no se generó ninguna migración. MAYORISTA es carga de datos de Emma: no cambia
+el contrato sale_price PEN final con IGV ni habilita otro precio por código.
+
+#### Mapa y construcción propuesta por punto
+
+**6A — Notas.** `front/src/modules/invoices/lib/invoiceEmitDraft.ts:134` inicia
+el documento afectado VACÍO. `components/InvoiceEmitCampos.tsx:135` contiene
+F001-0042 como PLACEHOLDER; no es una precarga persistida. Cambiarlo por una
+instrucción neutra y comprobar reapertura/cambio de tipo sin referencias viejas.
+`components/InvoiceItemsGrid.tsx:213` enlaza directamente un número al input:
+step=0.01 no fuerza dos decimales visibles. Usar edición monetaria con texto
+transitorio y formato de dos decimales al presentar/abandonar, sin redondear los
+valores fiscales heredados ni recalcular precios de notas desde el catálogo.
+
+Las fuentes YA coinciden: página `pages/InvoiceEmissionPage.tsx:173` y modal
+vía `InvoiceList.tsx:104` usan `services/inventoryProductsApi.ts:64`, endpoint
+GET /invoices/products por almacén. Pero `invoiceQueryService.ts:117` filtra
+activos y `inventoryProductsApi.ts:20` elimina los no vendibles/sin sale_price;
+además `:69` convierte un error de carga en []. El modal recibe [] mientras
+carga (`InvoiceEmitModal.tsx:240`) y `invoiceStockLinea.ts:162` confunde ausencia
+en esa lista con inexistencia en inventario, incluso promete que no habrá Kardex.
+Una nota puede contener una línea histórica/inactiva perfectamente válida.
+Propuesta: fuente M1 compartida y estado de carga/error explícito; distinguir
+catálogo de venta, existencia de inventario y línea histórica del origen. Para
+notas, recuperar existencia/stock desde esa misma consulta M1 con filtro adecuado
+al origen, sin ofrecer productos no vendibles para nuevas ventas. Conservar
+precios/unidad/afectación del origen; advertencia específica cuando sea histórico,
+y nunca afirmar inexistencia si la consulta falla o todavía carga.
+Pruebas: placeholder vacío, reapertura, dos decimales sin mutación fiscal,
+producto común, carga/error e histórico inactivo. Sin migración ni código de
+Inventario; solo lectura de sus datos por la interfaz M1 actual.
+
+**6B — Terceros, diagnóstico solamente.** `prisma/seeds/master-data.seed.ts:54`
+define nueve ejemplos: 20100000001 Cementos Andinos; 20100000002 Aceros del Perú;
+20100000003 Agregados Lima; 20100000004 Transportes Callao; 20100000005 Agencia
+Pacífico; CN91440300MA5XYZ12 Shenzhen Construction Supplies; 20500000001
+Constructora Los Andes; DNI 12345678 José Pérez; 20500000002 Inmobiliaria
+Miraflores. También `prisma/seeds/customs.seed.ts:244` sincroniza proveedores
+en business_partners. Esto identifica origen de SEED, no demuestra que las filas
+existan en producción ni autoriza a eliminarlas.
+
+`prisma/schema/invoicing.prisma:49` guarda identidad/nombre como snapshot, sin
+FK al tercero; cruce por empresa + tipo/número, no por nombre. La cartera también
+lee esos snapshots (`invoiceCustomerService.ts:93`). Solicité a Emma exportación
+sanitizada: no hay conector de lectura a Supabase en este entorno. Hasta recibirla,
+**pendiente el listado REAL de referenciados**. El cruce debe separar confirmados
+ACEPTADO/OBSERVADO, otros documentos numerados y posibles snapshots legados con
+identidad incompleta. No tener referencias M1 no demuestra ausencia de referencias
+en Compras/Inventario/Aduanas. Ningún dato se limpia en esta ronda.
+Consulta de diagnóstico para revisión/ejecución de Emma, nunca ejecutada aquí:
+
+```sql
+SELECT p.id, p.company_id, p.doc_type, p.doc_number, p.legal_name, p.is_active,
+       count(i.id) AS comprobantes_con_identidad_exacta,
+       count(i.id) FILTER (WHERE i.estado IN ('ACEPTADO','OBSERVADO')) AS confirmados,
+       jsonb_agg(jsonb_build_object('id',i.id,'numero',i.serie || '-' ||
+           lpad(i.correlativo::text,8,'0'),'estado',i.estado))
+         FILTER (WHERE i.id IS NOT NULL) AS referencias
+FROM business_partners p
+LEFT JOIN invoices i ON i.company_id = p.company_id
+ AND i.customer_identity_type = p.doc_type
+ AND btrim(i.customer_identity_number) = btrim(p.doc_number)
+GROUP BY p.id, p.company_id, p.doc_type, p.doc_number, p.legal_name, p.is_active
+ORDER BY p.company_id, p.doc_number;
+```
+
+**6C — Duplicados.** `InvoiceEmissionPage.tsx:309` rellena vacía o añade;
+`InvoiceEmitModal.tsx:355` agrega sin comprobar SKU repetido. Propuesta compartida
+para emisión 01/03: al elegir o confirmar SKU ya presente, diálogo con cantidades
+actual/nueva/resultante y botones Fusionar cantidades / Mantener separada /
+Cancelar; nada se modifica hasta confirmar. Fusión solo con mismo SKU canónico,
+unidad, afectación, precio y condiciones fiscales/comerciales equivalentes
+(descuento, ICBPER, SPOT). Si difieren, explicar que no se pueden fusionar y
+permitir separada solo con decisión explícita. Preservar precio de la línea
+existente y recalcular cantidades/totales/stock agregado. Cubrir también SKU
+introducido manualmente. No fusionar automáticamente líneas históricas de notas.
+Pruebas en página y modal: fusionar/cancelar/separar, incompatibilidades y stock.
+Sin migración ni otros módulos.
+
+**6D — MTQ.** Evidencia directa: `assets/sunat-sfs/commons/cpe/catalogo/cat_03.xml:1650`
+contiene MTQ=cubic metre; el XSD UN/ECE
+`commons/xsd/2.0/common/CodeList_UnitCode_UNECE_7_04.xsd:6956` también lo admite.
+La tabla oficial SUNAT de unidades incluye MTQ=METRO CUBICO:
+[RS 169-2015, anexo de tablas](https://www.sunat.gob.pe/legislacion/superin/2015/anexo3-rs169-2015.pdf).
+No cambiar el dato MTQ de ARE-001 a NIU ni convertir sus cantidades.
+Causa: whitelist reducida front `invoiceItems.ts:40`, rechazo en :305; back
+`sunatCatalogs.ts:151` también lo omite. Añadir MTQ en ambas y su presentación m³.
+Pruebas seleccionar Arena MTQ, payload sin sustitución, XML generado por código
+con unitCode MTQ y SFS real sin error de unidad; unidades ajenas siguen protegidas.
+Sin migración ni cambios de Inventario.
+
+**6E — Precio sugerido.** `InventoryProductSearchSelect.tsx:72` muestra
+producto.valorUnitario (sin IGV); `inventoryProductsApi.ts:37-38` conserva valor
+neto y precioUnitario final separados. Usar precioUnitario para la sugerencia,
+mismo formato de dos decimales de la línea y etiqueta clara de IGV incluido.
+Sin recambio por costo. Prueba catálogo 118 final / 100 base: sugerencia 118.00,
+seleccionar sin editar, payload 118.00, notas mantienen origen. Sin migración.
+
+**6F — Series ADMIN.** `InvoiceSettingsTab.tsx:25` solo lista.
+POST ya existe en `invoiceConfigController.ts:86`, pero tiene SOLO AuthGuard de
+clase (:51), no RolesGuard/ADMIN en el método (a diferencia de PUT config :65).
+Propuesta: proteger también el back con ADMIN; formulario front de tipo
+01/03/07/08, serie y correlativo, errores inline y refresco de useInvoiceConfig
+más catálogo de series. El endpoint interpreta correlativo_inicial como último
+usado (`invoiceSeriesService.ts:177`); la reserva incrementa en :99. UI debe
+explicitarlo y mostrar siguiente: guardar 0 implica emitir 1. Reactivar nunca
+reinicia un correlativo (:180). Pruebas ADMIN/403, tipos/series inválidos,
+reactivación sin reset, éxito/refresco/error en UI. Sin migración.
+
+**6G — Paquete docente.** Identidad ya tiene búsqueda en
+`CustomerLookupField.tsx:94`; origen de notas usa datalist en
+`InvoiceEmitCampos.tsx:124`, producto no tiene navegación explícita de flechas
+(`InventoryProductSearchSelect.tsx:48`). Emisión combina errores globales con
+algunos inline: completar requeridos marcados, aria-required/aria-invalid,
+mensaje asociado y foco al primer inválido; mantener selecciones reales y no
+confirmar una sugerencia por solo haber escrito texto. Selectores de tipo,
+serie, unidad, afectación, motivo, medio SPOT y almacén; combobox de productos,
+clientes y orígenes reales, sin inventar identificadores ni datos demo.
+
+Límite: el alta de cliente de M1 reutiliza
+`src/modules/customs/components/PartnerFormDialog.tsx:26`, invocado desde
+`CustomerLookupField.tsx:110`. Sus campos :103 y botón deshabilitado :203 no
+ofrecen validación requerida inline. **DETENIDO 6G-alta de terceros**: requiere
+excepción puntual para ese componente de Aduanas compartido (o un rediseño
+explícito), no se lo modifica por inferencia ni se duplica todo el formulario.
+Propuesta de excepción: validación visual del modo de alta de cliente M1, sin
+cambiar contratos/endpoints/persistencia de terceros ni otros flujos.
+
+Atajos propuestos, visibles en ayuda de emisión y con aria-keyshortcuts:
+Alt+C cliente; Alt+P producto; Alt+L nueva línea; Ctrl+Enter revisar emisión
+(abre confirmación, no envía solo); Escape cierra sugerencias/diálogo secundario,
+no descarta borrador ni interrumpe envío. Flechas arriba/abajo y Enter seleccionan
+sugerencias; Tab conserva recorrido nativo. No disparar durante composición IME,
+con otro modal activo o mientras envía; sin manejadores globales fuera de M1.
+Pruebas click/teclado, errores por campo, foco, catálogos y atajos sin doble envío.
+Sin migración; excepción fuera de M1 señalada, pendiente de aprobación.
+
+**6H — OBSERVADO origen.** Bloqueos explícitos en back
+`creditNoteBalanceGuard.ts:30` (ESTADOS_NOTABLES solo ACEPTADO) y
+`creationGuards.ts:130` (segunda ruta transaccional). InvoiceNoteService usa el
+servicio de saldo (:128). En front `invoiceNotaOrigen.ts:62` y
+`invoiceEmitDraft.ts:288` también exigen ACEPTADO. Unificar ACEPTADO/OBSERVADO en
+ambas rutas y selectores, actualizar mensajes/documentación por la nueva decisión
+de Jhordy; conservar saldo, motivos, identidad, locks, control RA y exclusión de
+notas como origen. Pruebas NC/ND de observado, exceso/concurrencia de saldo y
+negativos para todos los demás estados. Sin migración ni Contabilidad/Resiliencia.
+
+**6I — Reenvío forzado con constancia.** La consulta obligatoria actual vive en
+`resilience/.../invoiceRetryService.ts:101-128`; el punto M1 inmediatamente anterior
+es `invoiceJobConsumer.ts:208`, DESPUÉS de preparar/validar el XML. No se modifica
+Resiliencia ni se miente devolviendo NO_ENCONTRADO desde una consulta.
+
+Propuesta: POST /invoices/:id/forzar-reenvio, AuthGuard + RolesGuard ADMIN,
+CurrentCompany y usuario autenticado; body motivo no vacío acotado y
+confirmado=true. Solo incertidumbre de transporte pendiente en documento no
+finalizado, sin CDR definitivo. Rechazar ACEPTADO/OBSERVADO/ANULADO y rechazos
+SUNAT definitivos; aislamiento por empresa. En transacción con lock de invoice,
+registrar M1_FORCE_RESEND_AUTHORIZED en historial existente: usuario, motivo,
+fecha del servidor y versión de la decisión en mensaje estructurado. Mantener
+transport_uncertain=true hasta que el consumidor reclame la decisión. Reutilizar
+reenqueueInvoiceIfIdle/rescate DLQ existente; sin trabajos duplicados y sin tocar
+retry-cdr. Si falla publicar, la constancia queda durable y se puede recuperar.
+
+Tras preparación y compuerta exitosas, M1 reclama UNA autorización pendiente
+bajo lock y registra consumo vinculado a su ID. Solo entonces establece false
+para esa entrada al motor existente: omite la consulta previa y autoriza UN
+nuevo intento. El motor vuelve a persistir true antes del transporte; la nueva
+traza durable de inicio sigue obligatoria. Si ese intento queda incierto,
+conciliación automática normal de Parte 5b; no reutiliza la autorización para
+saltarse otra consulta. Caída tras consumir: conservación prudente, nunca permiso
+infinito. Un job ya activo no se duplica y una constancia ya consumida no se usa
+otra vez. Presentación: «Reenvío forzado por decisión registrada», quién/cuándo/
+motivo, sin afirmar aceptación. Motivo no sustituye la compuerta SFS ni firma.
+
+Pruebas: ADMIN/motivo/confirmación, tenant, finalizados, decisión durable antes de
+publicar, concurrencia/publicación fallida, consumo único, caída/reentrega,
+primera llamada sin consulta, timeout posterior vuelve a conciliar, puente solo
+tras aceptación y comportamiento automático 5b intacto. Sin migración: historial
+ya tiene mensaje e ID/fecha (`prisma/schema/resilience.prisma:3`); no cambia su
+modelo. Sin cambios de código en Resiliencia; si la implementación revelara que
+no se puede garantizar consumo único con esas interfaces, se detendrá.
+
+#### 6J — Definición normativa SPOT y mínimo propuesto
+
+Base: TUO del DL 940 (DS 155-2004-EF) y
+[RS 183-2004/SUNAT](https://www.sunat.gob.pe/legislacion/superin/2004/183.htm)
+con modificatorias. No tratar el HTML histórico de esa resolución ni un catálogo
+SFS antiguo como consolidado completo. Contraste con orientación SUNAT vigente,
+[RS 343-2014](https://www.sunat.gob.pe/legislacion/superin/2014/343-2014.pdf),
+[RS 071-2018](https://www.sunat.gob.pe/legislacion/superin/2018/071-2018.pdf),
+[RS 086-2025](https://emprender.sunat.gob.pe/sites/default/files/inline-files/RS%2086-2025.pdf)
+y modificaciones 121/175-2025 relativas a traslados de minerales.
+
+SPOT no es otro impuesto añadido al precio: el obligado deposita una parte del
+importe en cuenta de detracciones del proveedor en el Banco de la Nación; el
+saldo se paga al proveedor. El importe de la operación incluye IGV y cargos
+aplicables, después de descuentos reales; no se limita a la base sin IGV.
+En operaciones ordinarias el adquirente/usuario deposita; el proveedor tiene
+supuestos propios cuando recibe todo sin acreditación del depósito. Los plazos
+ordinarios consideran pago/anotación en Compras y quinto día hábil según sujeto;
+Anexo 1 tiene reglas previas al traslado. Emitir XML no acredita un depósito.
+
+Familias y tasas (la subpartida y definición legal, no el nombre comercial,
+determinan la inclusión):
+
+- Anexo 1: azúcar/melaza, alcohol etílico, minerales de oro/concentrados y minerales
+  metálicos no auríferos, 10%. Minerales reubicados en 2025; existen exclusiones
+  específicas de traslado. No aplicar automáticamente el corte de S/700 a este
+  anexo (regla propia de importe superior a media UIT y demás supuestos legales).
+- Anexo 2: arena/piedra y caña 10%; residuos y plomo 15%; carnes, maíz, madera,
+  harina/pellets de pescado y leche 4%; aceite de pescado, renuncia a exoneración,
+  páprika y minerales no metálicos 10%; bienes exonerados y oro/metales exonerados
+  1,5%; oro gravado 10% en las subpartidas que permanecen en Anexo 2. Recursos
+  hidrobiológicos tienen condiciones/padrón propios. La clasificación no se
+  deduce de un SKU ni se extiende a todo producto de ferretería.
+- Anexo 3: intermediación, mantenimiento/reparación, otros servicios empresariales
+  y demás servicios gravados 12% por RS 071-2018; arrendamiento, movimiento de
+  carga, comisión, fabricación por encargo y transporte de personas del anexo
+  10%; construcción 4%; beneficio de minerales metálicos 12% desde 2025.
+
+Fuentes de las familias y sus exclusiones:
+[venta de bienes SUNAT](https://orientacion.sunat.gob.pe/3141-02-en-la-venta-de-bienes-empresas),
+[servicios SUNAT](https://orientacion.sunat.gob.pe/3142-03-en-la-prestacion-de-servicios-empresas)
+y las modificatorias anteriores. No se implementan todos esos regímenes en el
+mínimo. Para Arena/piedra (Anexo 2 numeral 5, Catálogo 54 código **009**), tasa
+**10%**, operación **mayor** a S/700: 700.00 no, 700.01 sí. Hay excepciones de
+umbral para otros bienes del Anexo 2 y excepciones por clase de comprobante,
+usuario público y documentos autorizados. Servicios ordinarios del Anexo 3
+usan >700; transporte terrestre de carga tiene régimen separado (RS 073-2006,
+umbral 400 y valor referencial), no se mete en la regla universal de 700.
+Boleta ordinaria sin derecho a crédito/costo no se asimila a factura afecta;
+no afirmar que todo documento tipo 03 es jurídicamente imposible bajo cualquier
+supuesto. El mínimo propuesto soporta solo factura 01.
+
+Cuenta BN: existe `Company.detraction_account` (`auth.prisma:39`), ya la lee
+`emitirComprobanteService.ts:497`. Exponerla en configuración M1 mediante su
+writer/reader, sin nueva columna. Sin cuenta real o clasificación/medio exigidos:
+bloqueo antes de numerar. Los depósitos pueden redondearse a entero conforme a
+la quinta disposición final incorporada por RS 178-2005; no es verdad que todo
+importe XML deba ser entero (la regla 3208 controla moneda PEN). Mantener cálculo
+exacto a céntimos y distinguir cualquier redondeo del depósito de la liquidación.
+[Explicación oficial de importe y redondeo](https://orientacion.sunat.gob.pe/preguntas-frecuentes-detracciones).
+
+UBL 2.1, conforme al
+[Anexo VII oficial RS 114-2019](https://www.sunat.gob.pe/legislacion/superin/2019/anexoVII-114-2019.pdf),
+no al ejemplo viejo de la guía 2017 cuando difieren:
+InvoiceTypeCode listID 1001 para detracción ordinaria; Note con languageLocaleID
+2006 y leyenda SPOT, conservando monto en letras en su leyenda propia. PaymentMeans
+identificado Detraccion, PaymentMeansCode del catálogo 59 y PayeeFinancialAccount/ID
+con cuenta BN. PaymentTerms con ID Detraccion, PaymentMeansID código Catálogo 54
+(con atributos de catálogo), PaymentPercent tasa porcentual y Amount en PEN.
+No confundir ID Detraccion con el código de bien/servicio. Total fiscal UBL
+permanece bruto con IGV; el neto al proveedor se presenta aparte.
+
+Catálogo 59: `cat_59.xml:4` = 001 depósito en cuenta; :6 = 003 transferencia;
+:25 = 999 otros medios. **999 es un código válido, no un código inválido**, pero
+su fallback silencioso no demuestra un medio real. No sustituirlo universalmente
+por 001: selector explícito/validado; 001 solo cuando se declara depósito en
+cuenta, 003 cuando corresponde transferencia; ausencia de selección bloquea.
+Otros medios requieren alcance/evidencia explícitos, no un valor quemado.
+
+Deuda exacta hoy: `sunatCatalogs.ts:177` no incluye 009; `xmlNodesHelper.ts:351`
+usa 999 por defecto; `ublTaxBlocks.ts:172` omite PaymentPercent/atributos;
+`ublGeneratorService.ts:157` pone montoEnLetras dentro de la leyenda 2006;
+`emitirComprobanteAdapter.ts:286` aplica tasa de la primera línea a la base
+sujeta, y `paymentTermsAndSpotValidator.ts:225` trata 700 como universal. Además
+`assets/.../cat_54.xml` tiene tasas históricas (p.ej. 10% en servicios luego 12%):
+no editar assets oficiales para forzar un verde ni usarlos como única norma.
+
+**Mínimo recomendado sin migración:** factura PEN ordinaria, código 009 Arena y
+piedra, 10%, clasificación explícita del usuario respaldada por la definición
+arancelaria, cuenta real BN configurada, medio explícito, cálculo sobre importe
+de la operación, leyenda y bloques completos. Una factura solo incluye operaciones
+SPOT compatibles (art.19.1): no mezclar no sujetas ni códigos/tasas distintos;
+separar documentos. Congelar clasificación/tasa/importe/cuenta/medio en payload_ubl,
+que ya persiste esos datos fiscales; no modificar históricos. Formularios y ambas
+rutas comunes validan antes de numerar. Productos nunca se clasifican como SPOT
+solo por llamarse Arena.
+
+Fuera del mínimo: depósitos reales/constancias bancarias y plazos automatizados,
+moneda extranjera/valores referenciales, regímenes de transporte/hidrobiológicos/
+minería, combinaciones de códigos/tasas, casos especiales de boleta/sector público,
+ventas mixtas y automatización de ajustes SPOT de NC/ND. Deben bloquear con causa
+cuando no estén soportados, nunca omitir una detracción exigible silenciosamente.
+
+**DETENIDO el subalcance de flag/tasa persistidos POR PRODUCTO:** InventoryProduct
+no tiene campos SPOT; attributes es un array de atributos de variación según el
+DTO de Inventario, no un contrato tributario. No se lo reutiliza clandestinamente.
+Agregar campos/tabla de tarifas exigiría migración y coordinación con Inventario;
+no se genera ni aplica nada. La alternativa mínima anterior usa clasificación
+por operación/línea y payload ya existente, dentro de M1 y sin migración.
+
+Pruebas mínimas 6J: 699.99/700/700.01, tasa/base/centavos, BN/medio ausentes,
+mezclas rechazadas, coherencia de ambas rutas/persistencia/UI/PDF, XML firmado
+por generador con certificado ficticio → XSD y XSL SFS reales, snapshots SPOT
+actualizados solo por cambios normativos aprobados y demás XML byte a byte
+intactos. Sin llamadas transaccionales SUNAT.
+
+Decisiones pendientes para construir: aprobación por punto/bloque; exportación
+real 6B; excepción del formulario compartido 6G o alternativa acordada; elección
+expresa del mínimo 6J sin migración frente a automatización por producto detenida.
+
+#### Construcción aprobada — 6D
+
+MTQ incorporado a los mapas M1 de back/front; dato de Inventario intacto. Prueba de generador firmado con certificado ficticio y SFS oficial. La Fase 0 anterior fue aprobada en bloque; límites 6G/6J resueltos en el hilo del 10 nov.
+
+#### Construcción — 6E
+
+Sugerencia de producto muestra precioUnitario final (no valorUnitario neto), con dos decimales y etiqueta explícita. Prueba 118 final / 100 neto, selección sin edición. Contrato sale_price intacto.
+
+#### Construcción — 6H
+
+Decisión de Jhordy del 10 nov: OBSERVADO sí es origen de NC/ND. Guardas de saldo y transaccional común unificadas con ACEPTADO; selectores/vinculación front actualizados. Se conservan locks, saldo, baja pendiente, identidad y límites de motivos; negativos de otros estados siguen protegidos. Sin migración.
+
+#### Cierre 6B — exportación real recibida de Emma (10 nov)
+
+Fuente: Supabase en solo lectura por Emma; 18 filas de business_partners de la
+empresa demo. Contraste del seed anterior confirmado con una fila adicional
+TAX_ID 91440300MA5 Shenzhen Tech Electronics del seed de Aduanas. Distribución:
+10 filas de semilla (7 proveedores, 3 clientes), 3 clientes reales del 7 nov,
+Empresa Demo doc 204813697 (9 dígitos, cinco roles, creada el 9 nov 16:43), y
+4 proveedores exteriores de prueba de Aduanas (9 nov 21:37): Shenzhen Tech Global
+CN91440300MA5XYZ12, Silicon Valley Components US942857193, Hamburg Logistics
+DE301948275 y Taipei Semiconductor TW53892014. No se infiere que los dos registros
+CN91440300MA5XYZ12 tengan el mismo tipo documental ni que se deban deduplicar.
+
+Los 27 comprobantes referencian identidades en payload_ubl.cliente.numeroDocumento:
+12345678, 20100070970, 20131312955, 20481234566 y 45896325. La consulta ilustrativa
+anterior basada solo en columnas planas NO basta para los históricos: el cruce
+real usa también el snapshot cliente del payload, como verificó Emma.
+
+Referenciados del maestro (PROTEGER): José Pérez 12345678 (semilla pero usado),
+Ferretería Los Andes 20100070970, Distribuidora Callao 20131312955 y Supermercados
+Peruanos 20481234566. Receptor histórico 45896325 Juan Perez Gonzales NO está en
+el maestro; no se crea ni reescribe nada. Clientes de seed no referenciados por
+M1: Constructora Los Andes 20500000001 e Inmobiliaria Miraflores 20500000002.
+Empresa Demo no aparece entre los receptores; al tener cinco roles no se presume
+segura la eliminación de toda su fila: requiere decisión del equipo por sus
+otros usos. Ningún proveedor está referenciado por M1, pero Compras/Aduanas
+son sus dueños y no los toca Emma en esta limpieza. La limpieza autorizada de
+Emma se limita al lado cliente de ejemplos no referenciados; no la ejecuta Codex.
+
+6B queda diagnosticado con la exportación real: sin cambios de datos ni código.
+
+#### Construcción — 6A
+
+Placeholder fiscal obsoleto eliminado. Campo monetario compartido presenta dos decimales sin mutar precisión histórica por foco/blur. Catálogo histórico M1 incluye inactivos sin volverlos vendibles; emisión mantiene filtro de sale_price. Ambas pantallas usan el mismo endpoint por almacén; carga fallida ya no simula una lista vacía exitosa. Avisos distinguen carga/error/histórico de inexistencia; notas no se reprecifican ni se validan como descarga de venta nueva. Sin migración ni cambios de Inventario.
+
+#### Construcción — 6C
+
+La grilla compartida por página y modal pide Fusionar/Mantener separada/Cancelar al seleccionar o confirmar un SKU repetido. Fusión exige misma unidad, precio y condiciones fiscales/comerciales; cantidades se suman y sigue activa la validación de stock agregado. Condiciones diferentes deshabilitan fusión. Notas históricas excluidas de fusión automática. Pruebas de decisión explícita y SKU manual.
+
+#### Construcción — 6F
+
+POST /invoices/series exige ADMIN también en back; front muestra creación/reactivación solo para ADMIN. Tipos 01/03/07/08, serie y último correlativo usado (0 → siguiente 1), refresco de configuración, sin reiniciar numeración al reactivar. Endpoints y servicio de reserva existentes; sin migración. Pruebas de RolesGuard real y formulario con transporte simulado.
+
+#### Construcción — 6G y excepción autorizada del 10 nov
+
+Excepción puntual autorizada por Emma/Jhordy el 10 nov para aviso al equipo: `front/src/modules/customs/components/PartnerFormDialog.tsx` SOLO presentación. Se conservan exactamente campos, reglas (documento/nombre no vacíos y roles) y mutationFn/envío/botón deshabilitado; se añaden marcadores, aria-required/invalid/describedby, mensajes asociados y foco al primer inválido. Ningún otro archivo ajeno a M1 se modifica.
+
+M1 asocia errores de cliente y campos fiscales, ofrece navegación de productos/clientes por flechas/Enter y mantiene escritura sin selección como escritura, no selección implícita. Ayuda visible de atajos Alt+C/P/L y Ctrl+Enter para revisión explícita (no envío directo); Escape no descarta el borrador. Manejadores ligados al formulario/dialog activo, ignoran IME y emisión en curso. Pruebas de presentación/foco, bloqueo del alta intacto, selección teclado, revisión sin envío y regresiones de selección de cliente.
+
+#### Construcción — 6I
+
+Nuevo POST /invoices/:id/forzar-reenvio ADMIN, motivo escrito y confirmado=true. Usuario se toma de sub del token, no del body. Bloquea empresa ajena, estados finales y CDR existente. Constancia inmutable en historial, marcador true antes de publicar, singleton de cola existente y reutilización de autorización pendiente (no se sobrescribe por un segundo clic). Publicación fallida conserva la constancia.
+
+El consumidor M1 consume la autorización bajo lock DESPUÉS de preparación/SFS y justo antes de InvoiceRetryService. Consumo vinculado al ID, una sola vez; marcador false solo para la entrada autorizada, luego el motor existente vuelve a true antes de abrir transporte. Timeout posterior retoma conciliación normal 5b y no reutiliza la constancia. Si ya hay un trabajo activo, la respuesta informa que no confirma envío/aceptación y la constancia queda pendiente recuperable. Historial presenta usuario/motivo y fecha real. No cambia retry-cdr, estados admitidos, colas ni ningún archivo de Resiliencia. Sin migración.
+
+#### Construcción — 6J, mínimo SPOT aprobado sin migración
+
+Factura PEN de arena/piedra, Catálogo 54 código 009, 10%, solo si el importe final
+es estrictamente mayor a S/700. Clasificación explícita en cada línea; no se
+infiere por nombre ni SKU. Ambas entradas comunes rechazan mezcla de líneas sin
+clasificar, otros códigos/regímenes, documentos distintos de factura y líneas
+no gravadas. Por debajo del umbral no hay detracción efectiva ni cuenta exigida.
+Las tablas de códigos anteriores se conservan para lectura/regeneración histórica;
+no son una oferta de regímenes nuevos en el formulario.
+
+Cuenta propia exclusivamente de Company.detraction_account, editable en
+Configuración M1 (campo existente de 11 dígitos); ausencia o discrepancia bloquea
+antes de reservar número. Nuevas altas efectivas exigen 001 depósito o 003
+transferencia: no se acepta 999 ni se sustituye una selección ausente. El
+adaptador congela código, tasa, importe, cuenta y medio en payload_ubl. La
+lectura en InvoiceConfigService consulta únicamente la cuenta existente y por
+empresa. IssuerConfigResolver, credenciales, respaldo y firma quedan intactos.
+
+UBL incluye PaymentPercent y Amount en PaymentTerms de detracción, cuenta en
+PayeeFinancialAccount y leyenda 2006 «Operación sujeta al Sistema de Pago de
+Obligaciones Tributarias con el Gobierno Central», no monto en letras (estos se conservan en su leyenda 1000). El total
+fiscal sigue siendo bruto; neto pendiente descuenta la detracción. Dos snapshots
+SPOT cambian intencionalmente por porcentaje/leyenda; los snapshots no SPOT
+permanecen idénticos. Las pruebas generan XML, lo firman con certificado ficticio
+y pasan XSD/XSL SFS real para 009 con ambos medios 001/003.
+
+Deuda expresa DIFERIDA: clasificación/tasa persistida POR PRODUCTO requiere
+migración y coordinación con Inventario; no se usa attributes ni otra tabla
+paralela. Fuera de este mínimo: otros bienes/servicios, divisas, transporte
+especial, ventas mixtas, depósitos/constancias bancarias y ajustes automáticos
+SPOT de notas. No se realizaron depósitos, emisiones ni llamadas reales SUNAT.
+
+#### Verificación final de Parte 6 (10 nov)
+
+Bases congeladas de Fase 0: back dev b20706f73ca2e0481cac3379cd1b5dc879c080c9;
+front dev a38c8729bf92e74ac5a6ae099872ae21938885c3. Una revisión por punto;
+fixups locales consolidados antes de publicar.
+
+| Verificación | Base | Final |
+|---|---:|---:|
+| Back, suites aprobadas | 271 | 274 |
+| Back, pruebas aprobadas | 2501 | 2532 |
+| Back, omitidas | 4 suites /38 pruebas | 4 suites /38 pruebas |
+| Back, snapshots | 12 | 12 |
+| Front, archivos de prueba aprobados | 105 | 112 |
+| Front, pruebas aprobadas | 829 | 848 |
+
+Cero fallos finales. Back: test:cov --runInBand, integraciones obligatorias en
+PostgreSQL 16 local desechable; únicamente migraciones YA existentes, ninguna
+nueva, ninguna conexión ni aplicación en bases compartidas. Base local eliminada
+tras la corrida. Build y lint back OK, sin avisos. Front: suite completa y build
+OK. ESLint del front conserva exactamente los 2 errores set-state-in-effect y
+5 avisos anteriores en dev en los archivos revisados; comprobados sobre las
+fuentes base por stdin, sin cambios de reglas/configuración ni silenciamientos.
+No se presenta ese lint previo como verde.
+
+Cobertura local de código nuevo back respecto de b20706f, intersección diff/LCOV:
+90/92 líneas (97.83%); 105/117 condiciones; combinada 195/209 = 93.30%. Es la
+medición local reproducible con scripts/m1/coverage_new_code.py, no un resultado
+remoto de Sonar. XML firmado con certificado ficticio → SFS real, errores []:
+Arena MTQ y SPOT 009 para 001/003. Snapshots no SPOT intactos; exactamente dos
+snapshots SPOT actualizados por PaymentPercent/leyenda normativa.
+
+| Punto | Resultado | Commit back | Commit front local |
+|---|---|---|---|
+| 6A | Construido, notas/precio/catálogo | 70c92f3 | 935b50d |
+| 6B | Diagnóstico real completo; limpieza solo Emma | 99e9b6e | — |
+| 6C | Decisión explícita/fusión compatible | 384433f | 6687654 |
+| 6D | MTQ, mapa M1 y SFS oficial | eef7633 | cbc3828 |
+| 6E | Sugerencia al precio final | 9ff24fe | ae83349 |
+| 6F | Gestión de series ADMIN | 8b8f8c4 | 9ab0d63 |
+| 6G | Validación, selección y atajos; excepción documentada | 58df551 | 6dbab5b |
+| 6H | OBSERVADO con saldo y guardas intactos | 2c942ec | 67c5f5b |
+| 6I | Decisión ADMIN durable, un uso, sin tocar Resiliencia | 5a21da5 | a02aab2 |
+| 6J | Mínimo SPOT aprobado; flag por producto diferido | Este commit | 4cd1e97 |
+
+Entrega front exclusivamente mediante ferry/m1-cierre-recorrido: 44 rutas,
+manifiesto SHA256 y conteos en FERRY.md; no se empuja al remoto front.
+No hay cambios de Resiliencia, Contabilidad, Inventario, esquema o migraciones.
+La única excepción de código fuera de M1 es la presentación de PartnerFormDialog
+aprobada expresamente; resolver compartido SUNAT intacto. Documentos históricos
+y datos maestros no se reescriben. Perfil MAYORISTA, limpieza y carga de cuenta BN
+son datos del equipo. No PR, fusión, despliegue, emisión ni llamada real SUNAT.

@@ -1,3 +1,4 @@
+import { InvoiceForcedResendService } from './application/services/invoiceForcedResendService';
 import { claimIndividualSummaryChannel } from './application/services/summaryIndividualClaim';
 import {
   IssuerConfigResolver,
@@ -143,6 +144,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
     accounting?: InvoiceAccountingFallbackService,
     @Optional() private readonly issuerConfig?: IssuerConfigResolver,
     private readonly bridgeCoordinator: InvoiceBridgeCoordinatorService = new InvoiceBridgeCoordinatorService(prisma, puenteContable, accounting),
+    @Optional() private readonly forcedResend?: InvoiceForcedResendService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -205,6 +207,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       return null;
     }
 
+    await this.forcedResend?.consumir(invoiceId);
     const resultado = await this.retry.processWithRetry(aprobado.params);
     if (resultado?.circuitoAbierto) throw new Error('M1_CIRCUIT_OPEN_RETRY');
 

@@ -69,6 +69,8 @@ export interface DatosTributarios {
   montoTotalIncluyeIcbper?: boolean;
   codigoDetraccion?: string;
   montoDetraccion?: number;
+  /** Fracción de tasa congelada al crear; históricos usan catálogo. */
+  tasaDetraccion?: number;
   montoRetencion?: number;
   bolsasIcBper?: number;
   otrosDescuentos?: number;

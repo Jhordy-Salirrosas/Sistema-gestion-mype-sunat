@@ -45,3 +45,12 @@ it('boleta contado S/17.70 del flujo común → generador → firma ficticia pas
   const signed = new SignatureService({ getCertificate: () => ({ certificatePem: fake.pem, privateKeyPem: fake.privateKeyPem }) } as never).signXml(xml).signedXml;
   expect(await ejecutarSfs(signed, '03')).toEqual({ completado: true, errores: [] });
 });
+
+it('6D: Arena MTQ del generador conserva unidad y valida con SFS oficial', async () => {
+  const p = payload('01'); p.lineas![0].unidad = 'MTQ';
+  const xml = generator.generateInvoiceXml(p);
+  expect(xml).toContain('unitCode="MTQ"');
+  const fake = fakeIssuerCertificate();
+  const signed = new SignatureService({ getCertificate: () => ({ certificatePem: fake.pem, privateKeyPem: fake.privateKeyPem }) } as never).signXml(xml).signedXml;
+  expect(await ejecutarSfs(signed, '01')).toEqual({ completado: true, errores: [] });
+});

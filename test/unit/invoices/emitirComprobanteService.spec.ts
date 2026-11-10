@@ -197,6 +197,7 @@ const montar = (
 describe('EmitirComprobanteService — emisión de factura', () => {
   it.each([undefined, '003'] as const)('detracción efectiva con medio %s antes de reservar y persistir', async (medio) => {
     const d = montar();
+    d.prisma.company.findUnique.mockResolvedValue({ ruc: '20100070970', legal_name: 'FERRETERÍA LOS ANDES S.A.C.', ...fakeFiscalAddress, trade_name: null, detraction_account: '00019123456' } as never);
     const dto = factura({
       medio_pago_detraccion: medio,
       cuenta_banco_nacion: '00019123456',
@@ -512,7 +513,7 @@ describe('EmitirComprobanteService — nota sobre comprobante existente', () => 
       .resolves.toMatchObject({ success: true });
   });
 
-  it.each(['ERROR_RED', 'DLQ', 'OBSERVADO', 'EN_COLA', 'RECHAZADO', 'ANULADO']) (
+  it.each(['ERROR_RED', 'DLQ', 'EN_COLA', 'RECHAZADO', 'ANULADO']) (
     'rechaza ambas notas sobre %s antes de reservar o persistir', async (estado) => {
       for (const tipo of ['07', '08']) {
         const { servicio, series, creadas } = montar({
@@ -521,7 +522,7 @@ describe('EmitirComprobanteService — nota sobre comprobante existente', () => 
         await expect(servicio.emitir(nota({ tipo_comprobante: tipo }), COMPANY_ID))
           .rejects.toMatchObject({
             status: 400,
-            message: `El comprobante no está aceptado por SUNAT (estado: ${estado}) y por eso no admite notas de crédito ni de débito.`,
+            message: `El comprobante no está aceptado u observado por SUNAT (estado: ${estado}) y por eso no admite notas de crédito ni de débito.`,
           });
         expect(series.reservarCorrelativo).not.toHaveBeenCalled();
         expect(creadas).toHaveLength(0);
