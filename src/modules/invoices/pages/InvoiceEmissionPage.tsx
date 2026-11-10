@@ -1,3 +1,4 @@
+import { InvoiceNextNumber } from '../components/InvoiceNextNumber';
 import { pagoSegunDeposito } from '../lib/invoicePagoPresentacion';
 import { problemaSpotMinimo } from '../lib/invoiceDetraccion';
 import { useInvoiceKeyboard } from '../components/useInvoiceKeyboard';
@@ -471,6 +472,8 @@ export default function InvoiceEmissionPage() {
       // La grilla se limpia para no reenviar la misma venta por doble clic.
       setItems([itemVacio('1')]);
       setMedioPagoDetraccion('');
+      // Solo lectura: actualizar el dato informativo, nunca reservar numeración.
+      void apiClient.get<ConfiguracionBackend>('/invoices/config').then(({ data }) => setSeriesConfiguradas(data.series ?? [])).catch(() => {});
     } catch (error: unknown) {
       const sinRespuesta =
         !(error as { response?: unknown })?.response &&
@@ -547,6 +550,7 @@ export default function InvoiceEmissionPage() {
                     {!seriesDelTipo.length && <option value="">Sin serie activa</option>}
                     {seriesDelTipo.map(s => <option key={s.series} value={s.series}>{s.series}</option>)}
                   </select>
+                  <InvoiceNextNumber serie={serieActual} actual={seriesDelTipo.find(s => s.series === serieActual)?.current_correlative} />
                 </div>
 
                 {/*

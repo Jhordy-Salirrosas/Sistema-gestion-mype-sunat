@@ -96,7 +96,7 @@ interface VisorState {
 export const InvoiceList = () => {
   const companyId = useAuthStore(state => state.activeCompany?.tenantId);
   const ruc = useAuthStore(state => state.activeCompany?.ruc) ?? '';
-  const { data: configuracionFiscal } = useInvoiceConfig(ruc);
+  const { data: configuracionFiscal, recargar: recargarConfiguracion } = useInvoiceConfig(ruc);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = tabDesdeRuta(pathname);
@@ -172,10 +172,11 @@ export const InvoiceList = () => {
     () => {
       setModalEmision(null);
       void refetch();
+      void recargarConfiguracion();
       navigate(RUTA_POR_TAB.comprobantes);
       setFiltros({ ...FILTROS_INICIALES });
     },
-    [navigate, refetch],
+    [navigate, refetch, recargarConfiguracion],
   );
 
   /** Reencola un comprobante en error para que el worker vuelva a pedir su CDR. */
@@ -271,6 +272,7 @@ export const InvoiceList = () => {
           onActualizar={() => { void refresco.actualizar(); }}
           actualizando={refresco.actualizando}
           onEmitir={(tipo) => {
+            void recargarConfiguracion();
             if (tipo === 'Nota') {
               setModalEmision(tipo);
               return;
@@ -335,7 +337,7 @@ export const InvoiceList = () => {
           fecha={fechaHoy}
           existentes={comprobantes}
           productos={productosEmision}
-          seriesConfiguradas={configuracionFiscal?.series.map(s => ({ document_type: s.tipoComprobante, series: s.serie, is_active: s.activa }))}
+          seriesConfiguradas={configuracionFiscal?.series.map(s => ({ document_type: s.tipoComprobante, series: s.serie, is_active: s.activa, current_correlative: s.siguienteCorrelativo === undefined ? undefined : s.siguienteCorrelativo - 1 }))}
           perfilComercial={configuracionFiscal?.perfil_comercial}
           onEmitir={agregarComprobante}
           onCerrar={() => setModalEmision(null)}
