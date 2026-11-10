@@ -189,7 +189,7 @@ export const bloqueRetenciones = (
 };
 
 /**
- * Bloque `LegalMonetaryTotal` con el importe a pagar ya liquidado.
+ * Total monetario: LegalMonetaryTotal; DebitNote usa RequestedMonetaryTotal.
  *
  * Corrección de TA-62: la versión anterior calculaba el total como
  * `gravado + igv`, ignorando por completo las líneas exoneradas, inafectas y
@@ -211,12 +211,13 @@ export const bloqueRetenciones = (
 export const bloqueTotales = (
   t: TotalesCalculados,
   moneda: string,
+  elemento: 'LegalMonetaryTotal' | 'RequestedMonetaryTotal' = 'LegalMonetaryTotal',
 ): string => {
   const base =
     redondearMoneda(t.gravado + t.exonerado + t.inafecto + t.exportado);
   const totalConIgv = redondearMoneda(base + t.igv + t.icbper);
 
-  return `  <cac:LegalMonetaryTotal>
+  return `  <cac:${elemento}>
     <cbc:LineExtensionAmount currencyID="${moneda}">${dinero(base)}</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="${moneda}">${dinero(base)}</cbc:TaxExclusiveAmount>
     <cbc:TaxInclusiveAmount currencyID="${moneda}">${dinero(totalConIgv)}</cbc:TaxInclusiveAmount>
@@ -224,5 +225,5 @@ export const bloqueTotales = (
     <cbc:ChargeTotalAmount currencyID="${moneda}">0.00</cbc:ChargeTotalAmount>
     <cbc:PrepaidAmount currencyID="${moneda}">0.00</cbc:PrepaidAmount>
     <cbc:PayableAmount currencyID="${moneda}">${dinero(totalConIgv - (t.otrosDescuentos ?? 0))}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>`;
+  </cac:${elemento}>`;
 };
