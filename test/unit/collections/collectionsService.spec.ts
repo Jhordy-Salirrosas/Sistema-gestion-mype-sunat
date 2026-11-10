@@ -31,4 +31,13 @@ describe('CollectionsService', () => {
     prisma.invoice.findFirst.mockResolvedValue(null);
     await expect(service.create('c1', { customerName: 'Cliente', invoiceNumber: 'F001-00000001', amount: 10 })).rejects.toThrow('no existe');
   });
+
+  it('lista facturas con saldo pendiente', async () => {
+    const prisma = {
+      invoice: { findMany: jest.fn().mockResolvedValue([{ id: 'i1', serie: 'F001', correlativo: 1, customer_legal_name: 'Cliente', customer_identity_number: '20100070970', monto_total: 118, fecha_emision: new Date('2026-11-10') }]) },
+      collection: { groupBy: jest.fn().mockResolvedValue([{ invoice_id: 'i1', _sum: { amount: 18 } }]) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    await expect(service.listReceivables('c1')).resolves.toEqual([expect.objectContaining({ numero: 'F001-00000001', total: 118, paid: 18, balance: 100 })]);
+  });
 });

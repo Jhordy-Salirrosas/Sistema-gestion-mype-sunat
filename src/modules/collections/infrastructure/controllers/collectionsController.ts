@@ -9,6 +9,12 @@ import { CollectionsService } from '../../application/services/collectionsServic
 export class CollectionsController {
   constructor(private readonly collections: CollectionsService) {}
 
+  @Get('receivables')
+  receivables(@CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.listReceivables(companyId);
+  }
+
   @Get()
   list(@CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
