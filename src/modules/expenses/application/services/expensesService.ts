@@ -13,6 +13,16 @@ export class ExpensesService {
     return this.prisma.expense.findMany({ where: { company_id: companyId }, orderBy: { expense_date: 'desc' }, take: 200 });
   }
 
+  async listPayments(companyId: string, id: string) {
+    const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
+    if (!gasto) throw new BadRequestException('Gasto no encontrado.');
+    const pagos = await this.prisma.treasuryMovement.findMany({
+      where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: id, direction: 'EGRESO' },
+      orderBy: { movement_date: 'desc' },
+    });
+    return pagos.map((p) => ({ id: p.id, date: p.movement_date, amount: Number(p.amount), paymentMethod: p.payment_method, bankName: p.bank_name, concept: p.concept }));
+  }
+
   async create(companyId: string, dto: {
     description: string; supplierName: string; supplierDoc?: string; documentType?: string;
     documentNumber?: string; expenseDate?: string; baseAmount: number; igvAmount: number; totalAmount: number;
