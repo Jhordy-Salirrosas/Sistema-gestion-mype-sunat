@@ -187,6 +187,10 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
   }
 
   async closeFiscalYear(companyId: string, year: number) {
+    await this.prisma.accountingFiscalYear?.updateMany({
+      where: { company_id: companyId, year },
+      data: { status: 'CERRADO', closed_at: new Date() },
+    });
     await this.prisma.accountingPeriod.updateMany({
       where: { company_id: companyId, year, status: 'ABIERTO' },
       data: { status: 'CERRADO', closed_at: new Date() },
@@ -195,6 +199,11 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
   }
 
   async openFiscalYear(companyId: string, year: number) {
+    await this.prisma.accountingFiscalYear?.upsert({
+      where: { company_id_year: { company_id: companyId, year } },
+      update: { status: 'ABIERTO', closed_at: null },
+      create: { company_id: companyId, year, status: 'ABIERTO' },
+    });
     for (let month = 1; month <= 12; month += 1) {
       await this.openPeriod(companyId, year, month);
     }

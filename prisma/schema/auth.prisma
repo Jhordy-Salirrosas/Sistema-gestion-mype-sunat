@@ -66,6 +66,8 @@ model Company {
   sire_reconciliations  SireReconciliation[]
   accounting_entries    AccountingEntry[]
   accounting_periods    AccountingPeriod[]
+  accounting_fiscal_years AccountingFiscalYear[]
+  accounting_rules      AccountingRule[]
   ple_books             PleBook[]
   audit_logs            AuditLog[]
   business_partners     BusinessPartner[]

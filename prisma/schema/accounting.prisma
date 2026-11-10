@@ -12,6 +12,41 @@ enum AccountingPeriodStatus {
 }
 
 /// Catálogo PCGE 2019. Es global: no depende de la empresa.
+
+/// Ejercicio fiscal por empresa. Agrupa los períodos mensuales.
+model AccountingFiscalYear {
+  id         String   @id @default(uuid())
+  company_id String
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  year       Int
+  status     String   @default("ABIERTO")
+  opened_at  DateTime @default(now())
+  closed_at  DateTime?
+
+  @@unique([company_id, year])
+  @@index([company_id, status])
+  @@map("accounting_fiscal_years")
+}
+
+/// Regla de contabilización por proceso, documento y línea.
+model AccountingRule {
+  id               String   @id @default(uuid())
+  company_id       String
+  company          Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  process_code     String
+  document_type    String   @default("*")
+  line_order       Int
+  account_code     String
+  side             String
+  base_calculation String
+  description      String?
+  is_active        Boolean  @default(true)
+
+  @@unique([company_id, process_code, document_type, line_order])
+  @@index([company_id, process_code, is_active])
+  @@map("accounting_rules")
+}
+
 model AccountingAccount {
   id          String   @id @default(uuid())
   code        String   @unique
