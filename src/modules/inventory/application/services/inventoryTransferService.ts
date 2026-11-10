@@ -425,9 +425,14 @@ export class InventoryTransferService {
         where: { company_id: companyId, process_code: 'INVENTARIO', is_active: true },
       })) ?? [];
       const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
-      const cuentaExistencias = roles.get('MERCADERIAS') || '201';
-      const cuentaGastoMerma = roles.get('GASTO_MERMA') || '659';
-      const cuentaIngresoSobrante = roles.get('INGRESO_SOBRANTE') || '759';
+      const reglas = (await (this.prisma as any).accountingRule?.findMany({
+        where: { company_id: companyId, process_code: 'AJUSTE', is_active: true },
+        orderBy: { line_order: 'asc' },
+      })) ?? [];
+      const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+      const cuentaExistencias = porOrden.get(2) ?? roles.get('MERCADERIAS') ?? '201';
+      const cuentaGastoMerma = porOrden.get(1) ?? roles.get('GASTO_MERMA') ?? '659';
+      const cuentaIngresoSobrante = porOrden.get(3) ?? roles.get('INGRESO_SOBRANTE') ?? '759';
 
       const lines = adjustment.type === 'SALIDA'
         ? [

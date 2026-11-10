@@ -28,11 +28,34 @@ model Expense {
   base_amount      Decimal  @db.Decimal(14, 2)
   igv_amount       Decimal  @db.Decimal(14, 2)
   total_amount     Decimal  @db.Decimal(14, 2)
+  paid_amount      Decimal  @default(0.00) @db.Decimal(14, 2)
   status           String   @default("REGISTRADO")
   created_at       DateTime @default(now())
 
   @@index([company_id, expense_date])
   @@map("expenses")
+}
+
+
+/// Cobro de una cuenta por cobrar comercial.
+model Collection {
+  id              String   @id @default(uuid())
+  company_id      String
+  company         Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  collection_date DateTime
+  customer_name   String
+  customer_doc    String?
+  invoice_number  String?
+  invoice_id      String?
+  description     String
+  amount          Decimal  @db.Decimal(14, 2)
+  payment_method  String   @default("TRANSFERENCIA")
+  bank_name       String?
+  status          String   @default("REGISTRADO")
+  created_at      DateTime @default(now())
+
+  @@index([company_id, collection_date])
+  @@map("collections")
 }
 
 /// Ejercicio fiscal por empresa. Agrupa los períodos mensuales.

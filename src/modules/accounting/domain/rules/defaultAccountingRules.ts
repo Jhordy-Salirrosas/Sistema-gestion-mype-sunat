@@ -21,6 +21,9 @@ export const DEFAULT_ACCOUNTING_RULES = [
   ['GASTO', '*', 1, '63111', 'DEBE', 'BASE', 'Gastos de servicios'],
   ['GASTO', '*', 2, '40111', 'DEBE', 'IGV', 'IGV crédito fiscal'],
   ['GASTO', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar'],
+  ['COBRO', '*', 1, '1041', 'DEBE', 'MONTO_PAGADO', 'Cobro en banco'],
+  ['COBRO', '*', 2, '12121', 'HABER', 'MONTO_PAGADO', 'Cuentas por cobrar'],
   ['AJUSTE', '*', 1, '65911', 'DEBE', 'COSTO', 'Pérdida por ajuste'],
   ['AJUSTE', '*', 2, '20111', 'HABER', 'COSTO', 'Mercaderías'],
+  ['AJUSTE', '*', 3, '75911', 'HABER', 'COSTO', 'Sobrantes de inventario'],
 ] as const;

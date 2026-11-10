@@ -13,6 +13,16 @@ export class ExpensesService {
     return this.prisma.expense.findMany({ where: { company_id: companyId }, orderBy: { expense_date: 'desc' }, take: 200 });
   }
 
+  async listPayments(companyId: string, id: string) {
+    const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
+    if (!gasto) throw new BadRequestException('Gasto no encontrado.');
+    const pagos = await this.prisma.treasuryMovement.findMany({
+      where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: id, direction: 'EGRESO' },
+      orderBy: { movement_date: 'desc' },
+    });
+    return pagos.map((p) => ({ id: p.id, date: p.movement_date, amount: Number(p.amount), paymentMethod: p.payment_method, bankName: p.bank_name, concept: p.concept }));
+  }
+
   async create(companyId: string, dto: {
     description: string; supplierName: string; supplierDoc?: string; documentType?: string;
     documentNumber?: string; expenseDate?: string; baseAmount: number; igvAmount: number; totalAmount: number;
@@ -51,5 +61,70 @@ export class ExpensesService {
       ],
     });
     return gasto;
+  }
+
+  async annul(companyId: string, id: string) {
+    const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId } });
+    if (!gasto) throw new BadRequestException('Gasto no encontrado.');
+    if (gasto.status === 'ANULADO') throw new BadRequestException('El gasto ya está anulado.');
+    if (Number(gasto.paid_amount ?? 0) > 0) throw new BadRequestException('No se puede anular un gasto con pagos registrados.');
+    const original = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: id },
+      include: { lines: true },
+    });
+    if (!original) throw new BadRequestException('El gasto no tiene asiento contable; no se puede anular.');
+    const revertido = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: `ANUL-${id}` }, select: { id: true },
+    });
+    if (!revertido) {
+      const fecha = new Date();
+      const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      await this.accounting.execute({
+        companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación gasto ${gasto.description}`,
+        sourceModule: 'EXPENSES', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `expense-annul:${id}`,
+        lines: original.lines.map((l, i) => ({
+          lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name,
+          debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount),
+        })),
+      });
+    }
+    return this.prisma.expense.update({ where: { id }, data: { status: 'ANULADO' } });
+  }
+
+  async pay(companyId: string, id: string, dto: { amount?: number; paymentMethod?: string; bankName?: string }) {
+    const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId } });
+    if (!gasto) throw new BadRequestException('Gasto no encontrado.');
+    if (gasto.status === 'PAGADO') throw new BadRequestException('El gasto ya está pagado.');
+    const total = Number(gasto.total_amount);
+    const pagado = Number(gasto.paid_amount ?? 0);
+    const saldo = Math.round((total - pagado) * 100) / 100;
+    const monto = Math.round(Number(dto.amount ?? saldo) * 100) / 100;
+    if (!(monto > 0) || monto > saldo) throw new BadRequestException(`El monto debe estar entre 0.01 y ${saldo.toFixed(2)}.`);
+    const nuevoPagado = Math.round((pagado + monto) * 100) / 100;
+    const estado = nuevoPagado >= total - 0.005 ? 'PAGADO' : 'PAGO_PARCIAL';
+    const fecha = new Date();
+    const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
+    const mov = await this.prisma.$transaction(async (tx) => {
+      const creado = await tx.treasuryMovement.create({ data: {
+        company_id: companyId, movement_date: fecha, direction: 'EGRESO',
+        document_reference: gasto.document_number ?? gasto.id, counterpart_name: gasto.supplier_name,
+        concept: `Pago gasto ${gasto.description}`, amount: monto, source_module: 'EXPENSES',
+        source_reference_id: gasto.id, payment_method: metodo, bank_name: dto.bankName ?? null,
+      } });
+      await tx.expense.update({ where: { id }, data: { paid_amount: nuevoPagado, status: estado } });
+      return creado;
+    });
+    const reglas = await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'PAGO', is_active: true }, orderBy: { line_order: 'asc' } });
+    const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
+    const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    await this.accounting.execute({
+      companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Pago gasto ${gasto.description}`,
+      sourceModule: 'EXPENSES', sourceReferenceId: `PAGO-GASTO-${id}-${mov.id}`, idempotencyKey: `expense-payment:${mov.id}`,
+      lines: [
+        { lineOrder: 1, accountCode: porOrden.get(1) ?? '42121', accountName: 'Cuentas por pagar', debitAmount: monto, creditAmount: 0 },
+        { lineOrder: 2, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(2) ?? '1041'), accountName: 'Caja o banco', debitAmount: 0, creditAmount: monto },
+      ],
+    });
+    return { id, status: estado, amount: monto, paidAmount: nuevoPagado, balance: Math.round((total - nuevoPagado) * 100) / 100 };
   }
 }
