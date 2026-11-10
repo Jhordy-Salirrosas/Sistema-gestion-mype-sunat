@@ -1351,3 +1351,95 @@ La acción productiva pendiente es exclusivamente de Emma tras el despliegue:
 ejecutar el nuevo endpoint para la F001-00000064 y comprobar Kardex ALM-02,
 asiento de venta conservado y asiento de costo de S/ 15.00. Esta entrega no
 realiza esa operación ni la sustituye por una reentrega del comprobante.
+
+### Parte 5 — Pulido final del recorrido (10 nov 2026)
+
+Base back dev f8cea8c56314e61b575ed463b473ecbc50ccee37: 264 suites / 2445
+pruebas aprobadas, cero fallos, 4 suites / 38 pruebas omitidas y 12 snapshots
+fiscales intactos. Front dev 640d4b88ef8cfd81e7241874f184a13a5bf48cf1:
+102 archivos / 811 pruebas aprobadas. Rama fix/m1-pulido-recorrido; front solo
+por ferry/m1-pulido-recorrido. Sin migraciones nuevas ni operaciones reales.
+
+**5A — Panel:** el neto del servidor incluía EN_COLA/ENVIADO/PENDIENTE mientras
+la bandeja solo suma ACEPTADO/OBSERVADO. Ahora el dinero sigue los mismos tipos
+01/03 + 08 - 07 confirmados; una EN_COLA de S/118 (escenario de F001-57) no lo
+infla. Se añade total de documentos registrados en el período (todos los
+estados), explícitamente rotulado en el panel junto a aceptados/observados.
+Se preserva emitidos para consumidores anteriores y no se cambia la bandeja.
+Pruebas: aceptadas, NC, ND, pendiente 118 y todos los tipos/estados sin confirmar;
+conteo total y criterio visible en el panel. Validación focalizada aprobada; cierre completo de 5A–5D al final de esta sección.
+
+**5B — Presentación del bloqueo local:** se deriva resultado_presentacion del
+CDR y del historial ya persistidos, sin tocar estados ni datos históricos.
+Marcador explícito «Bloqueado antes de enviar por la validación XSL» (incluye
+los diagnósticos XSD del ejecutor) → VALIDACION_LOCAL. CDR de rechazo o SOAP
+Fault reconocido → SUNAT. Código aislado o falta de CDR no prueban origen:
+NO_DETERMINADO. Una decisión posterior no reconocida no revive un bloqueo
+anterior. El listado consulta un historial acotado y el detalle usa el mismo
+clasificador. Front transporta esa lectura, hidrata los datos del detalle y
+unifica badge, motivo y auditoría: local no dice «SUNAT rechazó» ni «todavía
+no respondió». La presentación de origen incierto es neutral.
+Pruebas focalizadas: 3128, XSD, CDR, SOAP Fault, evidencia insuficiente,
+cronología, marcadores operativos y conservación del estado RECHAZADO;
+lectura coherente en listado y detalle, con motivo visible. Generador y
+compuertas fiscales permanecen intactos.
+
+**5C — Rescate DLQ efectivo. Excepción autorizada por Jhordy el 10 nov 2026,
+para aviso a Oliver, dueño de Resiliencia:** el único cambio productivo fuera
+de M1 es reenqueueInvoiceIfIdle en queue.service.ts. Se añade opción explícita
+rescatarDlq; las llamadas automáticas sin ella conservan EN_DLQ, sin rescate
+ni bucle automático de reinicio de intentos. El rescate manual verifica la
+empresa del payload y exige callback M1 de estado/seguridad. Publica primero
+en la cola principal con singletonKey y solo elimina DLQ cuando hay publicación
+o trabajo vivo comprobado. Fallo de publicación conserva DLQ; fallo de limpieza
+se puede retomar sin otra publicación. Sin publicación comprobada devuelve
+EN_DLQ, nunca un éxito ficticio. Dos acciones concurrentes no duplican trabajo.
+
+M1 usa la opción en el endpoint EXISTENTE de retry-cdr y completa la persistencia
+de incertidumbre desconocida para los estados que ese endpoint ya admitía,
+antes de publicar. No se cambia ESTADOS_REINTENTABLES ni se amplían estados:
+ACEPTADO/OBSERVADO/ANULADO permanecen protegidos. Marcadores true/false existentes
+se conservan. El consumidor y su conciliación previa al reenvío no se modifican;
+la suite previa de intento incierto verifica consulta antes de sendBill y bloqueo
+ante consulta inconclusa. No hay consulta real a SUNAT en estas pruebas.
+
+El Monitor muestra «Reintentar» en DLQ y ERROR_RED permitidos, conserva resultado
+y actualiza la etiqueta tras ENCOLADO. Prueba con PostgreSQL y pg-boss REALES,
+sin registrar consumidor SUNAT: F001-57 simulada en EN_COLA/DLQ, marcador true
+comprobado en base antes de boss.send, trabajo eliminado de DLQ, un único job
+principal, segundo clic sin publicación y estado ACEPTADO protegido. También
+fallos de publicación/limpieza, concurrencia, compañía ajena, callback ausente
+y publicación no comprobada. La ejecución real sobre F001-00000057 corresponde
+solo a Emma tras el despliegue; no se ejecutó en producción.
+
+**5D — No reproducible en dev:** las seis pruebas nuevas cubren página estándar
+y modal, cada uno con selección por clic, foco de sugerencia mediante Tab y
+Enter (teclado nativo), y texto escrito sin confirmar selección. Preparan la
+línea, eligen/escriben al cliente y pulsan Emitir UNA vez sin retocar nombre ni
+documento. El primer payload contiene documento 20100070970, tipo 6 y razón
+social Ferretería Los Andes S.A.C.; no aparece «Falta la razón social del
+cliente». Se conservan los setters existentes: NO se cambia el código de
+CustomerLookupField ni los formularios por una causa no demostrada. No se
+agregan atajos ni confirmación implícita de sugerencias. Esto no niega el
+síntoma verificado por Emma en el main desplegado de las emisiones -64/-65;
+la evidencia nueva corresponde exclusivamente al dev probado.
+
+Cierre completo: back **267 suites / 2469 pruebas aprobadas**, cero fallos
+(+3 suites / +24 pruebas). Se conservan 4 suites / 38 pruebas omitidas y los
+**12 snapshots fiscales intactos**. Front **105 archivos / 827 pruebas aprobadas**,
+cero fallos (+3 archivos / +16 pruebas). Build de ambos aprobado; lint back sin
+errores/avisos; lint front de archivos modificados sin errores y solo el aviso
+preexistente de Fast Refresh por exportar estadoDeMonitor junto al componente.
+Cobertura local nueva (LCOV + diff contra f8cea8c): **38/38 líneas (100%)**,
+64/71 resultados de condiciones; combinado **93,58%**. No se modifican umbrales,
+configuración de CI/Sonar, esquemas, compuertas ni matemática UBL.
+
+Se entregan commits por 5A/5B/5C y la documentación/regresión de 5D. El único
+cambio productivo en Resiliencia es el método reenqueueInvoiceIfIdle autorizado;
+no se cambia retryDlq, políticas de reintentos, reconciliador automático ni
+invoiceRetryService. En M1, retry-cdr conserva ruta y estados admitidos; solo
+activa el rescate explícito y asegura el marcador previo a publicar en las
+ramas ya existentes. La base PostgreSQL local desechable se eliminó tras las
+pruebas. Ninguna base compartida fue tocada. Entrega front solo por ferry con
+FERRY.md y manifest de rutas exactas. El rescate de la F001-00000057 real queda
+para Emma después del despliegue; no se ejecutó en esta ronda.

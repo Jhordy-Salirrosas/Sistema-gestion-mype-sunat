@@ -211,36 +211,31 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     invoiceId: string,
     companyId: string,
     estadoPermitido?: () => Promise<boolean>,
+    opciones: { rescatarDlq?: boolean } = {},
   ): Promise<{
     estado: 'ENCOLADO' | 'YA_EN_COLA' | 'EN_DLQ' | 'ESTADO_NO_PERMITIDO';
     jobId?: string;
   }> {
-    if (!invoiceId || !companyId) {
-      throw new Error('invoiceId y companyId son obligatorios para reencolar.');
+    if (!invoiceId || !companyId) throw new Error('invoiceId y companyId son obligatorios para reencolar.');
+    const vivos = await this.boss.findJobs(INVOICE_QUEUE, { data: { invoice_id: invoiceId }, queued: true });
+    if (vivos.length > 0 && !opciones.rescatarDlq) return { estado: 'YA_EN_COLA' };
+    const enDlq = await this.boss.findJobs<{ invoice_id?: string; company_id?: string }>(INVOICE_DLQ, { data: { invoice_id: invoiceId }, queued: true });
+    if (enDlq.length > 0 && (!opciones.rescatarDlq || enDlq.some(job => job.data?.company_id !== companyId))) return { estado: 'EN_DLQ' };
+    if (enDlq.length > 0 && opciones.rescatarDlq && !estadoPermitido) return { estado: 'ESTADO_NO_PERMITIDO' };
+    // La comprobación M1 también persiste incertidumbre antes de publicar un rescate.
+    if (estadoPermitido && !(await estadoPermitido())) return { estado: 'ESTADO_NO_PERMITIDO' };
+    if (vivos.length > 0) {
+      // Recupera una limpieza fallida después de una publicación anterior, sin duplicar.
+      if (enDlq.length > 0) await this.boss.deleteJob(INVOICE_DLQ, enDlq.map(job => job.id));
+      return { estado: 'YA_EN_COLA' };
     }
-
-    const vivos = await this.boss.findJobs(INVOICE_QUEUE, {
-      data: { invoice_id: invoiceId },
-      queued: true,
-    });
-    if (vivos.length > 0) return { estado: 'YA_EN_COLA' };
-
-    const enDlq = await this.boss.findJobs(INVOICE_DLQ, {
-      data: { invoice_id: invoiceId },
-      queued: true,
-    });
-    if (enDlq.length > 0) return { estado: 'EN_DLQ' };
-
-    if (estadoPermitido && !(await estadoPermitido())) {
-      return { estado: 'ESTADO_NO_PERMITIDO' };
+    const jobId = await this.boss.send(INVOICE_QUEUE, { invoice_id: invoiceId, company_id: companyId }, { singletonKey: `invoice:${invoiceId}` });
+    if (enDlq.length > 0) {
+      const publicado = jobId || (await this.boss.findJobs(INVOICE_QUEUE, { data: { invoice_id: invoiceId }, queued: true })).length > 0;
+      // Publicar primero. Sin publicación comprobada se conserva la DLQ.
+      if (!publicado) return { estado: 'EN_DLQ' };
+      await this.boss.deleteJob(INVOICE_DLQ, enDlq.map(job => job.id));
     }
-
-    const jobId = await this.boss.send(
-      INVOICE_QUEUE,
-      { invoice_id: invoiceId, company_id: companyId },
-      { singletonKey: `invoice:${invoiceId}` },
-    );
-
     return jobId ? { estado: 'ENCOLADO', jobId } : { estado: 'YA_EN_COLA' };
   }
 

@@ -314,3 +314,50 @@ it('declara y actualiza la misma política recuperable en la cola principal exis
   expect(boss.createQueue).toHaveBeenCalledWith(INVOICE_QUEUE, policy);
   expect(boss.updateQueue).toHaveBeenCalledWith(INVOICE_QUEUE, policy);
 });
+
+// Excepción manual M1; el reconciliador conserva el comportamiento sin rescatarDlq.
+describe('rescate DLQ explícito del comprobante', () => {
+  function escenario() {
+    const { service, boss } = crearServicio();
+    const principal: any[] = []; let dlq: any[] = [{ id: 'dlq', data: { invoice_id: 'i', company_id: 'c' } }];
+    boss.findJobs.mockImplementation(async name => name === INVOICE_QUEUE ? [...principal] : [...dlq]);
+    boss.send.mockImplementation(async (_name, data) => { if (principal.length) return null; principal.push({ id: 'nuevo', data }); return 'nuevo'; });
+    boss.deleteJob.mockImplementation(async (_name, ids) => { dlq = dlq.filter(j => !ids.includes(j.id)); });
+    const permitido = jest.fn(async () => true);
+    const run = () => service.reenqueueInvoiceIfIdle('i', 'c', permitido, { rescatarDlq: true });
+    return { service, boss, principal, dlq: () => dlq, permitido, run };
+  }
+  it('publica en principal, elimina DLQ y un segundo clic no duplica', async () => {
+    const h = escenario(); expect(await h.run()).toEqual({ estado: 'ENCOLADO', jobId: 'nuevo' });
+    expect(h.principal).toHaveLength(1); expect(h.dlq()).toHaveLength(0);
+    expect(h.permitido.mock.invocationCallOrder[0]).toBeLessThan(h.boss.send.mock.invocationCallOrder[0]);
+    expect(await h.run()).toEqual({ estado: 'YA_EN_COLA' }); expect(h.boss.send).toHaveBeenCalledTimes(1);
+  });
+  it('ni estado no permitido ni empresa ajena permiten publicar/borrar', async () => {
+    const h = escenario(); h.permitido.mockResolvedValue(false);
+    expect(await h.run()).toEqual({ estado: 'ESTADO_NO_PERMITIDO' });
+    expect(h.boss.send).not.toHaveBeenCalled(); expect(h.boss.deleteJob).not.toHaveBeenCalled();
+    expect(await h.service.reenqueueInvoiceIfIdle('i', 'otra', undefined, { rescatarDlq: true })).toEqual({ estado: 'EN_DLQ' });
+    expect(h.boss.send).not.toHaveBeenCalled();
+  });
+  it('fallo de publicación conserva DLQ, y fallo de limpieza se recupera sin volver a publicar', async () => {
+    const h = escenario(); h.boss.send.mockRejectedValueOnce(new Error('cola caída'));
+    await expect(h.run()).rejects.toThrow('cola caída'); expect(h.dlq()).toHaveLength(1);
+    h.boss.deleteJob.mockRejectedValueOnce(new Error('limpieza fallida'));
+    await expect(h.run()).rejects.toThrow('limpieza fallida'); expect(h.principal).toHaveLength(1); expect(h.dlq()).toHaveLength(1);
+    expect(await h.run()).toEqual({ estado: 'YA_EN_COLA' }); expect(h.dlq()).toHaveLength(0); expect(h.boss.send).toHaveBeenCalledTimes(2);
+  });
+  it('sin publicación comprobada no borra el único trabajo durable', async () => {
+    const h = escenario(); h.boss.send.mockResolvedValue(null);
+    expect(await h.run()).toEqual({ estado: 'EN_DLQ' }); expect(h.dlq()).toHaveLength(1); expect(h.boss.deleteJob).not.toHaveBeenCalled();
+  });
+  it('dos rescates concurrentes no publican dos trabajos', async () => {
+    const h = escenario(); await Promise.all([h.run(), h.run()]); expect(h.principal).toHaveLength(1); expect(h.dlq()).toHaveLength(0);
+  });
+});
+it('no rescata DLQ sin la compuerta explícita del llamador M1', async () => {
+  const { service, boss } = crearServicio();
+  boss.findJobs.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'dlq', data: { invoice_id: 'i', company_id: 'c' } }]);
+  await expect(service.reenqueueInvoiceIfIdle('i', 'c', undefined, { rescatarDlq: true })).resolves.toEqual({ estado: 'ESTADO_NO_PERMITIDO' });
+  expect(boss.send).not.toHaveBeenCalled(); expect(boss.deleteJob).not.toHaveBeenCalled();
+});

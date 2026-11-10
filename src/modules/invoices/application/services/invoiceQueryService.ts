@@ -55,6 +55,8 @@ const SELECT_LISTADO = {
   xml_hash_sha256: true,
   payload_ubl: true,
   cdr_sunat: true,
+  history: { where: { estado_nuevo: 'RECHAZADO' as const }, orderBy: { created_at: 'desc' as const }, take: 20,
+    select: { estado_nuevo: true, codigo_error: true, mensaje_error: true, created_at: true } },
 } as const;
 
 /** Proyección del detalle: la del listado más ficha, CDR e historial. */
@@ -323,7 +325,7 @@ export class InvoiceQueryService {
         if (!actual) return false;
         estadoActual = actual.estado;
         return actual.estado === 'EN_COLA' || actual.estado === 'PENDIENTE';
-      });
+      }, { rescatarDlq: true });
       const numero = `${fila.serie}-${String(fila.correlativo).padStart(8, '0')}`;
       const explicacion = {
         ENCOLADO: 'Comprobante reencolado manualmente.',
@@ -365,8 +367,11 @@ export class InvoiceQueryService {
             where: { id: fila.id },
             select: { estado: true },
           });
-          return Boolean(actual && ESTADOS_REINTENTABLES.includes(actual.estado));
+          if (!actual || !ESTADOS_REINTENTABLES.includes(actual.estado)) return false;
+          await this.prisma.invoice.updateMany({ where: { id: fila.id, company_id: companyId, estado: { in: ESTADOS_REINTENTABLES as InvoiceStatus[] }, transport_uncertain: null }, data: { transport_uncertain: true } });
+          return true;
         },
+        { rescatarDlq: true },
       );
       encolado = resultado.estado === 'ENCOLADO';
       mensaje = {
