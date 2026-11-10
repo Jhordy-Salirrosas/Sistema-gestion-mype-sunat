@@ -112,8 +112,9 @@ describe('TA-34 · 503 sostenido y timeout', () => {
       5_000, 15_000, 45_000,
     ]);
     expect(
-      db.history.filter((fila) => fila.estado_nuevo === InvoiceStatus.ENVIADO),
+      db.history.filter((fila) => fila.estado_nuevo === InvoiceStatus.ENVIADO && fila.codigo_error !== 'M1_TRANSPORT_STARTED'),
     ).toHaveLength(4);
+    expect(db.history.filter(fila => fila.codigo_error === 'M1_TRANSPORT_STARTED').map(fila => fila.intento)).toEqual([1, 2, 3, 4]);
     expect(resultado.enviadoADlq).toBe(true);
   });
 });

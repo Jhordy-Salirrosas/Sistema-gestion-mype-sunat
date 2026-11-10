@@ -43,6 +43,7 @@ const ZIP_DE_PRUEBA = (() => {
  * La escritura real a PostgreSQL se prueba en cdr-persistence.service.spec.ts.
  */
 class PersistenceStub {
+  async registrarInicioTransporte() {}
   public readonly persisted: Array<Record<string, unknown>> = [];
   public readonly failures: Array<Record<string, unknown>> = [];
 

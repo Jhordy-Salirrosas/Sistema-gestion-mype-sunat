@@ -1443,3 +1443,96 @@ ramas ya existentes. La base PostgreSQL local desechable se eliminó tras las
 pruebas. Ninguna base compartida fue tocada. Entrega front solo por ferry con
 FERRY.md y manifest de rutas exactas. El rescate de la F001-00000057 real queda
 para Emma después del despliegue; no se ejecutó en esta ronda.
+
+### Parte 5b — Raíz de la incertidumbre de transporte (10 nov 2026)
+
+Base back dev `f831ec68e9d105e3c4cb2a1f39e1956b51e8488c`; rama
+`fix/m1-incertidumbre-transporte`. Base front dev
+`793149f86a9f904f7d200bd2e5f08d281bda9610`; entrega exclusiva por
+`ferry/m1-incertidumbre-transporte`, con manifiesto en FERRY.md.
+Línea base ejecutada: **267 suites / 2469 pruebas back** aprobadas, 4 suites /
+38 pruebas omitidas, 12 snapshots; **105 archivos / 827 pruebas front** aprobadas.
+
+**Causa:** consultar ya devolvía RECUPERADO / NO_ENCONTRADO / INCIERTO, pero
+consultarEstado convertía INCIERTO en ISSUER_STATUS_UNCERTAIN. La conciliación
+previa capturaba esa excepción como fallo y terminaba en ERROR_RED/DLQ; la
+posterior al envío la dejaba escapar para gastar reentregas de pg-boss. El
+marcador true tampoco distinguía su origen: rescate presunto o envío real.
+
+**Excepción autorizada por Jhordy el 10 nov de 2026, para aviso a Oliver:**
+se modifica SOLO `src/modules/resilience/infrastructure/queue/invoiceRetryService.ts`
+en Resiliencia, para ampliar el puerto a resultado estructurado y tratar las dos
+conciliaciones. Fundamento: orden de solucionar el defecto de raíz. No se toca
+ningún otro archivo productivo de Resiliencia, colas, circuito, política de
+backoff, retry-cdr ni ESTADOS_REINTENTABLES. Los harness de pruebas se adaptan al
+contrato nuevo y a la traza adicional, conservando las aserciones de los cuatro
+envíos y esperas 5/15/45 s cuando la consulta confirma ausencia.
+
+**Decisión y persistencia sin migración:** M1 clasifica el historial COMPLETO
+(`transaction_history`, sin límite de filas). Un evento explícito de bloqueo
+previo XSL, sin inicio/resultado de transporte posterior, es
+BLOQUEO_PREVIO_PROBADO: se resuelve el marcador presunto y se permite el envío.
+Un inicio/resultado de transporte sin resultado final es ENVIO_INCIERTO.
+Lo demás es EVIDENCIA_INSUFICIENTE: conserva la protección y exige consulta.
+Un empate de fecha entre bloqueo y transporte no autoriza a descartar el envío.
+Ni el número de intento ni la ausencia de eventos de red prueban por sí solos
+que nunca salió. Rescates manuales y consultas inconclusas no se cuentan como
+intentos de transporte.
+
+Todo envío individual, incluido el flujo normal, confirma el evento durable
+`M1_TRANSPORT_STARTED` en el historial antes de invocar sendBill. Si falla esa
+escritura, NO se abre conexión. Se conserva el estado fiscal real de la factura.
+La consulta devuelve el mismo contrato estructurado a su llamador: recuperado
+persiste el CDR y no reenvía; ausencia confirmada permite reenviar; inconclusa
+conserva el marcador, registra `M1_TRANSPORT_UNCERTAIN` con motivo y devuelve
+resultado reintentable sin DLQ. No se duerme ni se consume un envío por consultar:
+consulta previa inconclusa tiene 0 envíos; timeout seguido de inconclusa tiene
+1 envío real y no genera otro. La reserva del circuito se libera como antes;
+los resultados reales de transporte siguen alimentando el circuito existente.
+El trabajo termina esa ejecución sin error y el comprobante permanece durable,
+visible y recuperable mediante la acción existente; no se inventa otra cola ni
+un ciclo de reintentos automáticos con una política nueva.
+
+**Fixture REAL F001-00000057:** exportación completa proporcionada por Emma
+(Supabase, solo lectura, 10 nov), guardada en
+`test/fixtures/f001-57-transport-history.ts`. Invoice id
+`e0796a65-3fca-40a1-8028-7dd59c378f36`, ERROR_RED, transport_uncertain true,
+sunat_response_code null. Las tres filas literales de transaction_history son:
+rescate EN_DLQ del 6 nov 15:38:26.753 UTC, rescate ENCOLADO del 10 nov
+17:27:18.430 UTC y MAX_REINTENTOS / ISSUER_STATUS_UNCERTAIN del 10 nov
+17:27:26.405 UTC. Todas tienen tiempo y HTTP null. No se inventan IDs ni
+company_id no proporcionados, ni el bloqueo XSL ausente.
+
+**Clasificación: EVIDENCIA_INSUFICIENTE.** No hay evento explícito del bloqueo
+original ni inicio/resultado de transporte. La compuerta escribe su decisión en
+transaction_history mediante persistFailure; no identifiqué en el código otro
+registro durable del bloqueo original de esta factura en audit_logs o en sus
+campos. No se consultó la base compartida para esta ronda. Un XML inválido o el
+relato del bloqueo no sustituyen una traza durable para autorizar un reenvío.
+La prueba usa exactamente esas tres filas, luego añade únicamente el evento
+nuevo generado por la implementación y conserva esa clasificación. Consulta
+beta inconclusa: queda pendiente accionable con motivo, no reenvía ni vuelve
+a DLQ por fallo. Por tanto ESTA RONDA NO GARANTIZA EL REENVÍO de la F001-57
+histórica: sin evidencia adicional o consulta concluyente, sería reenviar a
+ciegas. Emma hará cualquier recuperación en vivo tras el despliegue.
+
+**Presentación:** listado y detalle transportan el origen TRANSPORTE_INCIERTO
+y su motivo con la proyección existente de resultado_presentacion. La ficha,
+badge, filtros y Monitor muestran «Incertidumbre de transporte»; SIN_CONFIRMAR
+ya no afirma «Error de red / No llegó a SUNAT». No se reescriben estados ni
+históricos. El Monitor conserva la acción Reintentar también para un ENVIADO
+incierto; usa el endpoint ya existente, que decide/conciliará antes de enviar.
+Las pruebas recorren los mappers reales y el clic con transporte simulado.
+
+**Verificación final:** **269 suites / 2493 pruebas back aprobadas**, cero fallos (+2 suites / +24 pruebas); 4 suites / 38 pruebas omitidas sin cambios y **12 snapshots fiscales intactos**. Front **105 archivos / 829 pruebas aprobadas**, cero fallos (+2 pruebas). Ambos builds aprobados; lint back sin errores/avisos; ESLint de archivos front modificados sin errores y dos avisos preexistentes de Fast Refresh. Cobertura local nueva (LCOV + diff contra f831ec6): **52/52 líneas (100.0%)**, combinado líneas/condiciones **93.89%**; no es una ejecución remota de Sonar ni cambia umbrales o CI.
+La corrida global detectó un harness TA-58 que aún devolvía el contrato antiguo;
+se adaptó a RECUPERADO sin cambiar sus aserciones de recuperación/envío único.
+Otra corrida coincidió con el build y falló únicamente en la cota de latencia
+TA-13 (7/10 bajo 800 ms; las diez respuestas fueron 202). La repetición completa aislada aprobó
+sin compilaciones ni pruebas concurrentes, sin tocar el test ni su umbral.
+
+Sin migraciones nuevas/generadas, PR, fusiones, despliegues, emisiones reales o
+llamadas reales a SUNAT. Las migraciones ya existentes se aplicaron únicamente
+a una base PostgreSQL local nueva y desechable para reproducir la suite bajo la
+excepción local previamente autorizada; ninguna base compartida fue tocada.
+SPOT, reglas fiscales, generadores UBL, Contabilidad e Inventario intactos.

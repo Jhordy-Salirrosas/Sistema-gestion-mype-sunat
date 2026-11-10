@@ -16,7 +16,7 @@ function wrongCdr() {
 }
 it('un CDR aceptado de otro documento no acepta la factura ni habilita reenvío automático', async () => {
   const persist = jest.fn(), persistFailure = jest.fn(async () => ({}));
-  const service = new SunatBillService({ persist, persistFailure } as never,
+  const service = new SunatBillService({ persist, persistFailure, registrarInicioTransporte: jest.fn(async () => undefined) } as never,
     { sendBill: async () => ({ applicationResponse: wrongCdr(), tiempoRespuestaMs: 1, httpStatus: 200 }) } as never);
   const result = await service.sendAndProcess({ ...expected, invoiceId: 'i', rucEmisor: '20601234567', tipoComprobante: '01', zip: Buffer.from('fixture') });
   expect(result).toMatchObject({ estado: 'ENVIADO', reintentable: false, valido: false, cdr: null });

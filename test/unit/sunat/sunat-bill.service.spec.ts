@@ -60,6 +60,7 @@ describe('SunatBillService (unitaria) - credenciales SOL', () => {
     service = new SunatBillService(
       {
         persist: jest.fn(),
+        registrarInicioTransporte: jest.fn(async () => undefined),
         persistFailure,
       } as unknown as CdrPersistenceService,
       { sendBill } as unknown as SunatSoapClient,
@@ -166,6 +167,7 @@ describe('SunatBillService (unitaria) - credenciales SOL', () => {
     service = new SunatBillService(
       {
         persist: jest.fn(),
+        registrarInicioTransporte: jest.fn(async () => undefined),
         persistFailure,
       } as unknown as CdrPersistenceService,
       { sendBill } as unknown as SunatSoapClient,
@@ -199,6 +201,7 @@ describe('SunatBillService (unitaria) - credenciales SOL', () => {
     service = new SunatBillService(
       {
         persist: jest.fn(),
+        registrarInicioTransporte: jest.fn(async () => undefined),
         persistFailure,
       } as unknown as CdrPersistenceService,
       { sendBill } as unknown as SunatSoapClient,
@@ -242,7 +245,7 @@ describe('D1 Bill company context', () => {
       .fn()
       .mockResolvedValue({ applicationResponse: null, tiempoRespuestaMs: 1 });
     const service = new SunatBillService(
-      { persistFailure: jest.fn().mockResolvedValue({}) } as never,
+      { registrarInicioTransporte: jest.fn(async () => undefined), persistFailure: jest.fn().mockResolvedValue({}) } as never,
       { sendBill } as never,
       undefined,
       { resolve: async () => context } as never,

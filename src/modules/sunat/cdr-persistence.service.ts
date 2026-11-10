@@ -36,6 +36,17 @@ export interface PersistCdrParams {
 export class CdrPersistenceService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Commit durable antes de invocar sendBill; si falla, no se abre conexión. */
+  async registrarInicioTransporte(params: { invoiceId: string; estadoActual?: InvoiceStatus | null; intento?: number }) {
+    const invoice = await this.prisma.invoice.findUniqueOrThrow({ where: { id: params.invoiceId }, select: { company_id: true, estado: true } });
+    return this.prisma.transactionHistory.create({ data: {
+      company_id: invoice.company_id, invoice_id: params.invoiceId,
+      intento: params.intento ?? 1, estado_anterior: invoice.estado, estado_nuevo: invoice.estado,
+      codigo_error: 'M1_TRANSPORT_STARTED', mensaje_error: 'Inicio de intento de transporte sendBill; resultado aún desconocido.',
+      tiempo_respuesta_ms: null, http_status_code: null,
+    } });
+  }
+
   async persist(params: PersistCdrParams) {
     const {
       invoiceId,

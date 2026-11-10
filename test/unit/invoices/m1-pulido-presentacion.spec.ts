@@ -21,3 +21,11 @@ it('respeta orden temporal y no revive un bloqueo antiguo tras una decisión pos
 it.each(['ACEPTADO', 'OBSERVADO', 'EN_COLA', 'ERROR_RED', 'ANULADO'])('un evento antiguo no cambia la lectura actual %s', estado => {
   expect(presentarResultado(estado, null, [evento('Validación XSL local: error')])).toBeUndefined();
 });
+
+it('incertidumbre se presenta con motivo sin convertirla en rechazo ni ausencia', () => {
+  const history = [{ estado_nuevo: 'ERROR_RED', codigo_error: 'M1_TRANSPORT_UNCERTAIN', mensaje_error: 'Incertidumbre de transporte: Beta sin CDR', created_at: new Date('2026-11-10') }];
+  expect(presentarResultado('ERROR_RED', null, history, true)).toEqual({ origen: 'TRANSPORTE_INCIERTO', codigo: 'M1_TRANSPORT_UNCERTAIN', motivo: history[0].mensaje_error });
+  expect(presentarResultado('ENVIADO', null, [], true)?.motivo).toContain('consultar antes de reenviar');
+  expect(presentarResultado('ACEPTADO', null, history, true)).toBeUndefined();
+  expect(presentarResultado('ERROR_RED', null, history, false)).toBeUndefined();
+});
