@@ -272,6 +272,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
         correlativo: true,
         fecha_emision: true,
         payload_ubl: true,
+        referenced_invoice_id: true,
+        referenced_series_correlative: true,
+        credit_debit_reason_code: true,
         items: {
           orderBy: { item_order: 'asc' },
           select: {
@@ -309,6 +312,9 @@ export class InvoiceJobConsumer implements OnModuleInit {
         afectacion: item.igv_affectation_type,
       })),
       importes,
+      motivoNota: fila.credit_debit_reason_code ?? undefined,
+      documentoAfectadoId: fila.referenced_invoice_id ?? undefined,
+      documentoAfectadoNumero: fila.referenced_series_correlative ?? undefined,
       motivoBloqueoAsiento: null,
     };
   }
