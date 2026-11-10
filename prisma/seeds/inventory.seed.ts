@@ -365,8 +365,141 @@ export async function seedInventory(prisma: PrismaClient) {
     return;
   }
 
+  // 0. Asegurar Unidades Oficiales SUNAT (Tabla 6)
+  const officialUnits = [
+    { code: 'NIU', name: 'UNIDAD (BIENES)', symbol: 'u' },
+    { code: 'KGM', name: 'KILOGRAMO', symbol: 'kg' },
+    { code: 'LTR', name: 'LITRO', symbol: 'L' },
+    { code: 'MTR', name: 'METRO LINEAL', symbol: 'm' },
+    { code: 'BX', name: 'CAJA', symbol: 'cja' },
+    { code: 'DZN', name: 'DOCENA', symbol: 'doc' },
+    { code: 'GRM', name: 'GRAMO', symbol: 'g' },
+    { code: 'SET', name: 'JUEGO / CONJUNTO', symbol: 'jgo' },
+    { code: 'FDO', name: 'FARDO', symbol: 'fdo' },
+    { code: 'BLS', name: 'BOLSA', symbol: 'bls' },
+    { code: 'CIL', name: 'CILINDRO', symbol: 'cil' },
+    { code: 'BAL', name: 'BALDE', symbol: 'bde' },
+    { code: 'BOT', name: 'BOTELLA', symbol: 'bot' },
+    { code: 'PK', name: 'PAQUETE', symbol: 'paq' },
+    { code: 'ROL', name: 'ROLLO', symbol: 'rol' },
+    { code: 'TNE', name: 'TONELADA METRICA', symbol: 't' },
+    { code: 'MTK', name: 'METRO CUADRADO', symbol: 'm²' },
+    { code: 'MTQ', name: 'METRO CUBICO', symbol: 'm³' },
+    { code: 'GLL', name: 'US GALON (3.785 L)', symbol: 'gal' },
+    { code: 'ZZ', name: 'SERVICIO / UNIDAD MUTUA', symbol: 'srv' },
+  ];
+  for (const u of officialUnits) {
+    await prisma.sunatUnitMeasurement.upsert({
+      where: { code: u.code },
+      update: { name: u.name, symbol: u.symbol },
+      create: { code: u.code, name: u.name, symbol: u.symbol },
+    }).catch(() => {});
+  }
+
   for (const company of companies) {
     console.log(`Poblando catálogo y almacén para empresa ${company.ruc} - ${company.legal_name}...`);
+
+    // 0.1 Asegurar mantenedores de inventario: Marcas, Modelos, Categorías, Fabricantes, Tags
+    const defaultBrands = [
+      { code: 'SOL', name: 'Sol (UNACEM)', description: 'Cementos y aglomerantes nacionales' },
+      { code: 'AND', name: 'Andino (UNACEM)', description: 'Cementos puzolánicos' },
+      { code: 'YUR', name: 'Yura', description: 'Cementos de alta resistencia' },
+      { code: 'AC-ARE', name: 'Aceros Arequipa', description: 'Barras y perfiles de acero corrugado' },
+      { code: 'SID', name: 'Siderperú', description: 'Fierro y barras de construcción' },
+      { code: 'PAV', name: 'Pavco Wavin', description: 'Tuberías y conexiones PVC' },
+      { code: 'TIG', name: 'Tigre Perú', description: 'Sistemas de tuberías y sanitarios' },
+      { code: 'BOS', name: 'Bosch', description: 'Herramientas eléctricas y accesorios' },
+      { code: 'MAK', name: 'Makita', description: 'Herramientas y maquinaria ligera' },
+      { code: 'DEC', name: 'DecorCeramica', description: 'Porcelanatos y acabados importados' },
+      { code: 'GEN', name: 'Genérico / Sin Marca', description: 'Productos estándar sin marca comercial' },
+    ];
+    for (const b of defaultBrands) {
+      await prisma.inventoryBrand.upsert({
+        where: { company_id_code: { company_id: company.id, code: b.code } },
+        update: { name: b.name, description: b.description },
+        create: { company_id: company.id, code: b.code, name: b.name, description: b.description },
+      }).catch(() => {});
+    }
+
+    const defaultCategories = [
+      { code: 'CEM', name: 'Cementos y Aglomerantes', sunat_code: '30111600' },
+      { code: 'ACE', name: 'Aceros y Metales', sunat_code: '30102400' },
+      { code: 'TUB', name: 'Tuberías y Conexiones', sunat_code: '40171500' },
+      { code: 'GRI', name: 'Griferías y Sanitarios', sunat_code: '30181500' },
+      { code: 'ACA', name: 'Pisos y Acabados', sunat_code: '30161700' },
+      { code: 'HER', name: 'Herramientas Eléctricas y Manuales', sunat_code: '27110000' },
+      { code: 'PIN', name: 'Pinturas e Impermeabilizantes', sunat_code: '31211500' },
+      { code: 'ILU', name: 'Iluminación y Material Eléctrico', sunat_code: '39111500' },
+      { code: 'VAL', name: 'Válvulas y Control de Fluidos', sunat_code: '40141600' },
+      { code: 'SEG', name: 'Seguridad Industrial y EPP', sunat_code: '46181500' },
+    ];
+    for (const c of defaultCategories) {
+      await prisma.inventoryCategory.upsert({
+        where: { company_id_code: { company_id: company.id, code: c.code } },
+        update: { name: c.name, sunat_code: c.sunat_code },
+        create: { company_id: company.id, code: c.code, name: c.name, sunat_code: c.sunat_code },
+      }).catch(() => {});
+    }
+
+    const defaultModels = [
+      { code: 'MOD-GSB13', name: 'GSB 13 RE (Taladro Percutor 650W)', brand_name: 'Bosch', description: 'Taladro percutor mandril 1/2"' },
+      { code: 'MOD-GWS700', name: 'GWS 700 (Amoladora Angular 710W)', brand_name: 'Bosch', description: 'Esmeril angular disco 4-1/2"' },
+      { code: 'MOD-HP1640', name: 'HP1640 (Taladro de Impacto 680W)', brand_name: 'Makita', description: 'Taladro de percusión para concreto y metal' },
+      { code: 'MOD-GA4530', name: 'GA4530 (Esmeril Angular 720W)', brand_name: 'Makita', description: 'Amoladora cuerpo delgado' },
+      { code: 'MOD-GR60', name: 'Grado 60 (Barra Corrugada ASTM A615)', brand_name: 'Aceros Arequipa', description: 'Acero de refuerzo estructural antisísmico' },
+      { code: 'MOD-ALM16', name: 'Alambre N° 16 (Recocido)', brand_name: 'Aceros Arequipa', description: 'Alambre negro para amarre de estribos' },
+      { code: 'MOD-SID60', name: 'Sider 60 (Fierro Habilitado)', brand_name: 'Siderperú', description: 'Fierro de construcción normalizado' },
+      { code: 'MOD-DES4', name: 'Desagüe Serie Blanca 4" x 3m', brand_name: 'Pavco Wavin', description: 'Tubería sanitaria PVC con unión flexible' },
+      { code: 'MOD-AGU12', name: 'Agua Fría Clase 10 1/2" x 5m', brand_name: 'Pavco Wavin', description: 'Tubería de presión roscable para agua potable' },
+      { code: 'MOD-SAN4', name: 'PVC Sanitario Clase A 4"', brand_name: 'Tigre Perú', description: 'Tubería y conexiones para evacuación' },
+      { code: 'MOD-POR60', name: 'Porcelanato 60x60 Pulido Rectificado', brand_name: 'DecorCeramica', description: 'Acabado vitrificado de alta resistencia' },
+      { code: 'MOD-T1-425', name: 'Portland Tipo I Bolsa 42.5 kg', brand_name: 'Sol (UNACEM)', description: 'Cemento para obras generales y estructuras' },
+    ];
+    for (const m of defaultModels) {
+      await prisma.inventoryModel.upsert({
+        where: { company_id_code: { company_id: company.id, code: m.code } },
+        update: { name: m.name, brand_name: m.brand_name, description: m.description },
+        create: { company_id: company.id, code: m.code, name: m.name, brand_name: m.brand_name, description: m.description },
+      }).catch(() => {});
+    }
+
+    const defaultManufacturers = [
+      { name: 'UNACEM S.A.A.', country_code: 'PE', website: 'https://www.unacem.com.pe', contact_info: 'RUC 20100132592 - ventas@unacem.com.pe' },
+      { name: 'Yura S.A.', country_code: 'PE', website: 'https://www.yura.com.pe', contact_info: 'RUC 20100180139 - atencion@yura.com.pe' },
+      { name: 'Corporación Aceros Arequipa S.A.', country_code: 'PE', website: 'https://www.acerosarequipa.com', contact_info: 'RUC 20100067644 - ventas@acerosarequipa.com' },
+      { name: 'Empresa Siderúrgica del Perú S.A.A. (Siderperú)', country_code: 'PE', website: 'https://www.siderperu.com.pe', contact_info: 'RUC 20100055204' },
+      { name: 'Mexichem Perú S.A. (Pavco Wavin)', country_code: 'PE', website: 'https://wavin.com/pe', contact_info: 'RUC 20100152941' },
+      { name: 'Tigre Perú Tubos y Conexiones S.A.', country_code: 'PE', website: 'https://www.tigre.pe', contact_info: 'RUC 20519129531' },
+      { name: 'Robert Bosch Perú S.A.', country_code: 'DE', website: 'https://www.bosch-pt.com.pe', contact_info: 'RUC 20100155029 - Herramientas eléctricas' },
+      { name: 'Makita Perú S.A.', country_code: 'JP', website: 'https://www.makita.pe', contact_info: 'RUC 20512803610 - Herramientas industriales' },
+      { name: 'Foshan Nanhai Ceramics Co., Ltd.', country_code: 'CN', website: 'https://www.foshanceramics.com', contact_info: 'Guangdong, China - Proveedor de Porcelanatos' },
+      { name: 'C&A Industrial Steel Co., Ltd.', country_code: 'CN', website: 'https://www.casteel.com', contact_info: 'Hebei, China - Aceros y perfiles' },
+    ];
+    for (const mf of defaultManufacturers) {
+      await prisma.inventoryManufacturer.upsert({
+        where: { company_id_name: { company_id: company.id, name: mf.name } },
+        update: { country_code: mf.country_code, website: mf.website, contact_info: mf.contact_info },
+        create: { company_id: company.id, name: mf.name, country_code: mf.country_code, website: mf.website, contact_info: mf.contact_info },
+      }).catch(() => {});
+    }
+
+    const defaultTags = [
+      { name: 'alta-rotacion', color: 'emerald' },
+      { name: 'rotacion-media', color: 'blue' },
+      { name: 'baja-rotacion', color: 'amber' },
+      { name: 'producto-importado', color: 'purple' },
+      { name: 'compra-nacional', color: 'emerald' },
+      { name: 'material-pesado', color: 'amber' },
+      { name: 'obra-civil', color: 'blue' },
+      { name: 'acabado-fino', color: 'purple' },
+    ];
+    for (const t of defaultTags) {
+      await prisma.inventoryTag.upsert({
+        where: { company_id_name: { company_id: company.id, name: t.name } },
+        update: { color: t.color },
+        create: { company_id: company.id, name: t.name, color: t.color },
+      }).catch(() => {});
+    }
 
     // 1. Asegurar almacén principal
     const warehouse = await prisma.inventoryWarehouse.upsert({

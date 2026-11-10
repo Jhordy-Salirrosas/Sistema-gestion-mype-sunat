@@ -11,6 +11,7 @@ import { AuthModule } from './modules/auth/authModule';
 import { SireModule } from './modules/sire/sireModule';
 import { AccountingModule } from './modules/accounting/accountingModule';
 import { InventoryModule } from './modules/inventory/inventoryModule';
+import { PurchasesModule } from './modules/purchases/purchasesModule';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { InventoryModule } from './modules/inventory/inventoryModule';
     SireModule,
     AccountingModule,
     InventoryModule,
+    PurchasesModule,
   ],
   controllers: [],
   providers: [],

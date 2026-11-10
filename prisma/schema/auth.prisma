@@ -71,6 +71,14 @@ model Company {
   business_partners     BusinessPartner[]
   accounting_mappings   AccountingMapping[]
   treasury_movements    TreasuryMovement[]
+  inventory_brands             InventoryBrand[]
+  inventory_models             InventoryModel[]
+  inventory_categories         InventoryCategory[]
+  inventory_manufacturers      InventoryManufacturer[]
+  inventory_tags               InventoryTag[]
+  inventory_product_suppliers  InventoryProductSupplier[]
+  inventory_product_presentations InventoryProductPresentation[]
+  inventory_product_variants   InventoryProductVariant[]
 
   @@map("companies")
 }

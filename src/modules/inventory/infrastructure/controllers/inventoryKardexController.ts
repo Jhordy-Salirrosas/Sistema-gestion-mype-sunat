@@ -1,6 +1,8 @@
 import {
+  Body,
   Controller,
   Get,
+  Post,
   Query,
   UnauthorizedException,
   UseGuards,
@@ -8,11 +10,15 @@ import {
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InventoryKardexService } from '../../application/services/inventoryKardexService';
+import { InventoryCostLayerService } from '../../application/services/inventoryCostLayerService';
 
 @Controller('api/v1/inventory/kardex')
 @UseGuards(AuthGuard)
 export class InventoryKardexController {
-  constructor(private readonly kardex: InventoryKardexService) {}
+  constructor(
+    private readonly kardex: InventoryKardexService,
+    private readonly costLayers: InventoryCostLayerService,
+  ) {}
 
   @Get()
   getKardex(
@@ -54,5 +60,29 @@ export class InventoryKardexController {
   getConsolidated(@CurrentCompany() companyId: string | undefined) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.kardex.getConsolidated(companyId);
+  }
+
+  @Get('config')
+  getCostConfig(@CurrentCompany() companyId: string | undefined) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.costLayers.getCostConfig(companyId);
+  }
+
+  @Post('config/method')
+  updateCostMethod(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() body: { method: 'PROMEDIO' | 'FIFO' },
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.costLayers.updateCostMethod(companyId, body?.method);
+  }
+
+  @Post('config/recalculate')
+  recalculateCosting(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() body: { method?: 'PROMEDIO' | 'FIFO' },
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.costLayers.recalculateCosting(companyId, body?.method);
   }
 }

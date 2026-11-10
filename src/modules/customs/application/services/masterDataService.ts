@@ -16,6 +16,9 @@ import {
   UpsertCurrencyDto,
   UpsertDocumentTypeDto,
   UpsertIncotermDto,
+  UpsertCountryDto,
+  UpsertPortDto,
+  UpdateExchangeRateDto,
 } from '../dto/masterDataDto';
 
 /**
@@ -80,6 +83,57 @@ export class MasterDataService {
         date,
         source: dto.source ?? 'MANUAL',
       },
+    });
+  }
+
+  async updateExchangeRate(id: string, dto: UpdateExchangeRateDto) {
+    const existing = await this.prisma.exchangeRate.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Tipo de cambio no encontrado.');
+    return this.prisma.exchangeRate.update({
+      where: { id },
+      data: {
+        rate: dto.rate,
+        ...(dto.source ? { source: dto.source } : {}),
+      },
+    });
+  }
+
+  async syncTodayExchangeRate() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let rate = 3.755;
+    let source = 'SUNAT';
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const resp = await fetch('https://api.apis.net.pe/v1/tipo-cambio-sunat', { signal: controller.signal });
+      clearTimeout(timeout);
+      if (resp.ok) {
+        const data = (await resp.json()) as { venta?: number; compra?: number };
+        if (data?.venta) {
+          rate = Number(data.venta);
+          source = 'SUNAT';
+        }
+      }
+    } catch {
+      const last = await this.prisma.exchangeRate.findFirst({
+        where: { base_currency: 'USD', quote_currency: 'PEN' },
+        orderBy: { date: 'desc' },
+      });
+      if (last) {
+        rate = Number(last.rate);
+        source = last.source;
+      }
+    }
+
+    return this.createExchangeRate({
+      baseCurrency: 'USD',
+      quoteCurrency: 'PEN',
+      rate,
+      date: today.toISOString(),
+      source,
     });
   }
 
@@ -163,7 +217,7 @@ export class MasterDataService {
       throw new ConflictException('Ya existe un tercero con ese documento.');
     }
 
-    return this.prisma.businessPartner.create({
+    const partner = await this.prisma.businessPartner.create({
       data: {
         company_id: companyId,
         doc_type: dto.docType,
@@ -189,10 +243,105 @@ export class MasterDataService {
         currency_code: (dto.currencyCode ?? 'PEN').toUpperCase(),
       },
     });
+
+    const country = (dto.countryCode ?? 'PE').toUpperCase();
+    const currency = (dto.currencyCode ?? 'PEN').toUpperCase();
+
+    if (dto.city || dto.postalCode || dto.address) {
+      await this.prisma.partnerAddress.create({
+        data: {
+          partner_id: partner.id,
+          label: 'OFICINA_CENTRAL',
+          address: dto.address?.trim() || 'N/A',
+          city: dto.city?.trim() || null,
+          postal_code: dto.postalCode?.trim() || null,
+          country_code: country,
+          is_default: true,
+        },
+      });
+    }
+
+    if (dto.contactName) {
+      await this.prisma.partnerContact.create({
+        data: {
+          partner_id: partner.id,
+          name: dto.contactName.trim(),
+          email: dto.email?.trim() || null,
+          phone: dto.phone?.trim() || null,
+          position: 'Contacto Comercial',
+          is_primary: true,
+        },
+      });
+    }
+
+    if (dto.bankName || dto.accountNumber || dto.swiftCode) {
+      await this.prisma.partnerBankAccount.create({
+        data: {
+          partner_id: partner.id,
+          bank_name: dto.bankName?.trim() || 'Banco',
+          bank_country: country,
+          account_number: dto.accountNumber?.trim() || '-',
+          swift: dto.swiftCode?.trim() || null,
+          currency_code: currency,
+          is_default: true,
+        },
+      });
+    }
+
+    // Si es del exterior o importador, sincronizar también en foreign_suppliers
+    const rolesUpper = (dto.roles ?? []).map((r) => r.toUpperCase());
+    if (rolesUpper.includes('IMPORTADOR') || rolesUpper.includes('PROVEEDOR_EXTERIOR') || country !== 'PE') {
+      try {
+        await this.prisma.foreignSupplier.upsert({
+          where: {
+            company_id_tax_id: {
+              company_id: companyId,
+              tax_id: dto.docNumber,
+            },
+          },
+          update: {
+            business_name: dto.legalName,
+            country_code: country,
+            city: dto.city?.trim() || null,
+            postal_code: dto.postalCode?.trim() || null,
+            address: dto.address?.trim() || null,
+            contact_name: dto.contactName?.trim() || null,
+            email: dto.email?.trim() || null,
+            phone: dto.phone?.trim() || null,
+            payment_terms: dto.paymentTerms?.trim() || null,
+            bank_name: dto.bankName?.trim() || null,
+            bank_account: dto.accountNumber?.trim() || null,
+            swift_code: dto.swiftCode?.trim() || null,
+            default_currency: currency,
+          },
+          create: {
+            company_id: companyId,
+            tax_id: dto.docNumber,
+            business_name: dto.legalName,
+            country_code: country,
+            city: dto.city?.trim() || null,
+            postal_code: dto.postalCode?.trim() || null,
+            address: dto.address?.trim() || null,
+            contact_name: dto.contactName?.trim() || null,
+            email: dto.email?.trim() || null,
+            phone: dto.phone?.trim() || null,
+            payment_terms: dto.paymentTerms?.trim() || null,
+            bank_name: dto.bankName?.trim() || null,
+            bank_account: dto.accountNumber?.trim() || null,
+            swift_code: dto.swiftCode?.trim() || null,
+            default_currency: currency,
+          },
+        });
+      } catch (err) {
+        console.warn('Advertencia al sincronizar con ForeignSupplier:', err);
+      }
+    }
+
+    return partner;
   }
 
   async updatePartner(companyId: string, id: string, dto: UpdatePartnerDto) {
-    await this.getPartner(companyId, id);
+    const existing = await this.getPartner(companyId, id);
 
     const data: Record<string, unknown> = {};
     if (dto.legalName !== undefined) data.legal_name = dto.legalName;
@@ -213,10 +362,136 @@ export class MasterDataService {
     if (dto.currencyCode !== undefined) data.currency_code = dto.currencyCode.toUpperCase();
     if (dto.isActive !== undefined) data.is_active = dto.isActive;
 
-    return this.prisma.businessPartner.update({
+    const updated = await this.prisma.businessPartner.update({
       where: { id },
       data: data as never,
     });
+
+    const targetCountry = (dto.countryCode ?? existing.country_code ?? 'PE').toUpperCase();
+    const targetCurrency = (dto.currencyCode ?? existing.currency_code ?? 'PEN').toUpperCase();
+
+    // Actualizar o crear dirección principal con ciudad / código postal
+    if (dto.city !== undefined || dto.postalCode !== undefined || dto.address !== undefined) {
+      const existingAddress = await this.prisma.partnerAddress?.findFirst?.({
+        where: { partner_id: id },
+      });
+      if (existingAddress && this.prisma.partnerAddress?.update) {
+        await this.prisma.partnerAddress.update({
+          where: { id: existingAddress.id },
+          data: {
+            ...(dto.address !== undefined ? { address: dto.address?.trim() || existingAddress.address } : {}),
+            ...(dto.city !== undefined ? { city: dto.city?.trim() || null } : {}),
+            ...(dto.postalCode !== undefined ? { postal_code: dto.postalCode?.trim() || null } : {}),
+            country_code: targetCountry,
+          },
+        });
+      } else if ((dto.city || dto.postalCode || dto.address) && this.prisma.partnerAddress?.create) {
+        await this.prisma.partnerAddress.create({
+          data: {
+            partner_id: id,
+            label: 'OFICINA_CENTRAL',
+            address: dto.address?.trim() || existing.address || 'N/A',
+            city: dto.city?.trim() || null,
+            postal_code: dto.postalCode?.trim() || null,
+            country_code: targetCountry,
+            is_default: true,
+          },
+        });
+      }
+    }
+
+    // Actualizar o crear contacto comercial
+    if (dto.contactName !== undefined || dto.email !== undefined || dto.phone !== undefined) {
+      const existingContact = await this.prisma.partnerContact?.findFirst?.({
+        where: { partner_id: id },
+      });
+      if (existingContact && this.prisma.partnerContact?.update) {
+        await this.prisma.partnerContact.update({
+          where: { id: existingContact.id },
+          data: {
+            ...(dto.contactName !== undefined ? { name: dto.contactName.trim() } : {}),
+            ...(dto.email !== undefined ? { email: dto.email?.trim() || null } : {}),
+            ...(dto.phone !== undefined ? { phone: dto.phone?.trim() || null } : {}),
+          },
+        });
+      } else if (dto.contactName && this.prisma.partnerContact?.create) {
+        await this.prisma.partnerContact.create({
+          data: {
+            partner_id: id,
+            name: dto.contactName.trim(),
+            email: dto.email?.trim() || existing.email || null,
+            phone: dto.phone?.trim() || existing.phone || null,
+            position: 'Contacto Comercial',
+            is_primary: true,
+          },
+        });
+      }
+    }
+
+    // Actualizar o crear cuenta bancaria
+    if (dto.bankName !== undefined || dto.accountNumber !== undefined || dto.swiftCode !== undefined) {
+      const existingBank = await this.prisma.partnerBankAccount?.findFirst?.({
+        where: { partner_id: id },
+      });
+      if (existingBank && this.prisma.partnerBankAccount?.update) {
+        await this.prisma.partnerBankAccount.update({
+          where: { id: existingBank.id },
+          data: {
+            ...(dto.bankName !== undefined ? { bank_name: dto.bankName.trim() } : {}),
+            ...(dto.accountNumber !== undefined ? { account_number: dto.accountNumber.trim() } : {}),
+            ...(dto.swiftCode !== undefined ? { swift: dto.swiftCode?.trim() || null } : {}),
+            bank_country: targetCountry,
+            currency_code: targetCurrency,
+          },
+        });
+      } else if ((dto.bankName || dto.accountNumber || dto.swiftCode) && this.prisma.partnerBankAccount?.create) {
+        await this.prisma.partnerBankAccount.create({
+          data: {
+            partner_id: id,
+            bank_name: dto.bankName?.trim() || 'Banco',
+            bank_country: targetCountry,
+            account_number: dto.accountNumber?.trim() || '-',
+            swift: dto.swiftCode?.trim() || null,
+            currency_code: targetCurrency,
+            is_default: true,
+          },
+        });
+      }
+    }
+
+    // Sincronizar en foreign_suppliers si existe tax_id coincidente
+    try {
+      const foreign = await this.prisma.foreignSupplier?.findFirst?.({
+        where: {
+          company_id: companyId,
+          tax_id: existing.doc_number,
+        },
+      });
+      if (foreign && this.prisma.foreignSupplier?.update) {
+        await this.prisma.foreignSupplier.update({
+          where: { id: foreign.id },
+          data: {
+            ...(dto.legalName ? { business_name: dto.legalName.trim() } : {}),
+            ...(dto.countryCode ? { country_code: dto.countryCode.toUpperCase() } : {}),
+            ...(dto.address !== undefined ? { address: dto.address?.trim() || null } : {}),
+            ...(dto.city !== undefined ? { city: dto.city?.trim() || null } : {}),
+            ...(dto.postalCode !== undefined ? { postal_code: dto.postalCode?.trim() || null } : {}),
+            ...(dto.contactName !== undefined ? { contact_name: dto.contactName?.trim() || null } : {}),
+            ...(dto.email !== undefined ? { email: dto.email?.trim() || null } : {}),
+            ...(dto.phone !== undefined ? { phone: dto.phone?.trim() || null } : {}),
+            ...(dto.paymentTerms !== undefined ? { payment_terms: dto.paymentTerms?.trim() || null } : {}),
+            ...(dto.bankName !== undefined ? { bank_name: dto.bankName?.trim() || null } : {}),
+            ...(dto.accountNumber !== undefined ? { bank_account: dto.accountNumber?.trim() || null } : {}),
+            ...(dto.swiftCode !== undefined ? { swift_code: dto.swiftCode?.trim() || null } : {}),
+            ...(dto.currencyCode !== undefined ? { default_currency: dto.currencyCode.toUpperCase() } : {}),
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('Advertencia al sincronizar actualización con ForeignSupplier:', err);
+    }
+
+    return updated;
   }
 
   async getPartnerTaxStatus(companyId: string, partnerId: string) {
@@ -395,5 +670,64 @@ export class MasterDataService {
 
   async deleteDocumentType(code: string) {
     return this.prisma.documentType.delete({ where: { code: code.toUpperCase() } });
+  }
+
+  // -------------------------------------------------------------------------
+  // Países
+  // -------------------------------------------------------------------------
+  listCountries() {
+    return this.prisma.country.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  upsertCountry(dto: UpsertCountryDto) {
+    const code = dto.code.trim().toUpperCase();
+    const data = {
+      name: dto.name.trim(),
+      status: (dto.status ?? 'ACTIVO').toUpperCase(),
+    };
+    return this.prisma.country.upsert({
+      where: { code },
+      update: data,
+      create: { code, ...data },
+    });
+  }
+
+  async deleteCountry(code: string) {
+    return this.prisma.country.delete({ where: { code: code.trim().toUpperCase() } });
+  }
+
+  // -------------------------------------------------------------------------
+  // Puertos
+  // -------------------------------------------------------------------------
+  listPorts(type?: string) {
+    const filterType = type?.trim().toUpperCase();
+    return this.prisma.port.findMany({
+      where: filterType && filterType !== 'TODOS' ? {
+        OR: [
+          { type: filterType },
+          { type: 'AMBOS' },
+        ],
+      } : undefined,
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  upsertPort(dto: UpsertPortDto) {
+    const code = dto.code.trim().toUpperCase();
+    const data = {
+      name: dto.name.trim(),
+      country_code: (dto.countryCode ?? 'PE').trim().toUpperCase(),
+      type: (dto.type ?? 'AMBOS').trim().toUpperCase(),
+      status: (dto.status ?? 'ACTIVO').trim().toUpperCase(),
+    };
+    return this.prisma.port.upsert({
+      where: { code },
+      update: data,
+      create: { code, ...data },
+    });
+  }
+
+  async deletePort(code: string) {
+    return this.prisma.port.delete({ where: { code: code.trim().toUpperCase() } });
   }
 }

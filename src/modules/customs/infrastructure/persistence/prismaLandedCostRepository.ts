@@ -16,6 +16,7 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
     return this.prisma.localExpenseInvoice.create({
       data: {
         shipment_id: data.shipmentId,
+        purchase_id: data.purchaseId ?? null,
         supplier_ruc: data.supplierRuc,
         supplier_name: data.supplierName,
         expense_concept: data.expenseConcept,

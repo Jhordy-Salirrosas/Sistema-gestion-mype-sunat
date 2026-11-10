@@ -28,6 +28,7 @@ export class AddLocalExpenseUseCase {
 
     const expense = await this.landedCostRepository.addLocalExpense({
       shipmentId: dto.shipment_id,
+      purchaseId: dto.purchase_id,
       supplierRuc: dto.supplier_ruc,
       supplierName: dto.supplier_name,
       expenseConcept: dto.expense_concept,

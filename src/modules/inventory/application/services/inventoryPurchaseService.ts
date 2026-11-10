@@ -1,36 +1,19 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
-import { MovingWeightedAverageEngine } from '../../domain/rules/MovingWeightedAverageEngine';
-import { CreateNationalPurchaseDto } from '../dto/nationalPurchaseDto';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
-
-const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
+import { PurchasesService } from '../../../purchases/application/services/purchasesService';
 
 /**
- * Servicio de Compras Nacionales (Fase 2).
- *
- * Registra facturas/boletas de compra de proveedores nacionales:
- * 1. Genera los movimientos de entrada al Kardex con código de operación 02 (Tabla 12 SUNAT).
- * 2. Actualiza el stock y el costo promedio ponderado en `inventory_balances`.
- * 3. Registra el IGV crédito fiscal y la cuenta por pagar al proveedor en `national_purchases`.
+ * Servicio puente para compatibilidad hacia atrás del módulo de inventario.
+ * Delega toda la lógica transaccional al módulo autónomo PurchasesService (Fase 1).
  */
 @Injectable()
-export class InventoryPurchaseService {
-  private readonly logger = new Logger(InventoryPurchaseService.name);
-
+export class InventoryPurchaseService extends PurchasesService {
   constructor(
-    private readonly prisma: PrismaService,
+    prisma: PrismaService,
     @Optional()
     private readonly accounting?: GenerateAccountingEntryUseCase,
-  ) {}
+  ) { }
 
   async listPurchases(companyId: string) {
     return this.prisma.nationalPurchase.findMany({
@@ -512,3 +495,8 @@ export class InventoryPurchaseService {
   }
 }
 
+accounting ?: GenerateAccountingEntryUseCase,
+  ) {
+  super(prisma, accounting);
+}
+}

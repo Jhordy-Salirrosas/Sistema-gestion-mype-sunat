@@ -2,8 +2,12 @@ import { InventoryCostLayerService } from '../../../src/modules/inventory/applic
 
 describe('InventoryCostLayerService', () => {
   const prisma = {
-    company: { findUnique: jest.fn() },
-    inventoryCostLayer: { findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+    company: { findUnique: jest.fn(), update: jest.fn() },
+    inventoryCostLayer: { findMany: jest.fn(), create: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
+    inventoryProduct: { count: jest.fn() },
+    inventoryWarehouse: { count: jest.fn() },
+    inventoryMovement: { count: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+    inventoryBalance: { findMany: jest.fn(), upsert: jest.fn() },
   };
   const service = new InventoryCostLayerService(prisma as never);
   beforeEach(() => jest.clearAllMocks());
@@ -35,5 +39,70 @@ describe('InventoryCostLayerService', () => {
     prisma.inventoryCostLayer.update.mockResolvedValue({});
     await service.consumir('c1', 'w1', 'p1', 4);
     expect(prisma.inventoryCostLayer.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('obtiene la configuración y valuación del inventario', async () => {
+    prisma.company.findUnique.mockResolvedValue({
+      id: 'c1',
+      ruc: '20123456789',
+      legal_name: 'EMPRESA DEMO S.A.C.',
+      inventory_cost_method: 'PROMEDIO',
+      updated_at: new Date('2026-11-01'),
+    });
+    prisma.inventoryProduct.count.mockResolvedValue(10);
+    prisma.inventoryWarehouse.count.mockResolvedValue(2);
+    prisma.inventoryMovement.count.mockResolvedValue(45);
+    prisma.inventoryBalance.findMany.mockResolvedValue([
+      { total_inventory_value: 1500.5 },
+      { total_inventory_value: 2300 },
+    ]);
+
+    const config = await service.getCostConfig('c1');
+    expect(config.currentMethod).toBe('PROMEDIO');
+    expect(config.companyRuc).toBe('20123456789');
+    expect(config.productsCount).toBe(10);
+    expect(config.totalInventoryValuePen).toBe(3800.5);
+  });
+
+  it('actualiza el método de costeo de la empresa', async () => {
+    prisma.company.update.mockResolvedValue({ id: 'c1', inventory_cost_method: 'FIFO' });
+    const res = await service.updateCostMethod('c1', 'FIFO');
+    expect(res.success).toBe(true);
+    expect(res.method).toBe('FIFO');
+    expect(prisma.company.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { inventory_cost_method: 'FIFO' },
+    });
+  });
+
+  it('recalcula costeo integral en método PROMEDIO', async () => {
+    prisma.company.findUnique.mockResolvedValue({ inventory_cost_method: 'PROMEDIO' });
+    prisma.company.update.mockResolvedValue({});
+    prisma.inventoryBalance.findMany
+      .mockResolvedValueOnce([{ total_inventory_value: 100 }]) // previous
+      .mockResolvedValueOnce([{ total_inventory_value: 150 }]); // final
+
+    prisma.inventoryMovement.findMany.mockResolvedValue([
+      {
+        id: 'm1',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'ENTRADA',
+        quantity: 10,
+        unit_cost: 15,
+        total_cost: 150,
+        movement_date: new Date('2026-11-01'),
+      },
+    ]);
+    prisma.inventoryMovement.update.mockResolvedValue({});
+    prisma.inventoryBalance.upsert.mockResolvedValue({});
+
+    const result = await service.recalculateCosting('c1', 'PROMEDIO');
+    expect(result.success).toBe(true);
+    expect(result.method).toBe('PROMEDIO');
+    expect(result.movementsCount).toBe(1);
+    expect(result.previousValuationPen).toBe(100);
+    expect(result.newValuationPen).toBe(150);
+    expect(result.differencePen).toBe(50);
   });
 });

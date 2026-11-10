@@ -43,11 +43,12 @@ async function applyMigrations() {
     const sqlContent = fs.readFileSync(sqlPath, 'utf8');
     console.log(`\n⏳ Procesando migración: ${folder}...`);
 
-    // Separar por sentencias para ejecución atómica o idempotente
-    const statements = sqlContent
+    // Limpiar comentarios de línea y separar por sentencias
+    const cleanSql = sqlContent.replace(/--.*$/gm, '');
+    const statements = cleanSql
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+      .filter(s => s.length > 0);
 
     for (const stmt of statements) {
       try {
@@ -83,6 +84,14 @@ async function applyMigrations() {
     'treasury_movements',
     'accounting_mappings',
     'accounting_entries',
+    'inventory_brands',
+    'inventory_models',
+    'inventory_categories',
+    'inventory_manufacturers',
+    'inventory_tags',
+    'sunat_unit_measurements',
+    'inventory_product_suppliers',
+    'inventory_product_presentations',
   ];
 
   for (const table of tables) {
