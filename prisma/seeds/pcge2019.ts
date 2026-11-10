@@ -381,7 +381,7 @@ export const PCGE_2019_ACCOUNTS: Array<[string, string]> = [
   ["1131", "Inversiones mantenidas para negociación – Acuerdo de compra"],
   ["1132", "Otras inversiones financieras"],
   ["1211", "No emitidas"],
-  ["1212", "Emitidas en cartera"],
+  ["1212", "Facturas, boletas y otros comprobantes por cobrar - emitidas en cartera"],
   ["1213", "En cobranza"],
   ["1214", "En descuento"],
   ["1232", "En cartera"],
