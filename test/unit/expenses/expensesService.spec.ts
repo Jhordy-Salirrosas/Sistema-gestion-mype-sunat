@@ -55,4 +55,21 @@ describe('ExpensesService', () => {
     prisma.expense.findFirst.mockResolvedValue({ id: 'g1', total_amount: 100, paid_amount: 0, status: 'PAGADO' });
     await expect(service.pay('c1', 'g1', {})).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('anula gasto sin pagos con contra-asiento', async () => {
+    const prisma = {
+      expense: { findFirst: jest.fn().mockResolvedValue({ id: 'g1', description: 'Luz', paid_amount: 0, status: 'REGISTRADO' }), update: jest.fn().mockResolvedValue({ id: 'g1', status: 'ANULADO' }) },
+      accountingEntry: { findFirst: jest.fn().mockResolvedValueOnce({ id: 'e1', lines: [{ account_code: '63111', account_name: 'Gasto', debit_amount: 100, credit_amount: 0 }, { account_code: '42121', account_name: 'CxP', debit_amount: 0, credit_amount: 100 }] }).mockResolvedValueOnce(null) },
+    };
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const service = new ExpensesService(prisma as never, accounting as never);
+    await expect(service.annul('c1', 'g1')).resolves.toMatchObject({ status: 'ANULADO' });
+    expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: 'ANUL-g1', lines: expect.arrayContaining([expect.objectContaining({ accountCode: '42121', debitAmount: 100 })]) }));
+  });
+
+  it('bloquea anulación con pagos', async () => {
+    const prisma = { expense: { findFirst: jest.fn().mockResolvedValue({ id: 'g1', paid_amount: 10, status: 'PAGO_PARCIAL' }) } };
+    const service = new ExpensesService(prisma as never, { execute: jest.fn() } as never);
+    await expect(service.annul('c1', 'g1')).rejects.toThrow('pagos registrados');
+  });
 });

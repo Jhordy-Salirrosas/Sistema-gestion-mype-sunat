@@ -21,6 +21,13 @@ export class ExpensesController {
     return this.expenses.listPayments(companyId, id);
   }
 
+  @Post(':id/annul')
+  @HttpCode(HttpStatus.OK)
+  annul(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.expenses.annul(companyId, id);
+  }
+
   @Post(':id/pay')
   @HttpCode(HttpStatus.OK)
   pay(@Param('id') id: string, @Body() dto: { amount?: number; paymentMethod?: string; bankName?: string }, @CurrentCompany() companyId?: string) {

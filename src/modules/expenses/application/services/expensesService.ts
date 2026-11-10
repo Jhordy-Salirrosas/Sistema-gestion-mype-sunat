@@ -63,6 +63,34 @@ export class ExpensesService {
     return gasto;
   }
 
+  async annul(companyId: string, id: string) {
+    const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId } });
+    if (!gasto) throw new BadRequestException('Gasto no encontrado.');
+    if (gasto.status === 'ANULADO') throw new BadRequestException('El gasto ya está anulado.');
+    if (Number(gasto.paid_amount ?? 0) > 0) throw new BadRequestException('No se puede anular un gasto con pagos registrados.');
+    const original = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: id },
+      include: { lines: true },
+    });
+    if (!original) throw new BadRequestException('El gasto no tiene asiento contable; no se puede anular.');
+    const revertido = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: `ANUL-${id}` }, select: { id: true },
+    });
+    if (!revertido) {
+      const fecha = new Date();
+      const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      await this.accounting.execute({
+        companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación gasto ${gasto.description}`,
+        sourceModule: 'EXPENSES', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `expense-annul:${id}`,
+        lines: original.lines.map((l, i) => ({
+          lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name,
+          debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount),
+        })),
+      });
+    }
+    return this.prisma.expense.update({ where: { id }, data: { status: 'ANULADO' } });
+  }
+
   async pay(companyId: string, id: string, dto: { amount?: number; paymentMethod?: string; bankName?: string }) {
     const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId } });
     if (!gasto) throw new BadRequestException('Gasto no encontrado.');
