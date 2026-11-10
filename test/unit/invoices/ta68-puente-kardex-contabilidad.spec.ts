@@ -62,6 +62,12 @@ const suma = (
 // 1 · Asiento contable de una venta
 // ---------------------------------------------------------------------------
 
+const REGLAS_VENTA_BASE = [
+  { line_order: 1, account_code: '12121' }, { line_order: 2, account_code: '40111' }, { line_order: 3, account_code: '70121' },
+  { line_order: 4, account_code: '70321' }, { line_order: 5, account_code: '70521' }, { line_order: 6, account_code: '74111' },
+  { line_order: 7, account_code: '12129' }, { line_order: 8, account_code: '40114' }, { line_order: 9, account_code: '74' },
+  { line_order: 10, account_code: '69111' }, { line_order: 11, account_code: '20111' },
+];
 describe('TA-68 · asiento de venta según el PCGE', () => {
   it('una venta gravada de 1000 + IGV 180 emite tres líneas', () => {
     const lineas = lineasAsientoVenta(VENTA_GRAVADA);
@@ -573,7 +579,7 @@ describe('TA-68 · servicio puente', () => {
       accountingRule: {
         findMany: jest.fn(async () => opciones.reglasVenta ? [
           { line_order: 1, account_code: '121210' }, { line_order: 2, account_code: '401110' }, { line_order: 3, account_code: '701210' },
-        ] : []),
+        ] : REGLAS_VENTA_BASE),
       },
     };
 
@@ -642,6 +648,15 @@ describe('TA-68 · servicio puente', () => {
     await puente.registrar(facturaPrueba());
     const asiento = asientoCreado.mock.calls[0][0] as { lines: Array<{ accountCode: string }> };
     expect(asiento.lines.map((l) => l.accountCode)).toEqual(expect.arrayContaining(['121210', '401110', '701210']));
+  });
+
+  it('falla con mensaje claro si no hay reglas de venta', async () => {
+    const { puente, asientoCreado, prisma } = dobles();
+    prisma.accountingRule.findMany.mockResolvedValue([]);
+    const resultado = await puente.registrar(facturaPrueba());
+    expect(resultado.asientoOmitido).toBe(false);
+    expect(resultado.errores.join(' ')).toContain('no hay reglas de contabilización para VENTA');
+    expect(asientoCreado).not.toHaveBeenCalled();
   });
 
   it('repone capas FIFO al revertir una nota de devolución', async () => {

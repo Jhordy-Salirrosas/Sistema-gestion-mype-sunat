@@ -7,6 +7,12 @@ import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/
 
 const importes = { gravado: 1000, igv: 180, exonerado: 0, inafecto: 0, icbper: 0, detraccion: 0, retencion: 0, total: 1080, descuentoNoAfecto: 100 };
 
+const REGLAS_VENTA_BASE = [
+  { line_order: 1, account_code: '12121' }, { line_order: 2, account_code: '40111' }, { line_order: 3, account_code: '70121' },
+  { line_order: 4, account_code: '70321' }, { line_order: 5, account_code: '70521' }, { line_order: 6, account_code: '74111' },
+  { line_order: 7, account_code: '12129' }, { line_order: 8, account_code: '40114' }, { line_order: 9, account_code: '74' },
+  { line_order: 10, account_code: '69111' }, { line_order: 11, account_code: '20111' },
+];
 describe('asiento de descuentos 01 y 03', () => {
   it('carga cobro neto y cuenta 74 contra ventas brutas e IGV', () => {
     const lineas = lineasAsientoVenta(importes);
@@ -38,7 +44,7 @@ describe('asiento de descuentos 01 y 03', () => {
       findAccounts: jest.fn(async () => ['12121', '74', '70121', '40111'].map((code) => ({ code }))),
       getNextEntryNumber: jest.fn(async () => 1), saveEntry };
     const generador = new GenerateAccountingEntryUseCase(repo as never);
-    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) }, inventoryMovement: { findMany: jest.fn(async () => []) } } as never, {} as never, generador);
+    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) }, inventoryMovement: { findMany: jest.fn(async () => []) }, accountingRule: { findMany: jest.fn(async () => REGLAS_VENTA_BASE) } } as never, {} as never, generador);
     const resultado = await puente.registrar({ id: 'inv-1', companyId: 'company-1', tipoComprobante: '01', serie: 'F001', correlativo: 1, fechaEmision: '2026-03-15', items: [], importes });
     expect(resultado.completo).toBe(true);
     expect(saveEntry).toHaveBeenCalledTimes(1);
@@ -51,7 +57,7 @@ describe('asiento de descuentos 01 y 03', () => {
     const repo = { findByIdempotencyKey: jest.fn(async () => null), findPeriod: jest.fn(async () => ({ status: 'ABIERTO' })),
       findAccounts: jest.fn(async () => ['12121', '70121', '40111'].map((code) => ({ code }))),
       getNextEntryNumber: jest.fn(async () => 1), saveEntry };
-    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) }, inventoryMovement: { findMany: jest.fn(async () => []) } } as never, {} as never, new GenerateAccountingEntryUseCase(repo as never));
+    const puente = new InvoiceAccountingBridgeService({ accountingEntry: { findFirst: jest.fn(async () => null) }, inventoryMovement: { findMany: jest.fn(async () => []) }, accountingRule: { findMany: jest.fn(async () => REGLAS_VENTA_BASE) } } as never, {} as never, new GenerateAccountingEntryUseCase(repo as never));
     const resultado = await puente.registrar({ id: 'inv-1', companyId: 'company-1', tipoComprobante: '01', serie: 'F001', correlativo: 1, fechaEmision: '2026-03-15', items: [], importes });
     expect(resultado.completo).toBe(false);
     expect(resultado.errores.join(' ')).toContain('cuenta PCGE 74 no existe');
