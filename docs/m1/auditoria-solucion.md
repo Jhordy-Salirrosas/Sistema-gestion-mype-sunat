@@ -2161,3 +2161,55 @@ Número visible proviene de configuración en ambos formularios; sin dato muestr
 interno no enviado queda 0, nunca se presenta como reserva. Lectura de configuración
 se refresca al abrir desde bandeja. Focal: front 1 archivo/3 pruebas aprobadas
 (66→67, 0→1, sin dato y cableado de ambas pantallas), sin escritura de numeración.
+
+#### Construcción — 6b-5
+
+Bloque de respuesta reutiliza la clasificación 5B: local y no confirmado dejan
+de presentarse como respuesta oficial SUNAT. Contador desglosa los tres orígenes
+sin alterar rechazados totales, estados ni documentos CDR. Agregado remoto con
+etiqueta neutral intacto. Focales: front 2 archivos/9 pruebas aprobadas, incluidos
+los casos locales de la ronda 5B y rechazo SUNAT confirmado.
+
+#### Cierre de Parte 6b — verificación y entrega
+
+Construcción completa tras la confirmación de bloque de Emma/Jhordy. Bases:
+back fecbe44ab6b5d6d969dd3a7ff1acf0a9123959a2; front Carlos
+95cf0586080422ef532be18449f8d43033734007. Cinco commits separados por punto
+(también en el ferry); los puntos exclusivamente front llevan constancia en back.
+
+| Suite completa | Base aprobada | Final |
+|---|---:|---:|
+| Back, suites aprobadas | 276 | 277 |
+| Back, pruebas aprobadas | 2544 | 2552 |
+| Back, omitidas | 4 suites /38 pruebas | 4 suites /38 pruebas |
+| Snapshots fiscales | 12 | 12, intactos |
+| Front, archivos aprobados | 112 | 118 |
+| Front, pruebas aprobadas | 849 | 866 |
+
+Cero fallos finales. Back ejecutado con cobertura e integraciones obligatorias
+en PostgreSQL 16 local desechable; sin SUNAT real. Builds back/front OK y lint
+back limpio. ESLint del front conserva 2 errores y 5 avisos de la base; se
+contrastaron las mismas fuentes base por stdin. No se relajan reglas ni se
+presenta ese lint previo como verde. La base local de pruebas se elimina al cerrar.
+Ninguna migración nueva, ningún cambio en esquema ni aplicación en base compartida.
+
+Regresión adicional 6b-2: el resumen real muestra depósito BN S73.00 y pago directo
+S657.17, manteniendo neto fiscal/cuota S657.15. Los cinco casos de aritmética y
+payload más esa prueba de UI pasan (6 pruebas nuevas de ese punto). El XML,
+las reglas tributarias, cuotas y estados fiscales no tienen cambios. El contador
+antiguo que atribuía un rechazo sin evidencia a SUNAT ahora espera origen no
+confirmado, en coherencia con la 5B.
+
+| Punto | Commit back | Commit front de origen | Evidencia focal |
+|---|---|---|---|
+| 6b-1 | 3561414 | 276acb4 | Back 1 suite/8 tests; front 1 archivo/1 test |
+| 6b-2 | 27bfd30 | 61b72bf | 6 pruebas nuevas, incluida UI y neto fiscal intacto |
+| 6b-3 | f3c3572 | c145168 | 2 archivos/3 tests: red estricta, error visible e invalidación |
+| 6b-4 | 79c2929 | 78db515 | 1 archivo/3 tests: configuración, ambos formularios y ausencia |
+| 6b-5 | Este commit | 43fa338 | 2 archivos/9 tests: local/SUNAT/no confirmado |
+
+Entrega front exclusiva por ferry/m1-pulido-6b en el remoto back, con cinco commits
+y FERRY.md completo (23 rutas exactas, hashes SHA256, bases y resultados).
+No se empuja al remoto front. Solo M1 y esta documentación: caché común,
+Resiliencia, Contabilidad e Inventario intactos. Sin emisiones reales, llamadas
+reales SUNAT, PR, fusiones o despliegues.
