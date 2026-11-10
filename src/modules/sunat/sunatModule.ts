@@ -10,8 +10,8 @@ import { ResilienceStateModule } from '../resilience/application/resilienceState
 import { ResilienceStateService } from '../resilience/application/resilienceStateService';
 import { SunatStatusConsultaService } from './statusConsultaService';
 import { CONSULTA_ESTADO_PORT } from '../resilience/infrastructure/queue/invoiceRetryService';
-import { SunatSummaryClient } from './soap/sunatSummaryOperations';
-import { resolveEndpoint, resolveTimeout } from './soap/sunatBillTypes';
+import { SunatSummaryClient, resolveSummaryTimeout } from './soap/sunatSummaryOperations';
+import { resolveEndpoint } from './soap/sunatBillTypes';
 import { AuthModule } from '../auth/authModule';
 import { RucController } from './rucController';
 import { RucConsultaService } from './rucConsultaService';
@@ -73,13 +73,11 @@ import { RucConsultaService } from './rucConsultaService';
         IssuerConfigResolver,
       ],
     },
-    // TA-67: cliente de `sendSummary` y `getStatus(ticket)`. Comparte la misma
-    // resolución de endpoint y timeout que el billService, para que apuntar al
-    // Mock en las pruebas no requiera configurar dos variables distintas.
+    // Agregados: mismo destino, presupuesto de transporte independiente.
     {
       provide: SunatSummaryClient,
       useFactory: () =>
-        new SunatSummaryClient(resolveEndpoint(), resolveTimeout()),
+        new SunatSummaryClient(resolveEndpoint(), resolveSummaryTimeout()),
     },
   ],
   exports: [

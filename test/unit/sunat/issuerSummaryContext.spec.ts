@@ -1,7 +1,7 @@
 import { summaryDispatchForTest } from '../../fixtures/summaryDispatchHarness';
 import { fakeIssuerContext } from '../../fixtures/issuerContext';
 import {
-  SunatSummaryClient,
+  SunatSummaryClient, resolveSummaryTimeout,
   SunatSummaryTransportError,
   construirSobreSendSummary,
 } from '../../../src/modules/sunat/soap/sunatSummaryOperations';
@@ -46,12 +46,12 @@ describe('D1 summary issuer context and transport errors', () => {
       expect(result.enviado).toBe(true);
       expect(resolve).toHaveBeenCalledWith(job.companyId);
       expect(sendSummary).toHaveBeenCalledWith(
-        expect.objectContaining({ context, credentials }),
+        expect.objectContaining({ context: { ...context, timeoutMs: resolveSummaryTimeout() }, credentials }),
       );
       expect(getStatus).toHaveBeenCalledWith(
         'fake-ticket',
         credentials,
-        context,
+        { ...context, timeoutMs: resolveSummaryTimeout() },
       );
     },
   );

@@ -277,8 +277,9 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const procesar = jest.fn(async () => resultado);
       const registerSummaryWorker = jest.fn();
       const consumidor = new SummaryJobConsumer(
-        { registerSummaryWorker } as never,
+        { registerSummaryWorker, encolarResumen: jest.fn(async () => 'poll-job') } as never,
         { procesar } as never,
+        {} as never,
       );
       return { consumidor, procesar, registerSummaryWorker };
     }
@@ -305,7 +306,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       });
     });
 
-    it('un 98 al agotar sondeos SÍ lanza, para que pg-boss reintente el resumen', async () => {
+    it('un 98 reprograma el ticket sin relanzar los reintentos rápidos', async () => {
       const { consumidor } = construir({
         enviado: false,
         identificador: 'RC-20261031-001',
@@ -316,7 +317,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
         error: 'SUNAT sigue procesando (código 98)',
       });
 
-      await expect(consumidor.procesar(jobDeEjemplo())).rejects.toThrow(/98/);
+      await expect(consumidor.procesar(jobDeEjemplo())).resolves.toMatchObject({ status: '98' });
     });
 
     it('un fallo sin ticket también lanza: el resumen todavía puede informarse', async () => {
