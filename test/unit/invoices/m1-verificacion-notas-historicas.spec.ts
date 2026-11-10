@@ -1,11 +1,11 @@
 import { prepareCreation } from '../../../src/modules/invoices/application/services/creationGuards';
 
 function harness() {
-  const product = { sku: 'HIST', is_active: false, tax_affectation: '20', sunat_unit_code: 'KGM' };
+  const product = { sale_price: 118, sku: 'HIST', is_active: false, tax_affectation: '20', sunat_unit_code: 'KGM' };
   const origin = { id: 'original', tipo_comprobante: '01', estado: 'ACEPTADO', serie: 'F001', correlativo: 1,
     monto_total: 118, customer_identity_type: '6', customer_identity_number: '20100070970',
     items: [{ item_code: 'HIST', igv_affectation_type: '10', unit_code: 'NIU' }] };
-  const tx = { inventoryProduct: { findMany: jest.fn(async ({ where }: { where: { is_active?: boolean } }) => where.is_active && !product.is_active ? [] : [product]) },
+  const tx = { inventoryWarehouse: { findFirst: jest.fn(async () => ({ id: 'warehouse' })) }, inventoryProduct: { findMany: jest.fn(async ({ where }: { where: { is_active?: boolean } }) => where.is_active && !product.is_active ? [] : [product]) },
     invoice: { findFirst: jest.fn(async () => origin), findMany: jest.fn(async () => []) },
     $executeRaw: jest.fn(async () => 1) };
   const dto = { tipo_comprobante: '07', serie: 'FC01', documento_afectado: 'F001-1', codigo_motivo_nota: '07',
@@ -44,4 +44,9 @@ it('motivo total usa el saldo restante después de notas previas', async () => {
 it('motivo por ítem conserva la devolución parcial', async () => {
   const h = harness(); h.dto.items[0].precioUnitario = 59;
   await expect(h.run()).resolves.toMatchObject({ codigo_motivo_nota: '07' });
+});
+
+it.each(['07', '08'])('la nota %s conserva precio histórico aunque no exista sale_price', async tipo => {
+  const h = harness(); h.dto.tipo_comprobante = tipo; h.product.sale_price = null as never;
+  expect((await h.run()).items[0].precioUnitario).toBe(118);
 });

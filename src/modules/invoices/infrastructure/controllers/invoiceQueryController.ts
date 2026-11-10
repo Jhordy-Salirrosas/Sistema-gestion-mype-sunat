@@ -107,12 +107,15 @@ export class InvoiceQueryController {
   /**
    * GET /api/v1/invoices/products
    *
-   * Catálogo de productos con su unidad, stock, costo promedio y afectación
+   * Catálogo de productos con su unidad, stock por almacén, precio final y afectación
    * tributaria (Catálogo 07) configurada en el producto.
    */
+  @Get('warehouses')
+  almacenes(@CurrentCompany() companyId: string) { return this.consultas.almacenes(companyId); }
+
   @Get('products')
-  catalogoProductos(@CurrentCompany() companyId: string) {
-    return this.consultas.catalogoProductos(companyId);
+  catalogoProductos(@CurrentCompany() companyId: string, @Query('almacen') almacen?: string) {
+    return this.consultas.catalogoProductos(companyId, almacen?.trim().toUpperCase() || 'ALM-01');
   }
 
   /**

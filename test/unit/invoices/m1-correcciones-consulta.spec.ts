@@ -207,12 +207,12 @@ describe('M1 consulta de notas y datos fiscales reales', () => {
 });
 
 describe('M1 catálogo de productos para emisión', () => {
-  it('proyecta Catálogo 07 por producto, agrega almacenes y deja null si no consta afectación', async () => {
+  it('proyecta Catálogo 07 y precio final por producto, filtra el almacén y deja null si no consta afectación', async () => {
     const prisma = {
       inventoryProduct: {
         findMany: jest.fn().mockResolvedValue([
           {
-            id: 'p1',
+            id: 'p1', sale_price: 35.4,
             sku: 'A',
             description: 'Exonerado',
             sunat_unit_code: 'NIU',
@@ -256,7 +256,7 @@ describe('M1 catálogo de productos para emisión', () => {
           sunatUnitCode: 'NIU',
           taxAffectation: '20',
           currentStock: 5.5,
-          averageUnitCost: 10,
+          salePrice: 35.4, vendible: true, motivo: null,
         },
         {
           sku: 'B',
@@ -264,7 +264,7 @@ describe('M1 catálogo de productos para emisión', () => {
           sunatUnitCode: 'KGM',
           taxAffectation: null,
           currentStock: 0,
-          averageUnitCost: 0,
+          salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
         },
         {
           sku: 'C',
@@ -272,7 +272,7 @@ describe('M1 catálogo de productos para emisión', () => {
           sunatUnitCode: 'NIU',
           taxAffectation: null,
           currentStock: 0,
-          averageUnitCost: 0,
+          salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
         },
       ],
     });
@@ -283,7 +283,7 @@ describe('M1 catálogo de productos para emisión', () => {
       }),
     );
     expect(prisma.inventoryBalance.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { company_id: company } }),
+      expect.objectContaining({ where: { company_id: company, warehouse: { warehouse_code: 'ALM-01' } } }),
     );
   });
 
@@ -304,7 +304,7 @@ describe('M1 catálogo de productos para emisión', () => {
     expect(await controller.catalogoProductos(company)).toEqual({
       balances: [],
     });
-    expect(consultas.catalogoProductos).toHaveBeenCalledWith(company);
+    expect(consultas.catalogoProductos).toHaveBeenCalledWith(company, 'ALM-01');
   });
 });
 

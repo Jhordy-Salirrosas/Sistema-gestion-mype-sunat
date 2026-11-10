@@ -36,6 +36,7 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
     tipo_comprobante: dto.tipo_comprobante as EmitirComprobanteDto['tipo_comprobante'], serie: dto.serie,
     fecha_emision: dto.fecha_emision, customer_identity_type: dto.customer_identity_type,
     customer_identity_number: dto.customer_identity_number, customer_legal_name: dto.customer_legal_name!,
+    almacen: p.almacen,
     forma_pago: p.formaPago, cuotas, descuento_global: p.descuentoGlobal,
     medio_pago_detraccion: p.medioPagoDetraccion, cuenta_banco_nacion: p.cuentaBancoNacion,
     documento_afectado: p.documentoAfectado, referenced_invoice_id: dto.referenced_invoice_id,
@@ -62,6 +63,10 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   if (!['Contado', 'Credito'].includes(dto.forma_pago as string) && ['01', '03'].includes(dto.tipo_comprobante)) {
     throw new BadRequestException('Indique la forma de pago; no se presume Contado');
   }
+  const almacen = (dto.almacen ?? 'ALM-01').trim().toUpperCase();
+  const warehouse = await tx.inventoryWarehouse.findFirst({ where: { company_id: companyId, warehouse_code: almacen, is_active: true }, select: { id: true } });
+  if (!warehouse) throw new BadRequestException(`Almacén no disponible en la empresa: ${almacen}`);
+  dto.almacen = almacen;
   const codigos = dto.items.map((l) => l.codigo?.trim());
   if (codigos.some((c) => !c)) throw new BadRequestException('Cada producto o servicio debe estar registrado con código y afectación');
   const esNota = dto.tipo_comprobante === '07' || dto.tipo_comprobante === '08';
@@ -78,10 +83,11 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   }
   const productos = await tx.inventoryProduct.findMany({ where: {
     company_id: companyId, sku: { in: codigos as string[] }, ...(esNota ? {} : { is_active: true }),
-  }, select: { sku: true, tax_affectation: true, sunat_unit_code: true, is_active: true } });
+  }, select: { sku: true, tax_affectation: true, sunat_unit_code: true, is_active: true, sale_price: true } });
   for (const l of dto.items) {
     const producto = productos.find((p) => p.sku === l.codigo!.trim());
     if (!producto) throw new BadRequestException(`Producto o servicio no registrado: ${l.codigo}`);
+    if (!esNota && (!Number.isFinite(Number(producto.sale_price)) || !(Number(producto.sale_price) > 0))) throw new BadRequestException(`Producto ${l.codigo} sin precio de venta configurado`);
     const candidatas = historicas.filter(h => h.item_code === l.codigo!.trim());
     const historica = candidatas.find(h => (!l.afectacion || l.afectacion === h.igv_affectation_type) && (!l.unidad || l.unidad === h.unit_code));
     if ((candidatas.length && !historica) || (producto.is_active === false && !historica)) throw new BadRequestException('La línea inactiva o histórica debe corresponder al comprobante origen');
@@ -95,6 +101,9 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     if (l.unidad && l.unidad !== unidad) throw new BadRequestException('No puede alterar la unidad del producto');
     if (!Number.isFinite(l.precioUnitario)) {
       throw new BadRequestException('Indique precio unitario con IGV y cantidad válidos');
+    }
+    if (!esNota && !new Prisma.Decimal(producto.sale_price!).equals(l.precioUnitario!)) {
+      throw new BadRequestException(`El precio de venta de ${l.codigo} cambió o no coincide con el configurado; actualice el catálogo`);
     }
     l.afectacion = afectacion;
     l.unidad = unidad;

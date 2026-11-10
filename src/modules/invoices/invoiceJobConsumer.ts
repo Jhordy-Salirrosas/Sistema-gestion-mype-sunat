@@ -302,6 +302,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       serie: fila.serie,
       correlativo: fila.correlativo,
       fechaEmision: fila.fecha_emision.toISOString().slice(0, 10),
+      almacen: payload.almacen,
       cliente: { razonSocial: payload.cliente?.razonSocial },
       items: items.map((item) => ({
         itemCode: item.item_code ?? undefined,

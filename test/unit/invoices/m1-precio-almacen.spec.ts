@@ -1,0 +1,35 @@
+import { StockValidationService } from '../../../src/modules/invoices/application/services/stockValidationService';
+import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
+import { InvoiceStatus } from '../../../src/generated/client/enums';
+
+it('no usa stock de otros almacenes y suma el SKU repetido solo en el elegido', async () => {
+  const groupBy = jest.fn(async ({ where }) => [{ product_id: 'p', _sum: { current_stock: where.warehouse.warehouse_code === 'ALM-02' ? 2 : 300 } }]);
+  const stock = new StockValidationService({ inventoryBalance: { groupBy }, inventoryProduct: { findMany: async () => [{ id: 'p', sku: 'CEM', is_inventory: true, description: 'Cemento' }] } } as never);
+  const lineas = [1, 2].map(cantidad => ({ codigo: 'CEM', descripcion: 'Cemento', cantidad }));
+  await expect(stock.validar('empresa', lineas, 'ALM-02')).rejects.toThrow('hay 2');
+  await expect(stock.validar('empresa', lineas, 'ALM-01')).resolves.toMatchObject({ validados: 2 });
+});
+it('el consumidor entrega al puente el almacén persistido, sin resolver otro', async () => {
+  const registrar = jest.fn(async () => ({ asientoId: 'asiento', completo: true, movimientosRegistrados: 1, movimientosOmitidos: 0, asientoOmitido: false, errores: [] }));
+  const fila = { id: 'inv', company_id: 'empresa', tipo_comprobante: '01', serie: 'F001', correlativo: 1,
+    fecha_emision: new Date('2026-11-10'), payload_ubl: { almacen: 'ALM-02', montoTotal: 118 }, items: [{ item_code: 'CEM', quantity: 1, unit_value: 100, igv_affectation_type: '10' }] };
+  const consumer = new InvoiceJobConsumer({} as never, {} as never, { invoice: { findUnique: async () => fila } } as never,
+    {} as never, {} as never, {} as never, {} as never, {} as never, { registrar } as never, {} as never, {} as never);
+  await (consumer as any).registrarEnContabilidad('inv', InvoiceStatus.ACEPTADO);
+  expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ almacen: 'ALM-02', companyId: 'empresa' }));
+});
+
+it('el catálogo marca precios ausentes sin exponer costo como precio y filtra el stock elegido', async () => {
+  const { InvoiceQueryService } = await import('../../../src/modules/invoices/application/services/invoiceQueryService');
+  const findMany = jest.fn(async () => [{ product_id: 'p', current_stock: 2, average_unit_cost: 15 }]);
+  const warehouses = jest.fn(async () => [{ warehouse_code: 'ALM-01', description: 'Principal' }]);
+  const query = new InvoiceQueryService({ inventoryBalance: { findMany }, inventoryWarehouse: { findMany: warehouses },
+    inventoryProduct: { findMany: async () => [null, 0, -1, 35.4].map((sale_price, i) => ({ id: 'p', sku: `P${i}`, description: 'Producto', sale_price })) } } as never, {} as never);
+  const { balances } = await query.catalogoProductos('empresa', 'ALM-02');
+  expect(balances.slice(0, 3)).toEqual(expect.arrayContaining([expect.objectContaining({ salePrice: null, vendible: false, motivo: 'sin precio de venta configurado' })]));
+  expect(balances[3]).toMatchObject({ salePrice: 35.4, vendible: true, currentStock: 2 });
+  expect(balances[3]).not.toHaveProperty('averageUnitCost');
+  expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { company_id: 'empresa', warehouse: { warehouse_code: 'ALM-02' } } }));
+  await query.almacenes('empresa');
+  expect(warehouses).toHaveBeenCalledWith(expect.objectContaining({ where: { company_id: 'empresa', is_active: true } }));
+});

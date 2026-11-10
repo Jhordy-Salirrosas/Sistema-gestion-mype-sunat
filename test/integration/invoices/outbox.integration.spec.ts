@@ -163,9 +163,11 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
       },
     });
 
+    await prisma.inventoryWarehouse.create({ data: { company_id: companyId, warehouse_code: 'ALM-01', description: 'Principal', sunat_establishment_code: '0000' } });
+
     // Servicio registrado: la ruta fiscal hereda afectación/unidad del maestro.
     await prisma.inventoryProduct.create({ data: {
-      company_id: companyId, sku: SKU_SERVICIO, description: 'Servicio de prueba Outbox',
+      sale_price: 118, company_id: companyId, sku: SKU_SERVICIO, description: 'Servicio de prueba Outbox',
       sunat_unit_code: 'NIU', tax_affectation: '10', is_inventory: false,
     } });
 
@@ -199,6 +201,7 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
       await prisma.invoice.deleteMany({ where: { company_id: companyId } });
       await prisma.inventoryProduct.deleteMany({ where: { company_id: companyId, sku: SKU_SERVICIO } });
       await prisma.invoiceSeries.deleteMany({ where: { company_id: companyId } });
+      await prisma.inventoryWarehouse.deleteMany({ where: { company_id: companyId } });
       await prisma.company
         .delete({ where: { id: companyId } })
         .catch(() => undefined);

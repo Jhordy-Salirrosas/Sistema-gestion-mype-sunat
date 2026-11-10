@@ -524,6 +524,14 @@ describe('TA-68 · servicio puente', () => {
     };
   }
 
+  it('descarga ALM-02 y calcula costo con previous_unit_cost del movimiento, sin usar el precio vendido', async () => {
+    const { puente, prisma, movimientoCreado, asientoCreado } = dobles({ costoVenta: 56 });
+    await puente.registrar({ ...facturaPrueba(), almacen: 'ALM-02' });
+    expect(movimientoCreado).toHaveBeenCalledWith(expect.objectContaining({ warehouse_code: 'ALM-02' }), expect.anything());
+    expect(prisma.inventoryMovement.findMany).toHaveBeenCalled();
+    expect(asientoCreado).toHaveBeenCalledWith(expect.objectContaining({ lines: expect.arrayContaining([expect.objectContaining({ debitAmount: 56 }), expect.objectContaining({ creditAmount: 56 })]) }));
+  });
+
   /** Dobles de Prisma y de los dos casos de uso. */
   function dobles(opciones: {
     productoExiste?: boolean;

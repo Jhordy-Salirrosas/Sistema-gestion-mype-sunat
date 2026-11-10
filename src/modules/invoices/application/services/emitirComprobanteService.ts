@@ -618,7 +618,7 @@ export class EmitirComprobanteService {
       afectacion: dto.tipo_comprobante === '08' ? null : item.afectacion ?? null,
     }));
 
-    await this.stock.validar(companyId, items);
+    await this.stock.validar(companyId, items, dto.almacen ?? 'ALM-01');
   }
 
   /**

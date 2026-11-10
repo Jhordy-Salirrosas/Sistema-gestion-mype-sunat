@@ -107,60 +107,33 @@ export class InvoiceQueryService {
     @Inject(QueueService) private readonly queue: QueueService,
   ) {}
 
-  /** Catálogo de productos con stock y afectación tributaria para emisión M1. */
-  async catalogoProductos(companyId: string) {
+  /** Catálogo M1: precio final PEN, nunca costo promedio como recambio. */
+  async catalogoProductos(companyId: string, almacen = 'ALM-01') {
     const [productos, saldos] = await Promise.all([
       this.prisma.inventoryProduct.findMany({
         where: { company_id: companyId, is_active: true },
-        select: {
-          id: true,
-          sku: true,
-          description: true,
-          sunat_unit_code: true,
-          tax_affectation: true,
-        },
+        select: { id: true, sku: true, description: true, sunat_unit_code: true, tax_affectation: true, sale_price: true },
         orderBy: { sku: 'asc' },
       }),
       this.prisma.inventoryBalance.findMany({
-        where: { company_id: companyId },
-        select: {
-          product_id: true,
-          current_stock: true,
-          average_unit_cost: true,
-        },
+        where: { company_id: companyId, warehouse: { warehouse_code: almacen } },
+        select: { product_id: true, current_stock: true },
       }),
     ]);
+    return { balances: productos.map(p => {
+      const precio = Number(p.sale_price);
+      const vendible = Number.isFinite(precio) && precio > 0;
+      const stock = saldos.filter(s => s.product_id === p.id).reduce((sum, s) => sum + (Number(s.current_stock) || 0), 0);
+      return { sku: p.sku, description: p.description, sunatUnitCode: p.sunat_unit_code,
+        taxAffectation: p.tax_affectation?.trim() || null, currentStock: stock,
+        salePrice: vendible ? precio : null, vendible,
+        motivo: vendible ? null : 'sin precio de venta configurado' };
+    }) };
+  }
 
-    const stockPorProducto = new Map<
-      string,
-      { stock: number; costo: number }
-    >();
-    for (const s of saldos) {
-      const actual = stockPorProducto.get(s.product_id) ?? {
-        stock: 0,
-        costo: 0,
-      };
-      const stock = Number(s.current_stock ?? 0);
-      const costo = Number(s.average_unit_cost ?? 0);
-      stockPorProducto.set(s.product_id, {
-        stock: actual.stock + (Number.isFinite(stock) ? stock : 0),
-        costo: Number.isFinite(costo) && costo > 0 ? costo : actual.costo,
-      });
-    }
-
-    return {
-      balances: productos.map((p) => {
-        const s = stockPorProducto.get(p.id) ?? { stock: 0, costo: 0 };
-        return {
-          sku: p.sku,
-          description: p.description,
-          sunatUnitCode: p.sunat_unit_code,
-          taxAffectation: p.tax_affectation?.trim() || null,
-          currentStock: s.stock,
-          averageUnitCost: s.costo,
-        };
-      }),
-    };
+  almacenes(companyId: string) {
+    return this.prisma.inventoryWarehouse.findMany({ where: { company_id: companyId, is_active: true },
+      select: { warehouse_code: true, description: true }, orderBy: { warehouse_code: 'asc' } });
   }
 
   /** Listado paginado con filtros por estado, tipo, serie y fechas. */
