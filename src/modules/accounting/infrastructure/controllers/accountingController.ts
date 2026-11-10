@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -276,6 +277,31 @@ export class AccountingController {
       Number(body.month),
       body.bookCode,
     );
+  }
+
+  @Get('rules')
+  async listRules(@CurrentCompany() currentCompanyId?: string) {
+    return this.prisma.accountingRule.findMany({
+      where: { company_id: this.empresaDelToken(currentCompanyId), is_active: true },
+      orderBy: [{ process_code: 'asc' }, { document_type: 'asc' }, { line_order: 'asc' }],
+    });
+  }
+
+  @Put('rules')
+  async upsertRule(@Body() body: {
+    processCode: string; documentType?: string; lineOrder: number;
+    accountCode: string; side: 'DEBE' | 'HABER'; baseCalculation: string; description?: string;
+  }, @CurrentCompany() currentCompanyId?: string) {
+    const companyId = this.empresaDelToken(currentCompanyId);
+    if (!body.processCode || !body.accountCode || !['DEBE', 'HABER'].includes(body.side)) {
+      throw new BadRequestException('Regla inválida: proceso, cuenta y lado son obligatorios.');
+    }
+    const documentType = body.documentType ?? '*';
+    return this.prisma.accountingRule.upsert({
+      where: { company_id_process_code_document_type_line_order: { company_id: companyId, process_code: body.processCode, document_type: documentType, line_order: body.lineOrder } },
+      update: { account_code: body.accountCode, side: body.side, base_calculation: body.baseCalculation, description: body.description, is_active: true },
+      create: { company_id: companyId, process_code: body.processCode, document_type: documentType, line_order: body.lineOrder, account_code: body.accountCode, side: body.side, base_calculation: body.baseCalculation, description: body.description },
+    });
   }
 
   // ==========================================
