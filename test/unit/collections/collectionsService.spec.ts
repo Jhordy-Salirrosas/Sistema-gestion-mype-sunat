@@ -40,4 +40,15 @@ describe('CollectionsService', () => {
     const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
     await expect(service.listReceivables('c1')).resolves.toEqual([expect.objectContaining({ numero: 'F001-00000001', total: 118, paid: 18, balance: 100 })]);
   });
+
+  it('anula cobro con contra-asiento', async () => {
+    const prisma = {
+      collection: { findFirst: jest.fn().mockResolvedValue({ id: 'c1', customer_name: 'Cliente', status: 'REGISTRADO' }), update: jest.fn().mockResolvedValue({ id: 'c1', status: 'ANULADO' }) },
+      accountingEntry: { findFirst: jest.fn().mockResolvedValue({ id: 'e1', lines: [{ account_code: '1041', account_name: 'Banco', debit_amount: 100, credit_amount: 0 }, { account_code: '12121', account_name: 'CxC', debit_amount: 0, credit_amount: 100 }] }) },
+    };
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const service = new CollectionsService(prisma as never, accounting as never);
+    await expect(service.annul('c1', 'c1')).resolves.toMatchObject({ status: 'ANULADO' });
+    expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: 'ANUL-c1', lines: expect.arrayContaining([expect.objectContaining({ accountCode: '1041', creditAmount: 100 })]) }));
+  });
 });

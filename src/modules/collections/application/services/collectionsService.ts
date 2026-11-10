@@ -10,6 +10,25 @@ export class CollectionsService {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
   }
 
+  async annul(companyId: string, id: string) {
+    const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId } });
+    if (!cobro) throw new BadRequestException('Cobro no encontrado.');
+    if (cobro.status === 'ANULADO') throw new BadRequestException('El cobro ya está anulado.');
+    const original = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, source_module: 'COLLECTIONS', source_reference_id: id },
+      include: { lines: true },
+    });
+    if (!original) throw new BadRequestException('El cobro no tiene asiento contable; no se puede anular.');
+    const fecha = new Date();
+    const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    await this.accounting.execute({
+      companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación cobro ${cobro.customer_name}`,
+      sourceModule: 'COLLECTIONS', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,
+      lines: original.lines.map((l, i) => ({ lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name, debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount) })),
+    });
+    return this.prisma.collection.update({ where: { id }, data: { status: 'ANULADO' } });
+  }
+
   async listReceivables(companyId: string) {
     const facturas = await this.prisma.invoice.findMany({
       where: { company_id: companyId, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
