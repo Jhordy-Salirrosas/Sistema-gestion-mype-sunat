@@ -126,7 +126,11 @@ describe('Inyector de fallos del Mock del billService (TA-12)', () => {
       );
       const segunda = Date.now() - inicio2;
 
-      expect(segunda).toBeGreaterThan(primera);
+      // Date.now() tiene resolución de 1 ms y el runner puede redondear ambas
+      // mediciones al mismo valor. La prueba exige que la segunda no sea menor
+      // y que refleje la latencia configurada.
+      expect(segunda).toBeGreaterThanOrEqual(primera);
+      expect(segunda).toBeGreaterThanOrEqual(100);
     });
   });
 
