@@ -70,8 +70,7 @@ describe('TA-32 · conciliación antes de reintentar', () => {
     const { sunat, sendAndProcess } = sunatQueDevuelve(falloDeRed());
     const consulta = {
       consultarEstado: jest.fn().mockResolvedValue({
-        ...aceptado(),
-        cdr: { responseCode: '0' } as never,
+        tipo: 'RECUPERADO', resultado: { ...aceptado(), cdr: { responseCode: '0' } as never },
       }),
     } as unknown as ConsultaEstadoPort;
 
@@ -95,9 +94,9 @@ describe('TA-32 · conciliación antes de reintentar', () => {
   it.each(['sin CDR', 'consulta fallida'])('conserva el job sin reenviar cuando hay %s', async caso => {
     const { sunat, sendAndProcess } = sunatQueDevuelve(falloDeRed(), rechazoDeNegocio());
     const consultarEstado = caso === 'sin CDR'
-      ? jest.fn().mockResolvedValue({ ...falloDeRed(), cdr: null })
+      ? jest.fn().mockResolvedValue({ tipo: 'INCIERTO', motivo: 'sin CDR' })
       : jest.fn().mockRejectedValue(new Error('consulta fallida'));
-    await expect(crearServicio(sunat, { consultarEstado }).processWithRetry(paramsBase)).rejects.toThrow();
+    await expect(crearServicio(sunat, { consultarEstado }).processWithRetry(paramsBase)).resolves.toMatchObject({ incertidumbreTransporte: true, enviadoADlq: false, reintentable: true });
     expect(sendAndProcess).toHaveBeenCalledTimes(1);
     expect(dobles.sleep).not.toHaveBeenCalled();
   });
@@ -108,7 +107,7 @@ describe('TA-32 · conciliación antes de reintentar', () => {
       falloDeRed(),
       rechazoDeNegocio(),
     );
-    const consultarEstado = jest.fn().mockResolvedValue(null);
+    const consultarEstado = jest.fn().mockResolvedValue({ tipo: 'NO_ENCONTRADO' });
     const consulta = { consultarEstado } as unknown as ConsultaEstadoPort;
 
     await crearServicio(sunat, consulta).processWithRetry(paramsBase);

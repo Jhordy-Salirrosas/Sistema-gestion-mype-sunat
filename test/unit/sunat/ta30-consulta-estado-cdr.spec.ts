@@ -407,7 +407,7 @@ describe('D1 consulta company context', () => {
         serie: 'F001',
         correlativo: 1,
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual({ tipo: 'NO_ENCONTRADO' });
     expect(resolve).toHaveBeenCalledWith('a');
     expect(getStatusCdr).toHaveBeenCalledWith(
       expect.objectContaining({ credentials: context.sol }),

@@ -19,8 +19,9 @@ import {
 import { ResilienceStateService } from '../../application/resilienceStateService';
 import {
   requiereConciliacion,
-  resultadoTrasConciliacion,
+  type DesenlaceConciliacion,
 } from '../../../invoices/application/services/invoiceReconciliation';
+import { clasificarTransporte, CONSULTA_INCIERTA } from '../../../invoices/application/services/invoiceTransportEvidence';
 import { InvoiceDlqService } from './invoiceDlqService';
 
 /** Token de inyección del reloj, para no esperar 65 s en las pruebas. */
@@ -39,9 +40,8 @@ export type RetryInvoiceJob = SendInvoiceParams;
 /**
  * Contrato mínimo de la consulta de estado (TA-30).
  *
- * Se declara aquí y no se importa de la implementación para que esta rama
- * (TA-32) no dependa de la rama de TA-30: mientras no se inyecte nada, el
- * servicio funciona como antes. El token de inyección es
+ * El contrato estructurado se comparte con M1 sin depender de la implementación
+ * SOAP. Sin consulta disponible, la incertidumbre sigue pendiente. El token es
  * `CONSULTA_ESTADO_PORT`.
  */
 export const CONSULTA_ESTADO_PORT = Symbol('CONSULTA_ESTADO_PORT');
@@ -58,10 +58,10 @@ export interface ConsultaEstadoParams {
 }
 
 export interface ConsultaEstadoPort {
-  /** Devuelve el resultado recuperado, o `null` si SUNAT no lo tiene. */
+  /** Distingue ausencia confirmada de consulta inconclusa, sin excepciones de negocio. */
   consultarEstado(
     params: ConsultaEstadoParams,
-  ): Promise<ProcessCdrResult | null>;
+  ): Promise<DesenlaceConciliacion>;
 }
 
 export interface RetryInvoiceResult {
@@ -72,6 +72,7 @@ export interface RetryInvoiceResult {
   enviadoADlq: boolean;
   /** true: el circuito estaba OPEN y el job debe quedar en cola. */
   circuitoAbierto: boolean;
+  incertidumbreTransporte?: boolean;
   ultimoResultado: ProcessCdrResult | null;
   error: string | null;
 }
@@ -85,8 +86,7 @@ export class InvoiceRetryService {
     private readonly sunatBill: SunatBillService,
     private readonly state: ResilienceStateService,
     @Optional() @Inject(RETRY_SLEEP) private readonly sleep: SleepFn = dormir,
-    // TA-32: opcional a propósito. Si no está (rama de TA-30 sin integrar),
-    // no se concilia y el reintento se comporta como antes.
+    // Sin puerto de consulta no se puede resolver un transporte incierto.
     @Optional()
     @Inject(CONSULTA_ESTADO_PORT)
     private readonly consultaEstado?: ConsultaEstadoPort,
@@ -101,6 +101,13 @@ export class InvoiceRetryService {
     const anterior = await this.prisma?.invoice.findUnique({ where: { id: job.invoiceId }, select: { transport_uncertain: true, estado: true } });
     // null conserva desconocimiento histórico: ENVIADO/ERROR_RED exige consultar.
     let incierto = anterior?.transport_uncertain === true || (anterior?.transport_uncertain == null && ['ENVIADO', 'ERROR_RED'].includes(anterior?.estado ?? job.estadoActual ?? ''));
+    if (incierto && this.prisma) {
+      const history = await this.prisma.transactionHistory.findMany({ where: { invoice_id: job.invoiceId }, orderBy: { created_at: 'asc' } });
+      if (clasificarTransporte(history) === 'BLOQUEO_PREVIO_PROBADO') {
+        await this.incertidumbre(job.invoiceId, false);
+        incierto = false;
+      }
+    }
     for (let intento = 1; ; intento += 1) {
       // TA-33: con el circuito OPEN no se toca la red. El job no se marca
       // terminado ni va a la DLQ: queda en cola para cuando SUNAT se recupere.
@@ -115,10 +122,11 @@ export class InvoiceRetryService {
 
       try {
         if (incierto) {
-          const recuperado = await this.consultarAntesDeReenviar(job, intento);
-          if (recuperado) {
+          const consulta = await this.consultarAntesDeReenviar(job, intento);
+          if (consulta.tipo !== 'NO_ENCONTRADO') {
             this.state.liberarEnvio();
-            return this.resultado(job.invoiceId, recuperado, intento - 1, false, false);
+            if (consulta.tipo === 'INCIERTO') return this.pendientePorIncertidumbre(job, estadoAnterior, intento - 1, ultimo, consulta.motivo);
+            return this.resultado(job.invoiceId, consulta.resultado, intento - 1, false, false);
           }
         }
         // Commit previo a abrir red: una caída del proceso también queda incierta.
@@ -150,9 +158,10 @@ export class InvoiceRetryService {
       // TA-32 criterio 3: si el intento anterior quedó en estado incierto
       // (timeout), se reconcilia con SUNAT ANTES de volver a enviar. Si SUNAT
       // ya tenía el comprobante, su CDR se recupera y no se reenvía nada.
-      const conciliado = await this.conciliar(job, ultimo, intento);
-      if (conciliado) {
-        return this.resultado(job.invoiceId, conciliado, intento, false, false);
+      if (incierto) {
+        const consulta = await this.consultarAntesDeReenviar(job, intento);
+        if (consulta.tipo === 'INCIERTO') return this.pendientePorIncertidumbre(job, estadoAnterior, intento, ultimo, consulta.motivo);
+        if (consulta.tipo === 'RECUPERADO') return this.resultado(job.invoiceId, consulta.resultado, intento, false, false);
       }
 
       incierto = false; // La consulta anterior confirmó ausencia o recuperó el CDR.
@@ -189,47 +198,48 @@ export class InvoiceRetryService {
     }
   }
 
-  /**
-   * TA-32, frente 2: concilia un intento que quedó en estado incierto.
-   *
-   * Antes de reenviar un comprobante cuyo timeout pudo haber llegado a SUNAT,
-   * se pregunta por su estado. Si SUNAT lo tenía, se devuelve el CDR
-   * recuperado y el proceso termina sin reenviar; si no lo tenía (o la
-   * consulta tampoco respondió), devuelve null y el flujo sigue al reintento.
-   *
-   * La consulta es OPCIONAL a propósito: en la rama de TA-32 todavía no existe
-   * el servicio de consulta (llega con TA-30). Sin él, el comportamiento es el
-   * anterior, así que las dos ramas se pueden integrar en cualquier orden.
-   */
-  private async conciliar(
-    job: RetryInvoiceJob,
-    ultimo: ProcessCdrResult | null,
-    intento: number,
-  ): Promise<ProcessCdrResult | null> {
-    if (!requiereConciliacion(ultimo, null)) return null;
-    return this.consultarAntesDeReenviar(job, intento);
-  }
-
   private async incertidumbre(invoiceId: string, value: boolean): Promise<void> {
     if (this.prisma) await this.prisma.invoice.update({ where: { id: invoiceId }, data: { transport_uncertain: value } });
   }
 
-  private async consultarAntesDeReenviar(job: RetryInvoiceJob, intento: number): Promise<ProcessCdrResult | null> {
-    if (!this.consultaEstado) throw new Error('TRANSPORT_UNCERTAIN_CONSULT_UNAVAILABLE');
-    // El puerto distingue ausencia confirmada (null) de consulta inconcluyente (throw).
-    // No capturar ese throw para reenviar: debe conservar el marcador y el job recuperable.
-    const consultado = await this.consultaEstado.consultarEstado({
-      invoiceId: job.invoiceId, rucEmisor: job.rucEmisor, tipoComprobante: job.tipoComprobante,
-      serie: job.serie, correlativo: job.correlativo, estadoActual: job.estadoActual ?? null, intento,
-    });
-    if (consultado === null) {
-      await this.incertidumbre(job.invoiceId, false);
-      return null;
+  private async consultarAntesDeReenviar(job: RetryInvoiceJob, intento: number): Promise<DesenlaceConciliacion> {
+    let consulta: DesenlaceConciliacion;
+    try {
+      consulta = this.consultaEstado ? await this.consultaEstado.consultarEstado({
+        invoiceId: job.invoiceId, rucEmisor: job.rucEmisor, tipoComprobante: job.tipoComprobante,
+        serie: job.serie, correlativo: job.correlativo, estadoActual: job.estadoActual ?? null, intento,
+      }) : { tipo: 'INCIERTO', motivo: 'Servicio de consulta no disponible.' };
+    } catch {
+      // Defensa ante implementaciones del puerto que fallen: nunca equivale a ausencia.
+      consulta = { tipo: 'INCIERTO', motivo: 'No se pudo completar la consulta de estado.' };
     }
-    const recuperado = resultadoTrasConciliacion(consultado);
-    if (!recuperado) throw new Error('TRANSPORT_UNCERTAIN_CONSULT_INCONCLUSIVE');
-    await this.incertidumbre(job.invoiceId, false);
-    return recuperado;
+    if (consulta?.tipo === 'RECUPERADO' && (!consulta.resultado.cdr || !['ACEPTADO', 'OBSERVADO', 'RECHAZADO'].includes(consulta.resultado.estado))) {
+      consulta = { tipo: 'INCIERTO', motivo: 'La consulta respondió sin CDR concluyente.' };
+    }
+    if (!consulta || !['RECUPERADO', 'NO_ENCONTRADO', 'INCIERTO'].includes(consulta.tipo)) {
+      consulta = { tipo: 'INCIERTO', motivo: 'Respuesta de consulta no concluyente.' };
+    }
+    if (consulta.tipo !== 'INCIERTO') await this.incertidumbre(job.invoiceId, false);
+    return consulta;
+  }
+
+  private async pendientePorIncertidumbre(job: RetryInvoiceJob, estado: InvoiceStatus | null,
+    intentos: number, ultimo: ProcessCdrResult | null, motivo: string): Promise<RetryInvoiceResult> {
+    const error = `Incertidumbre de transporte: ${motivo}`;
+    await this.incertidumbre(job.invoiceId, true);
+    if (this.prisma) {
+      const invoice = await this.prisma.invoice.findUniqueOrThrow({ where: { id: job.invoiceId }, select: { estado: true, company_id: true } });
+      estado = invoice.estado;
+      await this.prisma.transactionHistory.create({ data: {
+        company_id: invoice.company_id, invoice_id: job.invoiceId,
+        intento: intentos, estado_anterior: invoice.estado, estado_nuevo: invoice.estado,
+        codigo_error: CONSULTA_INCIERTA, mensaje_error: error, tiempo_respuesta_ms: null, http_status_code: null,
+      } });
+    }
+    this.logger.warn(`[M1] ${job.invoiceId}: ${error}; pendiente de conciliación, sin DLQ.`);
+    return { invoiceId: job.invoiceId, estado: estado ?? InvoiceStatus.ENVIADO, intentos,
+      reintentable: true, enviadoADlq: false, circuitoAbierto: false, incertidumbreTransporte: true,
+      ultimoResultado: ultimo, error };
   }
 
   /** Devuelve el job sin tocarlo: el Circuit Breaker está OPEN. */

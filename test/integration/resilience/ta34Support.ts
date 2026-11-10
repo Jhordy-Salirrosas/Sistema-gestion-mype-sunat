@@ -37,7 +37,7 @@ export interface HistoryRow {
 export interface FakeDb {
   invoices: Map<string, { estado: InvoiceStatus }>;
   history: HistoryRow[];
-  prisma: { $transaction: jest.Mock };
+  prisma: { $transaction: jest.Mock; invoice: { findUniqueOrThrow: jest.Mock }; transactionHistory: { create: jest.Mock } };
   tx: {
     invoice: { update: jest.Mock };
     transactionHistory: { create: jest.Mock };
@@ -87,6 +87,8 @@ export function crearDb(invoiceId: string): FakeDb {
     history,
     tx,
     prisma: {
+      invoice: { findUniqueOrThrow: jest.fn(async ({ where }) => ({ ...invoices.get(where.id), company_id: 'company-ta34-test' })) },
+      transactionHistory: tx.transactionHistory,
       $transaction: jest.fn(
         async (callback: (client: typeof tx) => Promise<unknown>) =>
           callback(tx),
@@ -115,7 +117,7 @@ export function crearRetry(params: {
   const sunat =
     params.sunatBill ??
     new SunatBillService(params.persistence, params.soap);
-  return new InvoiceRetryService(dlq, sunat, params.state, params.sleep, { consultarEstado: jest.fn().mockResolvedValue(null) });
+  return new InvoiceRetryService(dlq, sunat, params.state, params.sleep, { consultarEstado: jest.fn().mockResolvedValue({ tipo: 'NO_ENCONTRADO' }) });
 }
 
 export function aceptado(): ProcessCdrResult {

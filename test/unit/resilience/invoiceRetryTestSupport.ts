@@ -139,7 +139,7 @@ export function crearDobles(): Dobles {
         sunat,
         stateOverride ?? state,
         sleep,
-        { consultarEstado: jest.fn().mockResolvedValue(null) },
+        { consultarEstado: jest.fn().mockResolvedValue({ tipo: 'NO_ENCONTRADO' }) },
       ),
   };
 }

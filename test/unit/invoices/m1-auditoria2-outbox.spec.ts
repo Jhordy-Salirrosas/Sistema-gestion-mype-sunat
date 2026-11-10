@@ -8,8 +8,9 @@ function harness(uncertain = false) {
   const row = { transport_uncertain: uncertain };
   const prisma = { invoice: {
     findUnique: jest.fn(async () => ({ ...row })),
+    findUniqueOrThrow: jest.fn(async () => ({ ...row, estado: 'ENVIADO', company_id: 'empresa' })),
     update: jest.fn(async ({ data }: any) => { Object.assign(row, data); return row; }),
-  } };
+  }, transactionHistory: { findMany: jest.fn(async () => []), create: jest.fn(async () => ({})) } };
   const sunat = { sendAndProcess: jest.fn() };
   const consulta = { consultarEstado: jest.fn() };
   const dlq = { enviar: jest.fn(async () => 'job-dlq') };
@@ -19,7 +20,7 @@ function harness(uncertain = false) {
 }
 it('tras reinicio recupera CDR de intento incierto antes de cualquier sendBill', async () => {
   const h = harness(true);
-  h.consulta.consultarEstado.mockResolvedValue({ ...aceptado(), cdr: { responseCode: '0' } });
+  h.consulta.consultarEstado.mockResolvedValue({ tipo: 'RECUPERADO', resultado: { ...aceptado(), cdr: { responseCode: '0' } } });
   expect((await h.service.processWithRetry(paramsBase)).estado).toBe('ACEPTADO');
   expect(h.sunat.sendAndProcess).not.toHaveBeenCalled();
   expect(h.row.transport_uncertain).toBe(false);
@@ -30,11 +31,11 @@ it('consulta inconcluyente conserva incertidumbre durable y no reenvía', async 
   await h.service.processWithRetry(paramsBase);
   expect(h.sunat.sendAndProcess).not.toHaveBeenCalled();
   expect(h.row.transport_uncertain).toBe(true);
-  expect(h.dlq.enviar).toHaveBeenCalled();
+  expect(h.dlq.enviar).not.toHaveBeenCalled();
 });
 it('solo ausencia confirmada permite reenviar y el marcador se confirma antes de la red', async () => {
   const h = harness(true);
-  h.consulta.consultarEstado.mockResolvedValue(null);
+  h.consulta.consultarEstado.mockResolvedValue({ tipo: 'NO_ENCONTRADO' });
   h.sunat.sendAndProcess.mockImplementation(async () => {
     expect(h.row.transport_uncertain).toBe(true);
     return aceptado();
@@ -47,7 +48,7 @@ it('si el intento pierde respuesta y la consulta falla, no hay segundo envío', 
   const h = harness();
   h.sunat.sendAndProcess.mockResolvedValue(falloDeRed());
   h.consulta.consultarEstado.mockRejectedValue(new Error('caída simulada'));
-  await expect(h.service.processWithRetry(paramsBase)).rejects.toThrow('caída simulada');
+  await expect(h.service.processWithRetry(paramsBase)).resolves.toMatchObject({ incertidumbreTransporte: true, enviadoADlq: false });
   expect(h.sunat.sendAndProcess).toHaveBeenCalledTimes(1);
   expect(h.row.transport_uncertain).toBe(true);
 });

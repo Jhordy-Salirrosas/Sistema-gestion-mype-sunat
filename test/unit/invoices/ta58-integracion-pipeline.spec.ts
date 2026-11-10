@@ -521,8 +521,7 @@ describe('TA-58 · drenado del lote con el circuito restablecido', () => {
       tiempoRespuestaMs: null,
     }));
     const consultarEstado = jest.fn(async () => ({
-      ...aceptado('inv-F001-1'),
-      cdr: { responseCode: '0' } as never,
+      tipo: 'RECUPERADO', resultado: { ...aceptado('inv-F001-1'), cdr: { responseCode: '0' } as never },
     }));
 
     const servicio = crearRetry(

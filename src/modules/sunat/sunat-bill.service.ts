@@ -138,6 +138,8 @@ export class SunatBillService {
       throw new InternalServerErrorException('ISSUER_IDENTITY_MISMATCH');
     if (context && !endpointCoherente(context.environment, context.endpoint))
       throw new InternalServerErrorException('ISSUER_ENDPOINT_ENV_MISMATCH');
+    // Fuera del catch de transporte: una auditoría fallida nunca se simula como envío.
+    await this.persistence.registrarInicioTransporte(params);
     let soapResponded = false;
     let httpStatusCode: number | null = null;
     let elapsedMs: number | null = null;

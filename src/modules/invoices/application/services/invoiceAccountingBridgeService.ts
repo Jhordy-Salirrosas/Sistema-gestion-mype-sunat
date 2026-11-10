@@ -239,16 +239,25 @@ export class InvoiceAccountingBridgeService {
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
     })) ?? [];
     const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+    const reglas = (await (this.prisma as any).accountingRule?.findMany({
+      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
+      orderBy: { line_order: 'asc' },
+    })) ?? [];
+    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    const cuentaRegla = (orden: number, rol: string, nombre: string) => {
+      const codigo = porOrden.get(orden) ?? roles.get(rol);
+      return codigo ? { codigo, nombre } : undefined;
+    };
     const cuentas = {
-      ...(roles.get('CXC') ? { porCobrar: { codigo: roles.get('CXC')!, nombre: 'Cuentas por cobrar' } } : {}),
-      ...(roles.get('IGV') ? { igv: { codigo: roles.get('IGV')!, nombre: 'IGV - Cuenta propia' } } : {}),
-      ...(roles.get('VENTA_GRAVADA') ? { gravada: { codigo: roles.get('VENTA_GRAVADA')!, nombre: 'Ventas gravadas' } } : {}),
-      ...(roles.get('VENTA_EXONERADA') ? { exonerada: { codigo: roles.get('VENTA_EXONERADA')!, nombre: 'Ventas exoneradas' } } : {}),
-      ...(roles.get('VENTA_INAFECTA') ? { inafecta: { codigo: roles.get('VENTA_INAFECTA')!, nombre: 'Ventas inafectas' } } : {}),
-      ...(roles.get('ICBPER') ? { icbper: { codigo: roles.get('ICBPER')!, nombre: 'ICBPER por pagar' } } : {}),
-      ...(roles.get('DETRACCION') ? { detraccion: { codigo: roles.get('DETRACCION')!, nombre: 'Cuentas por cobrar - detracciones' } } : {}),
-      ...(roles.get('RETENCION') ? { porCobrarRetenido: { codigo: roles.get('RETENCION')!, nombre: 'IGV - Retenciones' } } : {}),
-      ...(roles.get('DESCUENTO') ? { descuento: { codigo: roles.get('DESCUENTO')!, nombre: 'Descuentos concedidos' } } : {}),
+      ...(cuentaRegla(1, 'CXC', 'Cuentas por cobrar') ? { porCobrar: cuentaRegla(1, 'CXC', 'Cuentas por cobrar')! } : {}),
+      ...(cuentaRegla(2, 'IGV', 'IGV - Cuenta propia') ? { igv: cuentaRegla(2, 'IGV', 'IGV - Cuenta propia')! } : {}),
+      ...(cuentaRegla(3, 'VENTA_GRAVADA', 'Ventas gravadas') ? { gravada: cuentaRegla(3, 'VENTA_GRAVADA', 'Ventas gravadas')! } : {}),
+      ...(cuentaRegla(4, 'VENTA_EXONERADA', 'Ventas exoneradas') ? { exonerada: cuentaRegla(4, 'VENTA_EXONERADA', 'Ventas exoneradas')! } : {}),
+      ...(cuentaRegla(5, 'VENTA_INAFECTA', 'Ventas inafectas') ? { inafecta: cuentaRegla(5, 'VENTA_INAFECTA', 'Ventas inafectas')! } : {}),
+      ...(cuentaRegla(6, 'ICBPER', 'ICBPER por pagar') ? { icbper: cuentaRegla(6, 'ICBPER', 'ICBPER por pagar')! } : {}),
+      ...(cuentaRegla(7, 'DETRACCION', 'Cuentas por cobrar - detracciones') ? { detraccion: cuentaRegla(7, 'DETRACCION', 'Cuentas por cobrar - detracciones')! } : {}),
+      ...(cuentaRegla(8, 'RETENCION', 'IGV - Retenciones') ? { porCobrarRetenido: cuentaRegla(8, 'RETENCION', 'IGV - Retenciones')! } : {}),
+      ...(cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos') ? { descuento: cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos')! } : {}),
     };
     const datos = { ...i, descuento: descuento > 0 ? descuento : 0, cuentas };
     const lineas = factura.tipoComprobante === '07'
@@ -326,7 +335,11 @@ export class InvoiceAccountingBridgeService {
       return sum + Math.max(0, item.cantidad) * unitario;
     }, 0) * 100) / 100;
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
-
+    const reglas = (await (this.prisma as any).accountingRule?.findMany({
+      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
+      orderBy: { line_order: 'asc' },
+    })) ?? [];
+    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
     try {
       const asiento = await this.generadorAsientos.execute({
         companyId: factura.companyId,
@@ -337,8 +350,8 @@ export class InvoiceAccountingBridgeService {
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost-rev:${factura.id}`,
         lines: [
-          { lineOrder: 1, accountCode: '201', accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
-          { lineOrder: 2, accountCode: '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
+          { lineOrder: 1, accountCode: porOrden.get(11) ?? '201', accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: porOrden.get(10) ?? '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
         ],
       });
       return { asientoCostoId: asiento.id, costoVenta: -costo, asientoCostoOmitido: false };
@@ -372,6 +385,11 @@ export class InvoiceAccountingBridgeService {
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
     })) ?? [];
     const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+    const reglasCosto = (await (this.prisma as any).accountingRule?.findMany({
+      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
+      orderBy: { line_order: 'asc' },
+    })) ?? [];
+    const porOrden = new Map<number, string>(reglasCosto.map((r: any) => [Number(r.line_order), String(r.account_code)]));
     try {
       const asiento = await this.generadorAsientos.execute({
         companyId: factura.companyId,
@@ -382,8 +400,8 @@ export class InvoiceAccountingBridgeService {
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost:${factura.id}`,
         lines: [
-          { lineOrder: 1, accountCode: roles.get('COSTO_VENTA') || '691', accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
-          { lineOrder: 2, accountCode: roles.get('INVENTARIO') || '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
+          { lineOrder: 1, accountCode: porOrden.get(10) ?? roles.get('COSTO_VENTA') ?? '691', accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: porOrden.get(11) ?? roles.get('INVENTARIO') ?? '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
         ],
       });
       return { asientoCostoId: asiento.id, costoVenta: costo, asientoCostoOmitido: false };

@@ -44,6 +44,7 @@ describe('HU-04 · InvoiceRetryService', () => {
     const sunat = new SunatBillService(
       {
         persist: jest.fn(),
+        registrarInicioTransporte: jest.fn(async () => undefined),
         persistFailure,
       } as unknown as CdrPersistenceService,
       { sendBill } as unknown as SunatSoapClient,
