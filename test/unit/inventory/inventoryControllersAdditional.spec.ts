@@ -1,4 +1,6 @@
 import { UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { InventoryPurchasesController } from '../../../src/modules/inventory/infrastructure/controllers/inventoryPurchasesController';
 import { InventoryKardexController } from '../../../src/modules/inventory/infrastructure/controllers/inventoryKardexController';
 import { InventoryOpeningController } from '../../../src/modules/inventory/infrastructure/controllers/inventoryOpeningController';
@@ -7,6 +9,10 @@ import {
   InventoryAdjustmentsController,
 } from '../../../src/modules/inventory/infrastructure/controllers/inventoryTransfersController';
 import { InventoryStocksController } from '../../../src/modules/inventory/infrastructure/controllers/inventoryStocksController';
+import {
+  UpdateCostMethodDto,
+  RecalculateCostingDto,
+} from '../../../src/modules/inventory/application/dto/costConfigDto';
 
 describe('Inventory Controllers (Additional Coverage)', () => {
   const companyId = 'comp-100';
@@ -148,6 +154,13 @@ describe('Inventory Controllers (Additional Coverage)', () => {
       expect(mockCostLayerService.getCostConfig).toHaveBeenCalledWith(companyId);
       expect(mockCostLayerService.updateCostMethod).toHaveBeenCalledWith(companyId, 'FIFO');
       expect(mockCostLayerService.recalculateCosting).toHaveBeenCalledWith(companyId, 'FIFO');
+
+      const validMethodDto = plainToInstance(UpdateCostMethodDto, { method: 'FIFO' });
+      const invalidMethodDto = plainToInstance(UpdateCostMethodDto, { method: 'LIFO' });
+      const validRecalcDto = plainToInstance(RecalculateCostingDto, {});
+      expect(await validate(validMethodDto)).toHaveLength(0);
+      expect((await validate(invalidMethodDto)).length).toBeGreaterThan(0);
+      expect(await validate(validRecalcDto)).toHaveLength(0);
     });
   });
 
