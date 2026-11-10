@@ -549,13 +549,16 @@ describe('TA-68 · servicio puente', () => {
           opciones.movimientoYaExiste ? { id: 'mov-0' } : null,
         ),
         findMany: jest.fn(async () => opciones.costoVenta
-          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2 }]
+          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2, product: { sku: 'CEM-001' } }]
           : []),
       },
       accountingEntry: {
         findFirst: jest.fn(async () =>
           opciones.asientoYaExiste ? { id: 'asiento-0' } : null,
         ),
+      },
+      invoice: {
+        findUnique: jest.fn(async () => ({ serie: 'F001', correlativo: 100 })),
       },
     };
 
@@ -584,6 +587,19 @@ describe('TA-68 · servicio puente', () => {
     const { puente, asientoCreado } = dobles({ costoVenta: 600 });
     const resultado = await puente.registrar(facturaPrueba());
     expect(resultado.costoVenta).toBe(600);
+    expect(resultado.asientoCostoId).toBe('asiento-1');
+    expect(asientoCreado).toHaveBeenCalledTimes(2);
+  });
+
+  it('revierte el costo original en una nota de crédito por devolución', async () => {
+    const { puente, asientoCreado } = dobles({ costoVenta: 600 });
+    const resultado = await puente.registrar({
+      ...facturaPrueba(),
+      tipoComprobante: '07',
+      motivoNota: '06',
+      documentoAfectadoId: 'inv-original',
+    });
+    expect(resultado.costoVenta).toBe(-6000);
     expect(resultado.asientoCostoId).toBe('asiento-1');
     expect(asientoCreado).toHaveBeenCalledTimes(2);
   });
