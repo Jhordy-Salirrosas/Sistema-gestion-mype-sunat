@@ -69,6 +69,7 @@ import { Ple13_1FlatFileWriterAdapter } from './infrastructure/adapters/ple13_1F
     InventoryOpeningService,
     InventoryPurchaseService,
     InventoryCostLayerService,
+    InventoryCostLayerService,
     // Use Cases
     ProcessImportCostOrderUseCase,
     RegisterManualMovementUseCase,
@@ -120,6 +121,7 @@ import { Ple13_1FlatFileWriterAdapter } from './infrastructure/adapters/ple13_1F
     EvaluateBookObligationUseCase,
     GeneratePleBookUseCase,
     InventoryPurchaseService,
+    InventoryCostLayerService,
     INVENTORY_WAREHOUSE_REPOSITORY_PORT,
     INVENTORY_PRODUCT_REPOSITORY_PORT,
     INVENTORY_BALANCE_REPOSITORY_PORT,
