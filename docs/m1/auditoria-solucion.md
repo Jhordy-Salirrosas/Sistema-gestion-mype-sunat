@@ -1002,3 +1002,54 @@ pasó: la API de SonarCloud devolvió 403 desde el entorno y el análisis remoto
 corresponde al siguiente push del PR #224. No se rebajó ninguna exigencia.
 Sin cambios front/ferry, Resiliencia, Contabilidad, envíos reales, PR nuevo,
 fusiones ni despliegues.
+
+### Parte 3b — UBL de Nota de Débito (08)
+
+Rama `fix/m1-nota-debito-ubl` creada desde el dev remoto
+`306dc43af4394c1e24332348e54041958048a2fc` (incluye las entregas anteriores).
+Línea base completa antes de cambiar el generador: **256 suites / 2327 pruebas
+aprobadas**, 4 suites / 38 pruebas omitidas por sus condiciones existentes.
+PostgreSQL 16 nuevo local y desechable para la integración de la suite; solo
+migraciones existentes en esa base local, sin conexión a bases compartidas.
+
+Reproducción previa con payload del adaptador común → UblGeneratorService →
+firma con certificado ficticio → ejecutarSfs/validate_sfs.py (sin XML escrito
+a mano): XSD oficial 2.1 devuelve `DebitNoteTypeCode: This element is not
+expected`, nodo `/*/cbc:DebitNoteTypeCode`. Al retirar solo ese elemento, la
+misma generación devuelve `LegalMonetaryTotal: This element is not expected`,
+nodo `/*/cac:LegalMonetaryTotal`, esperando TaxTotal o RequestedMonetaryTotal.
+Ambos defectos se confirmaron antes de modificar código productivo.
+
+Corrección exclusiva de DebitNote: la plantilla no emite DebitNoteTypeCode;
+el generador pide al bloque monetario RequestedMonetaryTotal, manteniendo su
+contenido interno idéntico. El valor predeterminado del bloque sigue siendo
+LegalMonetaryTotal. No se cambian cálculos, precios, referencias, líneas, SPOT,
+políticas de emisión ni otros tipos de documento.
+
+Se capturaron ANTES del cambio seis snapshots completos desde la base anterior:
+Factura contado/crédito, Boleta contado/crédito, NC y Factura con SPOT. Después
+pasan sin `-u` ni modificación, preservando bytes de 01/03/07 y todo el bloque
+SPOT/detracción. SHA-256 del archivo de snapshots antes/después:
+`2b8d7859e44078ac403df8535ca26cc013876e1d449ecce70623a6bb94934395`.
+
+La prueba nueva genera ND (no consume el fixture XML de TA-70), comprueba orden
+TaxTotal → RequestedMonetaryTotal → DebitNoteLine y contenido monetario igual
+al de la factura equivalente. Firmada ficticiamente, completa XSD oficial 2.1
+más ValidaExprRegND-2.0.1.xsl con `{completado:true,errores:[]}`. La inspección
+local del error_log de esa transformación, usando exactamente el XML generado
+del caso TEST001, no devuelve mensajes/observaciones (`[]`). No se alteran el
+ejecutor ni los assets oficiales. Dos casos negativos reintroducen por separado
+los nodos antiguos sobre XML generado y conservan ambos rechazos XSD. También
+se actualiza la expectativa heredada de ublAndCdrRules que exigía el nodo inválido.
+
+FD01-00000001 permanece como exhibit histórico bloqueado: no se reescribe,
+reemite ni reenvía y no se toca ningún dato productivo. La etiqueta visible
+«Rechazado por SUNAT» para bloqueos locales ANTES del envío sigue pendiente,
+como en la Parte 1; esta entrega no cambia esa clasificación.
+
+Cierre: suite completa **257 suites / 2336 pruebas aprobadas**, 12 snapshots;
+4 suites / 38 pruebas omitidas por las mismas condiciones de la base. Build
+y lint aprobados (solo aviso heredado en prueba de Contabilidad sin cambios).
+Sin migraciones nuevas, llamadas reales a SUNAT, emisiones, PR, fusiones ni
+despliegues. Base y suite final usaron PostgreSQL local aislado; su contenedor y
+volumen desechable se eliminaron al terminar las comprobaciones.

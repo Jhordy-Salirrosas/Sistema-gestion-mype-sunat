@@ -123,7 +123,7 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
     expect(xml).toContain('<cbc:ID>F001-00000042</cbc:ID>');
   });
 
-  it('usa la raíz DebitNote en el tipo 08', () => {
+  it('usa DebitNote sin TypeCode y con RequestedMonetaryTotal en tipo 08', () => {
     const xml = generator.generateInvoiceXml({
       ...payloadBase,
       tipoComprobante: '08',
@@ -135,7 +135,9 @@ describe('UblGeneratorService - generación UBL 2.1', () => {
     });
 
     expect(xml).toContain('<DebitNote');
-    expect(xml).toContain('<cbc:DebitNoteTypeCode');
+    expect(xml).not.toContain('<cbc:DebitNoteTypeCode');
+    expect(xml).toContain('<cac:RequestedMonetaryTotal>');
+    expect(xml).not.toContain('<cac:LegalMonetaryTotal>');
     expect(xml).toContain('</DebitNote>');
   });
 
