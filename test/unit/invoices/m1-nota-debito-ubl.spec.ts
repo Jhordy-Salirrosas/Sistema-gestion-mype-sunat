@@ -1,3 +1,4 @@
+import { XsdValidatorService } from '../../../src/modules/invoices/xsdValidatorService';
 import { bloqueTotales } from '../../../src/modules/invoices/ublTaxBlocks';
 import { UblGeneratorService } from '../../../src/modules/invoices/ublGeneratorService';
 import { traducirEmision } from '../../../src/modules/invoices/application/services/emitirComprobanteAdapter';
@@ -57,4 +58,31 @@ it.each(['LegalMonetaryTotal', 'RequestedMonetaryTotal'] as const)('bloque %s co
   expect(xml).toContain('<cbc:AllowanceTotalAmount currencyID="PEN">10.00</cbc:AllowanceTotalAmount>');
   expect(xml).toContain('<cbc:PayableAmount currencyID="PEN">108.00</cbc:PayableAmount>');
   expect(xml.replaceAll(elemento, 'LegalMonetaryTotal')).toBe(bloqueTotales(totals, 'PEN'));
+});
+
+const internalValidator = new XsdValidatorService();
+const igvWarning = 'El comprobante declara IGV: verifique que el régimen del emisor lo permita';
+it('ND de 3b pasa preparación interna y SFS oficial sobre el mismo XML firmado', async () => {
+  const xml = generator.generateInvoiceXml(payload('08'));
+  expect(internalValidator.validateInvoiceUbl21(xml)).toEqual({ isValid: true, errors: [], warnings: [igvWarning] });
+  const firmado = signed(xml);
+  expect(internalValidator.validateInvoiceUbl21(firmado)).toEqual({ isValid: true, errors: [], warnings: [igvWarning] });
+  expect(await ejecutarSfs(firmado, '08')).toEqual({ completado: true, errores: [] });
+});
+it.each(['01', '03', '07'])('tipo %s sigue validando y exigiendo LegalMonetaryTotal en la capa interna', tipo => {
+  const xml = signed(generator.generateInvoiceXml(payload(tipo)));
+  expect(internalValidator.validateInvoiceUbl21(xml)).toEqual({ isValid: true, errors: [], warnings: [igvWarning] });
+  const sinLegal = xml.replaceAll('LegalMonetaryTotal', 'RequestedMonetaryTotal');
+  expect(internalValidator.validateInvoiceUbl21(sinLegal)).toEqual({ isValid: false, errors: ['Nodo ausente obligatorio según UBL-Invoice-2.1.xsd: <cac:LegalMonetaryTotal>'], warnings: [igvWarning] });
+});
+it('ND sin RequestedMonetaryTotal falla preparación interna', () => {
+  const xml = generator.generateInvoiceXml(payload('08')).replace(/  <cac:RequestedMonetaryTotal>[\s\S]*?<\/cac:RequestedMonetaryTotal>/, '');
+  expect(internalValidator.validateInvoiceUbl21(signed(xml))).toEqual({ isValid: false, errors: [
+    'Nodo ausente obligatorio según UBL-Invoice-2.1.xsd: <cac:RequestedMonetaryTotal>',
+    'Nodo ausente obligatorio según UBL-Invoice-2.1.xsd: <cbc:PayableAmount>',
+  ], warnings: [igvWarning] });
+});
+it('LegalMonetaryTotal no sustituye RequestedMonetaryTotal de ND aunque preserve PayableAmount', () => {
+  const xml = generator.generateInvoiceXml(payload('08')).replaceAll('RequestedMonetaryTotal', 'LegalMonetaryTotal');
+  expect(internalValidator.validateInvoiceUbl21(signed(xml))).toEqual({ isValid: false, errors: ['Nodo ausente obligatorio según UBL-Invoice-2.1.xsd: <cac:RequestedMonetaryTotal>'], warnings: [igvWarning] });
 });
