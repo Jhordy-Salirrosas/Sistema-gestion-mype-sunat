@@ -89,6 +89,10 @@ describe('AccountingController', () => {
     getBalanceSheetUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetBalanceSheetUseCase>;
 
     mockPrisma = {
+      accountingRule: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'r1', process_code: 'VENTA', line_order: 1 }]),
+        upsert: jest.fn().mockResolvedValue({ id: 'r1' }),
+      },
       accountingMapping: {
         findMany: jest.fn().mockResolvedValue([
           { process_code: 'COMPRA', role_code: 'GASTO_COMPRA', account_code: '60111-CUSTOM' },
@@ -286,5 +290,15 @@ describe('AccountingController', () => {
     closeFiscalYearUseCase.execute.mockResolvedValue([]);
     await expect(controller.closeFiscalYear('2026', 'comp-1')).resolves.toEqual([]);
     expect(closeFiscalYearUseCase.execute).toHaveBeenCalledWith('comp-1', 2026);
+  });
+
+  it('lista y guarda reglas contables de la empresa del token', async () => {
+    await expect(controller.listRules('comp-1')).resolves.toEqual([{ id: 'r1', process_code: 'VENTA', line_order: 1 }]);
+    await expect(controller.upsertRule({ processCode: 'VENTA', lineOrder: 1, accountCode: '12121', side: 'DEBE', baseCalculation: 'TOTAL' }, 'comp-1')).resolves.toEqual({ id: 'r1' });
+    expect(mockPrisma.accountingRule.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ company_id: 'comp-1', process_code: 'VENTA' }) }));
+  });
+
+  it('rechaza una regla sin cuenta o lado válido', async () => {
+    await expect(controller.upsertRule({ processCode: 'VENTA', lineOrder: 1, accountCode: '', side: 'DEBE', baseCalculation: 'TOTAL' }, 'comp-1')).rejects.toThrow('Regla inválida');
   });
 });
