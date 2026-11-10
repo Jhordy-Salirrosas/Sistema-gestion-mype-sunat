@@ -214,6 +214,8 @@ describe('Inventory Controllers (Additional Coverage)', () => {
       mockPrisma = {
         inventoryWarehouse: {
           findMany: jest.fn().mockResolvedValue([{ warehouse_code: 'ALM-01' }]),
+          findFirst: jest.fn(),
+          create: jest.fn(),
         },
         inventoryProduct: {
           create: jest.fn().mockResolvedValue({ id: 'p-1', sku: 'SKU-1' }),
@@ -228,8 +230,19 @@ describe('Inventory Controllers (Additional Coverage)', () => {
           deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
           findMany: jest.fn().mockResolvedValue([]),
           create: jest.fn().mockResolvedValue({ id: 'v-1' }),
+          update: jest.fn().mockResolvedValue({ id: 'v-1', is_active: false }),
+        },
+        inventoryProductPresentation: {
+          create: jest.fn().mockResolvedValue({ id: 'pres-1' }),
+          deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        inventoryProductSupplier: {
+          create: jest.fn().mockResolvedValue({ id: 'ps-1' }),
+          upsert: jest.fn().mockResolvedValue({ id: 'ps-1' }),
+          deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
         inventoryBalance: {
+          upsert: jest.fn().mockResolvedValue({ id: 'bal-1' }),
           deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
       };
@@ -287,6 +300,87 @@ describe('Inventory Controllers (Additional Coverage)', () => {
       mockPrisma.inventoryMovement.count.mockResolvedValueOnce(0);
       const resDeleted = await controller.deleteProduct('SKU-1', companyId);
       expect(resDeleted.action).toBe('DELETED');
+    });
+
+    it('registra producto completo con variantes, presentaciones, proveedores y almacén por defecto', async () => {
+      await expect(controller.registerProduct({ sku: 'X', description: 'X' } as any, undefined)).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      mockPrisma.inventoryWarehouse.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.inventoryWarehouse.create.mockResolvedValueOnce({ id: 'wh-default', warehouse_code: 'ALM-01' });
+
+      const created = await controller.registerProduct(
+        {
+          sku: 'tub-pvc',
+          description: 'Tubo PVC',
+          origin_type: 'IMPORTADO',
+          is_inventory: true,
+          variants: [
+            { variant_name: 'Blanco 1/2', additional_cost: 2 },
+            { sku: 'TUB-NEG', variant_name: 'Negro 1/2' },
+          ],
+          presentations: [
+            { presentation_name: 'Unidad Individual', factor: 1 },
+            { presentation_name: 'Caja x 20', factor: 20, sunat_unit_code: 'BX' },
+          ],
+          suppliers: [{ supplier_id: 'bp-sup-1', purchase_cost: 15, is_preferred: true }],
+        } as any,
+        companyId,
+      );
+
+      expect(created.id).toBe('p-1');
+      expect(mockPrisma.inventoryProduct.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ sku: 'TUB-PVC', country_of_origin: 'CN', is_service: false, is_inventory: true }),
+      });
+      expect(mockPrisma.inventoryProductVariant.create).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.inventoryProductPresentation.create).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.inventoryProductSupplier.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.inventoryWarehouse.create).toHaveBeenCalled();
+      expect(mockPrisma.inventoryBalance.upsert).toHaveBeenCalled();
+    });
+
+    it('actualiza producto con variantes, presentaciones y proveedores y gestiona sub-endpoints', async () => {
+      mockPrisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'p-1', sku: 'SKU-1' });
+
+      await controller.updateProduct(
+        'SKU-1',
+        {
+          is_service: true,
+          variants: [{ variant_name: 'Azul', attribute_values: { color: 'Azul' } }],
+          presentations: [{ presentation_name: 'Paquete x 10', factor: 10 }],
+          suppliers: [{ supplier_id: 'bp-sup-1', purchase_cost: 12 }],
+        } as any,
+        companyId,
+      );
+      expect(mockPrisma.inventoryProductVariant.deleteMany).toHaveBeenCalled();
+      expect(mockPrisma.inventoryProductPresentation.deleteMany).toHaveBeenCalled();
+      expect(mockPrisma.inventoryProductSupplier.deleteMany).toHaveBeenCalled();
+
+      await controller.addProductSupplier('SKU-1', { supplier_id: 'sup-1' } as any, companyId);
+      expect(mockPrisma.inventoryProductSupplier.upsert).toHaveBeenCalled();
+      await controller.deleteProductSupplier('SKU-1', 'sup-1', companyId);
+      expect(mockPrisma.inventoryProductSupplier.deleteMany).toHaveBeenCalled();
+
+      await controller.addProductPresentation('SKU-1', { presentation_name: 'Caja', factor: 12 } as any, companyId);
+      expect(mockPrisma.inventoryProductPresentation.create).toHaveBeenCalled();
+      await controller.deleteProductPresentation('SKU-1', 'pres-1', companyId);
+      expect(mockPrisma.inventoryProductPresentation.deleteMany).toHaveBeenCalled();
+
+      await controller.listProductVariants('SKU-1', companyId);
+      expect(mockPrisma.inventoryProductVariant.findMany).toHaveBeenCalled();
+      await controller.addProductVariant('SKU-1', { variant_name: 'Rojo' } as any, companyId);
+      expect(mockPrisma.inventoryProductVariant.create).toHaveBeenCalled();
+      await controller.deleteProductVariant('SKU-1', 'var-1', companyId);
+      expect(mockPrisma.inventoryProductVariant.update).toHaveBeenCalledWith({
+        where: { id: 'var-1' },
+        data: { is_active: false },
+      });
+
+      await expect(controller.listStock(undefined)).rejects.toThrow(UnauthorizedException);
+      await controller.listStock(companyId);
+      await expect(controller.getKardex('SKU-1', undefined, undefined, undefined)).rejects.toThrow(UnauthorizedException);
+      await controller.getKardex('SKU-1', '2026-01-01', '2026-12-31', companyId, 'FIFO');
     });
   });
 });

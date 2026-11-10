@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { InventoryCostLayerService } from '../../../src/modules/inventory/application/services/inventoryCostLayerService';
 
 describe('InventoryCostLayerService', () => {
@@ -104,5 +105,106 @@ describe('InventoryCostLayerService', () => {
     expect(result.previousValuationPen).toBe(100);
     expect(result.newValuationPen).toBe(150);
     expect(result.differencePen).toBe(50);
+  });
+
+  it('delega calcular y valida métodos inválidos en updateCostMethod y recalculateCosting', async () => {
+    const calc = service.calcular([], 'ENTRADA', 5, 10);
+    expect(calc.resultingStock).toBe(5);
+    await expect(service.updateCostMethod('c1', 'LIFO' as any)).rejects.toThrow(BadRequestException);
+    await expect(service.recalculateCosting('c1', 'LIFO' as any)).rejects.toThrow(BadRequestException);
+  });
+
+  it('recalcula PROMEDIO con salidas válidas y salidas sin stock', async () => {
+    prisma.company.findUnique.mockResolvedValue({ inventory_cost_method: 'PROMEDIO' });
+    prisma.inventoryBalance.findMany
+      .mockResolvedValueOnce([{ total_inventory_value: 200 }])
+      .mockResolvedValueOnce([{ total_inventory_value: 0 }]);
+    prisma.inventoryMovement.findMany.mockResolvedValue([
+      {
+        id: 'm-1',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'ENTRADA',
+        quantity: 10,
+        unit_cost: 20,
+        total_cost: 200,
+        movement_date: new Date('2026-11-01'),
+      },
+      {
+        id: 'm-2',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'SALIDA',
+        quantity: 10,
+        unit_cost: 0,
+        total_cost: 0,
+        movement_date: new Date('2026-11-02'),
+      },
+      {
+        id: 'm-3',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'SALIDA',
+        quantity: 2,
+        unit_cost: 0,
+        total_cost: 0,
+        movement_date: new Date('2026-11-03'),
+      },
+    ]);
+    prisma.inventoryMovement.update.mockResolvedValue({});
+    prisma.inventoryBalance.upsert.mockResolvedValue({});
+
+    const res = await service.recalculateCosting('c1');
+    expect(res.method).toBe('PROMEDIO');
+    expect(res.movementsCount).toBe(3);
+  });
+
+  it('recalcula FIFO regenerando capas de costo y procesando entradas y salidas', async () => {
+    prisma.company.update.mockResolvedValue({});
+    prisma.inventoryCostLayer.deleteMany.mockResolvedValue({});
+    prisma.inventoryCostLayer.create.mockResolvedValue({});
+    prisma.inventoryBalance.findMany
+      .mockResolvedValueOnce([{ total_inventory_value: 300 }])
+      .mockResolvedValueOnce([{ total_inventory_value: 180 }]);
+    prisma.inventoryMovement.findMany.mockResolvedValue([
+      {
+        id: 'f-0',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'SALIDA',
+        quantity: 1,
+        unit_cost: 0,
+        total_cost: 0,
+        movement_date: new Date('2026-10-31'),
+      },
+      {
+        id: 'f-1',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'ENTRADA',
+        quantity: 10,
+        unit_cost: 15,
+        total_cost: 150,
+        movement_date: new Date('2026-11-01'),
+      },
+      {
+        id: 'f-2',
+        warehouse_id: 'w1',
+        product_id: 'p1',
+        direction: 'SALIDA',
+        quantity: 4,
+        unit_cost: 0,
+        total_cost: 0,
+        movement_date: new Date('2026-11-02'),
+      },
+    ]);
+    prisma.inventoryMovement.update.mockResolvedValue({});
+    prisma.inventoryBalance.upsert.mockResolvedValue({});
+
+    const res = await service.recalculateCosting('c1', 'FIFO');
+    expect(res.method).toBe('FIFO');
+    expect(res.movementsCount).toBe(3);
+    expect(prisma.inventoryCostLayer.deleteMany).toHaveBeenCalled();
+    expect(prisma.inventoryCostLayer.create).toHaveBeenCalled();
   });
 });

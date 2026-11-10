@@ -229,4 +229,48 @@ describe('CustomsController', () => {
     expect(result).toEqual(mockList);
     expect(listCustomsDeclarationsUseCase.execute).toHaveBeenCalledWith('comp-001');
   });
+
+  it('gestiona documentos de declaración y catálogos con y sin Prisma', async () => {
+    expect(await controller.getCatalogsBrokers('agencia')).toEqual([]);
+    await expect(controller.getDeclarationDocuments('d-1', undefined)).rejects.toThrow(UnauthorizedException);
+    expect(await controller.getDeclarationDocuments('d-1', 'comp-001')).toEqual([]);
+    await expect(controller.getCatalogsSuppliers(undefined, 'q')).rejects.toThrow(UnauthorizedException);
+    expect(await controller.getCatalogsSuppliers('comp-001', 'q')).toEqual([]);
+    await expect(controller.uploadDeclarationDocument('d-1', undefined, {} as any)).rejects.toThrow(UnauthorizedException);
+    const bareDoc = await controller.uploadDeclarationDocument('d-1', 'comp-001', {
+      format_type: 'A',
+      file_name: 'dua.pdf',
+      storage_url: 'https://cdn/dua.pdf',
+    });
+    expect(bareDoc.declaration_id).toBe('d-1');
+
+    const mockPrisma = {
+      customsDeclarationDocument: {
+        create: jest.fn().mockResolvedValue({ id: 'doc-1' }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'doc-1' }]),
+      },
+      customsBroker: { findMany: jest.fn().mockResolvedValue([{ id: 'br-1' }]) },
+      foreignSupplier: { findMany: jest.fn().mockResolvedValue([{ id: 'sup-1' }]) },
+    };
+    const prismaCtrl = new CustomsController(
+      calculateDuaUseCase,
+      registerDuaUseCase,
+      getCustomsDeclarationByIdUseCase,
+      listCustomsDeclarationsUseCase,
+      registerDuaWizardUseCase,
+      simulateDamTaxesUseCase,
+      mockPrisma as any,
+    );
+
+    expect(
+      await prismaCtrl.uploadDeclarationDocument('d-1', 'comp-001', {
+        format_type: 'A',
+        file_name: 'dua.pdf',
+        storage_url: 'https://cdn/dua.pdf',
+      }),
+    ).toEqual({ id: 'doc-1' });
+    expect(await prismaCtrl.getDeclarationDocuments('d-1', 'comp-001')).toEqual([{ id: 'doc-1' }]);
+    expect(await prismaCtrl.getCatalogsBrokers('agencia')).toEqual([{ id: 'br-1' }]);
+    expect(await prismaCtrl.getCatalogsSuppliers('comp-001', 'china')).toEqual([{ id: 'sup-1' }]);
+  });
 });

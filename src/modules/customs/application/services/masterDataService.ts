@@ -291,6 +291,21 @@ export class MasterDataService {
     // Si es del exterior o importador, sincronizar también en foreign_suppliers
     const rolesUpper = (dto.roles ?? []).map((r) => r.toUpperCase());
     if (rolesUpper.includes('IMPORTADOR') || rolesUpper.includes('PROVEEDOR_EXTERIOR') || country !== 'PE') {
+      const supplierData = {
+        business_name: dto.legalName,
+        country_code: country,
+        city: dto.city?.trim() || null,
+        postal_code: dto.postalCode?.trim() || null,
+        address: dto.address?.trim() || null,
+        contact_name: dto.contactName?.trim() || null,
+        email: dto.email?.trim() || null,
+        phone: dto.phone?.trim() || null,
+        payment_terms: dto.paymentTerms?.trim() || null,
+        bank_name: dto.bankName?.trim() || null,
+        bank_account: dto.accountNumber?.trim() || null,
+        swift_code: dto.swiftCode?.trim() || null,
+        default_currency: currency,
+      };
       try {
         await this.prisma.foreignSupplier.upsert({
           where: {
@@ -299,37 +314,11 @@ export class MasterDataService {
               tax_id: dto.docNumber,
             },
           },
-          update: {
-            business_name: dto.legalName,
-            country_code: country,
-            city: dto.city?.trim() || null,
-            postal_code: dto.postalCode?.trim() || null,
-            address: dto.address?.trim() || null,
-            contact_name: dto.contactName?.trim() || null,
-            email: dto.email?.trim() || null,
-            phone: dto.phone?.trim() || null,
-            payment_terms: dto.paymentTerms?.trim() || null,
-            bank_name: dto.bankName?.trim() || null,
-            bank_account: dto.accountNumber?.trim() || null,
-            swift_code: dto.swiftCode?.trim() || null,
-            default_currency: currency,
-          },
+          update: supplierData,
           create: {
             company_id: companyId,
             tax_id: dto.docNumber,
-            business_name: dto.legalName,
-            country_code: country,
-            city: dto.city?.trim() || null,
-            postal_code: dto.postalCode?.trim() || null,
-            address: dto.address?.trim() || null,
-            contact_name: dto.contactName?.trim() || null,
-            email: dto.email?.trim() || null,
-            phone: dto.phone?.trim() || null,
-            payment_terms: dto.paymentTerms?.trim() || null,
-            bank_name: dto.bankName?.trim() || null,
-            bank_account: dto.accountNumber?.trim() || null,
-            swift_code: dto.swiftCode?.trim() || null,
-            default_currency: currency,
+            ...supplierData,
           },
         });
       } catch (err) {

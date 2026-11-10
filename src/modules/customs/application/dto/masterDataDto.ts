@@ -81,23 +81,7 @@ export class UpsertIncotermDto {
   isActive?: boolean;
 }
 
-export class CreatePartnerDto {
-  @IsString()
-  @IsIn(['0', '1', '4', '6'])
-  docType!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(20)
-  @ValidateIf((o: { docType?: string }) => o.docType === '6')
-  @IsRucValid({ message: 'El RUC del tercero no supera la validación módulo 11.' })
-  docNumber!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(200)
-  legalName!: string;
-
+class BasePartnerOptionalFieldsDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -176,92 +160,33 @@ export class CreatePartnerDto {
   swiftCode?: string;
 }
 
-export class UpdatePartnerDto {
+export class CreatePartnerDto extends BasePartnerOptionalFieldsDto {
+  @IsString()
+  @IsIn(['0', '1', '4', '6'])
+  docType!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  @ValidateIf((o: { docType?: string }) => o.docType === '6')
+  @IsRucValid({ message: 'El RUC del tercero no supera la validación módulo 11.' })
+  docNumber!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  legalName!: string;
+}
+
+export class UpdatePartnerDto extends BasePartnerOptionalFieldsDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
   legalName?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  tradeName?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(2, 2)
-  countryCode?: string;
-
-  @IsOptional()
-  @IsString()
-  address?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  website?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  roles?: string[];
-
-  @IsOptional()
-  @IsString()
-  paymentTerms?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  hasCredit?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  allowsDiscount?: boolean;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  creditLimit?: number;
-
-  @IsOptional()
-  @IsString()
-  @Length(3, 3)
-  currencyCode?: string;
-
-  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
-
-  @IsOptional()
-  @IsString()
-  city?: string;
-
-  @IsOptional()
-  @IsString()
-  postalCode?: string;
-
-  @IsOptional()
-  @IsString()
-  contactName?: string;
-
-  @IsOptional()
-  @IsString()
-  bankName?: string;
-
-  @IsOptional()
-  @IsString()
-  accountNumber?: string;
-
-  @IsOptional()
-  @IsString()
-  swiftCode?: string;
 }
 
 export class AddPartnerAddressDto {

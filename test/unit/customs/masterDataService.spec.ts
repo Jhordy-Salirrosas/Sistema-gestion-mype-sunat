@@ -15,7 +15,10 @@ describe('MasterDataService', () => {
       },
       exchangeRate: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
         upsert: jest.fn(),
+        update: jest.fn(),
         delete: jest.fn(),
       },
       incoterm: {
@@ -31,16 +34,37 @@ describe('MasterDataService', () => {
         delete: jest.fn(),
       },
       partnerAddress: {
+        findFirst: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
         deleteMany: jest.fn(),
       },
       partnerContact: {
+        findFirst: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
         deleteMany: jest.fn(),
       },
       partnerBankAccount: {
+        findFirst: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
         deleteMany: jest.fn(),
+      },
+      foreignSupplier: {
+        findFirst: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+      },
+      country: {
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        delete: jest.fn(),
+      },
+      port: {
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        delete: jest.fn(),
       },
       documentType: {
         findMany: jest.fn(),
@@ -264,6 +288,196 @@ describe('MasterDataService', () => {
           source: 'SUNAT',
         }),
       });
+    });
+  });
+
+  describe('Extended Partner Sync, Countries & Ports', () => {
+    const companyId = 'comp-ext-1';
+
+    it('crea tercero exterior completo con dirección, contacto, banco y sincroniza ForeignSupplier', async () => {
+      mockPrisma.businessPartner.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.businessPartner.create.mockResolvedValue({ id: 'bp-ext-1' });
+      mockPrisma.foreignSupplier.upsert.mockResolvedValue({ id: 'fs-1' });
+
+      const created = await service.createPartner(companyId, {
+        docType: '0',
+        docNumber: 'CN-888999',
+        legalName: 'Shenzhen Industrial Co.',
+        countryCode: 'cn',
+        currencyCode: 'usd',
+        city: 'Shenzhen',
+        postalCode: '518000',
+        address: 'Nanshan District 99',
+        contactName: 'Li Wei',
+        email: 'li@shenzhen.cn',
+        phone: '+86-755',
+        paymentTerms: '30 DIAS',
+        bankName: 'Bank of China',
+        accountNumber: 'BOC-001122',
+        swiftCode: 'BKCHCNBJ',
+        roles: ['PROVEEDOR_EXTERIOR', 'IMPORTADOR'],
+      });
+
+      expect(created.id).toBe('bp-ext-1');
+      expect(mockPrisma.partnerAddress.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          partner_id: 'bp-ext-1',
+          city: 'Shenzhen',
+          postal_code: '518000',
+          country_code: 'CN',
+        }),
+      });
+      expect(mockPrisma.partnerContact.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ partner_id: 'bp-ext-1', name: 'Li Wei' }),
+      });
+      expect(mockPrisma.partnerBankAccount.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          partner_id: 'bp-ext-1',
+          bank_name: 'Bank of China',
+          swift: 'BKCHCNBJ',
+          currency_code: 'USD',
+        }),
+      });
+      expect(mockPrisma.foreignSupplier.upsert).toHaveBeenCalled();
+    });
+
+    it('no bloquea creación si falla la sincronización con ForeignSupplier', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      mockPrisma.businessPartner.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.businessPartner.create.mockResolvedValue({ id: 'bp-ext-2' });
+      mockPrisma.foreignSupplier.upsert.mockRejectedValue(new Error('sync error'));
+
+      const created = await service.createPartner(companyId, {
+        docType: '0',
+        docNumber: 'US-123',
+        legalName: 'Miami Cargo LLC',
+        countryCode: 'US',
+      });
+
+      expect(created.id).toBe('bp-ext-2');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('actualiza dirección, contacto, banco (creando y actualizando) y sincroniza ForeignSupplier', async () => {
+      mockPrisma.businessPartner.findFirst.mockResolvedValue({
+        id: 'bp-ext-1',
+        doc_number: 'CN-888999',
+        country_code: 'CN',
+        currency_code: 'USD',
+        address: 'Old Dir',
+      });
+      mockPrisma.businessPartner.update.mockResolvedValue({ id: 'bp-ext-1', has_credit: false });
+
+      // Primera pasada: ya existen subentidades -> update
+      mockPrisma.partnerAddress.findFirst.mockResolvedValueOnce({ id: 'addr-1', address: 'Old Dir' });
+      mockPrisma.partnerContact.findFirst.mockResolvedValueOnce({ id: 'cont-1' });
+      mockPrisma.partnerBankAccount.findFirst.mockResolvedValueOnce({ id: 'bank-1' });
+      mockPrisma.foreignSupplier.findFirst.mockResolvedValueOnce({ id: 'fs-1' });
+
+      await service.updatePartner(companyId, 'bp-ext-1', {
+        legalName: 'Shenzhen Updated',
+        tradeName: 'Shenzhen',
+        website: 'https://sz.cn',
+        paymentTerms: 'CONTADO',
+        allowsDiscount: true,
+        creditLimit: 5000,
+        isActive: true,
+        city: 'Guangzhou',
+        postalCode: '510000',
+        address: 'New Blvd',
+        contactName: 'Chen',
+        email: 'chen@sz.cn',
+        phone: '+86-20',
+        bankName: 'ICBC',
+        accountNumber: 'ICBC-99',
+        swiftCode: 'ICBKCNBJ',
+        currencyCode: 'usd',
+      });
+
+      expect(mockPrisma.partnerAddress.update).toHaveBeenCalled();
+      expect(mockPrisma.partnerContact.update).toHaveBeenCalled();
+      expect(mockPrisma.partnerBankAccount.update).toHaveBeenCalled();
+      expect(mockPrisma.foreignSupplier.update).toHaveBeenCalled();
+
+      // Segunda pasada: no existen subentidades -> create, y falla sync ForeignSupplier sin lanzar excepción
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      mockPrisma.partnerAddress.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.partnerContact.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.partnerBankAccount.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.foreignSupplier.findFirst.mockRejectedValueOnce(new Error('db fail'));
+
+      await service.updatePartner(companyId, 'bp-ext-1', {
+        city: 'Beijing',
+        contactName: 'Wang',
+        bankName: 'HSBC',
+      });
+
+      expect(mockPrisma.partnerAddress.create).toHaveBeenCalled();
+      expect(mockPrisma.partnerContact.create).toHaveBeenCalled();
+      expect(mockPrisma.partnerBankAccount.create).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('gestiona CRUD de países y puertos (con y sin filtro de tipo)', async () => {
+      mockPrisma.country.findMany.mockResolvedValue([{ code: 'PE', name: 'Perú' }]);
+      mockPrisma.country.upsert.mockResolvedValue({ code: 'PE', name: 'Perú', status: 'ACTIVO' });
+      mockPrisma.country.delete.mockResolvedValue({ code: 'PE' });
+
+      expect(await service.listCountries()).toHaveLength(1);
+      expect(await service.upsertCountry({ code: ' pe ', name: ' Perú ' })).toEqual({
+        code: 'PE',
+        name: 'Perú',
+        status: 'ACTIVO',
+      });
+      expect(await service.deleteCountry(' pe ')).toEqual({ code: 'PE' });
+
+      mockPrisma.port.findMany.mockResolvedValue([{ code: 'PECLL', name: 'Callao', type: 'MARITIMO' }]);
+      mockPrisma.port.upsert.mockResolvedValue({ code: 'PECLL', name: 'Callao' });
+      mockPrisma.port.delete.mockResolvedValue({ code: 'PECLL' });
+
+      await service.listPorts('MARITIMO');
+      expect(mockPrisma.port.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { OR: [{ type: 'MARITIMO' }, { type: 'AMBOS' }] } }),
+      );
+      await service.listPorts('TODOS');
+      expect(mockPrisma.port.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ where: undefined }),
+      );
+
+      await service.upsertPort({ code: ' pecll ', name: ' Callao ', countryCode: 'pe', type: 'maritimo' });
+      expect(mockPrisma.port.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { code: 'PECLL' },
+          create: expect.objectContaining({ code: 'PECLL', country_code: 'PE', type: 'MARITIMO' }),
+        }),
+      );
+      expect(await service.deletePort(' pecll ')).toEqual({ code: 'PECLL' });
+    });
+
+    it('actualiza tipo de cambio y sincroniza el tipo de cambio del día (API y fallback)', async () => {
+      mockPrisma.exchangeRate.findUnique.mockResolvedValueOnce(null);
+      await expect(service.updateExchangeRate('er-missing', { rate: 3.8 })).rejects.toThrow(NotFoundException);
+
+      mockPrisma.exchangeRate.findUnique.mockResolvedValueOnce({ id: 'er-1' });
+      mockPrisma.exchangeRate.update.mockResolvedValueOnce({ id: 'er-1', rate: 3.81, source: 'MANUAL' });
+      expect((await service.updateExchangeRate('er-1', { rate: 3.81, source: 'MANUAL' })).rate).toBe(3.81);
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ venta: 3.79 }),
+      }) as any;
+      mockPrisma.exchangeRate.upsert.mockResolvedValueOnce({ rate: 3.79, source: 'SUNAT' });
+      const syncedOk = await service.syncTodayExchangeRate();
+      expect(syncedOk.rate).toBe(3.79);
+
+      globalThis.fetch = jest.fn().mockRejectedValueOnce(new Error('network error')) as any;
+      mockPrisma.exchangeRate.findFirst.mockResolvedValueOnce({ rate: 3.74, source: 'CACHE' });
+      mockPrisma.exchangeRate.upsert.mockResolvedValueOnce({ rate: 3.74, source: 'CACHE' });
+      const syncedFallback = await service.syncTodayExchangeRate();
+      expect(syncedFallback.source).toBe('CACHE');
+      globalThis.fetch = originalFetch;
     });
   });
 });

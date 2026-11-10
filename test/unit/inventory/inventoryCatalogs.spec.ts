@@ -1,6 +1,6 @@
 import { InventoryCatalogsService, SUNAT_OFFICIAL_UNITS } from '../../../src/modules/inventory/application/services/inventoryCatalogsService';
 import { InventoryCatalogsController } from '../../../src/modules/inventory/infrastructure/controllers/inventoryCatalogsController';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 
 describe('InventoryCatalogsService & Controller (Fase 2 - Mantenedores)', () => {
   let service: InventoryCatalogsService;
@@ -12,38 +12,44 @@ describe('InventoryCatalogsService & Controller (Fase 2 - Mantenedores)', () => 
     mockPrisma = {
       sunatUnitMeasurement: {
         findMany: jest.fn().mockResolvedValue(SUNAT_OFFICIAL_UNITS),
-        upsert: jest.fn(),
+        upsert: jest.fn().mockResolvedValue({}),
       },
       inventoryBrand: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
       },
       inventoryModel: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
       },
       inventoryCategory: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
       },
       inventoryManufacturer: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
       },
       inventoryTag: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        delete: jest.fn(),
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      user: {
+        findMany: jest.fn(),
+      },
+      businessPartner: {
+        findMany: jest.fn(),
       },
     };
 
@@ -184,6 +190,161 @@ describe('InventoryCatalogsService & Controller (Fase 2 - Mantenedores)', () => 
 
       const updatedTag = await controller.updateTag('t-1', { name: 'alta-rotacion-vip', color: 'purple' }, companyId);
       expect(updatedTag.color).toBe('purple');
+    });
+  });
+
+  describe('Semillas automáticas, eliminaciones, conflictos y responsables autorizados', () => {
+    it('precarga catálogos cuando las tablas están vacías', async () => {
+      mockPrisma.sunatUnitMeasurement.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(SUNAT_OFFICIAL_UNITS);
+      expect((await controller.listUnits()).length).toBeGreaterThan(10);
+      expect(mockPrisma.sunatUnitMeasurement.upsert).toHaveBeenCalled();
+
+      mockPrisma.inventoryBrand.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ code: 'SOL' }]);
+      expect(await controller.listBrands(companyId)).toEqual([{ code: 'SOL' }]);
+      expect(mockPrisma.inventoryBrand.create).toHaveBeenCalled();
+
+      mockPrisma.inventoryModel.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ code: 'MOD-GSB13' }]);
+      expect(await controller.listModels(companyId)).toEqual([{ code: 'MOD-GSB13' }]);
+      expect(mockPrisma.inventoryModel.create).toHaveBeenCalled();
+
+      mockPrisma.inventoryCategory.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ code: 'CEM' }]);
+      expect(await controller.listCategories(companyId)).toEqual([{ code: 'CEM' }]);
+      expect(mockPrisma.inventoryCategory.create).toHaveBeenCalled();
+
+      mockPrisma.inventoryManufacturer.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ name: 'UNACEM S.A.A.' }]);
+      expect(await controller.listManufacturers(companyId)).toEqual([{ name: 'UNACEM S.A.A.' }]);
+      expect(mockPrisma.inventoryManufacturer.create).toHaveBeenCalled();
+
+      mockPrisma.inventoryTag.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ name: 'alta-rotacion' }]);
+      expect(await controller.listTags(companyId)).toEqual([{ name: 'alta-rotacion' }]);
+      expect(mockPrisma.inventoryTag.create).toHaveBeenCalled();
+    });
+
+    it('crea modelos, valida conflictos y maneja inactivación/eliminación y NotFound', async () => {
+      mockPrisma.inventoryModel.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.inventoryModel.create.mockResolvedValueOnce({ id: 'mod-2', code: 'MODX' });
+      expect(await controller.createModel({ name: 'Taladro X', code: 'modx' }, companyId)).toEqual({
+        id: 'mod-2',
+        code: 'MODX',
+      });
+
+      mockPrisma.inventoryModel.findFirst.mockResolvedValueOnce({ id: 'mod-2' });
+      await expect(controller.createModel({ name: 'Taladro X', code: 'modx' }, companyId)).rejects.toThrow(
+        ConflictException,
+      );
+
+      mockPrisma.inventoryBrand.findFirst.mockResolvedValueOnce({ id: 'b-1' });
+      mockPrisma.inventoryBrand.update.mockResolvedValueOnce({ id: 'b-1', is_active: false });
+      expect((await controller.deleteBrand('b-1', companyId)).is_active).toBe(false);
+      mockPrisma.inventoryBrand.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.deleteBrand('missing', companyId)).rejects.toThrow(NotFoundException);
+
+      mockPrisma.inventoryModel.findFirst.mockResolvedValueOnce({ id: 'm-1' });
+      mockPrisma.inventoryModel.update.mockResolvedValueOnce({ id: 'm-1', is_active: false });
+      expect((await controller.deleteModel('m-1', companyId)).is_active).toBe(false);
+      mockPrisma.inventoryModel.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.deleteModel('missing', companyId)).rejects.toThrow(NotFoundException);
+
+      mockPrisma.inventoryCategory.findFirst.mockResolvedValueOnce({ id: 'c-1' });
+      mockPrisma.inventoryCategory.update.mockResolvedValueOnce({ id: 'c-1', is_active: false });
+      expect((await controller.deleteCategory('c-1', companyId)).is_active).toBe(false);
+      mockPrisma.inventoryCategory.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.deleteCategory('missing', companyId)).rejects.toThrow(NotFoundException);
+
+      mockPrisma.inventoryManufacturer.findFirst.mockResolvedValueOnce({ id: 'mf-1' });
+      mockPrisma.inventoryManufacturer.update.mockResolvedValueOnce({ id: 'mf-1', is_active: false });
+      expect((await controller.deleteManufacturer('mf-1', companyId)).is_active).toBe(false);
+      mockPrisma.inventoryManufacturer.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.deleteManufacturer('missing', companyId)).rejects.toThrow(NotFoundException);
+
+      mockPrisma.inventoryTag.findFirst.mockResolvedValueOnce({ id: 'tg-1' });
+      mockPrisma.inventoryTag.delete.mockResolvedValueOnce({ id: 'tg-1' });
+      expect(await controller.deleteTag('tg-1', companyId)).toEqual({ id: 'tg-1' });
+      mockPrisma.inventoryTag.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.deleteTag('missing', companyId)).rejects.toThrow(NotFoundException);
+
+      // Conflictos y NotFound en updates de catálogos + lectura directa cuando hay datos
+      mockPrisma.inventoryBrand.findMany.mockResolvedValueOnce([{ id: 'b-1' }]);
+      expect(await controller.listBrands(companyId)).toEqual([{ id: 'b-1' }]);
+
+      mockPrisma.inventoryBrand.findFirst.mockResolvedValueOnce({ id: 'b-1' }).mockResolvedValueOnce({ id: 'b-2' });
+      await expect(controller.updateBrand('b-1', { name: 'Dup' }, companyId)).rejects.toThrow(ConflictException);
+
+      mockPrisma.inventoryModel.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.updateModel('missing', { name: 'X' }, companyId)).rejects.toThrow(NotFoundException);
+      mockPrisma.inventoryModel.findFirst.mockResolvedValueOnce({ id: 'm-1' }).mockResolvedValueOnce({ id: 'm-2' });
+      await expect(controller.updateModel('m-1', { code: 'DUP' }, companyId)).rejects.toThrow(ConflictException);
+
+      mockPrisma.inventoryCategory.findFirst.mockResolvedValueOnce({ id: 'c-1' }).mockResolvedValueOnce({ id: 'c-2' });
+      await expect(controller.updateCategory('c-1', { code: 'DUP' }, companyId)).rejects.toThrow(ConflictException);
+
+      mockPrisma.inventoryManufacturer.findFirst.mockResolvedValueOnce({ id: 'mf-1' }).mockResolvedValueOnce({ id: 'mf-2' });
+      await expect(controller.updateManufacturer('mf-1', { name: 'DUP' }, companyId)).rejects.toThrow(ConflictException);
+
+      mockPrisma.inventoryTag.findFirst.mockResolvedValueOnce({ id: 'tg-1' }).mockResolvedValueOnce({ id: 'tg-2' });
+      await expect(controller.updateTag('tg-1', { name: 'dup' }, companyId)).rejects.toThrow(ConflictException);
+
+      // Ramas de listados no vacíos, creación duplicada/conflictos y limpieza de campos opcionales
+      mockPrisma.inventoryModel.findMany.mockResolvedValueOnce([{ id: 'm-1' }]);
+      expect(await controller.listModels(companyId)).toEqual([{ id: 'm-1' }]);
+      mockPrisma.inventoryCategory.findMany.mockResolvedValueOnce([{ id: 'c-1' }]);
+      expect(await controller.listCategories(companyId)).toEqual([{ id: 'c-1' }]);
+      mockPrisma.inventoryManufacturer.findMany.mockResolvedValueOnce([{ id: 'mf-1' }]);
+      expect(await controller.listManufacturers(companyId)).toEqual([{ id: 'mf-1' }]);
+      mockPrisma.inventoryTag.findMany.mockResolvedValueOnce([{ id: 'tg-1' }]);
+      expect(await controller.listTags(companyId)).toEqual([{ id: 'tg-1' }]);
+
+      mockPrisma.inventoryBrand.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.updateBrand('b-1', {}, companyId)).rejects.toThrow(NotFoundException);
+      mockPrisma.inventoryBrand.findFirst.mockResolvedValueOnce({ id: 'b-1' });
+      await controller.updateBrand('b-1', { description: '', is_active: false }, companyId);
+
+      mockPrisma.inventoryCategory.findFirst.mockResolvedValueOnce({ id: 'c-1' });
+      await expect(controller.createCategory({ name: 'Cementos', code: 'CEM' }, companyId)).rejects.toThrow(ConflictException);
+      mockPrisma.inventoryManufacturer.findFirst.mockResolvedValueOnce({ id: 'mf-1' });
+      await expect(controller.createManufacturer({ name: 'UNACEM' }, companyId)).rejects.toThrow(ConflictException);
+
+      mockPrisma.inventoryTag.findFirst.mockResolvedValueOnce({ id: 'tg-existing', name: 'promo' });
+      expect((await controller.createTag({ name: ' PROMO ' }, companyId)).id).toBe('tg-existing');
+      mockPrisma.inventoryTag.findFirst.mockResolvedValueOnce(null);
+      await expect(controller.updateTag('missing', { color: 'blue' }, companyId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('lista responsables autorizados (usuarios y transportistas) y valida companyId en endpoints', async () => {
+      mockPrisma.user.findMany.mockResolvedValue([
+        { id: 'u-1', full_name: 'Ana Ruiz', role: 'ALMACEN', email: 'ana@mype.pe' },
+      ]);
+      mockPrisma.businessPartner.findMany.mockResolvedValue([
+        { id: 'bp-1', legal_name: 'Trans Express SAC', doc_number: '20555666777' },
+      ]);
+
+      const responsibles = await controller.listResponsibles(companyId);
+      expect(responsibles.users[0]).toMatchObject({ id: 'u-1', name: 'Ana Ruiz', type: 'USER' });
+      expect(responsibles.transporters[0]).toMatchObject({
+        id: 'bp-1',
+        name: 'Trans Express SAC (20555666777)',
+        type: 'CARRIER',
+      });
+
+      await expect(controller.listModels(undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.createModel({ name: 'X' }, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.updateModel('1', {}, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.deleteModel('1', undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.listCategories(undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.createCategory({ name: 'X' }, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.updateCategory('1', {}, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.deleteCategory('1', undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.listManufacturers(undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.createManufacturer({ name: 'X' }, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.updateManufacturer('1', {}, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.deleteManufacturer('1', undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.listTags(undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.createTag({ name: 'X' }, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.updateTag('1', {}, undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.deleteTag('1', undefined)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.listResponsibles(undefined)).rejects.toThrow(UnauthorizedException);
     });
   });
 });

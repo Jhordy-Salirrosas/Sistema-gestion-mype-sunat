@@ -281,6 +281,88 @@ describe('InventoryTransferService', () => {
       expect(mockPrisma.inventoryMovement.create).toHaveBeenCalledTimes(1);
       expect(mockPrisma.inventoryBalance.upsert).toHaveBeenCalledTimes(1);
     });
+
+    it('rechaza productos de tipo servicio y genera asientos contables en ajustes ENTRADA (201/759) y SALIDA (659/201)', async () => {
+      mockPrisma.inventoryAdjustment.findFirst.mockResolvedValue(null);
+      mockPrisma.inventoryWarehouse.findFirst.mockResolvedValue({ id: 'w-1', warehouse_code: 'ALM-01' });
+      mockPrisma.inventoryProduct.findFirst.mockResolvedValueOnce({
+        id: 'p-srv',
+        sku: 'SRV-1',
+        is_inventory: false,
+      });
+
+      await expect(
+        service.createAdjustment(companyId, {
+          warehouseCode: 'ALM-01',
+          type: 'ENTRADA',
+          reason: 'Prueba',
+          items: [{ sku: 'SRV-1', quantity: 1 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      const accounting = { execute: jest.fn().mockResolvedValue({ id: 'ent-1' }) };
+      const svcAccounting = new InventoryTransferService(mockPrisma, accounting as never);
+      mockPrisma.inventoryProduct.findFirst.mockResolvedValue({
+        id: 'p-1',
+        sku: 'SKU-1',
+        description: 'Item 1',
+        is_inventory: true,
+      });
+      mockPrisma.inventoryBalance.findUnique.mockResolvedValue({
+        current_stock: 10,
+        average_unit_cost: 20,
+        total_inventory_value: 200,
+      });
+      mockPrisma.inventoryAdjustment.create
+        .mockResolvedValueOnce({
+          id: 'adj-in',
+          adjustment_number: 'AJU-IN',
+          adjustment_date: new Date('2026-11-06'),
+          warehouse_code: 'ALM-01',
+          type: 'ENTRADA',
+          reason: 'Sobrante',
+        })
+        .mockResolvedValueOnce({
+          id: 'adj-out',
+          adjustment_number: 'AJU-OUT',
+          adjustment_date: new Date('2026-11-06'),
+          warehouse_code: 'ALM-01',
+          type: 'SALIDA',
+          reason: 'Merma',
+        });
+
+      await svcAccounting.createAdjustment(companyId, {
+        warehouseCode: 'ALM-01',
+        adjustmentNumber: 'AJU-IN',
+        type: 'ENTRADA',
+        reason: 'Sobrante',
+        items: [{ sku: 'SKU-1', quantity: 2, unitCost: 20 }],
+      });
+      expect(accounting.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lines: expect.arrayContaining([
+            expect.objectContaining({ accountCode: '201', debitAmount: 40 }),
+            expect.objectContaining({ accountCode: '759', creditAmount: 40 }),
+          ]),
+        }),
+      );
+
+      await svcAccounting.createAdjustment(companyId, {
+        warehouseCode: 'ALM-01',
+        adjustmentNumber: 'AJU-OUT',
+        type: 'SALIDA',
+        reason: 'Merma',
+        items: [{ sku: 'SKU-1', quantity: 3 }],
+      });
+      expect(accounting.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lines: expect.arrayContaining([
+            expect.objectContaining({ accountCode: '659', debitAmount: 60 }),
+            expect.objectContaining({ accountCode: '201', creditAmount: 60 }),
+          ]),
+        }),
+      );
+    });
   });
 });
 

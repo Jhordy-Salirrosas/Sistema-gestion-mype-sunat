@@ -10,6 +10,26 @@ describe('ForeignSupplierService multiempresa', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    businessPartner: {
+      upsert: jest.fn().mockResolvedValue({ id: 'bp-default' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue({ id: 'bp-default' }),
+    },
+    partnerBankAccount: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'ba-default' }),
+      update: jest.fn().mockResolvedValue({ id: 'ba-default' }),
+    },
+    partnerAddress: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'ad-default' }),
+      update: jest.fn().mockResolvedValue({ id: 'ad-default' }),
+    },
+    partnerContact: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'co-default' }),
+      update: jest.fn().mockResolvedValue({ id: 'co-default' }),
+    },
   };
   const service = new ForeignSupplierService(prisma as never);
 
@@ -89,5 +109,113 @@ describe('ForeignSupplierService multiempresa', () => {
     expect(prisma.foreignSupplier.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ company_id: 'company-1', OR: expect.any(Array) }) }),
     );
+  });
+
+  it('sincroniza creación y actualización completa hacia BusinessPartner y subentidades', async () => {
+    prisma.foreignSupplier.create.mockResolvedValue({ id: 'sup-sync-1' });
+    prisma.businessPartner.upsert.mockResolvedValue({ id: 'bp-sync-1' });
+    prisma.partnerBankAccount.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'ba-old', bank_name: 'Old', account_number: '1', swift: null });
+    prisma.partnerAddress.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'ad-old', address: 'Old', city: 'Old', postal_code: '0' });
+    prisma.partnerContact.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'co-old', email: 'a@b.com', phone: '1' });
+
+    await service.create('company-1', {
+      taxId: 'CN-TAX-1',
+      businessName: 'Yiwu Trading Ltd',
+      countryCode: 'cn',
+      defaultCurrency: 'usd',
+      city: 'Yiwu',
+      postalCode: '322000',
+      address: 'Futian Market 10',
+      contactName: 'Zhang San',
+      email: 'zhang@yiwu.cn',
+      phone: '+86-579',
+      paymentTerms: '60 DIAS',
+      bankName: 'Bank of China',
+      bankAccount: 'BOC-5566',
+      swiftCode: 'BKCHCNBJ',
+    });
+
+    // Segunda creación actualizando subentidades ya existentes del BusinessPartner
+    await service.create('company-1', {
+      taxId: 'CN-TAX-1',
+      businessName: 'Yiwu Trading Ltd 2',
+      countryCode: 'cn',
+      city: 'Yiwu',
+      contactName: 'Zhang San 2',
+      bankName: 'Bank of China',
+      bankAccount: 'BOC-5566',
+    });
+
+    expect(prisma.businessPartner.upsert).toHaveBeenCalled();
+    expect(prisma.partnerBankAccount.create).toHaveBeenCalled();
+    expect(prisma.partnerBankAccount.update).toHaveBeenCalled();
+    expect(prisma.partnerAddress.create).toHaveBeenCalled();
+    expect(prisma.partnerAddress.update).toHaveBeenCalled();
+    expect(prisma.partnerContact.create).toHaveBeenCalled();
+    expect(prisma.partnerContact.update).toHaveBeenCalled();
+
+    // Update sincronizando registros existentes en BusinessPartner y subentidades
+    prisma.foreignSupplier.findFirst.mockResolvedValue({ id: 'sup-sync-1', tax_id: 'CN-TAX-1' });
+    prisma.foreignSupplier.update.mockResolvedValue({ id: 'sup-sync-1' });
+    prisma.businessPartner.findFirst.mockResolvedValue({
+      id: 'bp-sync-1',
+      roles: ['CLIENTE'],
+      country_code: 'CN',
+      currency_code: 'USD',
+    });
+    prisma.partnerBankAccount.findFirst.mockResolvedValueOnce({ id: 'ba-1', bank_name: 'Old' }).mockResolvedValueOnce(null);
+    prisma.partnerAddress.findFirst.mockResolvedValueOnce({ id: 'ad-1', address: 'Old' }).mockResolvedValueOnce(null);
+    prisma.partnerContact.findFirst.mockResolvedValueOnce({ id: 'co-1' }).mockResolvedValueOnce(null);
+
+    await service.update('company-1', 'sup-sync-1', {
+      businessName: 'Yiwu Updated',
+      city: 'Ningbo',
+      postalCode: '315000',
+      address: 'Port Ave 20',
+      contactName: 'Li Ming',
+      bankName: 'HSBC',
+      bankAccount: 'HSBC-999',
+      swiftCode: 'HSBCCNSH',
+    });
+
+    // Segunda actualización creando subentidades faltantes
+    await service.update('company-1', 'sup-sync-1', {
+      city: 'Shanghai',
+      contactName: 'Chen',
+      bankName: 'ICBC',
+      bankAccount: 'ICBC-88',
+    });
+
+    expect(prisma.businessPartner.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          roles: expect.arrayContaining(['CLIENTE', 'PROVEEDOR', 'PROVEEDOR_EXTERIOR', 'IMPORTADOR']),
+        }),
+      }),
+    );
+    expect(prisma.partnerBankAccount.update).toHaveBeenCalled();
+    expect(prisma.partnerAddress.update).toHaveBeenCalled();
+    expect(prisma.partnerContact.update).toHaveBeenCalled();
+  });
+
+  it('continúa sin fallar cuando la sincronización opcional de BusinessPartner lanza error', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    prisma.foreignSupplier.create.mockResolvedValue({ id: 'sup-warn-1' });
+    prisma.businessPartner.upsert.mockRejectedValueOnce(new Error('partner upsert fail'));
+
+    await expect(
+      service.create('company-1', { businessName: 'Warn Corp', countryCode: 'DE' }),
+    ).resolves.toEqual({ id: 'sup-warn-1' });
+
+    prisma.foreignSupplier.findFirst.mockResolvedValue({ id: 'sup-warn-1', tax_id: null });
+    prisma.foreignSupplier.update.mockResolvedValue({ id: 'sup-warn-1' });
+    prisma.businessPartner.findFirst.mockRejectedValueOnce(new Error('partner update fail'));
+
+    await expect(
+      service.update('company-1', 'sup-warn-1', { businessName: 'Warn Updated' }),
+    ).resolves.toEqual({ id: 'sup-warn-1' });
+
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    warnSpy.mockRestore();
   });
 });

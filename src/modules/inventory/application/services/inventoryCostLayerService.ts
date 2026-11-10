@@ -181,108 +181,7 @@ export class InventoryCostLayerService {
       const [warehouseId, productId] = key.split(':');
       uniqueProducts.add(productId);
 
-      if (method === 'PROMEDIO') {
-        let runningStock = 0;
-        let runningCost = 0;
-        let runningTotalValue = 0;
-        let lastMovementDate: Date | null = null;
-
-        for (const mov of group) {
-          const qty = r4(Number(mov.quantity));
-          const originalUnitCost = r4(Number(mov.unit_cost));
-          lastMovementDate = mov.movement_date;
-
-          let calcUnitCost = originalUnitCost;
-          let calcTotalCost = r2(qty * originalUnitCost);
-          let resultingStock = runningStock;
-          let resultingCost = runningCost;
-          let resultingValue = runningTotalValue;
-
-          if (mov.direction === 'ENTRADA') {
-            const calc = MovingWeightedAverageEngine.calculate({
-              previousStock: runningStock,
-              previousAverageCost: runningCost,
-              previousTotalValue: runningTotalValue,
-              movementDirection: 'ENTRADA',
-              quantity: qty,
-              unitCost: originalUnitCost,
-            });
-            calcUnitCost = calc.movementUnitCost;
-            calcTotalCost = calc.movementTotalCost;
-            resultingStock = calc.resultingStock;
-            resultingCost = calc.resultingAverageCost;
-            resultingValue = calc.resultingTotalValue;
-          } else {
-            // SALIDA
-            if (runningStock > 0) {
-              const outQty = Math.min(qty, runningStock);
-              const calc = MovingWeightedAverageEngine.calculate({
-                previousStock: runningStock,
-                previousAverageCost: runningCost,
-                previousTotalValue: runningTotalValue,
-                movementDirection: 'SALIDA',
-                quantity: outQty,
-              });
-              calcUnitCost = calc.movementUnitCost;
-              calcTotalCost = calc.movementTotalCost;
-              resultingStock = calc.resultingStock;
-              resultingCost = calc.resultingAverageCost;
-              resultingValue = calc.resultingTotalValue;
-            } else {
-              calcUnitCost = 0;
-              calcTotalCost = 0;
-              resultingStock = r4(runningStock - qty);
-              resultingCost = 0;
-              resultingValue = 0;
-            }
-          }
-
-          await this.prisma.inventoryMovement.update({
-            where: { id: mov.id },
-            data: {
-              unit_cost: calcUnitCost,
-              total_cost: calcTotalCost,
-              previous_stock: runningStock,
-              previous_unit_cost: runningCost,
-              previous_total_value: runningTotalValue,
-              resulting_stock: resultingStock,
-              resulting_unit_cost: resultingCost,
-              resulting_total_value: resultingValue,
-            },
-          });
-
-          runningStock = resultingStock;
-          runningCost = resultingCost;
-          runningTotalValue = resultingValue;
-          movementsProcessed++;
-        }
-
-        await this.prisma.inventoryBalance.upsert({
-          where: {
-            company_id_warehouse_id_product_id: {
-              company_id: companyId,
-              warehouse_id: warehouseId,
-              product_id: productId,
-            },
-          },
-          create: {
-            company_id: companyId,
-            warehouse_id: warehouseId,
-            product_id: productId,
-            current_stock: runningStock,
-            average_unit_cost: runningCost,
-            total_inventory_value: runningTotalValue,
-            last_movement_at: lastMovementDate,
-          },
-          update: {
-            current_stock: runningStock,
-            average_unit_cost: runningCost,
-            total_inventory_value: runningTotalValue,
-            last_movement_at: lastMovementDate,
-          },
-        });
-      } else {
-        // FIFO
+      if (method === 'FIFO') {
         await this.prisma.inventoryCostLayer.deleteMany({
           where: {
             company_id: companyId,
@@ -290,84 +189,45 @@ export class InventoryCostLayerService {
             product_id: productId,
           },
         });
+      }
 
-        let layers: CostLayer[] = [];
-        let runningStock = 0;
-        let runningCost = 0;
-        let runningTotalValue = 0;
-        let lastMovementDate: Date | null = null;
+      let layers: CostLayer[] = [];
+      let runningStock = 0;
+      let runningCost = 0;
+      let runningTotalValue = 0;
+      let lastMovementDate: Date | null = null;
 
-        for (const mov of group) {
-          const qty = r4(Number(mov.quantity));
-          const originalUnitCost = r4(Number(mov.unit_cost));
-          lastMovementDate = mov.movement_date;
+      for (const mov of group) {
+        lastMovementDate = mov.movement_date;
+        const step = this.calculateRecalculationStep(method, mov, {
+          runningStock,
+          runningCost,
+          runningTotalValue,
+          layers,
+        });
+        layers = step.layers;
 
-          let calcUnitCost = originalUnitCost;
-          let calcTotalCost = r2(qty * originalUnitCost);
-          let resultingStock = runningStock;
-          let resultingCost = runningCost;
-          let resultingValue = runningTotalValue;
+        await this.prisma.inventoryMovement.update({
+          where: { id: mov.id },
+          data: {
+            unit_cost: step.calcUnitCost,
+            total_cost: step.calcTotalCost,
+            previous_stock: runningStock,
+            previous_unit_cost: runningCost,
+            previous_total_value: runningTotalValue,
+            resulting_stock: step.resultingStock,
+            resulting_unit_cost: step.resultingCost,
+            resulting_total_value: step.resultingValue,
+          },
+        });
 
-          if (mov.direction === 'ENTRADA') {
-            const r = FifoCostEngine.calculate({
-              layers,
-              movementDirection: 'ENTRADA',
-              quantity: qty,
-              unitCost: originalUnitCost,
-            });
-            layers = r.layers;
-            calcUnitCost = r.movementUnitCost;
-            calcTotalCost = r.movementTotalCost;
-            resultingStock = r.resultingStock;
-            resultingCost = r.resultingAverageCost;
-            resultingValue = r.resultingTotalValue;
-          } else {
-            // SALIDA
-            if (layers.length > 0) {
-              const avail = layers.reduce((s, l) => s + l.quantity, 0);
-              const consumeQty = Math.min(qty, avail);
-              if (consumeQty > 0) {
-                const r = FifoCostEngine.calculate({
-                  layers,
-                  movementDirection: 'SALIDA',
-                  quantity: consumeQty,
-                });
-                layers = r.layers;
-                calcUnitCost = r.movementUnitCost;
-                calcTotalCost = r.movementTotalCost;
-                resultingStock = r.resultingStock;
-                resultingCost = r.resultingAverageCost;
-                resultingValue = r.resultingTotalValue;
-              }
-            } else {
-              calcUnitCost = 0;
-              calcTotalCost = 0;
-              resultingStock = r4(runningStock - qty);
-              resultingCost = 0;
-              resultingValue = 0;
-            }
-          }
+        runningStock = step.resultingStock;
+        runningCost = step.resultingCost;
+        runningTotalValue = step.resultingValue;
+        movementsProcessed++;
+      }
 
-          await this.prisma.inventoryMovement.update({
-            where: { id: mov.id },
-            data: {
-              unit_cost: calcUnitCost,
-              total_cost: calcTotalCost,
-              previous_stock: runningStock,
-              previous_unit_cost: runningCost,
-              previous_total_value: runningTotalValue,
-              resulting_stock: resultingStock,
-              resulting_unit_cost: resultingCost,
-              resulting_total_value: resultingValue,
-            },
-          });
-
-          runningStock = resultingStock;
-          runningCost = resultingCost;
-          runningTotalValue = resultingValue;
-          movementsProcessed++;
-        }
-
+      if (method === 'FIFO') {
         for (const layer of layers) {
           if (layer.quantity > 0) {
             await this.prisma.inventoryCostLayer.create({
@@ -381,32 +241,32 @@ export class InventoryCostLayerService {
             });
           }
         }
+      }
 
-        await this.prisma.inventoryBalance.upsert({
-          where: {
-            company_id_warehouse_id_product_id: {
-              company_id: companyId,
-              warehouse_id: warehouseId,
-              product_id: productId,
-            },
-          },
-          create: {
+      await this.prisma.inventoryBalance.upsert({
+        where: {
+          company_id_warehouse_id_product_id: {
             company_id: companyId,
             warehouse_id: warehouseId,
             product_id: productId,
-            current_stock: runningStock,
-            average_unit_cost: runningCost,
-            total_inventory_value: runningTotalValue,
-            last_movement_at: lastMovementDate,
           },
-          update: {
-            current_stock: runningStock,
-            average_unit_cost: runningCost,
-            total_inventory_value: runningTotalValue,
-            last_movement_at: lastMovementDate,
-          },
-        });
-      }
+        },
+        create: {
+          company_id: companyId,
+          warehouse_id: warehouseId,
+          product_id: productId,
+          current_stock: runningStock,
+          average_unit_cost: runningCost,
+          total_inventory_value: runningTotalValue,
+          last_movement_at: lastMovementDate,
+        },
+        update: {
+          current_stock: runningStock,
+          average_unit_cost: runningCost,
+          total_inventory_value: runningTotalValue,
+          last_movement_at: lastMovementDate,
+        },
+      });
     }
 
     const finalBalances = await this.prisma.inventoryBalance.findMany({
@@ -426,6 +286,124 @@ export class InventoryCostLayerService {
       newValuationPen,
       differencePen: r2(newValuationPen - previousValuationPen),
       recalculatedAt: new Date().toISOString(),
+    };
+  }
+
+  private calculateRecalculationStep(
+    method: 'PROMEDIO' | 'FIFO',
+    mov: { direction: string; quantity: unknown; unit_cost: unknown },
+    state: {
+      runningStock: number;
+      runningCost: number;
+      runningTotalValue: number;
+      layers: CostLayer[];
+    },
+  ) {
+    const qty = r4(Number(mov.quantity));
+    const originalUnitCost = r4(Number(mov.unit_cost));
+    const { runningStock, runningCost, runningTotalValue } = state;
+    let layers = state.layers;
+
+    if (method === 'PROMEDIO') {
+      if (mov.direction === 'ENTRADA') {
+        const calc = MovingWeightedAverageEngine.calculate({
+          previousStock: runningStock,
+          previousAverageCost: runningCost,
+          previousTotalValue: runningTotalValue,
+          movementDirection: 'ENTRADA',
+          quantity: qty,
+          unitCost: originalUnitCost,
+        });
+        return {
+          layers,
+          calcUnitCost: calc.movementUnitCost,
+          calcTotalCost: calc.movementTotalCost,
+          resultingStock: calc.resultingStock,
+          resultingCost: calc.resultingAverageCost,
+          resultingValue: calc.resultingTotalValue,
+        };
+      }
+      if (runningStock <= 0) {
+        return {
+          layers,
+          calcUnitCost: 0,
+          calcTotalCost: 0,
+          resultingStock: r4(runningStock - qty),
+          resultingCost: 0,
+          resultingValue: 0,
+        };
+      }
+      const calc = MovingWeightedAverageEngine.calculate({
+        previousStock: runningStock,
+        previousAverageCost: runningCost,
+        previousTotalValue: runningTotalValue,
+        movementDirection: 'SALIDA',
+        quantity: Math.min(qty, runningStock),
+      });
+      return {
+        layers,
+        calcUnitCost: calc.movementUnitCost,
+        calcTotalCost: calc.movementTotalCost,
+        resultingStock: calc.resultingStock,
+        resultingCost: calc.resultingAverageCost,
+        resultingValue: calc.resultingTotalValue,
+      };
+    }
+
+    if (mov.direction === 'ENTRADA') {
+      const r = FifoCostEngine.calculate({
+        layers,
+        movementDirection: 'ENTRADA',
+        quantity: qty,
+        unitCost: originalUnitCost,
+      });
+      layers = r.layers;
+      return {
+        layers,
+        calcUnitCost: r.movementUnitCost,
+        calcTotalCost: r.movementTotalCost,
+        resultingStock: r.resultingStock,
+        resultingCost: r.resultingAverageCost,
+        resultingValue: r.resultingTotalValue,
+      };
+    }
+
+    if (layers.length === 0) {
+      return {
+        layers,
+        calcUnitCost: 0,
+        calcTotalCost: 0,
+        resultingStock: r4(runningStock - qty),
+        resultingCost: 0,
+        resultingValue: 0,
+      };
+    }
+
+    const avail = layers.reduce((s, l) => s + l.quantity, 0);
+    const consumeQty = Math.min(qty, avail);
+    if (consumeQty <= 0) {
+      return {
+        layers,
+        calcUnitCost: originalUnitCost,
+        calcTotalCost: r2(qty * originalUnitCost),
+        resultingStock: runningStock,
+        resultingCost: runningCost,
+        resultingValue: runningTotalValue,
+      };
+    }
+
+    const r = FifoCostEngine.calculate({
+      layers,
+      movementDirection: 'SALIDA',
+      quantity: consumeQty,
+    });
+    return {
+      layers: r.layers,
+      calcUnitCost: r.movementUnitCost,
+      calcTotalCost: r.movementTotalCost,
+      resultingStock: r.resultingStock,
+      resultingCost: r.resultingAverageCost,
+      resultingValue: r.resultingTotalValue,
     };
   }
 }

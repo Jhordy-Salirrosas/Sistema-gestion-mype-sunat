@@ -49,6 +49,18 @@ export class InventoryTransferService {
     });
   }
 
+  private async findInventoryProductOrThrow(tx: any, companyId: string, rawSku: string) {
+    const sku = rawSku.trim().toUpperCase();
+    const product = await tx.inventoryProduct.findFirst({
+      where: { company_id: companyId, sku },
+    });
+    if (!product) throw new NotFoundException(`Producto ${sku} no encontrado.`);
+    if (!product.is_inventory) {
+      throw new BadRequestException(`El producto ${sku} es un servicio y no mueve stock.`);
+    }
+    return { sku, product };
+  }
+
   async createTransfer(companyId: string, dto: CreateTransferDto) {
     const fromCode = dto.fromWarehouseCode.trim().toUpperCase();
     const toCode = dto.toWarehouseCode.trim().toUpperCase();
@@ -85,14 +97,7 @@ export class InventoryTransferService {
       const balanceUpdates: any[] = [];
 
       for (const item of dto.items) {
-        const sku = item.sku.trim().toUpperCase();
-        const product = await tx.inventoryProduct.findFirst({
-          where: { company_id: companyId, sku },
-        });
-        if (!product) throw new NotFoundException(`Producto ${sku} no encontrado.`);
-        if (!product.is_inventory) {
-          throw new BadRequestException(`El producto ${sku} es un servicio y no mueve stock.`);
-        }
+        const { sku, product } = await this.findInventoryProductOrThrow(tx, companyId, item.sku);
 
         const origin = await tx.inventoryBalance.findUnique({
           where: {
@@ -297,14 +302,7 @@ export class InventoryTransferService {
       const balanceUpdates: any[] = [];
 
       for (const item of dto.items) {
-        const sku = item.sku.trim().toUpperCase();
-        const product = await tx.inventoryProduct.findFirst({
-          where: { company_id: companyId, sku },
-        });
-        if (!product) throw new NotFoundException(`Producto ${sku} no encontrado.`);
-        if (!product.is_inventory) {
-          throw new BadRequestException(`El producto ${sku} es un servicio y no mueve stock.`);
-        }
+        const { sku, product } = await this.findInventoryProductOrThrow(tx, companyId, item.sku);
 
         const balance = await tx.inventoryBalance.findUnique({
           where: {
