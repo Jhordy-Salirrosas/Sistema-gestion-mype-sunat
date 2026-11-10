@@ -118,6 +118,7 @@ export function aListado(fila: FilaListado): ComprobanteListadoDto {
         ? fila.comprobante_origen
         : aComprobanteOrigenFallback(fila),
     hash_cpe: fila.xml_hash_sha256 ?? null,
+    ...importesPersistidos(fila.payload_ubl),
     ...condicionesDePago(fila.payload_ubl),
   };
 }
@@ -375,4 +376,11 @@ export function aDetalle(fila: FilaDetalle): ComprobanteDetalleDto {  return {
     created_at: fila.created_at.toISOString(),
     updated_at: fila.updated_at.toISOString(),
   };
+}
+
+/** Proyección literal, sin reglas fiscales: ausencia/valor inválido no es cero. */
+export function importesPersistidos(payload: unknown): { monto_detraccion: number | null; monto_retencion: number | null } {
+  const datos = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
+  const importe = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  return { monto_detraccion: importe(datos.montoDetraccion), monto_retencion: importe(datos.montoRetencion) };
 }
