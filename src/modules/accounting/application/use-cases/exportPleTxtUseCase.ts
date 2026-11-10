@@ -29,8 +29,9 @@ export class ExportPleTxtUseCase {
     let totalCredit = 0;
     const lines: string[] = [];
 
-    // 7.1 Inventarios y Balances: una línea por cuenta con sus saldos.
-    if (String(dto.bookCode) === '070100') {
+    // 3.1 Libro de Inventarios y Balances: una línea por cuenta con sus saldos.
+    // El 7.1 es Registro de Activos Fijos y no debe rotularse como balances.
+    if (String(dto.bookCode) === '030100') {
       const cuentas = new Map<string, { name: string; debit: number; credit: number }>();
       for (const entry of entries) {
         for (const line of entry.lines) {
