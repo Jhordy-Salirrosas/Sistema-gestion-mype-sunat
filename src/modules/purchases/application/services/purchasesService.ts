@@ -408,6 +408,12 @@ export class PurchasesService {
     }
     const fecha = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
     const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
+    const reglasPago = this.accounting
+      ? await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'PAGO', is_active: true }, orderBy: { line_order: 'asc' } })
+      : [];
+    if (this.accounting && reglasPago.length === 0) {
+      throw new BadRequestException('No hay reglas contables para PAGO. Configúrelas antes de pagar.');
+    }
     const nuevoPagado = Math.round((pagado + monto) * 100) / 100;
     const nuevoEstado = nuevoPagado >= total - 0.005 ? 'PAGADA' : 'PAGO_PARCIAL';
 
@@ -435,18 +441,14 @@ export class PurchasesService {
     });
 
     if (this.accounting) {
-      const mappings =
-        (await (this.prisma as any).accountingMapping?.findMany({
-          where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
-        })) ?? [];
-      const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
-      const reglasPago = (await (this.prisma as any).accountingRule?.findMany({
-        where: { company_id: companyId, process_code: 'PAGO', is_active: true },
-        orderBy: { line_order: 'asc' },
-      })) ?? [];
       const porOrdenPago = new Map<number, string>(reglasPago.map((r: any) => [Number(r.line_order), String(r.account_code)]));
-      const cxp = porOrdenPago.get(1) ?? roles.get('CXP') ?? '421';
-      const caja = metodo === 'EFECTIVO' ? (roles.get('CAJA') ?? '101') : (porOrdenPago.get(2) ?? roles.get('BANCO') ?? '1041');
+      const cuentaCxp = porOrdenPago.get(1);
+      const cuentaBanco = porOrdenPago.get(2);
+      if (!cuentaCxp || (!cuentaBanco && metodo !== 'EFECTIVO')) {
+        throw new BadRequestException('Las reglas PAGO están incompletas: faltan las líneas 1 y 2.');
+      }
+      const cxp = cuentaCxp;
+      const caja = metodo === 'EFECTIVO' ? '101' : cuentaBanco!;
       const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       await this.accounting.execute({
         companyId,
