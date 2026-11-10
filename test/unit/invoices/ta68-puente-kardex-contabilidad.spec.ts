@@ -539,6 +539,7 @@ describe('TA-68 · servicio puente', () => {
     asientoYaExiste?: boolean;
     costoVenta?: number;
     originalExiste?: boolean;
+    reglasVenta?: boolean;
   } = {}) {
     const movimientoCreado = jest.fn<(dto: unknown) => Promise<unknown>>(
       async () => ({ id: 'mov-1' }),
@@ -568,6 +569,11 @@ describe('TA-68 · servicio puente', () => {
       },
       invoice: {
         findUnique: jest.fn(async () => opciones.originalExiste === false ? null : ({ serie: 'F001', correlativo: 100 })),
+      },
+      accountingRule: {
+        findMany: jest.fn(async () => opciones.reglasVenta ? [
+          { line_order: 1, account_code: '121210' }, { line_order: 2, account_code: '401110' }, { line_order: 3, account_code: '701210' },
+        ] : []),
       },
     };
 
@@ -629,6 +635,13 @@ describe('TA-68 · servicio puente', () => {
     const { puente } = dobles();
     const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
     expect(resultado.costoVenta).toBe(0);
+  });
+
+  it('usa las cuentas de accounting_rules en la venta', async () => {
+    const { puente, asientoCreado } = dobles({ reglasVenta: true });
+    await puente.registrar(facturaPrueba());
+    const asiento = asientoCreado.mock.calls[0][0] as { lines: Array<{ accountCode: string }> };
+    expect(asiento.lines.map((l) => l.accountCode)).toEqual(expect.arrayContaining(['121210', '401110', '701210']));
   });
 
   it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
