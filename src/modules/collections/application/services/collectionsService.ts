@@ -21,6 +21,13 @@ export class CollectionsService {
     if (!original) throw new BadRequestException('El cobro no tiene asiento contable; no se puede anular.');
     const fecha = new Date();
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    await this.prisma.treasuryMovement.create({ data: {
+      company_id: companyId, movement_date: fecha, direction: 'INGRESO',
+      document_reference: cobro.invoice_number ?? cobro.id, counterpart_name: cobro.customer_name,
+      concept: `Devolución por anulación de cobro ${cobro.id}`, amount: Number(cobro.amount),
+      source_module: 'COLLECTIONS', source_reference_id: cobro.id, payment_method: cobro.payment_method,
+      bank_name: cobro.bank_name ?? null,
+    } });
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación cobro ${cobro.customer_name}`,
       sourceModule: 'COLLECTIONS', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,

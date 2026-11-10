@@ -48,6 +48,7 @@ describe('CollectionsService', () => {
     const prisma = {
       collection: { findFirst: jest.fn().mockResolvedValue({ id: 'c1', customer_name: 'Cliente', status: 'REGISTRADO' }), update: jest.fn().mockResolvedValue({ id: 'c1', status: 'ANULADO' }) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue({ id: 'e1', lines: [{ account_code: '1041', account_name: 'Banco', debit_amount: 100, credit_amount: 0 }, { account_code: '12121', account_name: 'CxC', debit_amount: 0, credit_amount: 100 }] }) },
+      treasuryMovement: { create: jest.fn().mockResolvedValue({ id: 'tm1' }) },
     };
     const accounting = { execute: jest.fn().mockResolvedValue({}) };
     const service = new CollectionsService(prisma as never, accounting as never);
