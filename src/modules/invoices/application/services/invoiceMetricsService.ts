@@ -24,6 +24,8 @@ import { PrismaService } from '../../../../database/prismaService';
 
 /** Resumen de métricas del periodo. */
 export interface MetricasFacturacion {
+  /** Todos los documentos registrados en empresa/período, incluidos pendientes y anulados. */
+  total: number;
   /** Comprobantes emitidos en el periodo, sin contar los rechazados. */
   emitidos: number;
   /** Comprobantes rechazados por SUNAT en el periodo. */
@@ -136,10 +138,12 @@ export const calcularMetricas = (
     if (fila.estado === 'ACEPTADO' || fila.estado === 'OBSERVADO') aceptados += 1;
     if (ESTADOS_PENDIENTES.includes(fila.estado)) pendientes += 1;
 
+    // Solo una venta confirmada afecta el neto; pendientes y errores no son facturación.
+    if (fila.estado !== 'ACEPTADO' && fila.estado !== 'OBSERVADO') continue;
     // Las notas de crédito devuelven y las de débito aumentan.
     if (fila.tipoComprobante === '07') acreditado += total;
     else if (fila.tipoComprobante === '08') debitado += total;
-    else facturadoBruto += total;
+    else if (fila.tipoComprobante === '01' || fila.tipoComprobante === '03') facturadoBruto += total;
   }
 
   const procesados = aceptados + rechazados;
@@ -147,6 +151,7 @@ export const calcularMetricas = (
     procesados === 0 ? 0 : Math.round((aceptados / procesados) * 10000) / 100;
 
   return {
+    total: filas.length,
     emitidos,
     rechazados,
     aceptados,

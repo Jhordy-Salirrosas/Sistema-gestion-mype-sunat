@@ -1351,3 +1351,21 @@ La acción productiva pendiente es exclusivamente de Emma tras el despliegue:
 ejecutar el nuevo endpoint para la F001-00000064 y comprobar Kardex ALM-02,
 asiento de venta conservado y asiento de costo de S/ 15.00. Esta entrega no
 realiza esa operación ni la sustituye por una reentrega del comprobante.
+
+### Parte 5 — Pulido final del recorrido (10 nov 2026)
+
+Base back dev f8cea8c56314e61b575ed463b473ecbc50ccee37: 264 suites / 2445
+pruebas aprobadas, cero fallos, 4 suites / 38 pruebas omitidas y 12 snapshots
+fiscales intactos. Front dev 640d4b88ef8cfd81e7241874f184a13a5bf48cf1:
+102 archivos / 811 pruebas aprobadas. Rama fix/m1-pulido-recorrido; front solo
+por ferry/m1-pulido-recorrido. Sin migraciones nuevas ni operaciones reales.
+
+**5A — Panel:** el neto del servidor incluía EN_COLA/ENVIADO/PENDIENTE mientras
+la bandeja solo suma ACEPTADO/OBSERVADO. Ahora el dinero sigue los mismos tipos
+01/03 + 08 - 07 confirmados; una EN_COLA de S/118 (escenario de F001-57) no lo
+infla. Se añade total de documentos registrados en el período (todos los
+estados), explícitamente rotulado en el panel junto a aceptados/observados.
+Se preserva emitidos para consumidores anteriores y no se cambia la bandeja.
+Pruebas: aceptadas, NC, ND, pendiente 118 y todos los tipos/estados sin confirmar;
+conteo total y criterio visible en el panel. Validación focalizada pendiente
+solo de consolidar el cierre completo al final de 5A–5D.
