@@ -6,6 +6,7 @@ const EMPRESA = 'empresa-propia';
 function servicioCon(estado: string) {
   const prisma = {
     invoice: {
+      updateMany: jest.fn(async () => ({ count: 1 })),
       findFirst: jest.fn().mockResolvedValue({ id: 'inv-1', estado: InvoiceStatus.ERROR_RED }),
       findUnique: jest.fn().mockResolvedValue({ estado: InvoiceStatus.ERROR_RED }),
     },

@@ -1384,3 +1384,31 @@ Pruebas focalizadas: 3128, XSD, CDR, SOAP Fault, evidencia insuficiente,
 cronología, marcadores operativos y conservación del estado RECHAZADO;
 lectura coherente en listado y detalle, con motivo visible. Generador y
 compuertas fiscales permanecen intactos.
+
+**5C — Rescate DLQ efectivo. Excepción autorizada por Jhordy el 10 nov 2026,
+para aviso a Oliver, dueño de Resiliencia:** el único cambio productivo fuera
+de M1 es reenqueueInvoiceIfIdle en queue.service.ts. Se añade opción explícita
+rescatarDlq; las llamadas automáticas sin ella conservan EN_DLQ, sin rescate
+ni bucle automático de reinicio de intentos. El rescate manual verifica la
+empresa del payload y exige callback M1 de estado/seguridad. Publica primero
+en la cola principal con singletonKey y solo elimina DLQ cuando hay publicación
+o trabajo vivo comprobado. Fallo de publicación conserva DLQ; fallo de limpieza
+se puede retomar sin otra publicación. Sin publicación comprobada devuelve
+EN_DLQ, nunca un éxito ficticio. Dos acciones concurrentes no duplican trabajo.
+
+M1 usa la opción en el endpoint EXISTENTE de retry-cdr y completa la persistencia
+de incertidumbre desconocida para los estados que ese endpoint ya admitía,
+antes de publicar. No se cambia ESTADOS_REINTENTABLES ni se amplían estados:
+ACEPTADO/OBSERVADO/ANULADO permanecen protegidos. Marcadores true/false existentes
+se conservan. El consumidor y su conciliación previa al reenvío no se modifican;
+la suite previa de intento incierto verifica consulta antes de sendBill y bloqueo
+ante consulta inconclusa. No hay consulta real a SUNAT en estas pruebas.
+
+El Monitor muestra «Reintentar» en DLQ y ERROR_RED permitidos, conserva resultado
+y actualiza la etiqueta tras ENCOLADO. Prueba con PostgreSQL y pg-boss REALES,
+sin registrar consumidor SUNAT: F001-57 simulada en EN_COLA/DLQ, marcador true
+comprobado en base antes de boss.send, trabajo eliminado de DLQ, un único job
+principal, segundo clic sin publicación y estado ACEPTADO protegido. También
+fallos de publicación/limpieza, concurrencia, compañía ajena, callback ausente
+y publicación no comprobada. La ejecución real sobre F001-00000057 corresponde
+solo a Emma tras el despliegue; no se ejecutó en producción.

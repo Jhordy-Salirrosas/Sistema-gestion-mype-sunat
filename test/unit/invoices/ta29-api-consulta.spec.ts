@@ -553,6 +553,7 @@ describe('TA-29 referencia de la nota al documento afectado', () => {
       'inv-1',
       EMPRESA,
       expect.any(Function),
+      { rescatarDlq: true },
     );
     expect(queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
   });
