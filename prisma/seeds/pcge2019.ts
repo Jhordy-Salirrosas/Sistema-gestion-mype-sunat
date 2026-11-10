@@ -1658,7 +1658,7 @@ export const PCGE_2019_ACCOUNTS: Array<[string, string]> = [
   ["69422", "Relacionadas"],
   ["70111", "Terceros"],
   ["70112", "Relacionadas"],
-  ["70121", "Servicios prestados / ventas gravadas"],
+  ["70121", "Ventas de mercaderías gravadas"],
   ["70211", "Terceros"],
   ["70212", "Relacionadas"],
   ["70221", "Terceros"],
