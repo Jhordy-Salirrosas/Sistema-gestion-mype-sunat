@@ -7,6 +7,7 @@ describe('ExpensesController', () => {
     create: jest.fn().mockResolvedValue({ id: 'g1' }),
     pay: jest.fn().mockResolvedValue({ status: 'PAGADO' }),
     listPayments: jest.fn().mockResolvedValue([]),
+    annul: jest.fn().mockResolvedValue({ id: 'g1', status: 'ANULADO' }),
   };
   const controller = new ExpensesController(service as never);
 
@@ -15,6 +16,7 @@ describe('ExpensesController', () => {
     await expect(controller.create({} as never, 'c1')).resolves.toEqual({ id: 'g1' });
     await expect(controller.pay('g1', {}, 'c1')).resolves.toEqual({ status: 'PAGADO' });
     await expect(controller.listPayments('g1', 'c1')).resolves.toEqual([]);
+    await expect(controller.annul('g1', 'c1')).resolves.toEqual({ id: 'g1', status: 'ANULADO' });
   });
 
   it('exige empresa en todas las rutas', () => {
@@ -22,5 +24,6 @@ describe('ExpensesController', () => {
     expect(() => controller.create({} as never, undefined)).toThrow(UnauthorizedException);
     expect(() => controller.pay('g1', {}, undefined)).toThrow(UnauthorizedException);
     expect(() => controller.listPayments('g1', undefined)).toThrow(UnauthorizedException);
+    expect(() => controller.annul('g1', undefined)).toThrow(UnauthorizedException);
   });
 });
