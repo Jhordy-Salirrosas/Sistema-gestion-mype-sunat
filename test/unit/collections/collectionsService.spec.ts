@@ -22,7 +22,7 @@ describe('CollectionsService', () => {
 
   it('valida comprobante y saldo del cobro', async () => {
     const prisma = {
-      invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', monto_total: 118, estado: 'ACEPTADO' }) },
+      invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', monto_total: 118, estado: 'ACEPTADO' }), aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 0 } }) },
       collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 18 } }), create: jest.fn() },
       accountingRule: { findMany: jest.fn() },
     };
@@ -34,11 +34,14 @@ describe('CollectionsService', () => {
 
   it('lista facturas con saldo pendiente', async () => {
     const prisma = {
-      invoice: { findMany: jest.fn().mockResolvedValue([{ id: 'i1', serie: 'F001', correlativo: 1, customer_legal_name: 'Cliente', customer_identity_number: '20100070970', monto_total: 118, fecha_emision: new Date('2026-11-10') }]) },
-      collection: { groupBy: jest.fn().mockResolvedValue([{ invoice_id: 'i1', _sum: { amount: 18 } }]) },
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'i1', serie: 'F001', correlativo: 1, customer_legal_name: 'Cliente', customer_identity_number: '20100070970', monto_total: 118, fecha_emision: new Date('2026-11-10') }]),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 18 } }),
+      },
+      collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 18 } }) },
     };
     const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
-    await expect(service.listReceivables('c1')).resolves.toEqual([expect.objectContaining({ numero: 'F001-00000001', total: 118, paid: 18, balance: 100 })]);
+    await expect(service.listReceivables('c1')).resolves.toEqual([expect.objectContaining({ numero: 'F001-00000001', total: 118, credited: 18, paid: 18, balance: 82 })]);
   });
 
   it('anula cobro con contra-asiento', async () => {
