@@ -79,14 +79,8 @@ export interface ConsultaEstadoRequest {
   correlativo: number;
 }
 
-/** Desenlace de una consulta de estado. */
-export type DesenlaceConsulta =
-  /** SUNAT tenía el comprobante: estado y CDR recuperados. */
-  | { tipo: 'RECUPERADO'; resultado: ProcessCdrResult }
-  /** SUNAT no lo tiene (0127): reenviar es seguro. */
-  | { tipo: 'NO_ENCONTRADO' }
-  /** La consulta no fue concluyente: NO reenviar. */
-  | { tipo: 'INCIERTO'; motivo: string };
+export type { DesenlaceConciliacion as DesenlaceConsulta } from '../invoices/application/services/invoiceReconciliation';
+import type { DesenlaceConciliacion as DesenlaceConsulta } from '../invoices/application/services/invoiceReconciliation';
 
 @Injectable()
 export class SunatStatusConsultaService {
@@ -99,14 +93,11 @@ export class SunatStatusConsultaService {
     @Optional() private readonly resolver?: IssuerConfigResolver,
   ) {}
 
-  /** Adapter for the existing resilience port; company is recovered from the invoice. */
+  /** Puerto estructurado: recupera la empresa y conserva INCIERTO como resultado. */
   async consultarEstado(
     request: ConsultaEstadoRequest,
-  ): Promise<ProcessCdrResult | null> {
-    const result = await this.consultar(request);
-    if (result.tipo === 'RECUPERADO') return result.resultado;
-    if (result.tipo === 'NO_ENCONTRADO') return null;
-    throw new Error('ISSUER_STATUS_UNCERTAIN');
+  ): Promise<DesenlaceConsulta> {
+    return this.consultar(request);
   }
 
   /**
