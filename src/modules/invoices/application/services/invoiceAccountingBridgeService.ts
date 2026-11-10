@@ -21,10 +21,11 @@
  *     devuelve el detalle del error en el resultado para que se reintente, en
  *     lugar de lanzar una excepción que haría creer que la emisión falló.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { RegisterManualMovementUseCase } from '../../../inventory/application/use-cases/registerManualMovementUseCase';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { InventoryCostLayerService } from '../../../inventory/application/services/inventoryCostLayerService';
 import { CUENTAS_VENTA, balanceAsiento, lineasAsientoNotaCredito, lineasAsientoVenta, periodoDe } from './accountingBridge';
 import { movimientosDeFactura, type LineaParaKardex } from './kardexBridge';
 
@@ -102,6 +103,7 @@ export class InvoiceAccountingBridgeService {
     private readonly prisma: PrismaService,
     private readonly registroMovimientos: RegisterManualMovementUseCase,
     private readonly generadorAsientos: GenerateAccountingEntryUseCase,
+    @Optional() private readonly capas?: InventoryCostLayerService,
   ) {}
 
   /**
@@ -304,6 +306,8 @@ export class InvoiceAccountingBridgeService {
     numero: string,
     errores: string[],
   ): Promise<{ asientoCostoId?: string; costoVenta?: number; asientoCostoOmitido?: boolean }> {
+    const motivosDevolucion = ['01', '06', '07'];
+    if (!factura.motivoNota || !motivosDevolucion.includes(factura.motivoNota)) return { costoVenta: 0 };
     const referencia = `${factura.id}:COSTO-REV`;
     const existente = await this.prisma.accountingEntry.findFirst({
       where: { company_id: factura.companyId, source_module: MODULO_ORIGEN, source_reference_id: referencia },
@@ -358,10 +362,54 @@ export class InvoiceAccountingBridgeService {
           { lineOrder: 2, accountCode: porOrden.get(10) ?? '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
         ],
       });
+      if (this.capas && await this.capas.metodo(factura.companyId) === 'FIFO') {
+        const almacen = await this.prisma.inventoryWarehouse.findFirst({ where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' }, select: { id: true } });
+        if (almacen) {
+          for (const item of factura.items) {
+            const unitario = costoPorSku.get(item.itemCode?.trim() ?? '') ?? 0;
+            if (!(unitario > 0) || !(item.cantidad > 0)) continue;
+            const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
+            if (producto) await this.capas.registrarEntrada(factura.companyId, almacen.id, producto.id, item.cantidad, unitario);
+          }
+        }
+      }
       return { asientoCostoId: asiento.id, costoVenta: -costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Reverso costo: ${(error as Error).message}`);
       return {};
+    }
+  }
+
+  /** Costo FIFO de las líneas vendidas, o null si no hay capas suficientes. */
+  private async costoFifo(factura: FacturaParaPuente): Promise<number | null> {
+    if (!this.capas) return null;
+    const metodo = await this.capas.metodo(factura.companyId);
+    if (metodo !== 'FIFO') return null;
+    const almacen = await this.prisma.inventoryWarehouse.findFirst({
+      where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' },
+      select: { id: true },
+    });
+    if (!almacen) return null;
+    let total = 0;
+    for (const item of factura.items) {
+      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
+      if (!producto || !(item.cantidad > 0)) continue;
+      const layers = await this.capas.capas(factura.companyId, almacen.id, producto.id);
+      if (layers.length === 0) return null;
+      const calculo = this.capas.calcular(layers, 'SALIDA', item.cantidad);
+      total += Number(calculo.movementTotalCost);
+    }
+    return Math.round(total * 100) / 100;
+  }
+
+  /** Consume las capas FIFO después de contabilizar el costo. */
+  private async consumirCapasFactura(factura: FacturaParaPuente): Promise<void> {
+    if (!this.capas) return;
+    const almacen = await this.prisma.inventoryWarehouse.findFirst({ where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' }, select: { id: true } });
+    if (!almacen) return;
+    for (const item of factura.items) {
+      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
+      if (producto && item.cantidad > 0) await this.capas.consumir(factura.companyId, almacen.id, producto.id, item.cantidad);
     }
   }
 
@@ -382,7 +430,8 @@ export class InvoiceAccountingBridgeService {
       where: { company_id: factura.companyId, source_reference_id: numero, operation_type_code: '01' },
       select: { quantity: true, previous_unit_cost: true },
     });
-    const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.quantity) * Number(m.previous_unit_cost), 0) * 100) / 100;
+    const costoFifo = await this.costoFifo(factura);
+    const costo = costoFifo ?? Math.round(movimientos.reduce((sum, m) => sum + Number(m.quantity) * Number(m.previous_unit_cost), 0) * 100) / 100;
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
     const mappings = (await (this.prisma as any).accountingMapping?.findMany({
@@ -408,6 +457,7 @@ export class InvoiceAccountingBridgeService {
           { lineOrder: 2, accountCode: porOrden.get(11) ?? roles.get('INVENTARIO') ?? '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
         ],
       });
+      if (costoFifo !== null) await this.consumirCapasFactura(factura);
       return { asientoCostoId: asiento.id, costoVenta: costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Costo de ventas: ${(error as Error).message}`);

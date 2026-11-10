@@ -659,6 +659,36 @@ describe('TA-68 · servicio puente', () => {
     expect(asientoCreado).not.toHaveBeenCalled();
   });
 
+  it('repone capas FIFO al revertir una nota de devolución', async () => {
+    const prisma = {
+      inventoryProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }) },
+      inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
+      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ quantity: 20, previous_unit_cost: 30, product: { sku: 'CEM-001' } }]) },
+      accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
+      invoice: { findUnique: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }) },
+    };
+    const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), registrarEntrada: jest.fn().mockResolvedValue(undefined), consumir: jest.fn() };
+    const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
+    await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
+    expect(capas.registrarEntrada).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20, 30);
+  });
+
+  it('usa capas FIFO para el costo de venta', async () => {
+    const prisma = {
+      inventoryProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }) },
+      inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
+      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+      accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), capas: jest.fn().mockResolvedValue([{ quantity: 100, unitCost: 30 }]), calcular: jest.fn().mockReturnValue({ movementTotalCost: 600 }), consumir: jest.fn().mockResolvedValue(undefined) };
+    const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
+    const r = await puente.registrar(facturaPrueba());
+    expect(r.costoVenta).toBe(600);
+    expect(capas.consumir).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20);
+  });
+
   it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
     const { puente, movimientoCreado, asientoCreado } = dobles();
     const resultado = await puente.registrar({ ...facturaPrueba(), motivoBloqueoAsiento: 'Contabilidad: asiento automático bloqueado por descuento 01/03; requiere revisión contable.' });
