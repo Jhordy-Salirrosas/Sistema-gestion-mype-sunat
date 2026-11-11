@@ -1,3 +1,4 @@
+import { VERSION_DEVOLUCION_FISICA_02 } from '../../application/services/notePhysicalReturnPolicy';
 import {
   ConflictException,
   Injectable,
@@ -41,7 +42,9 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
               tipo_comprobante: invoice.tipo_comprobante,
               monto_total: invoice.monto_total,
               fecha_emision: invoice.fecha_emision,
-              payload_ubl: invoice.payload_ubl as Prisma.InputJsonValue,
+              payload_ubl: (invoice.tipo_comprobante === '07' && invoice.credit_debit_reason_code === '02'
+                ? { ...invoice.payload_ubl, politicaDevolucionFisica02: VERSION_DEVOLUCION_FISICA_02 }
+                : invoice.payload_ubl) as Prisma.InputJsonValue,
               // Datos del adquirente: la bandeja y el PDF los leen de estas
               // columnas. Sin ellos la fila mostraba "CLIENTE SIN NOMBRE"
               // aunque el cliente viajara dentro del payload.

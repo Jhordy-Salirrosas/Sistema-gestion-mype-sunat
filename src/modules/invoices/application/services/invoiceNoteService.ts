@@ -1,5 +1,5 @@
 import { validarMotivoNota } from './noteReasonGuard';
-import { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS } from './noteCatalogs';
+import { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS, esMotivoCreditoTotal } from './noteCatalogs';
 export { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS } from './noteCatalogs';
 export type { MotivoCredito, MotivoDebito } from './noteCatalogs';
 /**
@@ -85,7 +85,7 @@ export class InvoiceNoteService {
 
     // En los motivos de anulación o devolución total el importe ES el saldo:
     // pedirlo dejaría dos fuentes de verdad para el mismo número.
-    const importe = motivo.total ? saldo.disponible : (solicitud.importe ?? 0);
+    const importe = esMotivoCreditoTotal(solicitud.motivoCodigo) ? saldo.disponible : (solicitud.importe ?? 0);
 
     verificarSaldoNota(saldo, importe);
 
@@ -161,6 +161,6 @@ export class InvoiceNoteService {
 
   /** ¿El motivo del Catálogo 09 implica devolver todo el comprobante? */
   public esMotivoTotal(codigo: string): boolean {
-    return CATALOGO_09_MOTIVOS.find((m) => m.codigo === codigo)?.total ?? false;
+    return esMotivoCreditoTotal(codigo);
   }
 }

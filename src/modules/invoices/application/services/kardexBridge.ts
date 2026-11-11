@@ -1,3 +1,4 @@
+import { devuelveUnidades } from './notePhysicalReturnPolicy';
 import { Prisma } from '../../../../generated/client/client';
 /**
  * Movimientos de Kardex que genera una factura emitida (TA-68).
@@ -61,7 +62,7 @@ export const generaMovimiento = (linea: LineaParaKardex): boolean => {
  *
  * Conforme al Plan Maestro § 9.2:
  *  - Factura / Boleta (01, 03): SALIDA de almacén (Operación 01 - Venta).
- *  - Nota de Crédito (07) con motivos 01 (Anulación), 06 (Devolución total) o
+ *  - Nota de Crédito (07) con motivos 01/02 (Anulación), 06 (Devolución total) o
  *    07 (Devolución por ítem): ENTRADA a almacén (Operación 05 - Devolución).
  *  - Nota de Crédito con motivos de ajuste/descuento (03, 04, 05, 09, 13):
  *    no mueve existencias físicas, solo ajuste contable.
@@ -85,8 +86,7 @@ export const movimientosDeFactura = (
 
   // Si es Nota de Crédito, evaluar el motivo del Catálogo 09
   if (esNotaCredito) {
-    const motivosDevolucion = ['01', '06', '07'];
-    if (!documento.motivoNota || !motivosDevolucion.includes(documento.motivoNota)) {
+    if (!devuelveUnidades(documento.motivoNota)) {
       // Motivos puramente económicos (descuento, corrección) no mueven mercadería física
       return [];
     }

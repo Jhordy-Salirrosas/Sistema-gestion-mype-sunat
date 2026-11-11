@@ -1,3 +1,4 @@
+import { devuelveUnidades, esNota02Historica } from './notePhysicalReturnPolicy';
 /**
  * Puente facturación → Kardex + Contabilidad (TA-68, HU-12).
  *
@@ -35,6 +36,7 @@ export const claveAsientoM1 = (invoiceId: string) => `m1:invoice:${invoiceId}`;
 
 /** Resultado del puente; nunca lanza, siempre informa. */
 export interface ResultadoPuente {
+  motivoOmision?: string;
   /** Movimientos de Kardex registrados en esta pasada. */
   movimientosRegistrados: number;
   /** Líneas que ya tenían su movimiento (reproceso). */
@@ -57,6 +59,7 @@ export interface ResultadoPuente {
 
 /** Factura mínima que necesita el puente. */
 export interface FacturaParaPuente {
+  politicaDevolucionFisica02?: number;
   id: string;
   companyId: string;
   tipoComprobante: string;
@@ -112,6 +115,10 @@ export class InvoiceAccountingBridgeService {
    * @param factura comprobante con sus líneas e importes ya liquidados.
    */
   public async registrar(factura: FacturaParaPuente): Promise<ResultadoPuente> {
+    if (esNota02Historica(factura.tipoComprobante, factura.motivoNota, factura.politicaDevolucionFisica02)) {
+      return { completo: true, movimientosRegistrados: 0, movimientosOmitidos: 0, asientoOmitido: true,
+        asientoCostoOmitido: true, errores: [], motivoOmision: 'M1_LEGACY_02_NO_RETROACTIVITY' };
+    }
     const errores: string[] = [];
     const numero =
       factura.numeroCompleto ??
@@ -366,8 +373,7 @@ export class InvoiceAccountingBridgeService {
     numero: string,
     errores: string[],
   ): Promise<{ asientoCostoId?: string; costoVenta?: number; asientoCostoOmitido?: boolean }> {
-    const motivosDevolucion = ['01', '06', '07'];
-    if (!factura.motivoNota || !motivosDevolucion.includes(factura.motivoNota)) return { costoVenta: 0 };
+    if (!devuelveUnidades(factura.motivoNota)) return { costoVenta: 0 };
     const referencia = `${factura.id}:COSTO-REV`;
     const existente = await this.prisma.accountingEntry.findFirst({
       where: { company_id: factura.companyId, source_module: MODULO_ORIGEN, source_reference_id: referencia },
