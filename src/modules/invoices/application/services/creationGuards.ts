@@ -1,3 +1,7 @@
+import { validarMotivoNota, validarImporteNota } from './noteReasonGuard';
+import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
+import { validarCantidadesNota, devuelveUnidades } from './noteQuantityBalance';
+export { validarCantidadesNota } from './noteQuantityBalance';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
@@ -6,7 +10,7 @@ import { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
-import { CATALOGO_09_MOTIVOS } from './invoiceNoteService';
+import { CATALOGO_09_MOTIVOS } from './noteCatalogs';
 import { validarPago } from './paymentTermsAndSpotValidator';
 import { ESTADOS_NOTABLES } from './creditNoteBalanceGuard';
 import { validarClasificacionSpot, validarCuentaSpot } from './spotMinimo';
@@ -72,6 +76,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   const codigos = dto.items.map((l) => l.codigo?.trim());
   if (codigos.some((c) => !c)) throw new BadRequestException('Cada producto o servicio debe estar registrado con código y afectación');
   const esNota = dto.tipo_comprobante === '07' || dto.tipo_comprobante === '08';
+  if (esNota) validarMotivoNota(dto.tipo_comprobante, dto.codigo_motivo_nota);
   let historicas: { item_code: string | null; unit_code: string | null; igv_affectation_type: string | null }[] = [];
   if (esNota) {
     const numero = /^([A-Za-z0-9]{4})-(\d{1,8})$/.exec(dto.documento_afectado?.trim() ?? '');
@@ -101,6 +106,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     if (!afectacion || !(AFECTACIONES_GRILLA as readonly string[]).includes(afectacion)) {
       throw new BadRequestException(`Producto ${l.codigo} sin afectación tributaria válida`);
     }
+    if (esNota && !esAfectacionGratuita(afectacion) && !(l.precioUnitario! > 0)) throw new BadRequestException({ code: 'NOTA_PRECIO_INVALIDO', message: 'El precio de una línea onerosa de la nota debe ser mayor que cero.' });
     if (l.afectacion && l.afectacion !== afectacion) throw new BadRequestException('No puede alterar la afectación del producto');
     if (l.unidad && l.unidad !== unidad) throw new BadRequestException('No puede alterar la unidad del producto');
     if (!Number.isFinite(l.precioUnitario)) {
@@ -148,9 +154,10 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       const notas = await tx.invoice.findMany({ where: { company_id: companyId,
         referenced_invoice_id: actual.id, tipo_comprobante: '07', estado: { notIn: ['RECHAZADO', 'ANULADO'] } },
       select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } } });
-      validarCantidadesNota(dto.items, actual.items, ['01', '06', '07'].includes(dto.codigo_motivo_nota ?? '') ? notas.filter(n => ['01', '06', '07'].includes(n.credit_debit_reason_code ?? '')).flatMap(n => n.items) : []);
+      validarCantidadesNota(dto.items, actual.items, devuelveUnidades(dto.codigo_motivo_nota) ? notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items) : [], dto.codigo_motivo_nota === '06');
       const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
       const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
+      validarImporteNota(importe);
       if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
       if (CATALOGO_09_MOTIVOS.find(m => m.codigo === dto.codigo_motivo_nota)?.total && Math.round(importe * 100) !== disponible) {
         throw new BadRequestException('El motivo de nota exige devolver el saldo disponible total');
@@ -166,6 +173,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   }
   validarClasificacionSpot(dto);
   const liquidado = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0);
+  if (esNota) validarImporteNota(liquidado.importes.total);
   if (liquidado.importes.detraccion > 0) {
     const empresa = await tx.company.findUnique({ where: { id: companyId }, select: { detraction_account: true } });
     dto.cuenta_banco_nacion = validarCuentaSpot(dto, liquidado.importes.detraccion, empresa?.detraction_account) ?? undefined;
@@ -174,21 +182,4 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     fechaEmision: liquidado.dto.payload_ubl.fechaEmision as string, montoTotal: liquidado.importes.total,
     detraccion: liquidado.importes.detraccion, retencion: liquidado.importes.retencion });
   return dto;
-}
-
-/** El lock del origen cubre también cantidades pendientes de devolución. */
-export function validarCantidadesNota(
-  nuevas: { codigo?: string; cantidad: number }[],
-  originales: { item_code: string | null; quantity: Prisma.Decimal | number }[],
-  anteriores: { item_code: string | null; quantity: Prisma.Decimal | number }[],
-): void {
-  const vendidos = new Map<string, Prisma.Decimal>(), pedidos = new Map<string, Prisma.Decimal>();
-  for (const l of originales) if (l.item_code) vendidos.set(l.item_code.trim(), (vendidos.get(l.item_code.trim()) ?? new Prisma.Decimal(0)).plus(l.quantity));
-  for (const l of anteriores) if (l.item_code) pedidos.set(l.item_code.trim(), (pedidos.get(l.item_code.trim()) ?? new Prisma.Decimal(0)).plus(l.quantity));
-  for (const l of nuevas) {
-    const sku = l.codigo!.trim();
-    if (!vendidos.has(sku)) throw new BadRequestException('La nota contiene un producto ajeno al comprobante origen');
-    pedidos.set(sku, (pedidos.get(sku) ?? new Prisma.Decimal(0)).plus(l.cantidad));
-  }
-  for (const [sku, cantidad] of pedidos) if (cantidad.greaterThan(vendidos.get(sku) ?? 0)) throw new ConflictException(`NOTA_EXCEDE_CANTIDAD: ${sku}`);
 }

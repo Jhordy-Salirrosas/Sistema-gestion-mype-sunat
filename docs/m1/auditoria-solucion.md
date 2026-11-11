@@ -2744,3 +2744,39 @@ Focal: 2 suites / 16 pruebas aprobadas. Los dos casos de crédito con solo detra
 - Ferry: `ferry/m1-descuento-redondeo`, diez archivos del front en sus rutas exactas y manifiesto `FERRY.md` con SHA-256. 8A-1 y 8A-4 no requieren cambios de front; 8A-2 y 8A-3 se transportan en commits separados.
 - Resto fiscal expresamente sin corregir aquí: gratuita+ICBPER (adapter vs total XML) y exoneradas con SFS 2992 por `TaxCategory/Percent` ausente (la hoja lo exige en `ValidaExprRegFactura-2.0.1.xsl:3100–3104`). No se alteran reglas de gratuitas/exoneradas ni los XML sin descuento para resolverlos de forma incidental.
 - Sin migraciones, emisiones, llamadas reales a SUNAT, PR, fusiones ni despliegues.
+
+## Parte 8B — Guardas de notas
+
+Bases aceptadas: back dev `b4b8febd497db0a1b3572c44d2fc9acec216f680`, 287 suites / 2635 pruebas aprobadas, 4 suites / 38 pruebas omitidas y 12 snapshots; front dev `316e681ec89c72f5de0ac4e6bac71a8ee992d1a3`, 125 suites / 908 pruebas. Sin migraciones, emisiones ni llamadas reales a SUNAT.
+
+### B1 — Devolución total física y monetaria
+
+El motivo 06 exige todas las unidades pendientes de cada SKU y el saldo monetario exacto. Se extrae el cálculo Decimal por SKU de la Parte 7 a `noteQuantityBalance`, reutilizable por la proyección de lectura. Se mantiene el lock del origen dentro de la transacción de creación, antes de leer notas vigentes; 01/06/07 reservan cantidades sin esperar su CDR y RECHAZADO/ANULADO no consumen saldo. No se inventa identidad entre líneas: se acumula por SKU. Los otros motivos conservan su control anterior.
+
+Focales B1: 3 suites / 74 pruebas aprobadas. Casos en ambos contratos de creación: 1 de 2 unidades al saldo completo se rechaza; todas las unidades y dinero exacto sobre OBSERVADO se admiten; devolución parcial previa; dinero incompleto; SKU omitido y repetido. Prueba secuencial de segunda solicitud con primera nota ya reservada y verificación de que el bloqueo precede a leer las notas (no se presenta esta prueba unitaria como carrera real de dos conexiones).
+
+Suite completa tras B1: **288 suites / 2645 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; 12 snapshots intactos. Front sin cambios de este punto: baseline 125/908.
+
+### B2 — Motivo oficial/habilitado e importes positivos
+
+Los dos contratos de creación comparten ahora la validación de motivo y positividad, antes de numerar. Se distingue `MOTIVO_INVALIDO` (fuera de catálogo oficial 09/10) de `MOTIVO_NO_HABILITADO` (oficial pero no habilitado en M1). Los catálogos habilitados se extraen sin cambiar sus códigos ni banderas `total`, manteniendo reexportaciones compatibles desde invoiceNoteService; las autorizaciones separadas de notas usan la misma distinción. Una prueba contrasta la lista oficial con los assets SFS y fija exactamente el conjunto habilitado anterior.
+
+Toda nota exige total finito mayor que cero; cada línea onerosa exige precio positivo. Las gratuitas quedan fuera de esta última guarda: precio cobrado cero requiere su referencia positiva real. El adapter conserva ese cero y usa `valorUnitario` como referencia, sin confundirlo con precio oneroso ni inventar una referencia. El cambio del adapter está acotado a esa entrada gratuita explícita cero; las rutas de precio bruto y la guarda de catálogo de ventas no cambian. No se modifica tratamiento de IGV, descuentos o XML de los casos existentes.
+
+Se verifican NC/ND y ambos contratos, incluyendo línea onerosa cero dentro de total positivo y descuento que dejaría total cero. El HTTP fiscal ya rechazaba cabecera cero por CreateInvoiceDto; esta protección se conserva y no se atribuye como nueva. Dos fixtures históricas de ND usaban incorrectamente motivo 07 de NC: pasan a 02, conservando las aserciones de precios históricos y OBSERVADO. Focales B2: **4 suites / 130 pruebas aprobadas**.
+
+Suite completa tras B2: **289 suites / 2666 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; 12 snapshots intactos. Front sin cambios de este punto: baseline 125/908.
+
+### B3 — Saldo físico proyectado y tope en la interfaz
+
+`GET /invoices/:id/saldo` añade `cantidades_pendientes: [{codigo, original, pendiente}]`, calculadas desde invoice_items y las NC vigentes de la empresa. Reutiliza el mismo cálculo Decimal por SKU de B1. Solo 01/06/07 descuentan unidades; las demás NC sí consumen su importe monetario según la regla ya existente, pero no inventan devoluciones físicas. El pendiente mostrado se limita a cero ante sobrededucción histórica, sin alterar los datos ni relajar la guarda de creación. No hay identidad ficticia de línea origen.
+
+El formulario NC usa el pendiente para 01/06/07 y el original para motivos que no devuelven unidades (por ejemplo 13), conservando el comportamiento del servidor. Por fila, el máximo resta lo solicitado en las otras filas del mismo SKU. Hay atributo max, aria-invalid, error visible junto al campo y bloqueo de emisión; no se recorta la cantidad silenciosamente. Antes de publicar se consulta de nuevo el saldo y se verifica el límite con los datos frescos. El servidor, bajo el lock del origen, sigue siendo la autoridad ante carreras posteriores. ND y la emisión de ventas no cambian sus campos de cantidad.
+
+Una respuesta sin cantidades o con cantidades inválidas no se reemplaza por un máximo inventado: se bloquea la NC con causa visible. Back y ferry deben integrarse coordinadamente; el front nuevo requiere la proyección nueva del back. Los mocks existentes de saldo se actualizan al contrato aditivo.
+
+Focales B3: **3 suites / 44 pruebas** en el back y **4 suites / 22 pruebas** en el front. Casos: original/pendiente por SKU; exclusión de devoluciones monetarias sin movimiento físico; notas en curso; decimal fraccionario; tope 3 contra 2 aunque el importe quepa, en ambos contratos; SKU repetido; error visible y botón bloqueado; cambio del saldo al confirmar sin publicar; respuestas incompletas rechazadas.
+
+Suite completa tras B3 (back): **290 suites / 2672 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; **12 snapshots fiscales intactos**, sin actualizaciones. Build y lint global del back aprobados. Build del front aprobado. El lint de los archivos del ferry conserva **1 error y 2 avisos previos** de InvoiceEmitModal; contraste por stdin contra la base 316e681: mismas reglas, mensajes y fragmentos (set-state-in-effect, exhaustive-deps y only-export-components), sin incidencias añadidas. No se desactivan reglas ni se tocan configuraciones.
+
+Front final tras B3: **126 suites / 913 pruebas aprobadas**, cero fallos (base 125/908). Ferry `ferry/m1-guardas-notas`: nueve archivos del front en rutas exactas y FERRY.md con manifiesto y SHA-256. B1/B2 no cambian la UI ni amplían motivos; B3 conserva las opciones visibles. No hay cambios en Resiliencia, Inventario o Contabilidad, migraciones, emisiones reales, llamadas a SUNAT, PR, merges o despliegues.
