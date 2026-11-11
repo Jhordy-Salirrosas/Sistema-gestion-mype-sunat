@@ -56,8 +56,8 @@ const SELECT_LISTADO = {
   payload_ubl: true,
   cdr_sunat: true,
   transport_uncertain: true,
-  history: { orderBy: { created_at: 'desc' as const }, take: 20,
-    select: { estado_nuevo: true, codigo_error: true, mensaje_error: true, created_at: true } },
+  history: { orderBy: { created_at: 'desc' as const },
+    select: { estado_nuevo: true, codigo_error: true, mensaje_error: true, created_at: true, tiempo_respuesta_ms: true, http_status_code: true } },
 } as const;
 
 /** Proyección del detalle: la del listado más ficha, CDR e historial. */
@@ -98,6 +98,7 @@ const SELECT_DETALLE = {
       codigo_error: true,
       mensaje_error: true,
       tiempo_respuesta_ms: true,
+      http_status_code: true,
       created_at: true,
     },
   },

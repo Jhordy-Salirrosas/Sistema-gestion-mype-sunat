@@ -2406,3 +2406,11 @@ Focal back: 1 suite/10 pruebas aprobadas, incluyendo ausencia y secretos en URL.
 Una opción de incertidumbre incluye ERROR_RED y la clase visual explícita;
 consultas y estados del servidor intactos. Focal front: 1 archivo/11 pruebas
 aprobadas; ajustada la selección de la opción antigua al nuevo rótulo único.
+
+#### Construcción — 6c-6
+
+Proyección booleana de lectura de CDR/historial completo (sin límite de 20), con
+campos de evidencia de transporte. Consulta incierta, rescate y bloqueo local no
+acreditan envío. La tabla usa la evidencia junto al estado existente; ni retry-cdr
+ni su guarda ni Resiliencia cambian. Focales: back 1 suite/5 pruebas y front
+1 archivo/3 pruebas aprobadas. Escenarios FD01-1 sin transporte y FD01-2 con inicio.
