@@ -17,7 +17,7 @@ describe('CollectionsService', () => {
     const prisma = { collection: { create: jest.fn() }, accountingRule: { findMany: jest.fn().mockResolvedValue([]) } };
     const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
     await expect(service.create('co1', { customerName: 'Cliente', amount: 0 })).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.create('co1', { customerName: 'Cliente', amount: 10 })).rejects.toThrow('No hay reglas contables para COBRO');
+    await expect(service.create('co1', { customerName: 'Cliente', amount: 10 })).rejects.toThrow('Las reglas COBRO están incompletas');
   });
 
   it('valida comprobante y saldo del cobro', async () => {

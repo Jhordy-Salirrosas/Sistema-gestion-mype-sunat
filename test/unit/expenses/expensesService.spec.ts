@@ -22,7 +22,7 @@ describe('ExpensesService', () => {
     const prisma = { expense: { create: jest.fn() }, accountingRule: { findMany: jest.fn().mockResolvedValue([]) } };
     const service = new ExpensesService(prisma as never, { execute: jest.fn() } as never);
     await expect(service.create('c1', { ...base, totalAmount: 200 })).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.create('c1', base)).rejects.toThrow('No hay reglas contables para GASTO');
+    await expect(service.create('c1', base)).rejects.toThrow('Las reglas GASTO están incompletas');
   });
 
   it('registra pago total del gasto y su asiento', async () => {

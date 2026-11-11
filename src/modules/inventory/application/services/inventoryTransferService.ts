@@ -305,6 +305,17 @@ export class InventoryTransferService {
     });
     if (duplicate) throw new ConflictException('Ya existe un ajuste con ese número.');
 
+    if (this.accounting) {
+      const reglas = await this.prisma.accountingRule.findMany({
+        where: { company_id: companyId, process_code: 'AJUSTE', is_active: true }, orderBy: { line_order: 'asc' },
+      });
+      const lineas = new Set(reglas.map((r) => r.line_order));
+      const requeridas = dto.type === 'SALIDA' ? [1, 2] : [2, 3];
+      if (reglas.length === 0 || !requeridas.every((n) => lineas.has(n))) {
+        throw new BadRequestException('Las reglas AJUSTE están incompletas para este tipo de ajuste.');
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx: any) => {
       const warehouse = await tx.inventoryWarehouse.findFirst({
         where: { company_id: companyId, warehouse_code: warehouseCode },
