@@ -17,6 +17,8 @@ import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
 import { InvoiceQueryController } from './infrastructure/controllers/invoiceQueryController';
 import { SalesReportController } from './infrastructure/controllers/salesReportController';
+import { InvoiceDetractionController } from './infrastructure/controllers/invoiceDetractionController';
+import { InvoiceDetractionService } from './application/services/invoiceDetractionService';
 import { InvoiceConfigController } from './infrastructure/controllers/invoiceConfigController';
 import { InvoiceDownloadController } from './infrastructure/controllers/invoiceDownloadController';
 import { InvoicesService } from './application/services/invoicesService';
@@ -87,6 +89,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceConfigController,
     InvoiceQueryController,
     SalesReportController,
+    InvoiceDetractionController,
     InvoiceDownloadController,
   ],
   providers: [
@@ -98,6 +101,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoicesService,
     InvoiceQueryService,
     SalesReportService,
+    InvoiceDetractionService,
     // TA-60: series con reserva atomica del correlativo + configuracion.
     InvoiceSeriesService,
     InvoiceConfigService,
@@ -152,6 +156,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoicesService,
     InvoiceQueryService,
     SalesReportService,
+    InvoiceDetractionService,
     InvoiceSeriesService,
     InvoiceConfigService,
     InvoiceDownloadService,
