@@ -2538,3 +2538,16 @@ del origen suma unidades originales, líneas repetidas y NC físicas anteriores
 (incluidas pendientes); no permite devolver más unidades reduciendo su precio.
 Las notas económicas no consumen devoluciones físicas acumuladas. OBSERVADO
 conserva las mismas reglas monetarias. Focal: 3 suites / 77 pruebas aprobadas.
+
+### 7E — reserva durable derivada y exclusión del stock
+
+Ambas rutas de creación bloquean el almacén/saldos y descuentan, del disponible,
+las unidades de ventas persistidas no descargadas. Usa invoice/items/movimientos
+existentes: sin tabla nueva ni reservas volátiles. Rechazos/anulados liberan la
+reserva; incertidumbre y aceptación con puente pendiente la conservan. El saldo
+ya descargado no se descuenta dos veces. Los históricos sin almacén siguen la
+misma resolución ALM-01 del puente; no se reparan saldos históricos.
+Focal: 3 suites / 26 pruebas aprobadas. PostgreSQL real local: stock 1 y dos
+creaciones simultáneas confirman solo una; dos NC simultáneas sobre OBSERVADO
+confirman solo una devolución. Sin SOAP ni consumidor. La exclusión compartida
+con la descarga se completa en 7K.
