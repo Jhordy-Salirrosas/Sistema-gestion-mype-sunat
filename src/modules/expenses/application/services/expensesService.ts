@@ -70,12 +70,36 @@ export class ExpensesService {
     const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId } });
     if (!gasto) throw new BadRequestException('Gasto no encontrado.');
     if (gasto.status === 'ANULADO') throw new BadRequestException('El gasto ya está anulado.');
-    if (Number(gasto.paid_amount ?? 0) > 0) throw new BadRequestException('No se puede anular un gasto con pagos registrados.');
     const original = await this.prisma.accountingEntry.findFirst({
       where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: id },
       include: { lines: true },
     });
     if (!original) throw new BadRequestException('El gasto no tiene asiento contable; no se puede anular.');
+    const pagos = Number(gasto.paid_amount ?? 0) > 0
+      ? await this.prisma.treasuryMovement.findMany({ where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: id, direction: 'EGRESO' } })
+      : [];
+    for (const pago of pagos) {
+      await this.prisma.treasuryMovement.create({ data: {
+        company_id: companyId, movement_date: new Date(), direction: 'INGRESO',
+        document_reference: gasto.document_number ?? gasto.id, counterpart_name: gasto.supplier_name,
+        concept: `Devolución por anulación gasto ${gasto.description}`, amount: Number(pago.amount),
+        source_module: 'EXPENSES', source_reference_id: id, payment_method: pago.payment_method, bank_name: pago.bank_name,
+      } });
+      const asientoPago = await this.prisma.accountingEntry.findFirst({
+        where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: `PAGO-GASTO-${id}-${pago.id}` }, include: { lines: true },
+      });
+      if (asientoPago) {
+        const fechaPago = new Date();
+        await this.accounting.execute({
+          companyId, period: `${fechaPago.getFullYear()}-${String(fechaPago.getMonth() + 1).padStart(2, '0')}`,
+          entryDate: fechaPago.toISOString(), glosa: `Anulación pago gasto ${gasto.description}`,
+          sourceModule: 'EXPENSES', journalCode: 'CAJ', sourceReferenceId: `ANUL-PAGO-${id}-${pago.id}`,
+          idempotencyKey: `expense-payment-annul:${pago.id}`,
+          lines: asientoPago.lines.map((l, i) => ({ lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name, debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount) })),
+        });
+      }
+    }
+
     const revertido = await this.prisma.accountingEntry.findFirst({
       where: { company_id: companyId, source_module: 'EXPENSES', source_reference_id: `ANUL-${id}` }, select: { id: true },
     });
@@ -84,7 +108,7 @@ export class ExpensesService {
       const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       await this.accounting.execute({
         companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación gasto ${gasto.description}`,
-        sourceModule: 'EXPENSES', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `expense-annul:${id}`,
+        sourceModule: 'EXPENSES', journalCode: 'GAS', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `expense-annul:${id}`,
         lines: original.lines.map((l, i) => ({
           lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name,
           debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount),
