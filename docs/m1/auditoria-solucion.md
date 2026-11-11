@@ -2400,3 +2400,9 @@ front: 1 archivo/3 pruebas aprobadas. No se modifica PageHeader compartido.
 Detalle fiscal condicionado al mismo booleano previo, con datos cargados; endpoints
 siempre con texto efectivo sanitizado/ausencia. Criterios y compuerta intactos.
 Focal back: 1 suite/10 pruebas aprobadas, incluyendo ausencia y secretos en URL.
+
+#### Construcción — 6c-5
+
+Una opción de incertidumbre incluye ERROR_RED y la clase visual explícita;
+consultas y estados del servidor intactos. Focal front: 1 archivo/11 pruebas
+aprobadas; ajustada la selección de la opción antigua al nuevo rótulo único.
