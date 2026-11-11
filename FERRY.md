@@ -32,9 +32,10 @@ recuperables; el Monitor conserva Reintentar y añade filtro de preparación.
 ERROR_RED permanece como estado fiscal. TRANSPORTE_INCIERTO sigue teniendo prioridad.
 No cambia la guarda de saldo: ERROR_RED consume saldo; no hay descarte terminal.
 
-## Reanudación tras desplegar el back
+## Acción de producto: reanudación de FC01-00000016
 
-Como ADMIN de la empresa, buscar FC01-00000016 en el Monitor y pulsar **Reintentar**.
+Tras el despliegue del back, FC01-00000016 se reanuda desde el Monitor:
+con rol ADMIN de la empresa, buscar el documento y pulsar **Reintentar**.
 Equivalente: `POST /api/v1/invoices/{UUID-de-FC01-00000016}/retry-cdr` con autenticación
 normal de la empresa. Se rescata el trabajo de DLQ si corresponde; un job activo no se duplica.
 En preparación se completa «Devolución total» y se registra M1_NOTE_DESCRIPTION_COMPLETED.
