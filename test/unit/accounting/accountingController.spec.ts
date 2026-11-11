@@ -6,6 +6,7 @@ import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application
 import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/exportTaxPleUseCase';
 import { ValidateTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from '../../../src/modules/accounting/application/use-cases/getIgvReconciliationUseCase';
+import { CloseAnnualUseCase } from '../../../src/modules/accounting/application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
@@ -28,6 +29,7 @@ describe('AccountingController', () => {
   let exportTaxPleUseCase: jest.Mocked<ExportTaxPleUseCase>;
   let validateTaxPleUseCase: jest.Mocked<ValidateTaxPleUseCase>;
   let getIgvReconciliationUseCase: jest.Mocked<GetIgvReconciliationUseCase>;
+  let closeAnnualUseCase: jest.Mocked<CloseAnnualUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
   let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
@@ -65,6 +67,8 @@ describe('AccountingController', () => {
     getIgvReconciliationUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
+
+    closeAnnualUseCase = { execute: jest.fn() } as unknown as jest.Mocked<CloseAnnualUseCase>;
 
     getEntriesUseCase = {
       execute: jest.fn().mockResolvedValue([]),
@@ -120,6 +124,7 @@ describe('AccountingController', () => {
       exportTaxPleUseCase,
       validateTaxPleUseCase,
       getIgvReconciliationUseCase,
+      closeAnnualUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
       createAccountUseCase,
@@ -325,5 +330,11 @@ describe('AccountingController', () => {
     validateTaxPleUseCase.execute.mockResolvedValue({ valid: true } as never);
     await expect(controller.validateTaxPle('comp-1', { year: 2026, month: 11, bookCode: '140100', companyRuc: '20100070970' })).resolves.toEqual({ valid: true });
     expect(validateTaxPleUseCase.execute).toHaveBeenCalledWith('comp-1', '20100070970', 2026, 11, '140100');
+  });
+
+  it('delega el cierre anual completo', async () => {
+    closeAnnualUseCase.execute.mockResolvedValue({ closingEntryCreated: true } as never);
+    await expect(controller.closeAnnual('2026', 'comp-1')).resolves.toEqual({ closingEntryCreated: true });
+    expect(closeAnnualUseCase.execute).toHaveBeenCalledWith('comp-1', 2026);
   });
 });
