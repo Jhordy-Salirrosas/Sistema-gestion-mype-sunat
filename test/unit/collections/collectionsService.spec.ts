@@ -86,5 +86,6 @@ describe('CollectionsService', () => {
     expect(r.invoiceCount).toBe(1);
     expect(r.debtors[0]).toMatchObject({ doc: '20100070970', balance: 100 });
     expect(r.aging.d31_60 + r.aging.d61_90 + r.aging.d90_plus + r.aging.d0_30).toBe(100);
+    expect(r.overdue).toEqual({ count: 1, total: 100 });
   });
 });

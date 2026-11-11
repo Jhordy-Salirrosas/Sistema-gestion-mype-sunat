@@ -19,12 +19,15 @@ export class CollectionsService {
     const porCliente = new Map<string, { doc: string; name: string; balance: number }>();
     let total = 0;
     let count = 0;
+    let overdueCount = 0;
+    let overdueTotal = 0;
     const hoy = Date.now();
     for (const f of facturas) {
       const { saldo } = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
       if (saldo <= 0.005) continue;
       count += 1; total += saldo;
       const dias = Math.max(0, Math.floor((hoy - new Date(f.fecha_emision).getTime()) / 86400000));
+      if (dias > 30) { overdueCount += 1; overdueTotal += saldo; }
       if (dias <= 30) aging.d0_30 += saldo;
       else if (dias <= 60) aging.d31_60 += saldo;
       else if (dias <= 90) aging.d61_90 += saldo;
@@ -38,7 +41,7 @@ export class CollectionsService {
     const deudores = [...porCliente.values()]
       .map((d) => ({ ...d, balance: Math.round(d.balance * 100) / 100 }))
       .sort((a, b) => b.balance - a.balance).slice(0, 10);
-    return { total: Math.round(total * 100) / 100, invoiceCount: count, aging, debtors: deudores };
+    return { total: Math.round(total * 100) / 100, invoiceCount: count, overdue: { count: overdueCount, total: Math.round(overdueTotal * 100) / 100 }, aging, debtors: deudores };
   }
 
   async customerStatement(companyId: string, customerDoc: string) {
