@@ -57,6 +57,22 @@ describe('GenerateAccountingEntryUseCase', () => {
     expect(result.glosa).toBe('Asiento por factura F001-00000001');
   });
 
+  it('rechaza una línea con debe y haber a la vez', async () => {
+    await expect(useCase.execute({
+      companyId: 'company-uuid-1', period: '2026-03', entryDate: '2026-03-10T00:00:00.000Z',
+      glosa: 'Asiento inválido', sourceModule: 'MANUAL',
+      lines: [{ lineOrder: 1, accountCode: '1212', accountName: 'CxC', debitAmount: 10, creditAmount: 10 }],
+    })).rejects.toThrow('registre debe o haber');
+  });
+
+  it('rechaza una línea con importe cero', async () => {
+    await expect(useCase.execute({
+      companyId: 'company-uuid-1', period: '2026-03', entryDate: '2026-03-10T00:00:00.000Z',
+      glosa: 'Asiento vacío', sourceModule: 'MANUAL',
+      lines: [{ lineOrder: 1, accountCode: '1212', accountName: 'CxC', debitAmount: 0, creditAmount: 0 }],
+    })).rejects.toThrow('mayor que cero');
+  });
+
   it('debe fallar si los montos de Debe y Haber no coinciden', async () => {
     await expect(
       useCase.execute({
