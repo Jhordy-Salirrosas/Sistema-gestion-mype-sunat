@@ -55,6 +55,20 @@ export class GenerateAccountingEntryUseCase {
       }
     }
 
+    dto.lines.forEach((linea, index) => {
+      const debe = Number(linea.debitAmount) || 0;
+      const haber = Number(linea.creditAmount) || 0;
+      if (debe < 0 || haber < 0) {
+        throw new BadRequestException(`Línea ${index + 1}: los importes no pueden ser negativos.`);
+      }
+      if (debe > 0 && haber > 0) {
+        throw new BadRequestException(`Línea ${index + 1}: registre debe o haber, no ambos.`);
+      }
+      if (debe === 0 && haber === 0) {
+        throw new BadRequestException(`Línea ${index + 1}: el importe debe ser mayor que cero.`);
+      }
+    });
+
     const nextEntryNumber = await this.accountingRepository.getNextEntryNumber(companyId, period);
 
     const entry = new AccountingEntryEntity({
