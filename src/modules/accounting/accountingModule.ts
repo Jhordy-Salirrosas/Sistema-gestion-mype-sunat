@@ -5,6 +5,7 @@ import { GenerateAccountingEntryUseCase } from './application/use-cases/generate
 import { GenerateClosingEntryUseCase } from './application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from './application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from './application/use-cases/exportTaxPleUseCase';
+import { ValidateTaxPleUseCase } from './application/use-cases/validateTaxPleUseCase';
 import { GetAccountingEntriesUseCase } from './application/use-cases/getAccountingEntriesUseCase';
 import { RegisterInvoiceAccountingEntryUseCase } from './application/use-cases/registerInvoiceAccountingEntryUseCase';
 import { ListAccountingAccountsUseCase } from './application/use-cases/listAccountingAccountsUseCase';
@@ -31,6 +32,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     GenerateClosingEntryUseCase,
     ExportPleTxtUseCase,
     ExportTaxPleUseCase,
+    ValidateTaxPleUseCase,
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
@@ -54,6 +56,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     GenerateClosingEntryUseCase,
     ExportPleTxtUseCase,
     ExportTaxPleUseCase,
+    ValidateTaxPleUseCase,
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
