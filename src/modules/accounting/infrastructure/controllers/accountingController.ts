@@ -25,6 +25,7 @@ import { GenerateClosingEntryUseCase } from '../../application/use-cases/generat
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUseCase';
 import { ValidateTaxPleUseCase } from '../../application/use-cases/validateTaxPleUseCase';
+import { GetIgvReconciliationUseCase } from '../../application/use-cases/getIgvReconciliationUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
@@ -48,6 +49,7 @@ export class AccountingController {
     private readonly exportPleUseCase: ExportPleTxtUseCase,
     private readonly exportTaxPleUseCase: ExportTaxPleUseCase,
     private readonly validateTaxPleUseCase: ValidateTaxPleUseCase,
+    private readonly getIgvReconciliationUseCase: GetIgvReconciliationUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
@@ -265,6 +267,12 @@ export class AccountingController {
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);
+  }
+
+  @Get('reconciliation/igv')
+  igvReconciliation(@CurrentCompany() companyId: string | undefined, @Query('period') period: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.getIgvReconciliationUseCase.execute(companyId, period);
   }
 
   @Post('ple/tax-validate')
