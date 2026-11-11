@@ -10,6 +10,27 @@ export class CollectionsService {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
   }
 
+  async customerStatement(companyId: string, customerDoc: string) {
+    if (!customerDoc?.trim()) throw new BadRequestException('El documento del cliente es obligatorio.');
+    const facturas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, customer_identity_number: customerDoc.trim(), estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
+      orderBy: { fecha_emision: 'desc' },
+      select: { id: true, serie: true, correlativo: true, monto_total: true, fecha_emision: true },
+    });
+    const filas = [];
+    let total = 0;
+    let acreditado = 0;
+    let cobrado = 0;
+    let saldo = 0;
+    for (const f of facturas) {
+      const s = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
+      total += Number(f.monto_total); acreditado += s.acreditado; cobrado += s.cobrado; saldo += s.saldo;
+      filas.push({ id: f.id, numero: `${f.serie}-${String(f.correlativo).padStart(8, '0')}`, date: f.fecha_emision, total: Number(f.monto_total), credited: s.acreditado, paid: s.cobrado, balance: s.saldo });
+    }
+    const cobros = await this.prisma.collection.findMany({ where: { company_id: companyId, customer_doc: customerDoc.trim(), status: { not: 'ANULADO' } }, orderBy: { collection_date: 'desc' }, select: { id: true, collection_date: true, invoice_number: true, amount: true, payment_method: true } });
+    return { customerDoc: customerDoc.trim(), invoices: filas, collections: cobros.map((c) => ({ id: c.id, date: c.collection_date, invoiceNumber: c.invoice_number, amount: Number(c.amount), paymentMethod: c.payment_method })), totals: { total: Math.round(total * 100) / 100, credited: Math.round(acreditado * 100) / 100, paid: Math.round(cobrado * 100) / 100, balance: Math.round(saldo * 100) / 100 } };
+  }
+
   async annul(companyId: string, id: string) {
     const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId } });
     if (!cobro) throw new BadRequestException('Cobro no encontrado.');

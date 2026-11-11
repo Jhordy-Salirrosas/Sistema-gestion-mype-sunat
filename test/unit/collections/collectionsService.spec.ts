@@ -55,4 +55,22 @@ describe('CollectionsService', () => {
     await expect(service.annul('c1', 'c1')).resolves.toMatchObject({ status: 'ANULADO' });
     expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: 'ANUL-c1', lines: expect.arrayContaining([expect.objectContaining({ accountCode: '1041', creditAmount: 100 })]) }));
   });
+
+  it('arma estado de cuenta por cliente', async () => {
+    const prisma = {
+      invoice: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'i1', serie: 'F001', correlativo: 1, monto_total: 118, fecha_emision: new Date('2026-11-10') }]),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 18 } }),
+      },
+      collection: {
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 50 } }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'c1', collection_date: new Date('2026-11-10'), invoice_number: 'F001-00000001', amount: 50, payment_method: 'TRANSFERENCIA' }]),
+      },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    const r = await service.customerStatement('co1', '20100070970');
+    expect(r.totals).toEqual({ total: 118, credited: 18, paid: 50, balance: 50 });
+    expect(r.invoices).toHaveLength(1);
+    expect(r.collections).toHaveLength(1);
+  });
 });

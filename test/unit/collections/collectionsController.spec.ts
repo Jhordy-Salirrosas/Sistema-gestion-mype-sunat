@@ -7,6 +7,7 @@ describe('CollectionsController', () => {
     create: jest.fn().mockResolvedValue({ id: 'c1' }),
     listReceivables: jest.fn().mockResolvedValue([{ id: 'i1' }]),
     annul: jest.fn().mockResolvedValue({ id: 'c1', status: 'ANULADO' }),
+    customerStatement: jest.fn().mockResolvedValue({ totals: {} }),
   };
   const controller = new CollectionsController(service as never);
 
@@ -15,6 +16,7 @@ describe('CollectionsController', () => {
     await expect(controller.list('co1')).resolves.toEqual([{ id: 'c1' }]);
     await expect(controller.create({} as never, 'co1')).resolves.toEqual({ id: 'c1' });
     await expect(controller.annul('c1', 'co1')).resolves.toEqual({ id: 'c1', status: 'ANULADO' });
+    await expect(controller.statement('20100070970', 'co1')).resolves.toEqual({ totals: {} });
   });
 
   it('exige empresa en todas las rutas', () => {
