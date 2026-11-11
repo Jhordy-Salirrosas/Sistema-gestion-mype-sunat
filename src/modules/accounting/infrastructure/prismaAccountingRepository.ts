@@ -50,6 +50,7 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           entry_date: entry.entryDate,
           glosa: entry.glosa,
           source_module: entry.sourceModule,
+          journal_code: entry.journalCode,
           source_reference_id: entry.sourceReferenceId,
           idempotency_key: entry.idempotencyKey ?? null,
           total_debit: totalDebit,
@@ -121,6 +122,7 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           entryDate: e.entry_date,
           glosa: e.glosa,
           sourceModule: e.source_module,
+          journalCode: e.journal_code ?? 'OPV',
           sourceReferenceId: e.source_reference_id ?? undefined,
           lines: e.lines.map((l: any) => ({
             lineOrder: l.line_order ?? l.lineOrder,

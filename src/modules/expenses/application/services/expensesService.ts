@@ -34,6 +34,13 @@ export class ExpensesService {
     const total = Math.round(Number(dto.totalAmount) * 100) / 100;
     if (Math.abs(base + igv - total) > 0.02) throw new BadRequestException('Base + IGV no coincide con el total del gasto.');
     const fecha = dto.expenseDate ? new Date(dto.expenseDate) : new Date();
+    const reglas = await this.prisma.accountingRule.findMany({
+      where: { company_id: companyId, process_code: 'GASTO', is_active: true }, orderBy: { line_order: 'asc' },
+    });
+    const lineas = new Set(reglas.map((r) => r.line_order));
+    if (reglas.length === 0 || ![1, 2, 3].every((n) => lineas.has(n))) {
+      throw new BadRequestException('Las reglas GASTO están incompletas: se requieren las líneas 1 a 3.');
+    }
 
     const gasto = await this.prisma.expense.create({
       data: {
@@ -44,16 +51,12 @@ export class ExpensesService {
       },
     });
 
-    const reglas = await this.prisma.accountingRule.findMany({
-      where: { company_id: companyId, process_code: 'GASTO', is_active: true }, orderBy: { line_order: 'asc' },
-    });
     const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
-    if (reglas.length === 0) throw new BadRequestException('No hay reglas contables para GASTO. Configúrelas antes de registrar el gasto.');
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(),
       glosa: `Gasto ${gasto.description} · ${gasto.supplier_name}`,
-      sourceModule: 'EXPENSES', sourceReferenceId: gasto.id, idempotencyKey: `expense:${gasto.id}`,
+      sourceModule: 'EXPENSES', journalCode: 'GAS', sourceReferenceId: gasto.id, idempotencyKey: `expense:${gasto.id}`,
       lines: [
         { lineOrder: 1, accountCode: porOrden.get(1) ?? '63111', accountName: 'Gasto', debitAmount: base, creditAmount: 0 },
         { lineOrder: 2, accountCode: porOrden.get(2) ?? '40111', accountName: 'IGV crédito fiscal', debitAmount: igv, creditAmount: 0 },
@@ -119,7 +122,7 @@ export class ExpensesService {
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Pago gasto ${gasto.description}`,
-      sourceModule: 'EXPENSES', sourceReferenceId: `PAGO-GASTO-${id}-${mov.id}`, idempotencyKey: `expense-payment:${mov.id}`,
+      sourceModule: 'EXPENSES', journalCode: 'CAJ', sourceReferenceId: `PAGO-GASTO-${id}-${mov.id}`, idempotencyKey: `expense-payment:${mov.id}`,
       lines: [
         { lineOrder: 1, accountCode: porOrden.get(1) ?? '42121', accountName: 'Cuentas por pagar', debitAmount: monto, creditAmount: 0 },
         { lineOrder: 2, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(2) ?? '1041'), accountName: 'Caja o banco', debitAmount: 0, creditAmount: monto },

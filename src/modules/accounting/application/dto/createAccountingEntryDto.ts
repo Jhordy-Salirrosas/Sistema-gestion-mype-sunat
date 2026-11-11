@@ -54,6 +54,10 @@ export class CreateAccountingEntryDto {
 
   @IsString()
   @IsOptional()
+  journalCode?: string;
+
+  @IsString()
+  @IsOptional()
   sourceReferenceId?: string;
 
   @IsString()

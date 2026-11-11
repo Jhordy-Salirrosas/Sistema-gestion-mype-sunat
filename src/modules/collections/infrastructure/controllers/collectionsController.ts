@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateCollectionDto } from '../../application/dto/createCollectionDto';
@@ -14,6 +14,24 @@ export class CollectionsController {
   annul(@Param('id') id: string, @CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.collections.annul(companyId, id);
+  }
+
+  @Get('invoice/:id')
+  invoiceCollections(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.invoiceCollections(companyId, id);
+  }
+
+  @Get('portfolio')
+  portfolio(@CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.portfolioAging(companyId);
+  }
+
+  @Get('statement')
+  statement(@Query('doc') doc: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.customerStatement(companyId, doc ?? '');
   }
 
   @Get('receivables')

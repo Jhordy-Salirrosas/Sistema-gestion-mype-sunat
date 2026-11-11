@@ -10,6 +10,88 @@ export class CollectionsService {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
   }
 
+  async invoiceCollections(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, company_id: companyId },
+      select: { id: true, serie: true, correlativo: true, customer_legal_name: true, monto_total: true, fecha_emision: true },
+    });
+    if (!invoice) throw new BadRequestException('Comprobante no encontrado.');
+    const cobros = await this.prisma.collection.findMany({
+      where: { company_id: companyId, invoice_id: invoiceId, status: { not: 'ANULADO' } },
+      orderBy: { collection_date: 'desc' },
+    });
+    return {
+      invoice: { id: invoice.id, numero: `${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}`, customerName: invoice.customer_legal_name, total: Number(invoice.monto_total), date: invoice.fecha_emision },
+      collections: cobros.map((c) => ({ id: c.id, date: c.collection_date, amount: Number(c.amount), paymentMethod: c.payment_method, bankName: c.bank_name, status: c.status })),
+      paid: Math.round(cobros.reduce((s, c) => s + Number(c.amount), 0) * 100) / 100,
+    };
+  }
+
+  async portfolioAging(companyId: string) {
+    const facturas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
+      select: { id: true, customer_identity_number: true, customer_legal_name: true, monto_total: true, fecha_emision: true },
+    });
+    const aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
+    const porCliente = new Map<string, { doc: string; name: string; balance: number }>();
+    let total = 0;
+    let count = 0;
+    let overdueCount = 0;
+    let overdueTotal = 0;
+    const hoy = Date.now();
+    for (const f of facturas) {
+      const { saldo } = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
+      if (saldo <= 0.005) continue;
+      count += 1; total += saldo;
+      const dias = Math.max(0, Math.floor((hoy - new Date(f.fecha_emision).getTime()) / 86400000));
+      if (dias > 30) { overdueCount += 1; overdueTotal += saldo; }
+      if (dias <= 30) aging.d0_30 += saldo;
+      else if (dias <= 60) aging.d31_60 += saldo;
+      else if (dias <= 90) aging.d61_90 += saldo;
+      else aging.d90_plus += saldo;
+      const key = f.customer_identity_number || f.customer_legal_name || '';
+      const actual = porCliente.get(key) ?? { doc: f.customer_identity_number ?? '', name: f.customer_legal_name ?? '', balance: 0 };
+      actual.balance += saldo;
+      porCliente.set(key, actual);
+    }
+    for (const k of Object.keys(aging) as Array<keyof typeof aging>) aging[k] = Math.round(aging[k] * 100) / 100;
+    const deudores = [...porCliente.values()]
+      .map((d) => ({ ...d, balance: Math.round(d.balance * 100) / 100 }))
+      .sort((a, b) => b.balance - a.balance).slice(0, 10);
+    return { total: Math.round(total * 100) / 100, invoiceCount: count, overdue: { count: overdueCount, total: Math.round(overdueTotal * 100) / 100 }, aging, debtors: deudores };
+  }
+
+  async customerStatement(companyId: string, customerDoc: string) {
+    if (!customerDoc?.trim()) throw new BadRequestException('El documento del cliente es obligatorio.');
+    const facturas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, customer_identity_number: customerDoc.trim(), estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
+      orderBy: { fecha_emision: 'desc' },
+      select: { id: true, serie: true, correlativo: true, monto_total: true, fecha_emision: true },
+    });
+    const filas = [];
+    let total = 0;
+    let acreditado = 0;
+    let cobrado = 0;
+    let saldo = 0;
+    const aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
+    const hoy = Date.now();
+    for (const f of facturas) {
+      const s = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
+      total += Number(f.monto_total); acreditado += s.acreditado; cobrado += s.cobrado; saldo += s.saldo;
+      const dias = Math.max(0, Math.floor((hoy - new Date(f.fecha_emision).getTime()) / 86400000));
+      if (s.saldo > 0.005) {
+        if (dias <= 30) aging.d0_30 += s.saldo;
+        else if (dias <= 60) aging.d31_60 += s.saldo;
+        else if (dias <= 90) aging.d61_90 += s.saldo;
+        else aging.d90_plus += s.saldo;
+      }
+      filas.push({ id: f.id, numero: `${f.serie}-${String(f.correlativo).padStart(8, '0')}`, date: f.fecha_emision, total: Number(f.monto_total), credited: s.acreditado, paid: s.cobrado, balance: s.saldo, days: dias });
+    }
+    for (const k of Object.keys(aging) as Array<keyof typeof aging>) aging[k] = Math.round(aging[k] * 100) / 100;
+    const cobros = await this.prisma.collection.findMany({ where: { company_id: companyId, customer_doc: customerDoc.trim(), status: { not: 'ANULADO' } }, orderBy: { collection_date: 'desc' }, select: { id: true, collection_date: true, invoice_number: true, amount: true, payment_method: true } });
+    return { customerDoc: customerDoc.trim(), invoices: filas, collections: cobros.map((c) => ({ id: c.id, date: c.collection_date, invoiceNumber: c.invoice_number, amount: Number(c.amount), paymentMethod: c.payment_method })), aging, totals: { total: Math.round(total * 100) / 100, credited: Math.round(acreditado * 100) / 100, paid: Math.round(cobrado * 100) / 100, balance: Math.round(saldo * 100) / 100 } };
+  }
+
   async annul(companyId: string, id: string) {
     const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId } });
     if (!cobro) throw new BadRequestException('Cobro no encontrado.');
@@ -30,7 +112,7 @@ export class CollectionsService {
     } });
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación cobro ${cobro.customer_name}`,
-      sourceModule: 'COLLECTIONS', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,
+      sourceModule: 'COLLECTIONS', journalCode: 'CAJ', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,
       lines: original.lines.map((l, i) => ({ lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name, debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount) })),
     });
     return this.prisma.collection.update({ where: { id }, data: { status: 'ANULADO' } });
@@ -92,6 +174,14 @@ export class CollectionsService {
     }
     const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
 
+    const reglas = await this.prisma.accountingRule.findMany({
+      where: { company_id: companyId, process_code: 'COBRO', is_active: true }, orderBy: { line_order: 'asc' },
+    });
+    const lineas = new Set(reglas.map((r) => r.line_order));
+    if (reglas.length === 0 || ![1, 2].every((n) => lineas.has(n))) {
+      throw new BadRequestException('Las reglas COBRO están incompletas: se requieren las líneas 1 y 2.');
+    }
+
     const cobro = await this.prisma.collection.create({
       data: {
         company_id: companyId, collection_date: fecha, customer_name: dto.customerName.trim(),
@@ -101,16 +191,12 @@ export class CollectionsService {
       },
     });
 
-    const reglas = await this.prisma.accountingRule.findMany({
-      where: { company_id: companyId, process_code: 'COBRO', is_active: true }, orderBy: { line_order: 'asc' },
-    });
-    if (reglas.length === 0) throw new BadRequestException('No hay reglas contables para COBRO. Configúrelas antes de registrar el cobro.');
     const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(),
       glosa: `Cobro de ${cobro.customer_name}${cobro.invoice_number ? ` · ${cobro.invoice_number}` : ''}`,
-      sourceModule: 'COLLECTIONS', sourceReferenceId: cobro.id, idempotencyKey: `collection:${cobro.id}`,
+      sourceModule: 'COLLECTIONS', journalCode: 'CAJ', sourceReferenceId: cobro.id, idempotencyKey: `collection:${cobro.id}`,
       lines: [
         { lineOrder: 1, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(1) ?? '1041'), accountName: 'Caja o banco', debitAmount: monto, creditAmount: 0 },
         { lineOrder: 2, accountCode: porOrden.get(2) ?? '12121', accountName: 'Cuentas por cobrar', debitAmount: 0, creditAmount: monto },

@@ -37,6 +37,9 @@ describe('InventoryTransferService', () => {
       accountingEntry: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      accountingRule: {
+        findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '659' }, { line_order: 2, account_code: '201' }, { line_order: 3, account_code: '759' }]),
+      },
       accountingMapping: {
         findMany: jest.fn().mockResolvedValue([]),
       },

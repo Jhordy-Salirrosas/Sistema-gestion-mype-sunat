@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { referenciaGratuita } from './freeOperationReference';
-import { dividirMoneda, formatoMoneda, formatoUnitario, multiplicarMoneda, redondearMoneda } from './money';
+import { dividirUnitario, dividirMoneda, formatoMoneda, formatoUnitario, multiplicarMoneda, redondearMoneda } from './money';
 /**
  * Constructores de nodos XML para el generador UBL 2.1 (M1).
  *
@@ -190,7 +190,11 @@ export const bloqueLinea = (
         <cbc:Description>${esc(l.descripcion)}</cbc:Description>
       </cac:Item>`;
 
+  // Certificación 8B-bis: representación neta exclusiva de notas con descuento 00.
+  const notaNeta = raiz !== 'Invoice' && descuentos.some(d => d.codigo === '00');
+  const valorUnitarioXml = notaNeta ? dividirUnitario(redondearMoneda(neto), l.cantidad) : l.valorUnitario;
   const descuentosXml = descuentos
+    .filter(d => !notaNeta || d.codigo !== '00')
     .map((d) => bloqueDescuentoLinea(d, baseBruta, moneda))
     .join('\n');
 
@@ -249,7 +253,7 @@ ${categoriaLinea(l.afectacion, gratuita ? '9996' : tributo)}
     </cac:TaxTotal>
 ${raiz !== 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}${item}
     <cac:Price>
-      <cbc:PriceAmount currencyID="${moneda}">${formatoUnitario(gratuita ? 0 : l.valorUnitario)}</cbc:PriceAmount>
+      <cbc:PriceAmount currencyID="${moneda}">${formatoUnitario(gratuita ? 0 : valorUnitarioXml)}</cbc:PriceAmount>
     </cac:Price>
   </cac:${raiz}Line>`;
 };
