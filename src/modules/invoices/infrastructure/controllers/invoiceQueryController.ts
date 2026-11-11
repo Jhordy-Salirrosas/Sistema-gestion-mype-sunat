@@ -24,7 +24,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentCompany } from '../../../../common/decorators';
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
+import { CurrentCompany, Roles } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { InvoiceQueryService } from '../../application/services/invoiceQueryService';
 import {
@@ -169,6 +170,8 @@ export class InvoiceQueryController {
    * Responde `enviado: false` con su motivo —y no un error— cuando la vista
    * previa trae reglas incumplidas o no hay nada que informar.
    */
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Post('resumenes/diario/enviar')
   @HttpCode(HttpStatus.OK)
   enviarResumen(
@@ -187,6 +190,8 @@ export class InvoiceQueryController {
    * ENVÍA la comunicación de baja (RA): anula ante SUNAT las facturas ya
    * aceptadas de la fecha.
    */
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Post('resumenes/baja/enviar')
   @HttpCode(HttpStatus.OK)
   enviarBaja(
@@ -271,6 +276,8 @@ export class InvoiceQueryController {
    * Reencola un comprobante en error para volver a consultar su CDR y
    * registra la acción en la auditoría (criterio 3).
    */
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Post(':id/retry-cdr')
   reintentarCdr(
     @CurrentCompany() companyId: string,

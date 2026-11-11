@@ -2558,3 +2558,9 @@ Las afectaciones gratuitas ya no excluyen la entrega física. Kardex valoriza
 con el método/costo real de Inventario, no con el valor referencial fiscal.
 No se modifica el adaptador tributario ni el ICBPER. Focal: 3 suites / 88
 pruebas aprobadas, incluyendo liquidación fiscal y ausencia de mutación de línea.
+
+### 7G — acciones operativas ADMIN
+
+retry-cdr y los POST de envío RA/RC exigen RolesGuard + ADMIN, además de la
+autenticación existente. No cambian estados admitidos, retry-cdr ni Resiliencia.
+Focal de metadatos y guardia real: 2 suites / 6 pruebas aprobadas.
