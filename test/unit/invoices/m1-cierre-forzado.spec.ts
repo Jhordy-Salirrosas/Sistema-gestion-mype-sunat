@@ -11,7 +11,7 @@ function harness() {
  let active = false;
  const queue = { reenqueueInvoiceIfIdle: jest.fn(async (_id, _company, guard) => { expect(history.some(h => h.codigo_error === FORCE_AUTH)).toBe(true); expect(row.transport_uncertain).toBe(true); if (active) return { estado: 'YA_EN_COLA' }; if (!await guard()) return { estado: 'ESTADO_NO_PERMITIDO' }; active = true; return { estado: 'ENCOLADO' }; }) };
  const service = new InvoiceForcedResendService(prisma as never, queue as never);
- const autorizar = (body: unknown = { motivo: 'Decisión explícita de prueba', confirmado: true }, actor = { sub: 'admin', role: 'ADMIN' }, company = 'empresa') => service.autorizar(company, row.id, actor, body);
+ const autorizar = (body: unknown = { motivo: 'Decisión explícita de prueba', confirmado: true, decisionId: 'decision-prueba-0001' }, actor = { sub: 'admin', role: 'ADMIN' }, company = 'empresa') => service.autorizar(company, row.id, actor, body);
  return { row, history, tx, prisma, queue, service, autorizar };
 }
 it('6I registra quién y motivo antes de publicar; segunda acción activa no duplica autorización', async () => {
@@ -46,4 +46,24 @@ it('6I publicación fallida conserva constancia durable recuperable', async () =
  const h = harness(); h.queue.reenqueueInvoiceIfIdle.mockRejectedValueOnce(new Error('cola caída'));
  await expect(h.autorizar()).rejects.toThrow('cola caída'); expect(h.history).toHaveLength(1); expect(h.row.transport_uncertain).toBe(true);
  expect(await h.autorizar()).toMatchObject({ autorizacionId: h.history[0].id, resultadoCola: 'ENCOLADO' });
+});
+
+it('7J replay consumido no crea ni publica una segunda autorización', async () => {
+ const h = harness(); await h.autorizar(); await h.service.consumir(h.row.id);
+ const calls = h.queue.reenqueueInvoiceIfIdle.mock.calls.length;
+ expect(await h.autorizar()).toMatchObject({ resultadoCola: 'AUTORIZACION_CONSUMIDA' });
+ expect(h.history.filter(e => e.codigo_error === FORCE_AUTH)).toHaveLength(1);
+ expect(h.queue.reenqueueInvoiceIfIdle).toHaveBeenCalledTimes(calls);
+});
+it('7J otra decisión exige renovar explícitamente la constancia consumida', async () => {
+ const h = harness(); const first = await h.autorizar(); await h.service.consumir(h.row.id); h.row.transport_uncertain = true;
+ const body = { motivo: 'Nueva decisión humana', confirmado: true, decisionId: 'decision-prueba-0002' };
+ expect(await h.autorizar(body)).toMatchObject({ resultadoCola: 'REQUIERE_NUEVA_DECISION' });
+ expect(h.history.filter(e => e.codigo_error === FORCE_AUTH)).toHaveLength(1);
+ await h.autorizar({ ...body, renovarAutorizacionId: first.autorizacionId });
+ expect(h.history.filter(e => e.codigo_error === FORCE_AUTH)).toHaveLength(2);
+});
+it('7J una clave de decisión no admite otro motivo', async () => {
+ const h = harness(); await h.autorizar();
+ await expect(h.autorizar({ motivo: 'Distinto', confirmado: true, decisionId: 'decision-prueba-0001' })).rejects.toThrow('DECISION_REUSED');
 });

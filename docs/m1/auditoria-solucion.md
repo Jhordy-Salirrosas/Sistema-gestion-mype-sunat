@@ -2580,3 +2580,15 @@ Vista previa y revalidación de reserva excluyen origen con cualquier NC/ND
 aceptada u observada, aunque sea parcial. Motivo: «Tiene notas asociadas».
 Se conserva la exclusión por nota pendiente y las demás guardas del agregado.
 Focal: 2 suites / 63 pruebas aprobadas, incluida selección anterior no elegible.
+
+### 7J — replay de constancia y nueva decisión humana
+
+El POST exige decisionId estable. La identidad, episodio durable y referencia
+a la constancia anterior quedan en el JSON del historial existente. Replay con
+otro motivo da conflicto; replay consumido no crea autorización ni publica.
+Una clave nueva tras consumo devuelve REQUIERE_NUEVA_DECISION sin escribir:
+se exige renovar expresamente la constancia anterior. Front conserva la clave
+al repetir; «Preparar una nueva decisión explícita» vacía motivo/confirmación y
+genera identidad nueva. No modifica la conciliación automática ni Resiliencia.
+Focal back: 1 suite / 16 pruebas aprobadas. Front: 1 suite / 2 pruebas aprobadas.
+Front se entrega exclusivamente por ferry/m1-puente-guardas.
