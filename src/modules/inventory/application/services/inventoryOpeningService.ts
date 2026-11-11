@@ -1,3 +1,4 @@
+import { InventoryCostLayerService } from './inventoryCostLayerService';
 import {
   BadRequestException,
   ConflictException,
@@ -28,12 +29,6 @@ export class InventoryOpeningService {
     if (new Set(skus).size !== skus.length) {
       throw new BadRequestException('No se puede repetir el mismo SKU en el saldo inicial.');
     }
-
-    const empresa = await (this.prisma as any).company?.findUnique?.({
-      where: { id: companyId },
-      select: { inventory_cost_method: true },
-    });
-    const usaFifo = empresa?.inventory_cost_method === 'FIFO';
 
     return this.prisma.$transaction(async (tx: any) => {
       const warehouse = await tx.inventoryWarehouse.findFirst({
@@ -68,6 +63,7 @@ export class InventoryOpeningService {
           );
         }
 
+        await new InventoryCostLayerService(this.prisma).enTransaccion(tx).bloquear(companyId, warehouse.id, product.id);
         const balance = await tx.inventoryBalance.findUnique({
           where: {
             company_id_warehouse_id_product_id: {
@@ -87,7 +83,7 @@ export class InventoryOpeningService {
           unitCost: item.unitCost,
         });
 
-        await tx.inventoryMovement.create({
+        const movimiento = await tx.inventoryMovement.create({
           data: {
             company_id: companyId,
             warehouse_id: warehouse.id,
@@ -140,7 +136,8 @@ export class InventoryOpeningService {
           },
         });
 
-        if (usaFifo && (tx as any).inventoryCostLayer?.create) {
+        if (item.unitCost == null || !Number.isFinite(Number(item.unitCost))) throw new BadRequestException(`Ingreso ${sku} sin costo acreditado.`);
+        {
           await (tx as any).inventoryCostLayer.create({
             data: {
               company_id: companyId,
@@ -148,6 +145,7 @@ export class InventoryOpeningService {
               product_id: product.id,
               quantity_remaining: item.quantity,
               unit_cost: r4(calc.movementUnitCost),
+              source_movement_id: movimiento.id,
             },
           });
         }

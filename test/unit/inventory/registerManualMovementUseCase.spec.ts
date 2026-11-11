@@ -136,7 +136,7 @@ describe('RegisterManualMovementUseCase', () => {
   });
 
   it('usa las capas FIFO cuando la empresa tiene ese método', async () => {
-    const costLayers = {
+    const costLayers = { bloquear: jest.fn(),
       metodo: jest.fn().mockResolvedValue('FIFO'),
       capas: jest.fn().mockResolvedValue([{ quantity: 10, unitCost: 100 }]),
       calcular: jest.fn().mockReturnValue({

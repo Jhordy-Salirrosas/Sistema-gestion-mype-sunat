@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '../../../../generated/client/client';
 import { PrismaService } from '../../../../database/prismaService';
 import { FifoCostEngine, type CostLayer } from '../../domain/rules/FifoCostEngine';
 import { MovingWeightedAverageEngine } from '../../domain/rules/MovingWeightedAverageEngine';
@@ -22,33 +23,55 @@ export class InventoryCostLayerService {
   async capas(companyId: string, warehouseId: string, productId: string): Promise<CostLayer[]> {
     const rows = await this.prisma.inventoryCostLayer.findMany({
       where: { company_id: companyId, warehouse_id: warehouseId, product_id: productId, quantity_remaining: { gt: 0 } },
-      orderBy: { created_at: 'asc' },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
     });
     return rows.map((r) => ({ quantity: Number(r.quantity_remaining), unitCost: Number(r.unit_cost) }));
   }
 
-  async registrarEntrada(companyId: string, warehouseId: string, productId: string, quantity: number, unitCost: number) {
-    await this.prisma.inventoryCostLayer.create({
-      data: { company_id: companyId, warehouse_id: warehouseId, product_id: productId, quantity_remaining: quantity, unit_cost: unitCost },
+  private transaccional = false;
+  private ultimaEntradaMs = 0;
+
+  enTransaccion(tx: Prisma.TransactionClient): InventoryCostLayerService {
+    const service = new InventoryCostLayerService(tx as unknown as PrismaService);
+    service.transaccional = true;
+    return service;
+  }
+
+  async bloquear(companyId: string, warehouseId: string, productId: string) {
+    await this.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`inventory:${companyId}:${warehouseId}`}, 0))`;
+    await this.prisma.$executeRaw`SELECT id FROM inventory_balances WHERE company_id = ${companyId} AND warehouse_id = ${warehouseId} AND product_id = ${productId} FOR UPDATE`;
+  }
+
+  async registrarEntrada(companyId: string, warehouseId: string, productId: string, quantity: number, unitCost: number, sourceMovementId?: string): Promise<Prisma.InventoryCostLayerGetPayload<object>> {
+    if (!this.transaccional && this.prisma.$transaction) return this.prisma.$transaction(tx => this.enTransaccion(tx).registrarEntrada(companyId, warehouseId, productId, quantity, unitCost, sourceMovementId));
+    if (!Number.isFinite(unitCost) || unitCost < 0 || !(quantity > 0)) throw new BadRequestException('Ingreso sin costo acreditado o cantidad válida.');
+    await this.bloquear(companyId, warehouseId, productId);
+    this.ultimaEntradaMs = Math.max(Date.now(), this.ultimaEntradaMs + 1);
+    return this.prisma.inventoryCostLayer.create({
+      data: { company_id: companyId, warehouse_id: warehouseId, product_id: productId, quantity_remaining: quantity, unit_cost: unitCost, source_movement_id: sourceMovementId, created_at: new Date(this.ultimaEntradaMs) },
     });
   }
 
-  async consumir(companyId: string, warehouseId: string, productId: string, quantity: number) {
-    let pendiente = quantity;
+  async consumir(companyId: string, warehouseId: string, productId: string, quantity: number): Promise<{ quantity: number; unitCost: number }[]> {
+    if (!this.transaccional && this.prisma.$transaction) return this.prisma.$transaction(tx => this.enTransaccion(tx).consumir(companyId, warehouseId, productId, quantity));
+    if (!Number.isFinite(quantity) || !(quantity > 0)) throw new BadRequestException('Cantidad de consumo inválida.');
+    await this.bloquear(companyId, warehouseId, productId);
     const capas = await this.prisma.inventoryCostLayer.findMany({
       where: { company_id: companyId, warehouse_id: warehouseId, product_id: productId, quantity_remaining: { gt: 0 } },
-      orderBy: { created_at: 'asc' },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
     });
+    let pendiente = new Prisma.Decimal(quantity);
+    const disponible = capas.reduce((s, c) => s.plus(c.quantity_remaining), new Prisma.Decimal(0));
+    if (disponible.lessThan(pendiente)) throw new BadRequestException('Capas de costo insuficientes: consumo pendiente, no se modificó inventario.');
+    const consumidas: { quantity: number; unitCost: number }[] = [];
     for (const capa of capas) {
-      if (pendiente <= 0) break;
-      const disponible = Number(capa.quantity_remaining);
-      const usar = Math.min(disponible, pendiente);
-      await this.prisma.inventoryCostLayer.update({
-        where: { id: capa.id },
-        data: { quantity_remaining: disponible - usar },
-      });
-      pendiente -= usar;
+      if (pendiente.isZero()) break;
+      const usar = Prisma.Decimal.min(capa.quantity_remaining, pendiente);
+      await this.prisma.inventoryCostLayer.update({ where: { id: capa.id }, data: { quantity_remaining: new Prisma.Decimal(capa.quantity_remaining).minus(usar).toNumber() } });
+      consumidas.push({ quantity: usar.toNumber(), unitCost: Number(capa.unit_cost) });
+      pendiente = pendiente.minus(usar);
     }
+    return consumidas;
   }
 
   calcular(layers: CostLayer[], direction: 'ENTRADA' | 'SALIDA', quantity: number, unitCost?: number) {

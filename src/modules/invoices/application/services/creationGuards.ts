@@ -75,6 +75,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   let historicas: { item_code: string | null; unit_code: string | null; igv_affectation_type: string | null }[] = [];
   if (esNota) {
     const numero = /^([A-Za-z0-9]{4})-(\d{1,8})$/.exec(dto.documento_afectado?.trim() ?? '');
+    if (!numero && !dto.referenced_invoice_id) throw new BadRequestException('Una nota exige comprobante origen válido');
     if (numero || dto.referenced_invoice_id) {
       const origen = await tx.invoice.findFirst({ where: { company_id: companyId,
         ...(dto.referenced_invoice_id ? { id: dto.referenced_invoice_id } : { serie: numero![1], correlativo: Number(numero![2]) }) },
@@ -92,6 +93,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     if (!esNota && (!Number.isFinite(Number(producto.sale_price)) || !(Number(producto.sale_price) > 0))) throw new BadRequestException(`Producto ${l.codigo} sin precio de venta configurado`);
     const candidatas = historicas.filter(h => h.item_code === l.codigo!.trim());
     const historica = candidatas.find(h => (!l.afectacion || l.afectacion === h.igv_affectation_type) && (!l.unidad || l.unidad === h.unit_code));
+    if (esNota && !candidatas.length) throw new BadRequestException('La nota contiene un producto ajeno al comprobante origen');
     if ((candidatas.length && !historica) || (producto.is_active === false && !historica)) throw new BadRequestException('La línea inactiva o histórica debe corresponder al comprobante origen');
     const afectacion = (historica ? historica.igv_affectation_type : producto.tax_affectation)?.trim();
     const unidad = historica ? historica.unit_code : producto.sunat_unit_code;
@@ -128,7 +130,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     if (!origen) throw new NotFoundException('Comprobante origen no encontrado en la empresa');
     // Serializa las notas de un mismo origen antes de leer estado y saldo.
     await tx.$executeRaw`SELECT id FROM invoices WHERE id = ${origen.id} AND company_id = ${companyId} FOR UPDATE`;
-    const actual = await tx.invoice.findFirst({ where: { id: origen.id, company_id: companyId } });
+    const actual = await tx.invoice.findFirst({ where: { id: origen.id, company_id: companyId }, include: { items: true } });
     if (!actual || !ESTADOS_NOTABLES.includes(actual.estado) || !['01', '03'].includes(actual.tipo_comprobante)) {
       throw new BadRequestException('El origen debe ser factura o boleta aceptada u observada por SUNAT');
     }
@@ -141,10 +143,12 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     }
     dto.referenced_invoice_id = actual.id;
     dto.documento_afectado = referencia;
+    if (dto.tipo_comprobante === '08') validarCantidadesNota(dto.items, actual.items, []);
     if (dto.tipo_comprobante === '07') {
       const notas = await tx.invoice.findMany({ where: { company_id: companyId,
         referenced_invoice_id: actual.id, tipo_comprobante: '07', estado: { notIn: ['RECHAZADO', 'ANULADO'] } },
-      select: { monto_total: true } });
+      select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } } });
+      validarCantidadesNota(dto.items, actual.items, ['01', '06', '07'].includes(dto.codigo_motivo_nota ?? '') ? notas.filter(n => ['01', '06', '07'].includes(n.credit_debit_reason_code ?? '')).flatMap(n => n.items) : []);
       const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
       const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
       if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
@@ -170,4 +174,21 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     fechaEmision: liquidado.dto.payload_ubl.fechaEmision as string, montoTotal: liquidado.importes.total,
     detraccion: liquidado.importes.detraccion, retencion: liquidado.importes.retencion });
   return dto;
+}
+
+/** El lock del origen cubre también cantidades pendientes de devolución. */
+export function validarCantidadesNota(
+  nuevas: { codigo?: string; cantidad: number }[],
+  originales: { item_code: string | null; quantity: Prisma.Decimal | number }[],
+  anteriores: { item_code: string | null; quantity: Prisma.Decimal | number }[],
+): void {
+  const vendidos = new Map<string, Prisma.Decimal>(), pedidos = new Map<string, Prisma.Decimal>();
+  for (const l of originales) if (l.item_code) vendidos.set(l.item_code.trim(), (vendidos.get(l.item_code.trim()) ?? new Prisma.Decimal(0)).plus(l.quantity));
+  for (const l of anteriores) if (l.item_code) pedidos.set(l.item_code.trim(), (pedidos.get(l.item_code.trim()) ?? new Prisma.Decimal(0)).plus(l.quantity));
+  for (const l of nuevas) {
+    const sku = l.codigo!.trim();
+    if (!vendidos.has(sku)) throw new BadRequestException('La nota contiene un producto ajeno al comprobante origen');
+    pedidos.set(sku, (pedidos.get(sku) ?? new Prisma.Decimal(0)).plus(l.cantidad));
+  }
+  for (const [sku, cantidad] of pedidos) if (cantidad.greaterThan(vendidos.get(sku) ?? 0)) throw new ConflictException(`NOTA_EXCEDE_CANTIDAD: ${sku}`);
 }

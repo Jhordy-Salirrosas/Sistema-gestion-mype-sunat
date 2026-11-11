@@ -4,7 +4,7 @@ function harness() {
   const product = { sale_price: 118, sku: 'HIST', is_active: false, tax_affectation: '20', sunat_unit_code: 'KGM' };
   const origin = { id: 'original', tipo_comprobante: '01', estado: 'ACEPTADO', serie: 'F001', correlativo: 1,
     monto_total: 118, customer_identity_type: '6', customer_identity_number: '20100070970',
-    items: [{ item_code: 'HIST', igv_affectation_type: '10', unit_code: 'NIU' }] };
+    items: [{ item_code: 'HIST', quantity: 1, igv_affectation_type: '10', unit_code: 'NIU' }] };
   const tx = { inventoryWarehouse: { findFirst: jest.fn(async () => ({ id: 'warehouse' })) }, inventoryProduct: { findMany: jest.fn(async ({ where }: { where: { is_active?: boolean } }) => where.is_active && !product.is_active ? [] : [product]) },
     invoice: { findFirst: jest.fn(async () => origin), findMany: jest.fn(async () => []) },
     $executeRaw: jest.fn(async () => 1) };

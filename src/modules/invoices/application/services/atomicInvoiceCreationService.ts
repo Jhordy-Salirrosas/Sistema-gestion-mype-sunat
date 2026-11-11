@@ -1,3 +1,4 @@
+import { validarReservaVenta } from './invoiceStockReservation';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../database/prismaService';
@@ -45,6 +46,7 @@ export class AtomicInvoiceCreationService {
 
   private async runEmission(tx: Prisma.TransactionClient, dto: EmitirComprobanteDto, companyId: string) {
     const validated = await prepareCreation(tx, dto, companyId);
+    await validarReservaVenta(tx, validated, companyId);
     const scoped = tx as unknown as PrismaService;
     return new EmitirComprobanteService(scoped, new InvoiceSeriesService(scoped),
       new StockValidationService(scoped), new InvoiceNoteService(scoped),

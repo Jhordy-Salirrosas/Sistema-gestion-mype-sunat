@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 /**
  * TA-28 - Consumidor de la cola de facturas.
  *
@@ -91,7 +92,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker } as never,
     { processWithRetry } as never,
-    { invoice: { findUnique, update } } as never,
+    withBridgeTransaction({ invoice: { findUnique, update } }) as never,
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
     { verifySignature: jest.fn(() => true), signXml } as never,
@@ -267,7 +268,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     expect(d.processWithRetry).not.toHaveBeenCalled();
   });
 
-  it('genera el asiento contable cuando el CDR queda aceptado', async () => {
+  it('7L conserva pendiente el trabajo aceptado sin asiento configurado', async () => {
     const accounting = {
       execute: jest.fn<(args: unknown) => Promise<unknown>>(async () => ({ id: 'asiento-respaldo' })),
     };
@@ -290,8 +291,8 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() },
-        accountingEntry: { findFirst: jest.fn(async () => null) } } as never,
+      withBridgeTransaction({ invoice: { findUnique, update: jest.fn() },
+        accountingEntry: { findFirst: jest.fn(async () => null) } }) as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
@@ -322,18 +323,8 @@ describe('TA-28 InvoiceJobConsumer', () => {
       accounting as never,
     );
 
-    await consumer.procesar({ invoice_id: 'inv-1' });
-
-    expect(accounting.execute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        companyId: 'company-1',
-        invoiceId: 'inv-1',
-        tipoComprobante: '01',
-        base: 100,
-        igv: 18,
-        total: 118,
-      }),
-    );
+    await expect(consumer.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_ACCOUNTING_PENDING');
+    expect(accounting.execute).not.toHaveBeenCalled();
   });
 
   it.each(['01', '03'] as const)('envía descuento %s al puente y bloquea solo el respaldo incompatible', async (codigo) => {
@@ -345,7 +336,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() } } as never,
+      withBridgeTransaction({ invoice: { findUnique, update: jest.fn() } }) as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
@@ -366,7 +357,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() } } as never,
+      withBridgeTransaction({ invoice: { findUnique, update: jest.fn() } }) as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,

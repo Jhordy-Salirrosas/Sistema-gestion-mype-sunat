@@ -2490,3 +2490,218 @@ esquema, reglas fiscales, estados ni XML. retry-cdr/ESTADOS_REINTENTABLES intact
 la nueva evidencia solo se lee para presentar la acción. Nada de datos históricos
 reescritos, emisiones reales, SUNAT real, PR, merges o despliegues. No queda
 ningún punto abierto dentro del alcance aprobado.
+
+## Parte 7 — puente y guardas (autorización de Jhordy)
+
+Base reconciliada: back dev `7ac5cbbc` (merge #277), front dev `c20a639`
+(merge #188). Back: 279 suites / 2561 pruebas aprobadas, 4 suites / 38
+pruebas omitidas, 12 snapshots. Front: 123 suites / 885 pruebas aprobadas.
+La medición anterior 276/2552 sobre bdb50766 omitía adicionalmente
+`pulidoDlq.integration.spec.ts` (1 prueba) y
+`sireDashboardMetrics.integration.spec.ts` (2), por TEST_DATABASE_URL ausente.
+La referencia origin/dev quedó antes desfasada porque el refspec del clon
+solo actualizaba main; se corrigió con fetch explícito del ref de dev.
+Pruebas DB únicamente en PostgreSQL 16 local desechable (127.0.0.1:5436),
+con migraciones existentes; ninguna migración nueva o base compartida.
+
+### 7A — costo desde el movimiento real
+
+El puente toma total_cost persistido por Kardex. No recalcula el costo de
+venta leyendo las capas restantes ni las consume una segunda vez.
+Regresión focal: TA-68, 1 suite / 41 pruebas aprobadas, incluida FIFO con
+costo ya consumido y aserciones de cero lecturas/consumos adicionales.
+La suite completa se repite al cierre de la ronda; XML fiscal intacto.
+
+### 7B — cantidad física agregada por SKU
+
+Una descarga por SKU suma todas sus líneas con Decimal. Un movimiento histórico
+con cantidad distinta deja pendiente la conciliación, sin omitirlo como completo
+ni publicar otra descarga que duplique lo anterior. Focal: 2 suites / 43 pruebas
+aprobadas (SKU repetido, decimales, regresiones del puente).
+
+### 7C — tipos y devolución a costo histórico
+
+ND no genera movimiento físico ni exige stock de salida. La NC física acredita
+costo y almacén desde la salida original (total_cost / quantity), nunca desde
+el precio de venta. La idempotencia consulta la operación 05 para devoluciones.
+El reverso contable usa el total_cost de la devolución persistida; no vuelve a
+crear capas. Sin movimiento original/costo acreditado queda pendiente con motivo.
+La evidencia de Emma (FD01-3 sin salida y FC01-13 sin devolución) no se reescribe:
+esta ronda corrige el motor para la recuperación explícita posterior.
+Focal: 2 suites / 44 pruebas aprobadas; se corrige la prueba antigua que exigía
+incorrectamente salida de ND. Tipado de producción aprobado.
+
+### 7D — cantidades y pertenencia de notas
+
+La guarda común exige que todos los SKU pertenezcan al origen. Bajo FOR UPDATE
+del origen suma unidades originales, líneas repetidas y NC físicas anteriores
+(incluidas pendientes); no permite devolver más unidades reduciendo su precio.
+Las notas económicas no consumen devoluciones físicas acumuladas. OBSERVADO
+conserva las mismas reglas monetarias. Focal: 3 suites / 77 pruebas aprobadas.
+
+### 7E — reserva durable derivada y exclusión del stock
+
+Ambas rutas de creación bloquean el almacén/saldos y descuentan, del disponible,
+las unidades de ventas persistidas no descargadas. Usa invoice/items/movimientos
+existentes: sin tabla nueva ni reservas volátiles. Rechazos/anulados liberan la
+reserva; incertidumbre y aceptación con puente pendiente la conservan. El saldo
+ya descargado no se descuenta dos veces. Los históricos sin almacén siguen la
+misma resolución ALM-01 del puente; no se reparan saldos históricos.
+Focal: 3 suites / 26 pruebas aprobadas. PostgreSQL real local: stock 1 y dos
+creaciones simultáneas confirman solo una; dos NC simultáneas sobre OBSERVADO
+confirman solo una devolución. Sin SOAP ni consumidor. La exclusión compartida
+con la descarga se completa en 7K.
+
+### 7F — gratuitas con entrega física
+
+Las afectaciones gratuitas ya no excluyen la entrega física. Kardex valoriza
+con el método/costo real de Inventario, no con el valor referencial fiscal.
+No se modifica el adaptador tributario ni el ICBPER. Focal: 3 suites / 88
+pruebas aprobadas, incluyendo liquidación fiscal y ausencia de mutación de línea.
+
+### 7G — acciones operativas ADMIN
+
+retry-cdr y los POST de envío RA/RC exigen RolesGuard + ADMIN, además de la
+autenticación existente. No cambian estados admitidos, retry-cdr ni Resiliencia.
+Focal de metadatos y guardia real: 2 suites / 6 pruebas aprobadas.
+
+### 7H — exclusión distribuida por documento
+
+Coordinador compartido por endpoint/consumidor toma advisory lock transaccional
+por invoice y vuelve a comprobar el estado antes de ejecutar el puente. Dos
+procesos no intercalan el mismo documento. Se mantiene la recuperación por etapa
+con las claves contables existentes. Focal: 2 suites / 15 pruebas aprobadas;
+PostgreSQL real confirma máximo un puente activo por documento, y las pruebas
+F001-64 mantienen recuperación, no-op, ausencia de capa y OBSERVADO.
+
+### 7I — RA sin notas asociadas aceptadas
+
+Vista previa y revalidación de reserva excluyen origen con cualquier NC/ND
+aceptada u observada, aunque sea parcial. Motivo: «Tiene notas asociadas».
+Se conserva la exclusión por nota pendiente y las demás guardas del agregado.
+Focal: 2 suites / 63 pruebas aprobadas, incluida selección anterior no elegible.
+
+### 7J — replay de constancia y nueva decisión humana
+
+El POST exige decisionId estable. La identidad, episodio durable y referencia
+a la constancia anterior quedan en el JSON del historial existente. Replay con
+otro motivo da conflicto; replay consumido no crea autorización ni publica.
+Una clave nueva tras consumo devuelve REQUIERE_NUEVA_DECISION sin escribir:
+se exige renovar expresamente la constancia anterior. Front conserva la clave
+al repetir; «Preparar una nueva decisión explícita» vacía motivo/confirmación y
+genera identidad nueva. No modifica la conciliación automática ni Resiliencia.
+Focal back: 1 suite / 16 pruebas aprobadas. Front: 1 suite / 2 pruebas aprobadas.
+Front se entrega exclusivamente por ferry/m1-puente-guardas.
+
+### 7K — entradas y salidas con capas atómicas (excepción autorizada)
+
+Jhordy autoriza el cambio acotado de Inventario y la edición puntual de
+purchasesService.ts (Compras): la capa al unitCostNet nace dentro de la misma
+transacción existente. No se cambia cálculo de compra, IGV, saldo ni promedio.
+El puente InventoryPurchaseService permanece intacto. Avisar a los dueños de
+Inventario y Compras en revisión.
+
+Ingreso manual e importación usan los repositorios existentes ligados al mismo
+cliente transaccional; movimiento/capas/saldo hacen commit o rollback juntos.
+Apertura conserva su motor y transacción. El servicio de capas acepta cliente
+transaccional, bloquea almacén/saldo y comprueba disponibilidad completa antes
+de consumir. Usa source_movement_id existente: no requiere migración.
+
+Toda entrada crea capa al costo acreditado y toda salida mantiene cantidades
+simétricas, también en PROMEDIO. FIFO traslada piezas al costo original en orden;
+PROMEDIO conserva exactamente la valorización previa y crea la capa destino a
+ese costo promedio. La capa no redefine el motor de promedio. Falta de costo
+explícito admite el promedio del saldo previo como costo acreditado (ajustes y
+manual); ausencia de ambos bloquea atómicamente, nunca precio de venta/cero
+por defecto. No se reconstruyen capas/saldos históricos: la carga espejo y las
+correcciones de datos son de Emma. Si falta alguna descarga, el asiento de costo
+queda pendiente; no se guarda como completo un costo de documento parcial.
+
+Focal: 8 suites / 100 pruebas aprobadas, 11 casos de PostgreSQL real incluidos
+(rollback tras movimiento, consumos, traslado FIFO/PROMEDIO, ajustes y carencia
+de capas/costo). Regresiones adicionales: 8 suites / 84 pruebas aprobadas.
+Se actualizan dobles para el puerto transaccional nuevo; la prueba de RA de
+fecha fija congela el reloj para no fallar al cruzar el plazo real de siete días.
+La primera corrida completa detectó esos harness obsoletos; el cierre completo
+se reporta al final, sin ocultar fallos ni cambiar configuración/umbrales.
+
+### 7L — cuentas de respaldo retiradas
+
+El puente exige todas las cuentas realmente usadas por VENTA/costo/reverso.
+Un mapeo parcial no cae a cuentas PCGE fijas: informa la cuenta faltante y deja
+trabajo recuperable. El coordinador solo reconoce asientos previos por sus
+referencias/idempotencia; no construye otro asiento ni borra el motivo original.
+El adaptador de respaldo queda retirado para escrituras. Contabilidad intacta.
+Focal: 5 suites / 93 pruebas aprobadas, incluida reparación del mapeo seguida de
+reproceso sin repetir la descarga física ni consumir otra capa.
+
+### 7M — publicación null revierte creación
+
+Si enqueueInvoiceInTx devuelve null, la transacción de creación falla con el
+contrato OUTBOX_WRITE_FAILED; no confirma respuesta idempotente ni comprobante
+sin trabajo. Resiliencia no se modifica. Focal: 2 suites / 33 pruebas aprobadas;
+PostgreSQL real confirma cero facturas persistidas tras insertar y recibir null.
+
+### 7N — catálogo vendible coherente con guardas fiscales
+
+Vendible exige activo, sale_price positivo, unidad SUNAT soportada y afectación
+admitida por la misma matriz de emisión. El listado entrega motivo concreto y
+no sustituye precio por costo. Los históricos siguen consultables para notas.
+Focal: 2 suites / 28 pruebas aprobadas; incluye MTQ válido, unidad ausente/no
+soportada y afectación ausente/inválida aun con precio positivo.
+
+### Barrido de fronteras: deuda de equipo expresamente aparcada
+
+Por resolución del bloque de Parte 7, NO se construyen:
+- Ítem 3: cambio de método/recalculo de Inventario concurrente o retroactivo.
+  inventoryCostLayerService.updateCostMethod/recalculateCosting requieren
+  coordinación con su dueño y períodos contables; no se recalculan históricos.
+- Ítem 4: fallback compartido de almacén explícito inexistente a principal en
+  manual/importación. Modificarlo cambia conducta compartida de Inventario.
+- Ítem 6: numeración contable por leer último + 1 en
+  prismaAccountingRepository.getNextEntryNumber. Exclusión 7H no reemplaza
+  coordinación de numeración entre documentos/módulos distintos.
+- Ítem 7: carrera entre cierre/apertura de período y saveEntry. Requiere una
+  decisión/interfaz transaccional del dueño de Contabilidad.
+- Ítem 9: ventanas entre guardar agregado/resultado y publicar/programar su
+  trabajo. Ticket/artefacto conservados permiten recuperación, sin prometer
+  reanudación automática durable; requiere diseño coordinado de publicación.
+- Ítem 11: rol/actividad del usuario en access token vigente hasta 15 minutos;
+  revocación inmediata requiere política de identidad, no cambio unilateral M1.
+- Hallazgo 10c: ajuste de depósitos SPOT en notas fuera de alcance por decisión.
+
+La edición de Compras se limita a la capa al costo neto dentro de su transacción
+existente; no se amplía a su contabilidad, precios, IGV o saldos. Ningún archivo
+de Resiliencia o Contabilidad se modifica en esta ronda.
+
+### Verificación final de Parte 7
+
+Back final: **284 suites / 2604 pruebas aprobadas**, cero fallos;
+**4 suites / 38 pruebas omitidas** por sus condiciones existentes;
+**12 snapshots fiscales aprobados**, sin editar generadores/XML ni snapshots.
+Son +5 suites y +43 pruebas aprobadas respecto de dev actualizado (279/2561).
+Incluye regresión de servicio gratuito con SKU sin descarga física y devolución
+física basada en salida histórica aun si el catálogo cambió a servicio.
+Último foco conjunto de puente/reproceso/idempotencia: 3 suites / 64 pruebas.
+Build y lint back aprobados, sin nuevos avisos.
+
+Corrida completa con cobertura y PostgreSQL local aislado. La primera corrida
+instrumentada agotó el heap de Node (2 GiB); la corrida final usó únicamente
+NODE_OPTIONS=--max-old-space-size=6144 en el proceso local. No se modifica CI,
+Sonar ni umbrales. Medición contra dev 7ac5cbbc con el script existente
+scripts/m1/coverage_new_code.py sobre LCOV: 232/242 líneas nuevas cubiertas
+(**95,87%**), 241/278 resultados de condición cubiertos; combinado
+(**90,96%**). Es medición local, no un resultado remoto de SonarCloud.
+
+Front final: **123 suites / 886 pruebas aprobadas** (base 123/885), build
+aprobado. ESLint de los dos archivos cambiados sin errores/avisos. Lint global
+contrastado con worktree limpio c20a639: ambos arrojan **129 errores / 31
+avisos**, todos en archivos sin cambios de esta entrega; no se corrigen módulos
+ajenos. El único cambio front es 7J y se entrega por ferry/m1-puente-guardas,
+con rutas exactas, manifiesto FERRY.md y SHA-256 por archivo.
+
+Catorce commits funcionales A–N. Sin migraciones nuevas, sin cambios en
+Resiliencia/Contabilidad, sin modificar datos del equipo/producción. Las
+migraciones existentes solo prepararon la base local desechable autorizada.
+Ninguna emisión, llamada real a SUNAT, PR, merge o despliegue. La ejecución
+operativa y correcciones históricas siguen a cargo de Emma tras su revisión.

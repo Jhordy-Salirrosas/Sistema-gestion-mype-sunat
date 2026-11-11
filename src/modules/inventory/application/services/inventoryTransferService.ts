@@ -1,3 +1,4 @@
+import { InventoryCostLayerService } from './inventoryCostLayerService';
 import { Logger } from '@nestjs/common';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 import {
@@ -92,6 +93,8 @@ export class InventoryTransferService {
       if (!from) throw new NotFoundException(`Almacén de origen ${fromCode} no encontrado.`);
       if (!to) throw new NotFoundException(`Almacén de destino ${toCode} no encontrado.`);
 
+      const capas = new InventoryCostLayerService(this.prisma).enTransaccion(tx);
+      const metodo = await capas.metodo(companyId);
       const itemRows: any[] = [];
       const movementRows: any[] = [];
       const balanceUpdates: any[] = [];
@@ -99,6 +102,7 @@ export class InventoryTransferService {
       for (const item of dto.items) {
         const { sku, product } = await this.findInventoryProductOrThrow(tx, companyId, item.sku);
 
+        for (const id of [from.id, to.id].sort((a, b) => a.localeCompare(b))) await capas.bloquear(companyId, id, product.id);
         const origin = await tx.inventoryBalance.findUnique({
           where: {
             company_id_warehouse_id_product_id: {
@@ -116,7 +120,7 @@ export class InventoryTransferService {
         }
 
         const originCost = Number(origin?.average_unit_cost ?? 0);
-        const outCalc = MovingWeightedAverageEngine.calculate({
+        const outCalc = metodo === 'FIFO' ? capas.calcular(await capas.capas(companyId, from.id, product.id), 'SALIDA', item.quantity) : MovingWeightedAverageEngine.calculate({
           previousStock: originStock,
           previousAverageCost: originCost,
           previousTotalValue: Number(origin?.total_inventory_value ?? 0),
@@ -142,6 +146,16 @@ export class InventoryTransferService {
           quantity: item.quantity,
           unitCost: outCalc.movementUnitCost,
         });
+
+        const retiradas = await capas.consumir(companyId, from.id, product.id, item.quantity);
+        const ingresadas = metodo === 'FIFO' ? retiradas : [{ quantity: item.quantity, unitCost: outCalc.movementUnitCost }];
+        for (const capa of ingresadas) await capas.registrarEntrada(companyId, to.id, product.id, capa.quantity, capa.unitCost);
+        if (metodo === 'FIFO') {
+          const destino = await capas.capas(companyId, to.id, product.id);
+          inCalc.movementTotalCost = outCalc.movementTotalCost;
+          inCalc.resultingTotalValue = r2(destino.reduce((sum, c) => sum + c.quantity * c.unitCost, 0));
+          inCalc.resultingAverageCost = inCalc.resultingStock > 0 ? r4(inCalc.resultingTotalValue / inCalc.resultingStock) : 0;
+        }
 
         itemRows.push({
           product_id: product.id,
@@ -297,6 +311,8 @@ export class InventoryTransferService {
       });
       if (!warehouse) throw new NotFoundException(`Almacén ${warehouseCode} no encontrado.`);
 
+      const capas = new InventoryCostLayerService(this.prisma).enTransaccion(tx);
+      const metodo = await capas.metodo(companyId);
       const itemRows: any[] = [];
       const movementRows: any[] = [];
       const balanceUpdates: any[] = [];
@@ -304,6 +320,7 @@ export class InventoryTransferService {
       for (const item of dto.items) {
         const { sku, product } = await this.findInventoryProductOrThrow(tx, companyId, item.sku);
 
+        await capas.bloquear(companyId, warehouse.id, product.id);
         const balance = await tx.inventoryBalance.findUnique({
           where: {
             company_id_warehouse_id_product_id: {
@@ -322,11 +339,12 @@ export class InventoryTransferService {
           );
         }
 
-        const fallbackCost = currentCost > 0 ? currentCost : Number((product as any).cost_price || 0);
+        const fallbackCost = currentStock > 0 && Number.isFinite(currentCost) ? currentCost : undefined;
         const unitCost = dto.type === 'ENTRADA'
-          ? (item.unitCost && item.unitCost > 0 ? Number(item.unitCost) : fallbackCost)
+          ? (item.unitCost != null ? Number(item.unitCost) : fallbackCost)
           : currentCost;
-        const calc = MovingWeightedAverageEngine.calculate({
+        if (dto.type === 'ENTRADA' && (unitCost == null || !Number.isFinite(unitCost))) throw new BadRequestException(`Ingreso ${sku} sin costo acreditado; informe costo o saldo previo valorizado.`);
+        const calc = dto.type === 'SALIDA' && metodo === 'FIFO' ? capas.calcular(await capas.capas(companyId, warehouse.id, product.id), 'SALIDA', item.quantity) : MovingWeightedAverageEngine.calculate({
           previousStock: currentStock,
           previousAverageCost: currentCost,
           previousTotalValue: Number(balance?.total_inventory_value ?? 0),
@@ -334,6 +352,9 @@ export class InventoryTransferService {
           quantity: item.quantity,
           unitCost,
         });
+
+        if (dto.type === 'ENTRADA') await capas.registrarEntrada(companyId, warehouse.id, product.id, item.quantity, calc.movementUnitCost);
+        else await capas.consumir(companyId, warehouse.id, product.id, item.quantity);
 
         const counted = dto.type === 'ENTRADA'
           ? currentStock + item.quantity
@@ -346,7 +367,7 @@ export class InventoryTransferService {
           system_quantity: currentStock,
           counted_quantity: counted,
           difference_quantity: dto.type === 'ENTRADA' ? item.quantity : -item.quantity,
-          unit_cost: r4(unitCost),
+          unit_cost: r4(calc.movementUnitCost),
         });
 
         movementRows.push(

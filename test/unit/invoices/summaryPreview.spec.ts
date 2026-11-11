@@ -20,9 +20,9 @@ it.each(['RUC','vencido','futuro','NC completa','NC pendiente','reserva','ANULAD
   if(reason==='ANULADO')h.rows[0].estado='ANULADO';
   const v=await h.view.vistaComunicacionBaja('company',date);expect(v.lineas[0].incluido).toBe(false);expect(v.lineas[0].motivoExclusion).not.toBe('');expect(v.xml).toBeNull();
 });
-it('RA no neutraliza saldo con NC parcial, rechazada o sin referencia; respeta OBSERVADO',async()=>{
+it('7I RA excluye NC parcial aceptada también sobre origen OBSERVADO',async()=>{
   const h=harness();h.rows[0].estado='OBSERVADO';h.db.invoice.findMany.mockResolvedValue([{referenced_invoice_id:'invoice',estado:'ACEPTADO',monto_total:10},{referenced_invoice_id:null,estado:'ACEPTADO',monto_total:118}]);
-  expect((await h.view.vistaComunicacionBaja('company',date)).envio.lineas).toBe(1);
+  expect((await h.view.vistaComunicacionBaja('company',date)).envio.lineas).toBe(0);
 });
 it('selección RA ajena no genera XML y la transacción excluye su propia reserva',async()=>{
   const h=harness();const v=await h.view.vistaComunicacionBaja('company',date,1,[{id:'missing',motivo:'Prueba'}],h.db as never,'own');expect(v.xml).toBeNull();expect(v.envio.lineas).toBe(0);expect(v.lineas[0].motivoExclusion).toBe('No seleccionado.');expect(h.db.invoiceAggregate.findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({id:{not:'own'}})}));
@@ -48,4 +48,10 @@ it('RC selecciona dentro de transacción, genera Catálogo 11 y referencia de no
 it('RC detecta pérdida de elegibilidad y referencia faltante sin construir un envío parcial',async()=>{
   const h=harness();h.rows.splice(0,1,{...invoice('invoice','PENDIENTE','03'),tipo_comprobante:'07',serie:'BC01'});
   const v=await h.view.vistaResumenDiario('company',date,1,[{id:'invoice',motivo:''},{id:'missing',motivo:''}]);expect(v.errores).toEqual(expect.arrayContaining([expect.stringContaining('ya no son elegibles'),expect.stringContaining('referencia real')]));expect(v.xml).toBeNull();
+});
+it.each(['ACEPTADO','OBSERVADO'])('7I razón visible y selección obsoleta no habilitan RA con nota %s', async estado => {
+ const h = harness(); h.db.invoice.findMany.mockResolvedValue([{ referenced_invoice_id: 'invoice', estado, monto_total: 1 }]);
+ const v = await h.view.vistaComunicacionBaja('company', date, 1, [{ id: 'invoice', motivo: 'Baja' }]);
+ expect(v.lineas[0]).toMatchObject({ incluido: false, motivoExclusion: 'Tiene notas asociadas.' });
+ expect(v.xml).toBeNull();
 });

@@ -5,7 +5,7 @@ const base = () => ({ tipo_comprobante: '01', serie: 'F001', customer_legal_name
 function harness() {
   const product = { sale_price: 118, sku: 'SERV', tax_affectation: '10', sunat_unit_code: 'NIU' };
   const origin = { id: 'origin', tipo_comprobante: '01', serie: 'F001', correlativo: 1, estado: 'ACEPTADO',
-    monto_total: 118, customer_identity_type: '6', customer_identity_number: '20100070970' };
+    items: [{ item_code: 'SERV', quantity: 1, unit_code: 'NIU', igv_affectation_type: '10' }], monto_total: 118, customer_identity_type: '6', customer_identity_number: '20100070970' };
   const tx = { inventoryWarehouse: { findFirst: jest.fn(async () => ({ id: 'warehouse' })) }, inventoryProduct: { findMany: jest.fn(async () => [product]) },
     businessPartner: { findFirst: jest.fn(async () => ({ id: 'cli', has_credit: true, allows_discount: true })) },
     partnerTaxStatus: { findFirst: jest.fn(async () => null) }, $executeRaw: jest.fn(async () => 1),

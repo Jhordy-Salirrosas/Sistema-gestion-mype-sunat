@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 /**
  * TA-58 · cierre de la integración del pipeline en dev.
  *
@@ -136,7 +137,7 @@ function crearConsumidor(
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker: jest.fn() } as never,
     { processWithRetry } as never,
-    { invoice: { findUnique, update } } as never,
+    withBridgeTransaction({ invoice: { findUnique, update } }) as never,
     { generateInvoiceXml: jest.fn() } as never,
     { validateInvoiceUbl21: jest.fn() } as never,
     { verifySignature: jest.fn(() => true), signXml: jest.fn() } as never,

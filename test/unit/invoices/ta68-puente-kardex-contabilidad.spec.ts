@@ -27,7 +27,6 @@ import {
   type DatosAsientoVenta,
 } from '../../../src/modules/invoices/application/services/accountingBridge';
 import {
-  AFECTACIONES_SIN_MOVIMIENTO,
   generaMovimiento,
   movimientosDeFactura,
 } from '../../../src/modules/invoices/application/services/kardexBridge';
@@ -381,10 +380,8 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
     ).toBe(false);
   });
 
-  it('las afectaciones gratuitas no se mueven y las onerosas sí', () => {
-    // Las gratuitas sacan mercadería física pero el sistema no puede valuarlas
-    // sin costo de referencia: se excluyen a propósito y queda documentado.
-    for (const afectacion of AFECTACIONES_SIN_MOVIMIENTO) {
+  it('las gratuitas y las onerosas descuentan mercadería física', () => {
+    for (const afectacion of ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36', '37']) {
       expect(
         generaMovimiento({
           itemCode: 'X-1',
@@ -394,7 +391,7 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
           valorUnitario: 10,
           afectacion,
         }),
-      ).toBe(false);
+      ).toBe(true);
     }
 
     // Exoneradas, inafectas y de exportación sí son mercadería real.
@@ -457,14 +454,12 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
     expect(movimientos[0].operation_type_code).toBe('05');
   });
 
-  it('una Nota de Débito 08 genera SALIDA de Kardex', () => {
+  it('una Nota de Débito 08 no genera movimiento físico', () => {
     const movimientos = movimientosDeFactura(
       [{ itemCode: 'CEM-001', descripcion: 'Cemento', unidad: 'NIU', cantidad: 2, valorUnitario: 50, afectacion: '10' }],
       { tipoComprobante: '08', serie: 'FD01', correlativo: 3, fechaEmision: '2026-11-06' },
     );
-    expect(movimientos).toHaveLength(1);
-    expect(movimientos[0].direction).toBe('SALIDA');
-    expect(movimientos[0].operation_type_code).toBe('01');
+    expect(movimientos).toHaveLength(0);
   });
 
   it('omite movimientos si la Nota de Crédito es por motivo económico / descuento', () => {
@@ -530,6 +525,24 @@ describe('TA-68 · servicio puente', () => {
     };
   }
 
+  it.each(['01', '07'])('7F servicio gratuito %s con SKU no descarga ni exige costo histórico', async tipoComprobante => {
+    const { puente, prisma, movimientoCreado } = dobles();
+    prisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'servicio', is_inventory: false } as never);
+    const factura = facturaPrueba();
+    const resultado = await puente.registrar({ ...factura, tipoComprobante, motivoNota: '01', documentoAfectadoId: 'original', items: factura.items.map(l => ({ ...l, afectacion: '11' })) });
+    expect(resultado.completo).toBe(true);
+    expect(resultado.movimientosRegistrados).toBe(0);
+    expect(movimientoCreado).not.toHaveBeenCalled();
+  });
+
+  it('7C una devolución usa la salida histórica aunque el catálogo cambie a servicio', async () => {
+    const { puente, prisma, movimientoCreado } = dobles({ costoVenta: 600 });
+    prisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'producto', is_inventory: false } as never);
+    const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'original' });
+    expect(resultado.completo).toBe(true);
+    expect(movimientoCreado).toHaveBeenCalledWith(expect.objectContaining({ unit_cost: 30, quantity: 20, operation_type_code: '05' }), 'emp-1');
+  });
+
   it('descarga ALM-02 y calcula costo con previous_unit_cost del movimiento, sin usar el precio vendido', async () => {
     const { puente, prisma, movimientoCreado, asientoCreado } = dobles({ costoVenta: 56 });
     await puente.registrar({ ...facturaPrueba(), almacen: 'ALM-02' });
@@ -565,7 +578,7 @@ describe('TA-68 · servicio puente', () => {
           opciones.movimientoYaExiste ? { id: 'mov-0' } : null,
         ),
         findMany: jest.fn(async () => opciones.costoVenta
-          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2, product: { sku: 'CEM-001' } }]
+          ? [{ quantity: 20, previous_unit_cost: opciones.costoVenta / 20, total_cost: opciones.costoVenta, product: { sku: 'CEM-001' } }]
           : []),
       },
       accountingEntry: {
@@ -574,6 +587,7 @@ describe('TA-68 · servicio puente', () => {
         ),
       },
       invoice: {
+        findFirst: jest.fn(async () => opciones.originalExiste === false ? null : ({ serie: 'F001', correlativo: 100 })),
         findUnique: jest.fn(async () => opciones.originalExiste === false ? null : ({ serie: 'F001', correlativo: 100 })),
       },
       accountingRule: {
@@ -613,14 +627,15 @@ describe('TA-68 · servicio puente', () => {
   });
 
   it('revierte el costo original en una nota de crédito por devolución', async () => {
-    const { puente, asientoCreado } = dobles({ costoVenta: 600 });
+    const { puente, asientoCreado, movimientoCreado } = dobles({ costoVenta: 600 });
     const resultado = await puente.registrar({
       ...facturaPrueba(),
       tipoComprobante: '07',
       motivoNota: '06',
       documentoAfectadoId: 'inv-original',
     });
-    expect(resultado.costoVenta).toBe(-6000);
+    expect(resultado.costoVenta).toBe(-600);
+    expect(movimientoCreado).toHaveBeenCalledWith(expect.objectContaining({ direction: 'ENTRADA', operation_type_code: '05', unit_cost: 30 }), 'emp-1');
     expect(resultado.asientoCostoId).toBe('asiento-1');
     expect(asientoCreado).toHaveBeenCalledTimes(2);
   });
@@ -637,10 +652,11 @@ describe('TA-68 · servicio puente', () => {
     expect(resultado.errores.join(' ')).toContain('el comprobante original no existe');
   });
 
-  it('no genera costo si la venta original no tuvo salida valorizada', async () => {
+  it('deja pendiente la devolución sin costo histórico acreditado', async () => {
     const { puente } = dobles();
     const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
-    expect(resultado.costoVenta).toBe(0);
+    expect(resultado.completo).toBe(false);
+    expect(resultado.errores.join(' ')).toContain('falta costo histórico');
   });
 
   it('usa las cuentas de accounting_rules en la venta', async () => {
@@ -659,34 +675,35 @@ describe('TA-68 · servicio puente', () => {
     expect(asientoCreado).not.toHaveBeenCalled();
   });
 
-  it('repone capas FIFO al revertir una nota de devolución', async () => {
+  it('no repone capas otra vez al contabilizar una devolución', async () => {
     const prisma = {
       inventoryProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }) },
       inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
-      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ quantity: 20, previous_unit_cost: 30, product: { sku: 'CEM-001' } }]) },
+      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ quantity: 20, previous_unit_cost: 30, total_cost: 600, product: { sku: 'CEM-001' } }]) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
-      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
-      invoice: { findUnique: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue(REGLAS_VENTA_BASE) },
+      invoice: { findFirst: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }), findUnique: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }) },
     };
     const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), registrarEntrada: jest.fn().mockResolvedValue(undefined), consumir: jest.fn() };
     const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
     await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
-    expect(capas.registrarEntrada).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20, 30);
+    expect(capas.registrarEntrada).not.toHaveBeenCalled();
   });
 
-  it('usa capas FIFO para el costo de venta', async () => {
+  it('usa el costo FIFO ya consumido del movimiento, sin leer ni consumir capas otra vez', async () => {
     const prisma = {
       inventoryProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }) },
       inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
-      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ total_cost: 600 }]) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
-      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue(REGLAS_VENTA_BASE) },
     };
     const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), capas: jest.fn().mockResolvedValue([{ quantity: 100, unitCost: 30 }]), calcular: jest.fn().mockReturnValue({ movementTotalCost: 600 }), consumir: jest.fn().mockResolvedValue(undefined) };
     const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
     const r = await puente.registrar(facturaPrueba());
     expect(r.costoVenta).toBe(600);
-    expect(capas.consumir).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20);
+    expect(capas.consumir).not.toHaveBeenCalled();
+    expect(capas.capas).not.toHaveBeenCalled();
   });
 
   it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
@@ -771,4 +788,21 @@ describe('TA-68 · servicio puente', () => {
     expect(dto.glosa).toContain('F001-00000143');
     expect(dto.glosa).toContain('CONSTRUCTORA DEL NORTE');
   });
+  it('7K no contabiliza costo parcial cuando falta una descarga física', async () => {
+    const { puente, movimientoCreado, asientoCreado } = dobles({ costoVenta: 600 });
+    movimientoCreado.mockRejectedValueOnce(new Error('sin capa'));
+    const resultado = await puente.registrar(facturaPrueba());
+    expect(resultado.completo).toBe(false);
+    expect(asientoCreado).not.toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: expect.stringContaining(':COSTO') }));
+  });
+
+  it('7L no sustituye silenciosamente una cuenta IGV ausente', async () => {
+    const { puente, prisma, asientoCreado } = dobles();
+    prisma.accountingRule.findMany.mockResolvedValue(REGLAS_VENTA_BASE.filter(r => r.line_order !== 2));
+    const resultado = await puente.registrar(facturaPrueba());
+    expect(resultado.completo).toBe(false);
+    expect(resultado.errores.join(' ')).toContain('mapeo VENTA incompleto (igv)');
+    expect(asientoCreado).not.toHaveBeenCalled();
+  });
+
 });
