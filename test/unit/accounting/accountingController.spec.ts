@@ -4,6 +4,7 @@ import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/
 import { GenerateClosingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/exportTaxPleUseCase';
+import { ValidateTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/validateTaxPleUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
@@ -24,6 +25,7 @@ describe('AccountingController', () => {
   let closingUseCase: jest.Mocked<GenerateClosingEntryUseCase>;
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
   let exportTaxPleUseCase: jest.Mocked<ExportTaxPleUseCase>;
+  let validateTaxPleUseCase: jest.Mocked<ValidateTaxPleUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
   let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
@@ -53,6 +55,10 @@ describe('AccountingController', () => {
     exportTaxPleUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<ExportTaxPleUseCase>;
+
+    validateTaxPleUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<ValidateTaxPleUseCase>;
 
     getEntriesUseCase = {
       execute: jest.fn().mockResolvedValue([]),
@@ -106,6 +112,7 @@ describe('AccountingController', () => {
       closingUseCase,
       exportPleUseCase,
       exportTaxPleUseCase,
+      validateTaxPleUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
       createAccountUseCase,
@@ -300,5 +307,11 @@ describe('AccountingController', () => {
 
   it('rechaza una regla sin cuenta o lado válido', async () => {
     await expect(controller.upsertRule({ processCode: 'VENTA', lineOrder: 1, accountCode: '', side: 'DEBE', baseCalculation: 'TOTAL' }, 'comp-1')).rejects.toThrow('Regla inválida');
+  });
+
+  it('delega la validación del PLE tributario', async () => {
+    validateTaxPleUseCase.execute.mockResolvedValue({ valid: true } as never);
+    await expect(controller.validateTaxPle('comp-1', { year: 2026, month: 11, bookCode: '140100', companyRuc: '20100070970' })).resolves.toEqual({ valid: true });
+    expect(validateTaxPleUseCase.execute).toHaveBeenCalledWith('comp-1', '20100070970', 2026, 11, '140100');
   });
 });
