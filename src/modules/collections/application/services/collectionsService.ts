@@ -22,13 +22,23 @@ export class CollectionsService {
     let acreditado = 0;
     let cobrado = 0;
     let saldo = 0;
+    const aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
+    const hoy = Date.now();
     for (const f of facturas) {
       const s = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
       total += Number(f.monto_total); acreditado += s.acreditado; cobrado += s.cobrado; saldo += s.saldo;
-      filas.push({ id: f.id, numero: `${f.serie}-${String(f.correlativo).padStart(8, '0')}`, date: f.fecha_emision, total: Number(f.monto_total), credited: s.acreditado, paid: s.cobrado, balance: s.saldo });
+      const dias = Math.max(0, Math.floor((hoy - new Date(f.fecha_emision).getTime()) / 86400000));
+      if (s.saldo > 0.005) {
+        if (dias <= 30) aging.d0_30 += s.saldo;
+        else if (dias <= 60) aging.d31_60 += s.saldo;
+        else if (dias <= 90) aging.d61_90 += s.saldo;
+        else aging.d90_plus += s.saldo;
+      }
+      filas.push({ id: f.id, numero: `${f.serie}-${String(f.correlativo).padStart(8, '0')}`, date: f.fecha_emision, total: Number(f.monto_total), credited: s.acreditado, paid: s.cobrado, balance: s.saldo, days: dias });
     }
+    for (const k of Object.keys(aging) as Array<keyof typeof aging>) aging[k] = Math.round(aging[k] * 100) / 100;
     const cobros = await this.prisma.collection.findMany({ where: { company_id: companyId, customer_doc: customerDoc.trim(), status: { not: 'ANULADO' } }, orderBy: { collection_date: 'desc' }, select: { id: true, collection_date: true, invoice_number: true, amount: true, payment_method: true } });
-    return { customerDoc: customerDoc.trim(), invoices: filas, collections: cobros.map((c) => ({ id: c.id, date: c.collection_date, invoiceNumber: c.invoice_number, amount: Number(c.amount), paymentMethod: c.payment_method })), totals: { total: Math.round(total * 100) / 100, credited: Math.round(acreditado * 100) / 100, paid: Math.round(cobrado * 100) / 100, balance: Math.round(saldo * 100) / 100 } };
+    return { customerDoc: customerDoc.trim(), invoices: filas, collections: cobros.map((c) => ({ id: c.id, date: c.collection_date, invoiceNumber: c.invoice_number, amount: Number(c.amount), paymentMethod: c.payment_method })), aging, totals: { total: Math.round(total * 100) / 100, credited: Math.round(acreditado * 100) / 100, paid: Math.round(cobrado * 100) / 100, balance: Math.round(saldo * 100) / 100 } };
   }
 
   async annul(companyId: string, id: string) {
