@@ -2551,3 +2551,10 @@ Focal: 3 suites / 26 pruebas aprobadas. PostgreSQL real local: stock 1 y dos
 creaciones simultáneas confirman solo una; dos NC simultáneas sobre OBSERVADO
 confirman solo una devolución. Sin SOAP ni consumidor. La exclusión compartida
 con la descarga se completa en 7K.
+
+### 7F — gratuitas con entrega física
+
+Las afectaciones gratuitas ya no excluyen la entrega física. Kardex valoriza
+con el método/costo real de Inventario, no con el valor referencial fiscal.
+No se modifica el adaptador tributario ni el ICBPER. Focal: 3 suites / 88
+pruebas aprobadas, incluyendo liquidación fiscal y ausencia de mutación de línea.

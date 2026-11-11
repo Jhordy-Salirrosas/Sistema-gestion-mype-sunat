@@ -27,7 +27,6 @@ import {
   type DatosAsientoVenta,
 } from '../../../src/modules/invoices/application/services/accountingBridge';
 import {
-  AFECTACIONES_SIN_MOVIMIENTO,
   generaMovimiento,
   movimientosDeFactura,
 } from '../../../src/modules/invoices/application/services/kardexBridge';
@@ -381,10 +380,8 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
     ).toBe(false);
   });
 
-  it('las afectaciones gratuitas no se mueven y las onerosas sí', () => {
-    // Las gratuitas sacan mercadería física pero el sistema no puede valuarlas
-    // sin costo de referencia: se excluyen a propósito y queda documentado.
-    for (const afectacion of AFECTACIONES_SIN_MOVIMIENTO) {
+  it('las gratuitas y las onerosas descuentan mercadería física', () => {
+    for (const afectacion of ['11', '12', '13', '14', '15', '16', '21', '31', '32', '33', '34', '35', '36', '37']) {
       expect(
         generaMovimiento({
           itemCode: 'X-1',
@@ -394,7 +391,7 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
           valorUnitario: 10,
           afectacion,
         }),
-      ).toBe(false);
+      ).toBe(true);
     }
 
     // Exoneradas, inafectas y de exportación sí son mercadería real.

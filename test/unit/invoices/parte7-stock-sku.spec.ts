@@ -11,3 +11,9 @@ it('7B suma cantidades decimales sin residuos y mantiene SKU distintos', () => {
 it('7C una ND económica no crea ninguna salida física', () => {
  expect(movimientosDeFactura([linea], { ...doc, tipoComprobante: '08' })).toEqual([]);
 });
+it('7F una entrega gratuita descarga físicamente sin modificar la línea fiscal/ICBPER', () => {
+ const gratis = { ...linea, afectacion: '11', icbperLinea: .5, cantidadBolsas: 1 };
+ const copy = structuredClone(gratis);
+ expect(movimientosDeFactura([gratis], doc)).toEqual([expect.objectContaining({ direction: 'SALIDA', quantity: 2 })]);
+ expect(gratis).toEqual(copy);
+});

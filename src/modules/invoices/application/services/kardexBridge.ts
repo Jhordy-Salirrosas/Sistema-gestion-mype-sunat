@@ -45,18 +45,8 @@ export interface DocumentoKardex {
   motivoNota?: string;
 }
 
-/**
- * Líneas que NO deben generar salida de almacén.
- *
- * Las gratuitas (11-16, 21, 31-36) sí sacan mercadería físicamente, pero hoy el
- * sistema no puede valuarlas sin costo de referencia, así que se excluyen
- * explícitamente y se documenta el hueco en lugar de mover stock a cero. Las de
- * exportación y las inafectas sí se mueven: son mercadería real.
- */
-export const AFECTACIONES_SIN_MOVIMIENTO: readonly string[] = [
-  '11', '12', '13', '14', '15', '16',
-  '21', '31', '32', '33', '34', '35', '36', '37',
-];
+/** La afectación fiscal no decide si existe una entrega física de mercadería. */
+export const AFECTACIONES_SIN_MOVIMIENTO: readonly string[] = [];
 
 /** ¿La línea debe generar un movimiento de inventario? */
 export const generaMovimiento = (linea: LineaParaKardex): boolean => {
