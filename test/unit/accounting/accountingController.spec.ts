@@ -5,6 +5,7 @@ import { GenerateClosingEntryUseCase } from '../../../src/modules/accounting/app
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/exportTaxPleUseCase';
 import { ValidateTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/validateTaxPleUseCase';
+import { GetIgvReconciliationUseCase } from '../../../src/modules/accounting/application/use-cases/getIgvReconciliationUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
@@ -26,6 +27,7 @@ describe('AccountingController', () => {
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
   let exportTaxPleUseCase: jest.Mocked<ExportTaxPleUseCase>;
   let validateTaxPleUseCase: jest.Mocked<ValidateTaxPleUseCase>;
+  let getIgvReconciliationUseCase: jest.Mocked<GetIgvReconciliationUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
   let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
@@ -59,6 +61,10 @@ describe('AccountingController', () => {
     validateTaxPleUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<ValidateTaxPleUseCase>;
+
+    getIgvReconciliationUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
 
     getEntriesUseCase = {
       execute: jest.fn().mockResolvedValue([]),
@@ -113,6 +119,7 @@ describe('AccountingController', () => {
       exportPleUseCase,
       exportTaxPleUseCase,
       validateTaxPleUseCase,
+      getIgvReconciliationUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
       createAccountUseCase,
@@ -307,6 +314,11 @@ describe('AccountingController', () => {
 
   it('rechaza una regla sin cuenta o lado válido', async () => {
     await expect(controller.upsertRule({ processCode: 'VENTA', lineOrder: 1, accountCode: '', side: 'DEBE', baseCalculation: 'TOTAL' }, 'comp-1')).rejects.toThrow('Regla inválida');
+  });
+
+  it('delega la conciliación de IGV', async () => {
+    getIgvReconciliationUseCase.execute.mockResolvedValue({ reconciled: true } as never);
+    await expect(controller.igvReconciliation('comp-1', '2026-11')).resolves.toEqual({ reconciled: true });
   });
 
   it('delega la validación del PLE tributario', async () => {
