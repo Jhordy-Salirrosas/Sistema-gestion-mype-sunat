@@ -1,3 +1,4 @@
+import { SummaryPollingCoordinator, pollingOf } from './summaryPollingCoordinator';
 import { raReversalWork, raWorks } from './raBridgeReversalService';
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
@@ -27,7 +28,8 @@ const normalizeNumber = (s: string) => {
 
 @Injectable()
 export class SummaryAggregateStore {
-  constructor(private readonly prisma: PrismaService, private readonly queue: QueueService) {}
+  readonly polling: SummaryPollingCoordinator;
+  constructor(private readonly prisma: PrismaService, private readonly queue: QueueService) { this.polling = new SummaryPollingCoordinator(prisma,queue); }
 
   async reservar(companyId: string, kind: AggregateKind, fecha: string, selection: SeleccionBaja[], context: IssuerContext,
     preview: (tx: Prisma.TransactionClient, correlativo: number, excludeId?: string) => Promise<VistaPrevia>): Promise<{ row: InvoiceAggregate; vista?: VistaPrevia }> {
@@ -79,19 +81,19 @@ export class SummaryAggregateStore {
       data: { transport_uncertain: true, state: 'SENDING' } })).count === 1;
   }
   async ticket(id: string, ticket: string) {
-    await this.prisma.invoiceAggregate.update({ where: { id }, data: { ticket, state: 'POLLING', transport_uncertain: false, error: null } });
+    await this.prisma.invoiceAggregate.update({ where: { id }, data: { ticket, state: 'POLLING', transport_uncertain: false, error: null, result: { polling: { attempts: 0, nextAt: new Date().toISOString() } } } });
   }
   async pendiente(id: string, error: string, ticket: string | null) {
     await this.prisma.invoiceAggregate.updateMany({ where: { id, state: { notIn: ['ACCEPTED', 'REJECTED'] } }, data: { state: ticket ? 'POLLING' : 'UNCERTAIN', error } });
   }
   async revision(id: string, error: string) { await this.prisma.invoiceAggregate.update({ where: { id }, data: { state: 'REVIEW', error } }); }
   async rechazar(id: string, codigo: string, error: string) { await this.prisma.invoiceAggregate.update({ where: { id }, data: { state: 'REJECTED', transport_uncertain: false, error, result: { codigo, mensaje: error } } }); }
-  async pendientes() { return this.prisma.invoiceAggregate.findMany({ where: { OR: [{ state: 'PREPARED' }, { state: 'RESERVED', updated_at: { lt: new Date(Date.now() - 60_000) } }, { state: { notIn: ['ACCEPTED', 'REJECTED'] }, result: { path: ['receivedCdr'], not: Prisma.DbNull } }] }, take: 50, orderBy: { created_at: 'asc' } }); }
+  async pendientes() { return this.prisma.invoiceAggregate.findMany({ where: { OR: [{ state: 'POLLING', ticket: { not: null } }, { state: 'PREPARED' }, { state: 'RESERVED', updated_at: { lt: new Date(Date.now() - 60_000) } }, { state: { notIn: ['ACCEPTED', 'REJECTED'] }, result: { path: ['receivedCdr'], not: Prisma.DbNull } }] }, take: 50, orderBy: { updated_at: 'asc' } }); }
   async listar(companyId: string) {
     if (!companyId) throw new BadRequestException('SUMMARY_COMPANY_REQUIRED');
     const rows = await this.prisma.invoiceAggregate.findMany({ where: { company_id: companyId }, orderBy: { created_at: 'desc' }, take: 100,
       select: { id: true, kind: true, identifier: true, reference_date: true, state: true, ticket: true, transport_uncertain: true, result: true, error: true, job_id: true, created_at: true } });
-    return rows.map(r => { const result = r.result as Record<string, unknown> | null; return { ...r, bridge_reversal: { pending: raWorks(r.result).filter(w => w.status !== 'DONE').length, done: raWorks(r.result).filter(w => w.status === 'DONE').length }, result: result ? { codigo: result.codigo, mensaje: result.mensaje, referencia: result.referencia } : null }; });
+    return rows.map(r => { const result = r.result as Record<string, unknown> | null; return { ...r, polling: pollingOf(r.result) ? { attempts: pollingOf(r.result)!.attempts, nextAt: pollingOf(r.result)!.nextAt, exhausted: pollingOf(r.result)!.exhausted ?? false, historyUnknown: pollingOf(r.result)!.historyUnknown ?? false, inProgress: Boolean(pollingOf(r.result)!.lease && Date.parse(pollingOf(r.result)!.lease!.until)>Date.now()) } : undefined, bridge_reversal: { pending: raWorks(r.result).filter(w => w.status !== 'DONE').length, done: raWorks(r.result).filter(w => w.status === 'DONE').length }, result: result ? { codigo: result.codigo, mensaje: result.mensaje, referencia: result.referencia } : null }; });
   }
   async finalizar(row: InvoiceAggregate, contenido: string, status: string | null) {
     const cdr = parseCdr(contenido);

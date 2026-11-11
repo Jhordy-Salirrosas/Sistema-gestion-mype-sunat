@@ -56,7 +56,7 @@ it('artefacto y cola usan transiciones condicionales sin degradar trabajos en cu
 it('reclamación única persiste incertidumbre antes de red, ticket y estados de recuperación', async () => {
   const h=aggregateHarness(); expect(await h.store.reclamar(h.row as never)).toBe(true); h.delegate.updateMany.mockResolvedValueOnce({count:0}); expect(await h.store.reclamar(h.row as never)).toBe(false);
   expect(h.delegate.updateMany.mock.calls[0][0]).toMatchObject({where:{company_id:'company',ticket:null,transport_uncertain:false},data:{state:'SENDING',transport_uncertain:true}});
-  await h.store.ticket(h.row.id,'T'); expect(h.delegate.update).toHaveBeenLastCalledWith({where:{id:h.row.id},data:{ticket:'T',state:'POLLING',transport_uncertain:false,error:null}});
+  await h.store.ticket(h.row.id,'T'); expect(h.delegate.update).toHaveBeenLastCalledWith({where:{id:h.row.id},data:expect.objectContaining({ticket:'T',state:'POLLING',transport_uncertain:false,error:null})});
   await h.store.pendiente(h.row.id,'red',null); expect(h.delegate.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({data:{state:'UNCERTAIN',error:'red'}}));
   await h.store.pendiente(h.row.id,'procesando','T'); expect(h.delegate.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({data:{state:'POLLING',error:'procesando'}}));
   await h.store.revision(h.row.id,'ajeno'); expect(h.delegate.update).toHaveBeenLastCalledWith({where:{id:h.row.id},data:{state:'REVIEW',error:'ajeno'}});
