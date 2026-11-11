@@ -26,6 +26,7 @@ import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-case
 import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUseCase';
 import { ValidateTaxPleUseCase } from '../../application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from '../../application/use-cases/getIgvReconciliationUseCase';
+import { CloseAnnualUseCase } from '../../application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
@@ -50,6 +51,7 @@ export class AccountingController {
     private readonly exportTaxPleUseCase: ExportTaxPleUseCase,
     private readonly validateTaxPleUseCase: ValidateTaxPleUseCase,
     private readonly getIgvReconciliationUseCase: GetIgvReconciliationUseCase,
+    private readonly closeAnnualUseCase: CloseAnnualUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
@@ -171,6 +173,12 @@ export class AccountingController {
       this.empresaDelToken(currentCompanyId),
       Number(year),
     );
+  }
+
+  @Post('periods/year/:year/close-annual')
+  @HttpCode(HttpStatus.OK)
+  closeAnnual(@Param('year') year: string, @CurrentCompany() currentCompanyId?: string) {
+    return this.closeAnnualUseCase.execute(this.empresaDelToken(currentCompanyId), Number(year));
   }
 
   @Post('periods/year/:year/close')
