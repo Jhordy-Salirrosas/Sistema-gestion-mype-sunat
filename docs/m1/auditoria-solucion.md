@@ -2388,3 +2388,9 @@ La Fase 0 fue aprobada en bloque; no cambian reglas, estados ni XML.
 Cierre Cerrar compuesto desde M1 con API compartida existente, sin editar UI común.
 SIMULADO (pruebas) solo cambia texto; MOCK sigue siendo el valor. Focales front:
 2 archivos/13 pruebas aprobadas, incluidos guardado y secretos de configuración.
+
+#### Construcción — 6c-3
+
+Subtítulo completo en párrafo M1 multilinea; contador «Sin confirmación SUNAT
+(incluye cola)» y explicación de su alcance. Fórmula y cifras intactas. Focal
+front: 1 archivo/3 pruebas aprobadas. No se modifica PageHeader compartido.
