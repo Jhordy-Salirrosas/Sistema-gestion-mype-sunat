@@ -1,3 +1,4 @@
+import { numeroVisible } from '../lib/invoiceVisibleNumber';
 /**
  * Fila de la grilla enriquecida de comprobantes (M1).
  *
@@ -46,7 +47,7 @@ export const InvoiceTableRow = ({
     <TableRow
       className="cursor-pointer"
       tabIndex={0}
-      aria-label={`Ver detalle XML de ${c.serie}-${c.correlativo}`}
+      aria-label={`Ver detalle XML de ${numeroVisible(c.serie, c.correlativo)}`}
       onClick={() => onVerXml(c)}
       onKeyDown={(e) => {
         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
@@ -58,7 +59,7 @@ export const InvoiceTableRow = ({
       <TableCell>
         <PageText variant="label">{TIPO_LABEL[c.tipo]}</PageText>
         <PageText variant="caption">
-          {c.serie}-{String(c.correlativo).padStart(4, '0')}
+          {numeroVisible(c.serie, c.correlativo)}
         </PageText>
         <PageText variant="caption">
           {c.formaPago === 'Credito'
@@ -133,7 +134,7 @@ export const InvoiceTableRow = ({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Ver XML de ${c.serie}-${c.correlativo}`}
+            aria-label={`Ver XML de ${numeroVisible(c.serie, c.correlativo)}`}
             title="Ver XML"
             onClick={() => onVerXml(c)}
           >
@@ -142,7 +143,7 @@ export const InvoiceTableRow = ({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Ver CDR de ${c.serie}-${c.correlativo}`}
+            aria-label={`Ver CDR de ${numeroVisible(c.serie, c.correlativo)}`}
             title="Ver CDR"
             onClick={() => onVerCdr(c)}
           >
@@ -151,7 +152,7 @@ export const InvoiceTableRow = ({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={`Descargar PDF de ${c.serie}-${c.correlativo}`}
+            aria-label={`Descargar PDF de ${numeroVisible(c.serie, c.correlativo)}`}
             title="Descargar PDF"
             onClick={() => onDescargarPdf(c)}
           >
@@ -161,7 +162,7 @@ export const InvoiceTableRow = ({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={`Reintentar CDR de ${c.serie}-${c.correlativo}`}
+              aria-label={`Reintentar CDR de ${numeroVisible(c.serie, c.correlativo)}`}
               title="Reintentar CDR (reencola el comprobante)"
               onClick={() => onReintentarCdr(c)}
             >

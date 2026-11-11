@@ -1,3 +1,4 @@
+import { numeroVisible } from '../lib/invoiceVisibleNumber';
 import { useState } from 'react';
 import { Button, PageText } from '@/components/ui';
 import { extractApiErrorMessage } from '@/lib/apiErrors';
@@ -30,11 +31,11 @@ export function EnviarBajaPanel({ fecha, vista, onEnviado }: { fecha: string; vi
   };
   return <section aria-label="Selección de baja" className="space-y-3">
     <PageText variant="label">Seleccione documentos y motivo de cada baja</PageText>
-    {vista.lineas.map(l => <div key={l.id ?? `${l.serie}-${l.correlativo}`} className="rounded border p-2 space-y-1">
-      <label><input type="checkbox" disabled={!l.incluido || !l.id || ocupado} checked={seleccion.some(s => s.id === l.id)} aria-label={`Dar de baja ${l.serie}-${l.correlativo}`} onChange={e => cambiar(e.target.checked ? [...seleccion, { id: l.id!, motivo: 'Anulación de la operación' }] : seleccion.filter(s => s.id !== l.id))} /> {l.serie}-{l.correlativo} · {l.estado}</label>
+    {vista.lineas.map(l => <div key={l.id ?? `${numeroVisible(l.serie, l.correlativo)}`} className="rounded border p-2 space-y-1">
+      <label><input type="checkbox" disabled={!l.incluido || !l.id || ocupado} checked={seleccion.some(s => s.id === l.id)} aria-label={`Dar de baja ${numeroVisible(l.serie, l.correlativo)}`} onChange={e => cambiar(e.target.checked ? [...seleccion, { id: l.id!, motivo: 'Anulación de la operación' }] : seleccion.filter(s => s.id !== l.id))} /> {numeroVisible(l.serie, l.correlativo)} · {l.estado}</label>
       <PageText variant="caption">{ETIQUETA_TIPO[l.tipoComprobante] ?? l.tipoComprobante} ({l.tipoComprobante}) · Total: {l.total.toFixed(2)} · {l.estado}</PageText>
       {!l.incluido && <p className="text-sm">{l.motivoExclusion}</p>}
-      {seleccion.some(s => s.id === l.id) && <label className="block text-sm">Motivo <input className="rounded border p-1 w-full" aria-label={`Motivo de baja ${l.serie}-${l.correlativo}`} disabled={ocupado} maxLength={100} value={seleccion.find(s => s.id === l.id)!.motivo} onChange={e => cambiar(seleccion.map(s => s.id === l.id ? { ...s, motivo: e.target.value } : s))} /></label>}
+      {seleccion.some(s => s.id === l.id) && <label className="block text-sm">Motivo <input className="rounded border p-1 w-full" aria-label={`Motivo de baja ${numeroVisible(l.serie, l.correlativo)}`} disabled={ocupado} maxLength={100} value={seleccion.find(s => s.id === l.id)!.motivo} onChange={e => cambiar(seleccion.map(s => s.id === l.id ? { ...s, motivo: e.target.value } : s))} /></label>}
     </div>)}
     <Button disabled={!seleccion.length || ocupado || seleccion.some(s => !s.motivo.trim())} onClick={() => void preview()}>Ver XML de selección</Button>
     {previa?.key === key && <><p>{previa.vista.errores.join(' | ')}</p>{previa.vista.xml && <details open><summary>XML de los documentos seleccionados</summary><pre className="max-h-64 overflow-auto text-xs">{previa.vista.xml}</pre></details>}</>}

@@ -13,15 +13,15 @@ afterEach(() => { cleanup(); vi.resetAllMocks(); });
 it('sin selección explícita no permite preview ni envío; la neutralizada queda deshabilitada', () => {
   render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={vi.fn()} />);
   expect((screen.getByRole('button', { name: 'Enviar baja a SUNAT' }) as HTMLButtonElement).disabled).toBe(true);
-  expect((screen.getByLabelText('Dar de baja F001-61') as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByLabelText('Dar de baja F001-00000061') as HTMLInputElement).disabled).toBe(true);
   expect(invoicesApi.enviarBaja).not.toHaveBeenCalled();
 });
 it('selección y motivo se previsualizan y envían solo tras confirmación', async () => {
   vi.mocked(invoicesApi.previsualizarBaja).mockResolvedValue(vista);
   vi.mocked(invoicesApi.enviarBaja).mockResolvedValue({ enviado: true, identificador: 'RA-20261109-002', jobId: 'job', incluidos: 1, motivo: null });
   const refresh = vi.fn(); render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={refresh} />);
-  fireEvent.click(screen.getByLabelText('Dar de baja F001-62'));
-  fireEvent.change(screen.getByLabelText('Motivo de baja F001-62'), { target: { value: 'Error de operación' } });
+  fireEvent.click(screen.getByLabelText('Dar de baja F001-00000062'));
+  fireEvent.change(screen.getByLabelText('Motivo de baja F001-00000062'), { target: { value: 'Error de operación' } });
   fireEvent.click(screen.getByRole('button', { name: 'Ver XML de selección' }));
   expect(await screen.findByText('XML de los documentos seleccionados')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Enviar baja a SUNAT' })); expect(invoicesApi.enviarBaja).not.toHaveBeenCalled();
@@ -31,13 +31,13 @@ it('selección y motivo se previsualizan y envían solo tras confirmación', asy
 });
 it('editar el motivo invalida el XML previo y obliga a actualizarlo', async () => {
   vi.mocked(invoicesApi.previsualizarBaja).mockResolvedValue(vista); render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={vi.fn()} />);
-  fireEvent.click(screen.getByLabelText('Dar de baja F001-62')); fireEvent.click(screen.getByRole('button', { name: 'Ver XML de selección' })); await screen.findByText('XML de los documentos seleccionados');
-  fireEvent.change(screen.getByLabelText('Motivo de baja F001-62'), { target: { value: 'Otro motivo' } });
+  fireEvent.click(screen.getByLabelText('Dar de baja F001-00000062')); fireEvent.click(screen.getByRole('button', { name: 'Ver XML de selección' })); await screen.findByText('XML de los documentos seleccionados');
+  fireEvent.change(screen.getByLabelText('Motivo de baja F001-00000062'), { target: { value: 'Otro motivo' } });
   expect(screen.queryByText('XML de los documentos seleccionados')).toBeNull(); expect((screen.getByRole('button', { name: 'Enviar baja a SUNAT' }) as HTMLButtonElement).disabled).toBe(true);
 });
 it('presenta motivo de rechazo a la preparación sin afirmar aceptación', async () => {
   vi.mocked(invoicesApi.previsualizarBaja).mockResolvedValue(vista); vi.mocked(invoicesApi.enviarBaja).mockResolvedValue({ enviado: false, identificador: 'RA-20261109-001', jobId: null, incluidos: 1, motivo: 'Validación XSD bloqueada' });
-  render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={vi.fn()} />); fireEvent.click(screen.getByLabelText('Dar de baja F001-62')); fireEvent.click(screen.getByRole('button', { name: 'Ver XML de selección' })); await screen.findByText('XML de los documentos seleccionados'); fireEvent.click(screen.getByRole('button', { name: 'Enviar baja a SUNAT' })); fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja en SUNAT' }));
+  render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={vi.fn()} />); fireEvent.click(screen.getByLabelText('Dar de baja F001-00000062')); fireEvent.click(screen.getByRole('button', { name: 'Ver XML de selección' })); await screen.findByText('XML de los documentos seleccionados'); fireEvent.click(screen.getByRole('button', { name: 'Enviar baja a SUNAT' })); fireEvent.click(screen.getByRole('button', { name: 'Confirmar baja en SUNAT' }));
   expect((await screen.findByRole('status')).textContent).toContain('Validación XSD bloqueada');
 });
 it.each(['RA', 'RC'] as const)('Monitor muestra %s, ticket, causa y consulta sin reenvío', async kind => {
