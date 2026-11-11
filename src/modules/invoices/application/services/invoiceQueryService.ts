@@ -1,3 +1,4 @@
+import { esUnidadFerreteria } from '../../sunatCatalogsQuery';
 /**
  * Consulta de comprobantes (TA-29): listado, detalle y reintento de CDR.
  *
@@ -8,6 +9,7 @@
  * organización (IDOR por enumeración).
  */
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { PrismaService } from '../../../../database/prismaService';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
 import type { InvoiceStatus } from '../../../../generated/client/enums';
@@ -126,12 +128,16 @@ export class InvoiceQueryService {
     ]);
     return { balances: productos.map(p => {
       const precio = Number(p.sale_price);
-      const vendible = p.is_active !== false && Number.isFinite(precio) && precio > 0;
+      const precioValido = Number.isFinite(precio) && precio > 0;
+      const unidadValida = Boolean(p.sunat_unit_code?.trim()) && esUnidadFerreteria(p.sunat_unit_code);
+      const afectacionValida = (AFECTACIONES_GRILLA as readonly string[]).includes(p.tax_affectation?.trim() ?? '');
+      const motivo = p.is_active === false ? 'producto inactivo' : !precioValido ? 'sin precio de venta configurado' : !unidadValida ? 'sin unidad SUNAT compatible configurada' : !afectacionValida ? 'sin afectación tributaria válida configurada' : null;
+      const vendible = motivo === null;
       const stock = saldos.filter(s => s.product_id === p.id).reduce((sum, s) => sum + (Number(s.current_stock) || 0), 0);
       return { activo: p.is_active !== false, sku: p.sku, description: p.description, sunatUnitCode: p.sunat_unit_code,
         taxAffectation: p.tax_affectation?.trim() || null, currentStock: stock,
         salePrice: vendible ? precio : null, vendible,
-        motivo: vendible ? null : 'sin precio de venta configurado' };
+        motivo };
     }) };
   }
 

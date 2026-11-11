@@ -25,7 +25,7 @@ it('el catálogo marca precios ausentes sin exponer costo como precio y filtra e
   const findMany = jest.fn(async () => [{ product_id: 'p', current_stock: 2, average_unit_cost: 15 }]);
   const warehouses = jest.fn(async () => [{ warehouse_code: 'ALM-01', description: 'Principal' }]);
   const query = new InvoiceQueryService({ inventoryBalance: { findMany }, inventoryWarehouse: { findMany: warehouses },
-    inventoryProduct: { findMany: async () => [null, 0, -1, 35.4].map((sale_price, i) => ({ id: 'p', sku: `P${i}`, description: 'Producto', sale_price })) } } as never, {} as never);
+    inventoryProduct: { findMany: async () => [null, 0, -1, 35.4].map((sale_price, i) => ({ id: 'p', sku: `P${i}`, description: 'Producto', sunat_unit_code: 'NIU', tax_affectation: '10', sale_price })) } } as never, {} as never);
   const { balances } = await query.catalogoProductos('empresa', 'ALM-02');
   expect(balances.slice(0, 3)).toEqual(expect.arrayContaining([expect.objectContaining({ salePrice: null, vendible: false, motivo: 'sin precio de venta configurado' })]));
   expect(balances[3]).toMatchObject({ salePrice: 35.4, vendible: true, currentStock: 2 });
@@ -41,4 +41,16 @@ it('6A catálogo histórico usa misma fuente por empresa sin habilitar venta de 
  const service = new InvoiceQueryService({ inventoryProduct: { findMany: productos }, inventoryBalance: { findMany: async () => [{ product_id: 'p', current_stock: 1 }] } } as never, {} as never);
  expect((await service.catalogoProductos('empresa', 'ALM-02', true)).balances[0]).toMatchObject({ sku: 'HIST', vendible: false, currentStock: 1 });
  expect(productos).toHaveBeenCalledWith(expect.objectContaining({ where: { company_id: 'empresa' } }));
+});
+
+it.each([{ sunat_unit_code: null }, { sunat_unit_code: 'INVALIDA' }, { tax_affectation: null }, { tax_affectation: '99' }])('7N precio positivo sin configuración fiscal válida no se ofrece: %j', async changes => {
+ const { InvoiceQueryService } = await import('../../../src/modules/invoices/application/services/invoiceQueryService');
+ const product = { id: 'p', sku: 'ARE', description: 'Arena', sale_price: 118, sunat_unit_code: 'MTQ', tax_affectation: '10', ...changes };
+ const service = new InvoiceQueryService({ inventoryProduct: { findMany: async () => [product] }, inventoryBalance: { findMany: async () => [] } } as never, {} as never);
+ expect((await service.catalogoProductos('empresa')).balances[0]).toMatchObject({ vendible: false, salePrice: null, motivo: expect.stringMatching(/unidad|afectación/) });
+});
+it('7N MTQ con precio y afectación válidos sigue vendible', async () => {
+ const { InvoiceQueryService } = await import('../../../src/modules/invoices/application/services/invoiceQueryService');
+ const service = new InvoiceQueryService({ inventoryProduct: { findMany: async () => [{ id: 'p', sku: 'ARE', description: 'Arena', sale_price: 118, sunat_unit_code: 'MTQ', tax_affectation: '10' }] }, inventoryBalance: { findMany: async () => [] } } as never, {} as never);
+ expect((await service.catalogoProductos('empresa')).balances[0]).toMatchObject({ vendible: true, salePrice: 118, motivo: null });
 });

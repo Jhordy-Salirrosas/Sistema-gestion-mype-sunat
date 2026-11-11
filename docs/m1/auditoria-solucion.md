@@ -2641,3 +2641,67 @@ Si enqueueInvoiceInTx devuelve null, la transacción de creación falla con el
 contrato OUTBOX_WRITE_FAILED; no confirma respuesta idempotente ni comprobante
 sin trabajo. Resiliencia no se modifica. Focal: 2 suites / 33 pruebas aprobadas;
 PostgreSQL real confirma cero facturas persistidas tras insertar y recibir null.
+
+### 7N — catálogo vendible coherente con guardas fiscales
+
+Vendible exige activo, sale_price positivo, unidad SUNAT soportada y afectación
+admitida por la misma matriz de emisión. El listado entrega motivo concreto y
+no sustituye precio por costo. Los históricos siguen consultables para notas.
+Focal: 2 suites / 28 pruebas aprobadas; incluye MTQ válido, unidad ausente/no
+soportada y afectación ausente/inválida aun con precio positivo.
+
+### Barrido de fronteras: deuda de equipo expresamente aparcada
+
+Por resolución del bloque de Parte 7, NO se construyen:
+- Ítem 3: cambio de método/recalculo de Inventario concurrente o retroactivo.
+  inventoryCostLayerService.updateCostMethod/recalculateCosting requieren
+  coordinación con su dueño y períodos contables; no se recalculan históricos.
+- Ítem 4: fallback compartido de almacén explícito inexistente a principal en
+  manual/importación. Modificarlo cambia conducta compartida de Inventario.
+- Ítem 6: numeración contable por leer último + 1 en
+  prismaAccountingRepository.getNextEntryNumber. Exclusión 7H no reemplaza
+  coordinación de numeración entre documentos/módulos distintos.
+- Ítem 7: carrera entre cierre/apertura de período y saveEntry. Requiere una
+  decisión/interfaz transaccional del dueño de Contabilidad.
+- Ítem 9: ventanas entre guardar agregado/resultado y publicar/programar su
+  trabajo. Ticket/artefacto conservados permiten recuperación, sin prometer
+  reanudación automática durable; requiere diseño coordinado de publicación.
+- Ítem 11: rol/actividad del usuario en access token vigente hasta 15 minutos;
+  revocación inmediata requiere política de identidad, no cambio unilateral M1.
+- Hallazgo 10c: ajuste de depósitos SPOT en notas fuera de alcance por decisión.
+
+La edición de Compras se limita a la capa al costo neto dentro de su transacción
+existente; no se amplía a su contabilidad, precios, IGV o saldos. Ningún archivo
+de Resiliencia o Contabilidad se modifica en esta ronda.
+
+### Verificación final de Parte 7
+
+Back final: **284 suites / 2604 pruebas aprobadas**, cero fallos;
+**4 suites / 38 pruebas omitidas** por sus condiciones existentes;
+**12 snapshots fiscales aprobados**, sin editar generadores/XML ni snapshots.
+Son +5 suites y +43 pruebas aprobadas respecto de dev actualizado (279/2561).
+Incluye regresión de servicio gratuito con SKU sin descarga física y devolución
+física basada en salida histórica aun si el catálogo cambió a servicio.
+Último foco conjunto de puente/reproceso/idempotencia: 3 suites / 64 pruebas.
+Build y lint back aprobados, sin nuevos avisos.
+
+Corrida completa con cobertura y PostgreSQL local aislado. La primera corrida
+instrumentada agotó el heap de Node (2 GiB); la corrida final usó únicamente
+NODE_OPTIONS=--max-old-space-size=6144 en el proceso local. No se modifica CI,
+Sonar ni umbrales. Medición contra dev 7ac5cbbc con el script existente
+scripts/m1/coverage_new_code.py sobre LCOV: 232/242 líneas nuevas cubiertas
+(**95,87%**), 241/278 resultados de condición cubiertos; combinado
+(**90,96%**). Es medición local, no un resultado remoto de SonarCloud.
+
+Front final: **123 suites / 886 pruebas aprobadas** (base 123/885), build
+aprobado. ESLint de los dos archivos cambiados sin errores/avisos. Lint global
+contrastado con worktree limpio c20a639: ambos arrojan **129 errores / 31
+avisos**, todos en archivos sin cambios de esta entrega; no se corrigen módulos
+ajenos. El único cambio front es 7J y se entrega por ferry/m1-puente-guardas,
+con rutas exactas, manifiesto FERRY.md y SHA-256 por archivo.
+
+Catorce commits funcionales A–N. Sin migraciones nuevas, sin cambios en
+Resiliencia/Contabilidad, sin modificar datos del equipo/producción. Las
+migraciones existentes solo prepararon la base local desechable autorizada.
+Ninguna emisión, llamada real a SUNAT, PR, merge o despliegue. La ejecución
+operativa y correcciones históricas siguen a cargo de Emma tras su revisión.
