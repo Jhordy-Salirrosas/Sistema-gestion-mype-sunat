@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { referenciaGratuita } from './freeOperationReference';
-import { formatoMoneda, formatoUnitario, multiplicarMoneda } from './money';
+import { dividirMoneda, formatoMoneda, formatoUnitario, multiplicarMoneda, redondearMoneda } from './money';
 /**
  * Constructores de nodos XML para el generador UBL 2.1 (M1).
  *
@@ -93,6 +93,7 @@ const bloqueDescuentoLinea = (
 ): string => `    <cac:AllowanceCharge>
       <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
       <cbc:AllowanceChargeReasonCode>${esc(d.codigo ?? '00')}</cbc:AllowanceChargeReasonCode>
+      <cbc:MultiplierFactorNumeric>${(d.monto / base).toFixed(5)}</cbc:MultiplierFactorNumeric>
       <cbc:Amount currencyID="${moneda}">${dinero(d.monto)}</cbc:Amount>
       <cbc:BaseAmount currencyID="${moneda}">${dinero(base)}</cbc:BaseAmount>
     </cac:AllowanceCharge>`;
@@ -158,6 +159,7 @@ export const bloqueLinea = (
    * `cbc:InvoicedQuantity`. Se detectó emitiendo una NC contra BETA el 31-10.
    */
   raiz: 'Invoice' | 'CreditNote' | 'DebitNote' = 'Invoice',
+  descuentoGlobalPrecio = 0,
 ): string => {
   const unidad = l.unidad ?? 'NIU';
   const tributo = typeof l.afectacion === 'string' ? tributoDeAfectacion(l.afectacion) : null;
@@ -172,7 +174,9 @@ export const bloqueLinea = (
   const neto = gratuita ? referencia.base : l.totalLinea - l.igvLinea;
 
   // Tipo 02 informa valor referencial sin IGV; cac:Price conserva precio de venta cero.
-  const precioXml = gratuita ? l.valorUnitario : precio;
+  const precioXml = gratuita ? l.valorUnitario : descuentos.length || descuentoGlobalPrecio > 0
+    ? dividirMoneda(redondearMoneda(neto + l.igvLinea + (l.icbperLinea ?? 0) - descuentos.filter(d => d.codigo === '01').reduce((s, d) => s + d.monto, 0) - descuentoGlobalPrecio), l.cantidad)
+    : precio;
   const tipoPrecio = gratuita ? '02' : '01';
 
   const item = l.codigo

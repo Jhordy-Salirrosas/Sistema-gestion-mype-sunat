@@ -2705,3 +2705,42 @@ Resiliencia/Contabilidad, sin modificar datos del equipo/producción. Las
 migraciones existentes solo prepararon la base local desechable autorizada.
 Ninguna emisión, llamada real a SUNAT, PR, merge o despliegue. La ejecución
 operativa y correcciones históricas siguen a cargo de Emma tras su revisión.
+
+## Parte 8A — Descuento y redondeo
+
+Bases: back dev `4877dc1c6dac306c187be043e765612a81134a33` (284 suites / 2604 pruebas aprobadas; 4 suites / 38 pruebas omitidas; 12 snapshots); front dev `315f50ccf2e9de73e5cef713d03121febf63d8d9` (123 suites / 886 pruebas). Sin migraciones ni llamadas reales a SUNAT.
+
+### 8A-1 — Precio alternativo neto
+
+El adapter conserva el precio bruto del catálogo y no cambia su contrato. Solo el precio alternativo 01 de líneas con descuento pasa a informar el neto unitario con impuestos, HALF_UP a dos decimales; gratuitas 02 y XML sin descuento se conservan. El descuento de línea añade `MultiplierFactorNumeric` (monto/base). La hoja del repositorio valida ese factor **si existe**: su ausencia no era por sí sola prueba de rechazo.
+
+El descuento global se atribuye proporcionalmente a las bases de línea (02 solo gravadas, excluyendo gratuitas), HALF_UP a céntimos; residuo a la mayor base y empate a la primera. El IGV reducido de cabecera se atribuye con la misma regla. Esta atribución solo informa el precio alternativo: **no** vuelve a reducir `LineExtensionAmount` ni `TaxTotal` de línea; el allowance global de cabecera sigue siendo la única deducción en los totales. Ejemplo global: bases de línea 35.00 menos allowance 3.50 = base de cabecera 31.50; IGV 5.67; total 37.17. Reducir además las bases XML de línea descontaría dos veces. El código 01/03 conserva sus bases/impuesto y reduce el precio neto con la rebaja no afecta.
+
+Pruebas focales: 3 suites / 18 pruebas. XML generado y firmado con certificado ficticio pasa XSD/XSL SFS real tanto con descuento de línea equivalente al caso F001-68 como global 02 y no afectos 01/03. Dos hashes SHA256 tomados del generador previo prueban igualdad byte a byte sin descuento, incluido SPOT 009 contado. No se actualiza ningún snapshot fiscal.
+
+Bordes previos detectados, fuera de esta corrección: una gratuita con dos bolsas ICBPER produce total 1.00 en el adapter y 0.00 en el generador (el agregador omite ICBPER de gratuitas); resolverlo cambiaría XML sin descuento. Una prueba exploratoria mixta gravada/exonerada obtuvo SFS 2992 en el tributo 9997; no se cambia su categoría fiscal en esta ronda. La distribución de bases mixtas tiene prueba matemática; los casos SFS exigidos de descuento son gravados.
+
+### 8A-2 — Paridad de redondeo front/back
+
+El front usa Decimal HALF_UP para redondear y, crucialmente, **antes** del redondeo para multiplicar/dividir: 7.1 × 1.15 = 8.17. `decimal.js` 10.6.0 pasa de dependencia transitiva de pruebas a dependencia directa de producción; sin cambios de versión del paquete. Se alinean `invoiceTaxes`, `invoiceItems` y la rebaja de IGV de `invoiceDescuentoGlobal`. La línea con descuento 01 también sigue la rama de IGV recalculado que usa el adapter, en vez del complemento del bruto reservado a líneas sin descuento. No cambia la guarda de precio del catálogo.
+
+Contrato compartido de 17 casos (cantidades fraccionarias, gravadas/exoneradas/inafectas, descuentos 00/01 y precios con precisión persistida sin redondear prematuramente la unidad): fixture verificada por el adapter y el PayableAmount generado del back, y copiada literalmente al ferry para comprobar el front. Back focal: 1 suite / 17 pruebas. Primera corrida completa del front en este punto: 124 suites / 902 pruebas aprobadas (base 123/886). El borde preexistente de gratuita+ICBPER descrito arriba queda fuera: no se presenta como paridad XML resuelta.
+
+### 8A-3 — Edición decimal del descuento
+
+`InvoiceItemsGrid` e `InvoiceDescuentoGlobal` reutilizan `InvoiceMoneyInput`: borrador textual durante la edición, entrada decimal de hasta dos posiciones y formato a dos decimales al abandonar. No cambia la matemática fiscal ni la validación de importes. Pruebas con formulario controlado real y userEvent: escritura secuencial `4.` → `4.13`, pegado, borrado, reescritura `7.1` y blur `7.10` para ambos campos. Focal: 3 suites / 14 pruebas aprobadas, incluidas las regresiones existentes de grilla y descuento global.
+
+### 8A-4 — SPOT al crédito: comportamiento conservado y validado
+
+No se cambia la fórmula ni el validador: cuotas = PayableAmount − detracción exacta − retención cuando concurren ambas. Casos: 1180.00 − 118.00 = 1062.00; con retención 35.40, cuotas 1026.60. Caso con diferencia de depósito BN: 730.17 − detracción exacta 73.02 = 657.15 de cuotas; **no** 657.17 (pago directo presentado después de depósito redondeado a 73.00). El generador rechaza tanto cuotas por el total íntegro como por el neto del depósito redondeado.
+
+Focal: 2 suites / 16 pruebas aprobadas. Los dos casos de crédito con solo detracción se generan, firman con certificado ficticio y pasan XSD + hoja oficial SFS sin errores. SPOT+retención simultánea tiene regresión estructural de cuotas, conforme a la decisión explícita de Emma. La hoja local no sustituye la validación del servicio SUNAT vigente: se verifican también importes y sumas directamente.
+
+### Cierre de verificación 8A
+
+- Back final: **287 suites / 2635 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; **12 snapshots aprobados, ninguno actualizado**. Build y lint global oxlint aprobados.
+- Front final: **125 suites / 908 pruebas aprobadas**, cero fallos. Build aprobado; ESLint de todos los archivos TS/TSX modificados sin errores ni avisos. No se atribuye a esta entrega la limpieza del lint global ajeno a M1.
+- Una corrida concurrente con builds falló la barra temporal de TA-13; la corrida completa final se ejecutó sin esa carga concurrente y pasó, sin modificar tests ni umbrales.
+- Ferry: `ferry/m1-descuento-redondeo`, diez archivos del front en sus rutas exactas y manifiesto `FERRY.md` con SHA-256. 8A-1 y 8A-4 no requieren cambios de front; 8A-2 y 8A-3 se transportan en commits separados.
+- Resto fiscal expresamente sin corregir aquí: gratuita+ICBPER (adapter vs total XML) y exoneradas con SFS 2992 por `TaxCategory/Percent` ausente (la hoja lo exige en `ValidaExprRegFactura-2.0.1.xsl:3100–3104`). No se alteran reglas de gratuitas/exoneradas ni los XML sin descuento para resolverlos de forma incidental.
+- Sin migraciones, emisiones, llamadas reales a SUNAT, PR, fusiones ni despliegues.
