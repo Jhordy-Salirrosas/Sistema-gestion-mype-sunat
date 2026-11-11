@@ -2756,3 +2756,13 @@ El motivo 06 exige todas las unidades pendientes de cada SKU y el saldo monetari
 Focales B1: 3 suites / 74 pruebas aprobadas. Casos en ambos contratos de creación: 1 de 2 unidades al saldo completo se rechaza; todas las unidades y dinero exacto sobre OBSERVADO se admiten; devolución parcial previa; dinero incompleto; SKU omitido y repetido. Prueba secuencial de segunda solicitud con primera nota ya reservada y verificación de que el bloqueo precede a leer las notas (no se presenta esta prueba unitaria como carrera real de dos conexiones).
 
 Suite completa tras B1: **288 suites / 2645 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; 12 snapshots intactos. Front sin cambios de este punto: baseline 125/908.
+
+### B2 — Motivo oficial/habilitado e importes positivos
+
+Los dos contratos de creación comparten ahora la validación de motivo y positividad, antes de numerar. Se distingue `MOTIVO_INVALIDO` (fuera de catálogo oficial 09/10) de `MOTIVO_NO_HABILITADO` (oficial pero no habilitado en M1). Los catálogos habilitados se extraen sin cambiar sus códigos ni banderas `total`, manteniendo reexportaciones compatibles desde invoiceNoteService; las autorizaciones separadas de notas usan la misma distinción. Una prueba contrasta la lista oficial con los assets SFS y fija exactamente el conjunto habilitado anterior.
+
+Toda nota exige total finito mayor que cero; cada línea onerosa exige precio positivo. Las gratuitas quedan fuera de esta última guarda: precio cobrado cero requiere su referencia positiva real. El adapter conserva ese cero y usa `valorUnitario` como referencia, sin confundirlo con precio oneroso ni inventar una referencia. El cambio del adapter está acotado a esa entrada gratuita explícita cero; las rutas de precio bruto y la guarda de catálogo de ventas no cambian. No se modifica tratamiento de IGV, descuentos o XML de los casos existentes.
+
+Se verifican NC/ND y ambos contratos, incluyendo línea onerosa cero dentro de total positivo y descuento que dejaría total cero. El HTTP fiscal ya rechazaba cabecera cero por CreateInvoiceDto; esta protección se conserva y no se atribuye como nueva. Dos fixtures históricas de ND usaban incorrectamente motivo 07 de NC: pasan a 02, conservando las aserciones de precios históricos y OBSERVADO. Focales B2: **4 suites / 130 pruebas aprobadas**.
+
+Suite completa tras B2: **289 suites / 2666 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; 12 snapshots intactos. Front sin cambios de este punto: baseline 125/908.

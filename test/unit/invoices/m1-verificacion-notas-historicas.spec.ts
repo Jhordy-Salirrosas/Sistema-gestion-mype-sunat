@@ -47,11 +47,11 @@ it('motivo por ítem conserva la devolución parcial', async () => {
 });
 
 it.each(['07', '08'])('la nota %s conserva precio histórico aunque no exista sale_price', async tipo => {
-  const h = harness(); h.dto.tipo_comprobante = tipo; h.product.sale_price = null as never;
+  const h = harness(); h.dto.tipo_comprobante = tipo; h.dto.codigo_motivo_nota = tipo === '08' ? '02' : '07'; h.product.sale_price = null as never;
   expect((await h.run()).items[0].precioUnitario).toBe(118);
 });
 
 it.each(['07', '08'])('6H ruta común %s admite origen observado conservando líneas y saldo', async tipo => {
- const h = harness(); h.origin.estado = 'OBSERVADO'; h.dto.tipo_comprobante = tipo;
+ const h = harness(); h.origin.estado = 'OBSERVADO'; h.dto.tipo_comprobante = tipo; h.dto.codigo_motivo_nota = tipo === '08' ? '02' : '07';
  await expect(h.run()).resolves.toMatchObject({ items: [expect.objectContaining({ precioUnitario: 118 })] });
 });

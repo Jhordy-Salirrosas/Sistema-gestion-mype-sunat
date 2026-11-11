@@ -1,3 +1,7 @@
+import { validarMotivoNota } from './noteReasonGuard';
+import { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS } from './noteCatalogs';
+export { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS } from './noteCatalogs';
+export type { MotivoCredito, MotivoDebito } from './noteCatalogs';
 /**
  * Notas de Crédito (07) y de Débito (08) con control de saldo (TA-66, HU-12).
  *
@@ -27,48 +31,6 @@ import {
   type SaldoComprobante,
 } from './creditNoteBalanceGuard';
 
-/** Motivo del Catálogo 09 (Nota de Crédito). */
-export interface MotivoCredito {
-  codigo: string;
-  descripcion: string;
-  /**
-   * ¿Devuelve el importe completo del comprobante?
-   *
-   * Los motivos de anulación total (01, 06) implican devolver todo, así que no
-   * se les pide importe: se toma el saldo disponible entero.
-   */
-  total: boolean;
-}
-
-/** Motivo del Catálogo 10 (Nota de Débito). */
-export interface MotivoDebito {
-  codigo: string;
-  descripcion: string;
-}
-
-/** Catálogo 09 de SUNAT: motivos de Nota de Crédito. */
-export const CATALOGO_09_MOTIVOS: readonly MotivoCredito[] = [
-  { codigo: '01', descripcion: 'Anulación de la operación', total: true },
-  { codigo: '02', descripcion: 'Anulación por error en el RUC', total: true },
-  { codigo: '03', descripcion: 'Corrección por error en la descripción', total: false },
-  { codigo: '04', descripcion: 'Descuento global', total: false },
-  { codigo: '05', descripcion: 'Descuento por ítem', total: false },
-  { codigo: '06', descripcion: 'Devolución total', total: true },
-  { codigo: '07', descripcion: 'Devolución por ítem', total: false },
-  { codigo: '09', descripcion: 'Disminución en el valor', total: false },
-  { codigo: '13', descripcion: 'Ajustes de montos y/o fechas de pago al crédito', total: false },
-];
-
-/** Catálogo 10 de SUNAT: motivos de Nota de Débito. */
-export const CATALOGO_10_MOTIVOS: readonly MotivoDebito[] = [
-  { codigo: '01', descripcion: 'Intereses por mora' },
-  { codigo: '02', descripcion: 'Aumento en el valor' },
-  { codigo: '03', descripcion: 'Penalidades / otros conceptos' },
-  { codigo: '11', descripcion: 'Ajustes de operaciones de exportación' },
-  { codigo: '12', descripcion: 'Ajustes afectos al IVAP' },
-];
-
-/** Datos para solicitar una nota. */
 export interface SolicitudNota {
   /** Comprobante que se modifica. */
   comprobanteOrigenId: string;
@@ -113,17 +75,8 @@ export class InvoiceNoteService {
     companyId: string,
     solicitud: SolicitudNota,
   ): Promise<NotaAutorizada> {
-    const motivo = CATALOGO_09_MOTIVOS.find(
-      (m) => m.codigo === solicitud.motivoCodigo,
-    );
-    if (!motivo) {
-      throw new BadRequestException({
-        code: 'MOTIVO_INVALIDO',
-        message:
-          `El motivo ${solicitud.motivoCodigo} no pertenece al Catálogo 09. ` +
-          `Los válidos son ${CATALOGO_09_MOTIVOS.map((m) => m.codigo).join(', ')}.`,
-      });
-    }
+    validarMotivoNota('07', solicitud.motivoCodigo);
+    const motivo = CATALOGO_09_MOTIVOS.find(m => m.codigo === solicitud.motivoCodigo)!;
 
     const saldo = await this.saldos.calcular(
       companyId,
@@ -162,17 +115,8 @@ export class InvoiceNoteService {
     companyId: string,
     solicitud: SolicitudNota,
   ): Promise<NotaAutorizada> {
-    const motivo = CATALOGO_10_MOTIVOS.find(
-      (m) => m.codigo === solicitud.motivoCodigo,
-    );
-    if (!motivo) {
-      throw new BadRequestException({
-        code: 'MOTIVO_INVALIDO',
-        message:
-          `El motivo ${solicitud.motivoCodigo} no pertenece al Catálogo 10. ` +
-          `Los válidos son ${CATALOGO_10_MOTIVOS.map((m) => m.codigo).join(', ')}.`,
-      });
-    }
+    validarMotivoNota('08', solicitud.motivoCodigo);
+    const motivo = CATALOGO_10_MOTIVOS.find(m => m.codigo === solicitud.motivoCodigo)!;
 
     const saldo = await this.saldos.calcular(
       companyId,

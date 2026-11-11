@@ -15,5 +15,5 @@ export function harness() {
 }
 
 
-export function entradaNota(d: any, ruta: string) { return ruta === 'pantalla' ? d : fiscalToEmission(traducirEmision({ ...d, items: d.items.map((l: any) => ({ ...l, afectacion: '10', unidad: 'NIU' })) }, { ruc: '20000000001', razonSocial: 'Prueba' }, 1).dto); }
+export function entradaNota(d: any, ruta: string) { return ruta === 'pantalla' ? d : fiscalToEmission(traducirEmision({ ...d, items: d.items.map((l: any) => ({ ...l, afectacion: l.afectacion ?? '10', unidad: l.unidad ?? 'NIU' })) }, { ruc: '20000000001', razonSocial: 'Prueba' }, 1).dto); }
 export const nota = () => ({ ...base(), tipo_comprobante: '07', serie: 'FC01', documento_afectado: 'F001-00000001', codigo_motivo_nota: '06' });
