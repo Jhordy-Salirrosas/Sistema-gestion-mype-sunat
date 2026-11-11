@@ -2511,3 +2511,10 @@ venta leyendo las capas restantes ni las consume una segunda vez.
 Regresión focal: TA-68, 1 suite / 41 pruebas aprobadas, incluida FIFO con
 costo ya consumido y aserciones de cero lecturas/consumos adicionales.
 La suite completa se repite al cierre de la ronda; XML fiscal intacto.
+
+### 7B — cantidad física agregada por SKU
+
+Una descarga por SKU suma todas sus líneas con Decimal. Un movimiento histórico
+con cantidad distinta deja pendiente la conciliación, sin omitirlo como completo
+ni publicar otra descarga que duplique lo anterior. Focal: 2 suites / 43 pruebas
+aprobadas (SKU repetido, decimales, regresiones del puente).

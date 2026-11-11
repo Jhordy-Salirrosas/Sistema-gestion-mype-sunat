@@ -1,3 +1,4 @@
+import { Prisma } from '../../../../generated/client/client';
 /**
  * Movimientos de Kardex que genera una factura emitida (TA-68).
  *
@@ -79,6 +80,15 @@ export const movimientosDeFactura = (
   lineas: readonly LineaParaKardex[],
   documento: DocumentoKardex,
 ): readonly RegisterManualMovementDto[] => {
+  const porSku = new Map<string, LineaParaKardex>();
+  for (const linea of lineas.filter(generaMovimiento)) {
+    const sku = linea.itemCode!.trim();
+    const anterior = porSku.get(sku);
+    porSku.set(sku, anterior ? { ...anterior,
+      cantidad: new Prisma.Decimal(anterior.cantidad).plus(linea.cantidad).toNumber(),
+    } : { ...linea, itemCode: sku });
+  }
+  const agrupadas = [...porSku.values()];
   const numeroDocumento = `${documento.serie}-${String(documento.correlativo).padStart(8, '0')}`;
   const esNotaCredito = documento.tipoComprobante === '07';
 
@@ -90,7 +100,7 @@ export const movimientosDeFactura = (
       return [];
     }
 
-    return lineas.filter(generaMovimiento).map((linea) => ({
+    return agrupadas.map((linea) => ({
       warehouse_code: documento.almacen,
       sku: linea.itemCode!.trim(),
       direction: 'ENTRADA' as const,
@@ -107,7 +117,7 @@ export const movimientosDeFactura = (
   }
 
   // Factura o Boleta estándar: Venta nacional (Salida)
-  return lineas.filter(generaMovimiento).map((linea) => ({
+  return agrupadas.map((linea) => ({
     warehouse_code: documento.almacen,
     sku: linea.itemCode!.trim(),
     direction: 'SALIDA' as const,

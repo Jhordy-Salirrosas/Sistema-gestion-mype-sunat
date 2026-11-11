@@ -176,8 +176,13 @@ export class InvoiceAccountingBridgeService {
         factura.companyId,
         numero,
         sku,
+        movimiento.quantity,
       );
 
+      if (yaRegistrado === 'INCONSISTENTE') {
+        errores.push(`Kardex ${sku}: la cantidad del movimiento existente no coincide con el documento; requiere conciliación.`);
+        continue;
+      }
       if (yaRegistrado === null) {
         // El SKU no existe en el inventario de la empresa: la línea no se puede
         // mover y hay que decirlo. Silenciarlo dejaría el Kardex incompleto sin
@@ -450,7 +455,8 @@ export class InvoiceAccountingBridgeService {
     companyId: string,
     numeroDocumento: string,
     sku: string,
-  ): Promise<boolean | null> {
+    cantidad: number,
+  ): Promise<boolean | null | 'INCONSISTENTE'> {
     const producto = await this.prisma.inventoryProduct.findFirst({
       where: { company_id: companyId, sku },
       select: { id: true },
@@ -470,9 +476,10 @@ export class InvoiceAccountingBridgeService {
         operation_type_code: '01',
         product_id: producto.id,
       },
-      select: { id: true },
+      select: { id: true, quantity: true },
     });
 
+    if (movimiento?.quantity != null && Number(movimiento.quantity) !== cantidad) return 'INCONSISTENTE';
     return movimiento !== null;
   }
 
