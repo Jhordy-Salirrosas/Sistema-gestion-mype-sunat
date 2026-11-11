@@ -5,7 +5,7 @@ export interface MotivoCredito {
   /**
    * ¿Devuelve el importe completo del comprobante?
    *
-   * Los motivos de anulación total (01, 06) implican devolver todo, así que no
+   * Los motivos marcados como totales implican devolver todo, así que no
    * se les pide importe: se toma el saldo disponible entero.
    */
   total: boolean;
@@ -38,3 +38,8 @@ export const CATALOGO_10_MOTIVOS: readonly MotivoDebito[] = [
   { codigo: '11', descripcion: 'Ajustes de operaciones de exportación' },
   { codigo: '12', descripcion: 'Ajustes afectos al IVAP' },
 ];
+
+/** Única definición de totalidad monetaria y de cantidades para notas de crédito. */
+export function esMotivoCreditoTotal(codigo: string | null | undefined): boolean {
+  return CATALOGO_09_MOTIVOS.find(m => m.codigo === codigo)?.total ?? false;
+}

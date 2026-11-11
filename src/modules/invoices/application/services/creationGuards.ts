@@ -11,7 +11,7 @@ import { EmitirComprobanteDto } from '../dto/emitirComprobanteDto';
 import type { CreateInvoiceDto } from '../dto/createInvoiceDto';
 import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { traducirEmision } from './emitirComprobanteAdapter';
-import { CATALOGO_09_MOTIVOS } from './noteCatalogs';
+import { esMotivoCreditoTotal } from './noteCatalogs';
 import { validarPago } from './paymentTermsAndSpotValidator';
 import { ESTADOS_NOTABLES } from './creditNoteBalanceGuard';
 import { validarClasificacionSpot, validarCuentaSpot } from './spotMinimo';
@@ -158,12 +158,16 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       const notas = await tx.invoice.findMany({ where: { company_id: companyId,
         referenced_invoice_id: actual.id, tipo_comprobante: '07', estado: { notIn: ['RECHAZADO', 'ANULADO'] } },
       select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } } });
-      validarCantidadesNota(dto.items, actual.items, devuelveUnidades(dto.codigo_motivo_nota) ? notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items) : [], dto.codigo_motivo_nota === '06');
+      const total = esMotivoCreditoTotal(dto.codigo_motivo_nota);
+      // La exigencia de totalidad no cambia qué notas anteriores reservan unidades físicas.
+      const anteriores = total || devuelveUnidades(dto.codigo_motivo_nota)
+        ? notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items) : [];
+      validarCantidadesNota(dto.items, actual.items, anteriores, total);
       const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
       const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
       validarImporteNota(importe);
       if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
-      if (CATALOGO_09_MOTIVOS.find(m => m.codigo === dto.codigo_motivo_nota)?.total && Math.round(importe * 100) !== disponible) {
+      if (esMotivoCreditoTotal(dto.codigo_motivo_nota) && Math.round(importe * 100) !== disponible) {
         throw new BadRequestException('El motivo de nota exige devolver el saldo disponible total');
       }
     }

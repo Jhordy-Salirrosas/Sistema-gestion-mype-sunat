@@ -2850,3 +2850,15 @@ Tras el despliegue del back, FC01-00000016 se reanuda desde el Monitor: con rol 
 La preparación completa `descripcionMotivoNota` con «Devolución total» y registra `M1_NOTE_DESCRIPTION_COMPLETED` en el historial antes de generar. No editar el payload ni crear otra nota para sustituirla. No cambia transport_uncertain: si es true o histórico desconocido, el flujo existente concilia antes de cualquier reenvío; si la consulta no concluye, seguirá pendiente. Reanudar no garantiza aceptación fiscal y no libera saldo. Esta acción no se ejecutó en producción durante el encargo.
 
 Entrega front por `ferry/preparacion-local-notas` en el repositorio back, con siete rutas exactas y FERRY.md con hashes SHA-256. Base front actual: f7c4191b0c4dbf57364a6a56ed031f82752f4497; clon front validado: ed31e1e33526b90b3f94dacf3cf262c0faba2fa5. Sin push al repositorio front. Sin migraciones nuevas o aplicadas, emisiones reales, PRs, merges ni despliegues.
+
+## Parte 8B-ter — totalidad de cantidades de NC
+
+Base back: main `68575577abed679326f2bb116c15151bb12a0044`; base front: main `59cbbb48fba579b10917dcf151151f637fcfad54`. Baselines verificados: back 301 suites / 2734 pruebas y 12 snapshots (4 suites / 38 pruebas omitidas); front 128 suites / 930 pruebas. Construcción limitada a P1 y P2, sin migraciones ni emisiones.
+
+### P1 — Una sola fuente de totalidad
+
+`esMotivoCreditoTotal` consulta el flag `total` de noteCatalogs y es consumido por las guardas de dinero y cantidades y por InvoiceNoteService. Se elimina la comparación manual con motivo 06. Para NC totales, la guarda exige igualdad por SKU contra el pool pendiente: incluye SKU omitidos, suma filas repetidas y mantiene el máximo y la precisión Decimal existentes. Se usa el pool pendiente también al validar motivo 02, sin cambiar qué notas anteriores reservan unidades físicas.
+
+ND y motivos parciales conservan su comportamiento. La clasificación física de 02, el Kardex y la reversión de costo quedan expresamente fuera de esta parte; no se cambian devuelveUnidades ni los filtros de la proyección de cantidades_pendientes. No se reinterpretan notas históricas 02 como devoluciones físicas.
+
+Focal P1: **3 suites / 61 pruebas aprobadas**; la suite nueva contiene 34 casos, incluidos ambos contratos de alta atómica con dinero exacto/unidades parciales para 01, 02 y control 06, ausencia de reserva/publicación al bloquear, SKU omitido, filas repetidas, pool consumido, precisión decimal y controles de ND/07. TypeScript back aprobado. Sin cambios de esquema.
