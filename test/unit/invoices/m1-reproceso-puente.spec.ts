@@ -58,7 +58,7 @@ function escenario(capa = true) {
         ? (value as any[]).some((w) => matches(row, w))
         : row[key] === value,
     );
-  const prisma = {
+  const prisma = { accountingRule: { findMany: jest.fn(async () => [{ line_order: 10, account_code: '691' }, { line_order: 11, account_code: '201' }]) },
     invoice: {
       findFirst: jest.fn(async ({ where }) =>
         matches(fila, where) ? fila : null,
@@ -72,7 +72,7 @@ function escenario(capa = true) {
       findMany: async () =>
         movimientos.map((m) => ({
           quantity: m.quantity,
-          previous_unit_cost: m.previousUnitCost,
+          previous_unit_cost: m.previousUnitCost, total_cost: m.totalCost,
         })),
     },
     inventoryCostLayer: {
@@ -92,6 +92,7 @@ function escenario(capa = true) {
       ),
     },
   };
+  Object.assign(prisma, { $executeRaw: jest.fn(), $transaction: async (work: any) => work(prisma) });
   const createMovement = jest.fn(async (m: any) => {
     movimientos.push(m);
     return { ...m, id: 'mov-64' };
@@ -301,4 +302,15 @@ it('sin empresa autenticada no omite el filtro de tenant', async () => {
     h.servicio.reprocesar(undefined as never, 'inv-64'),
   ).rejects.toMatchObject({ status: 403 });
   expect(h.prisma.invoice.findFirst).not.toHaveBeenCalled();
+});
+
+it('7L mapeo de costo incompleto queda pendiente y se recupera sin repetir Kardex', async () => {
+ const h = escenario(); const rules = h.prisma.accountingRule.findMany.getMockImplementation()!;
+ h.prisma.accountingRule.findMany.mockResolvedValue([]);
+ const pending = await h.servicio.reprocesar('empresa', 'inv-64');
+ expect(pending.completo).toBe(false); expect(pending.errores.join(' ')).toContain('mapeo VENTA incompleto');
+ expect(h.crearAsiento).not.toHaveBeenCalled(); expect(h.fallback.execute).not.toHaveBeenCalled();
+ h.prisma.accountingRule.findMany.mockImplementation(rules);
+ expect(await h.servicio.reprocesar('empresa', 'inv-64')).toMatchObject({ completo: true, costoVenta: 15 });
+ expect(h.createMovement).toHaveBeenCalledTimes(1);
 });

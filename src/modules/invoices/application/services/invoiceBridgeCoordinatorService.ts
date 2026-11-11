@@ -37,7 +37,7 @@ export class InvoiceBridgeCoordinatorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly puenteContable: InvoiceAccountingBridgeService,
-    @Optional() private readonly accounting?: InvoiceAccountingFallbackService,
+    @Optional() _accounting?: InvoiceAccountingFallbackService,
   ) {}
 
   async reprocesar(
@@ -76,8 +76,19 @@ export class InvoiceBridgeCoordinatorService {
 
   private async ejecutar(
     invoiceId: string,
-    estado: InvoiceStatus,
+    _estado: InvoiceStatus,
   ): Promise<{ respuesta: ResultadoReprocesoPuente; error?: Error }> {
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`m1:bridge:${invoiceId}`}, 0))`;
+      const actual = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { estado: true } });
+      if (!actual || ![InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO].includes(actual.estado as 'ACEPTADO' | 'OBSERVADO')) {
+        throw new BadRequestException('Solo se puede reprocesar el puente de un comprobante ACEPTADO u OBSERVADO');
+      }
+      return this.ejecutarExclusivo(invoiceId, actual.estado);
+    }, { timeout: 30000 });
+  }
+
+  private async ejecutarExclusivo(invoiceId: string, estado: InvoiceStatus): Promise<{ respuesta: ResultadoReprocesoPuente; error?: Error }> {
     const factura = await this.cargarParaPuente(invoiceId, estado);
     if (!factura) throw new Error('M1_ACCOUNTING_DOCUMENT_UNAVAILABLE');
     const resultado = await this.puenteContable.registrar(factura);
@@ -85,9 +96,7 @@ export class InvoiceBridgeCoordinatorService {
       resultado.completo && (resultado.asientoId || resultado.asientoOmitido)
         ? {}
         : await this.recuperarRespaldo(invoiceId, factura, resultado);
-    const errores = respaldo
-      ? resultado.errores.filter((e) => !e.startsWith('Contabilidad:'))
-      : [...resultado.errores];
+    const errores = [...resultado.errores];
     if (error && !errores.length) errores.push(error.message);
     const completo = !error && (resultado.completo || errores.length === 0);
     return {
@@ -108,7 +117,7 @@ export class InvoiceBridgeCoordinatorService {
       return { error: new Error('M1_ACCOUNTING_REVIEW_REQUIRED') };
     }
     let respaldo: { id?: string; omitido: boolean } | undefined;
-    if (!resultado.asientoId) {
+    if (!resultado.asientoId && !resultado.asientoOmitido) {
       try {
         respaldo = await this.registrarAsiento(invoiceId);
       } catch (cause) {
@@ -118,9 +127,7 @@ export class InvoiceBridgeCoordinatorService {
         };
       }
     }
-    const error = resultado.errores.some((e) => !e.startsWith('Contabilidad:'))
-      ? new Error('M1_KARDEX_PENDING')
-      : undefined;
+    const error = resultado.errores.length ? new Error(resultado.errores.some(e => e.startsWith('Kardex')) ? 'M1_KARDEX_PENDING' : 'M1_ACCOUNTING_PENDING') : undefined;
     return { respaldo, error };
   }
 
@@ -142,7 +149,7 @@ export class InvoiceBridgeCoordinatorService {
       asientoOmitido,
       asientoCostoId: resultado.asientoCostoId,
       costoVenta: resultado.costoVenta,
-      kardex: resultado.errores.some((e) => e.startsWith('Kardex '))
+      kardex: resultado.errores.some((e) => e.startsWith('Kardex'))
         ? 'PENDIENTE'
         : 'COMPLETO',
       movimientosRegistrados: resultado.movimientosRegistrados,
@@ -416,7 +423,6 @@ export class InvoiceBridgeCoordinatorService {
     invoiceId: string,
     idAsientoDelPuente?: string,
   ): Promise<{ id?: string; omitido: boolean }> {
-    if (!this.accounting) throw new Error('M1_ACCOUNTING_FALLBACK_UNAVAILABLE');
     if (idAsientoDelPuente) return { id: idAsientoDelPuente, omitido: true };
 
     const invoice = await this.prisma.invoice.findUnique({
@@ -436,13 +442,6 @@ export class InvoiceBridgeCoordinatorService {
       },
     });
     if (!invoice) throw new Error('M1_ACCOUNTING_DOCUMENT_UNAVAILABLE');
-    if (
-      invoice.tipo_comprobante !== '01' &&
-      invoice.tipo_comprobante !== '03'
-    ) {
-      return { omitido: true };
-    }
-
     // El puente y el respaldo identifican la misma venta con referencias
     // distintas. Consultar ambas también cubre un puente sin id o un reproceso.
     const existente = await this.prisma.accountingEntry.findFirst({
@@ -462,43 +461,6 @@ export class InvoiceBridgeCoordinatorService {
     });
     if (existente) return { id: existente.id, omitido: true };
 
-    const payload = (invoice.payload_ubl ?? {}) as Record<string, unknown>;
-    const total = Number(invoice.monto_total);
-    const numero = (valor: unknown): number | undefined => {
-      const n = Number(valor);
-      return Number.isFinite(n) ? n : undefined;
-    };
-
-    // El payload UBL es la fuente primaria: distingue una operación gravada
-    // (IGV > 0) de una exonerada (IGV = 0). Los campos de la fila son el
-    // respaldo para comprobantes antiguos que no los traían.
-    const payloadIgv = numero(payload.montoIgv);
-    const payloadBase = numero(payload.montoGravado);
-    const totalIgv = numero(invoice.total_igv);
-    const taxable = numero(invoice.taxable_operations);
-    const igv =
-      payloadIgv ??
-      (totalIgv && totalIgv > 0 ? totalIgv : centimos(total - total / 1.18));
-    const base =
-      payloadBase && payloadBase > 0
-        ? payloadBase
-        : taxable && taxable > 0
-          ? taxable
-          : centimos(total - igv);
-
-    const entry = await this.accounting.execute({
-      companyId: invoice.company_id,
-      invoiceId: invoice.id,
-      tipoComprobante: invoice.tipo_comprobante,
-      serie: invoice.serie,
-      correlativo: invoice.correlativo,
-      fechaEmision: invoice.fecha_emision.toISOString().slice(0, 10),
-      cliente: invoice.customer_legal_name ?? 'CLIENTE',
-      base,
-      igv,
-      total,
-    });
-    if (!entry) throw new Error('M1_ACCOUNTING_PENDING');
-    return { id: entry.id, omitido: false };
+    throw new Error('M1_ACCOUNTING_PENDING: el puente no produjo asiento; revise el mapeo y el motivo registrado. No se aplican cuentas de respaldo.');
   }
 }

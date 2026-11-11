@@ -9,6 +9,8 @@ describe('InventoryTransferService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $executeRaw: jest.fn(), company: { findUnique: jest.fn(async () => ({ inventory_cost_method: 'PROMEDIO' })) },
+      inventoryCostLayer: { findMany: jest.fn(async () => [{ id: 'layer', quantity_remaining: 100000, unit_cost: 1 }]), update: jest.fn(), create: jest.fn(async () => ({ id: 'layer-new' })) },
       inventoryTransfer: {
         findMany: jest.fn(),
         findFirst: jest.fn(),

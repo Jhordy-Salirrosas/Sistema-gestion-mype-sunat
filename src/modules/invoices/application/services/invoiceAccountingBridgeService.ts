@@ -103,7 +103,7 @@ export class InvoiceAccountingBridgeService {
     private readonly prisma: PrismaService,
     private readonly registroMovimientos: RegisterManualMovementUseCase,
     private readonly generadorAsientos: GenerateAccountingEntryUseCase,
-    @Optional() private readonly capas?: InventoryCostLayerService,
+    @Optional() _capas?: InventoryCostLayerService,
   ) {}
 
   /**
@@ -117,13 +117,14 @@ export class InvoiceAccountingBridgeService {
       factura.numeroCompleto ??
       `${factura.serie}-${String(factura.correlativo).padStart(8, '0')}`;
 
-    const kardex = await this.registrarKardex(factura, numero, errores);
+    const { requiereCosto, ...kardex } = await this.registrarKardex(factura, numero, errores);
     const contabilidad = factura.motivoBloqueoAsiento
       ? (errores.push(factura.motivoBloqueoAsiento), { asientoOmitido: true })
       : await this.registrarAsiento(factura, numero, errores);
 
-    const costo = factura.motivoBloqueoAsiento
+    const costo = factura.motivoBloqueoAsiento || errores.some(e => e.startsWith('Kardex'))
       ? {}
+      : !requiereCosto ? { costoVenta: 0, asientoCostoOmitido: true }
       : factura.tipoComprobante === '07'
         ? await this.revertirCostoNota(factura, numero, errores)
         : !['01', '03'].includes(factura.tipoComprobante)
@@ -153,8 +154,8 @@ export class InvoiceAccountingBridgeService {
     factura: FacturaParaPuente,
     numero: string,
     errores: string[],
-  ): Promise<{ movimientosRegistrados: number; movimientosOmitidos: number }> {
-    const pendientes = movimientosDeFactura(factura.items, {
+  ): Promise<{ movimientosRegistrados: number; movimientosOmitidos: number; requiereCosto: boolean }> {
+    let pendientes = movimientosDeFactura(factura.items, {
       tipoComprobante: factura.tipoComprobante,
       serie: factura.serie,
       correlativo: factura.correlativo,
@@ -163,8 +164,50 @@ export class InvoiceAccountingBridgeService {
       motivoNota: factura.motivoNota,
     });
 
+    let servicios = 0;
+    const fisicos: typeof pendientes[number][] = [];
+    for (const movimiento of pendientes) {
+      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: movimiento.sku }, select: { is_inventory: true } });
+      if (producto?.is_inventory === false && factura.tipoComprobante !== '07') servicios++;
+      else fisicos.push(movimiento);
+    }
+    pendientes = fisicos;
+    let requiereCosto = pendientes.length > 0;
+    if (factura.tipoComprobante === '07' && pendientes.length) {
+      if (!factura.documentoAfectadoId) {
+        errores.push('Kardex: falta el comprobante original para acreditar el costo de devolución.');
+        return { movimientosRegistrados: 0, movimientosOmitidos: servicios, requiereCosto };
+      }
+      const original = await this.prisma.invoice.findFirst({ where: { id: factura.documentoAfectadoId, company_id: factura.companyId },
+        select: { serie: true, correlativo: true, payload_ubl: true } });
+      if (!original) {
+        errores.push('Kardex: el comprobante original no existe.');
+        return { movimientosRegistrados: 0, movimientosOmitidos: servicios, requiereCosto };
+      }
+      const referencia = `${original.serie}-${String(original.correlativo).padStart(8, '0')}`;
+      const originales = await this.prisma.inventoryMovement.findMany({ where: {
+        company_id: factura.companyId, source_reference_id: referencia, operation_type_code: '01',
+      }, select: { quantity: true, total_cost: true, warehouse: { select: { warehouse_code: true } }, product: { select: { sku: true } } } });
+      const valorizados: typeof pendientes[number][] = [];
+      for (const movimiento of pendientes) {
+        const salida = originales.find(m => m.product.sku === movimiento.sku);
+        if (!salida) {
+          const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: movimiento.sku }, select: { is_inventory: true } });
+          if (producto?.is_inventory === false) { servicios++; continue; }
+        }
+        if (!salida || !(Number(salida.quantity) > 0) || salida.total_cost == null || !Number.isFinite(Number(salida.total_cost)) || movimiento.quantity > Number(salida.quantity)) {
+          errores.push(`Kardex ${movimiento.sku}: falta costo histórico o la devolución supera la salida original.`);
+          continue;
+        }
+        valorizados.push({ ...movimiento, warehouse_code: salida.warehouse?.warehouse_code ?? (original.payload_ubl as unknown as { almacen?: string })?.almacen ?? factura.almacen,
+          unit_cost: Number(salida.total_cost) / Number(salida.quantity) });
+      }
+      pendientes = valorizados;
+      requiereCosto = pendientes.length > 0;
+    }
+
     let registrados = 0;
-    let omitidos = 0;
+    let omitidos = servicios;
 
     for (const movimiento of pendientes) {
       const sku = movimiento.sku;
@@ -176,8 +219,14 @@ export class InvoiceAccountingBridgeService {
         factura.companyId,
         numero,
         sku,
+        movimiento.quantity,
+        movimiento.operation_type_code,
       );
 
+      if (yaRegistrado === 'INCONSISTENTE') {
+        errores.push(`Kardex ${sku}: la cantidad del movimiento existente no coincide con el documento; requiere conciliación.`);
+        continue;
+      }
       if (yaRegistrado === null) {
         // El SKU no existe en el inventario de la empresa: la línea no se puede
         // mover y hay que decirlo. Silenciarlo dejaría el Kardex incompleto sin
@@ -207,7 +256,7 @@ export class InvoiceAccountingBridgeService {
       }
     }
 
-    return { movimientosRegistrados: registrados, movimientosOmitidos: omitidos };
+    return { movimientosRegistrados: registrados, movimientosOmitidos: omitidos, requiereCosto };
   }
 
   /** Crea el asiento contable si esa factura no tiene uno ya. */
@@ -265,6 +314,16 @@ export class InvoiceAccountingBridgeService {
       ...(cuentaRegla(8, 'RETENCION', 'IGV - Retenciones') ? { porCobrarRetenido: cuentaRegla(8, 'RETENCION', 'IGV - Retenciones')! } : {}),
       ...(cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos') ? { descuento: cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos')! } : {}),
     };
+    const requeridas: [keyof typeof CUENTAS_VENTA, number][] = [
+      ['porCobrar', i.total - i.detraccion - i.retencion], ['descuento', i.descuentoNoAfecto ?? descuento],
+      ['detraccion', i.detraccion], ['porCobrarRetenido', i.retencion], ['gravada', i.gravado],
+      ['exonerada', i.exonerado], ['inafecta', i.inafecto], ['igv', i.igv], ['icbper', i.icbper],
+    ];
+    const faltantes = requeridas.filter(([rol, monto]) => monto > 0 && !cuentas[rol]).map(([rol]) => rol);
+    if (faltantes.length) {
+      errores.push(`Contabilidad: mapeo VENTA incompleto (${faltantes.join(', ')}); asiento pendiente, sin cuentas de respaldo.`);
+      return { asientoOmitido: false };
+    }
     const datos = { ...i, descuento: descuento > 0 ? descuento : 0, cuentas };
     const lineas = factura.tipoComprobante === '07'
       ? lineasAsientoNotaCredito(datos)
@@ -328,26 +387,28 @@ export class InvoiceAccountingBridgeService {
       errores.push('Costo de nota: el comprobante original no existe.');
       return {};
     }
-    const numeroOriginal = factura.documentoAfectadoNumero ?? `${original.serie}-${String(original.correlativo).padStart(8, '0')}`;
+    if (errores.some(e => e.startsWith('Kardex'))) return {};
     const movimientos = await this.prisma.inventoryMovement.findMany({
-      where: { company_id: factura.companyId, source_reference_id: numeroOriginal, operation_type_code: '01' },
-      select: { quantity: true, previous_unit_cost: true, product: { select: { sku: true } } },
+      where: { company_id: factura.companyId, source_reference_id: numero, operation_type_code: '05' },
+      select: { total_cost: true },
     });
-    const costoPorSku = new Map<string, number>();
-    for (const m of movimientos) {
-      const sku = m.product?.sku;
-      if (sku) costoPorSku.set(sku, Number(m.previous_unit_cost));
+    if (!movimientos.length) {
+      errores.push('Costo de nota: falta el movimiento de devolución valorizado.');
+      return {};
     }
-    const costo = Math.round(factura.items.reduce((sum, item) => {
-      const unitario = costoPorSku.get(item.itemCode?.trim() ?? '') ?? 0;
-      return sum + Math.max(0, item.cantidad) * unitario;
-    }, 0) * 100) / 100;
+    const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.total_cost), 0) * 100) / 100;
+    if (!Number.isFinite(costo)) { errores.push('Costo de nota: falta costo acreditado.'); return {}; }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
     const reglas = (await (this.prisma as any).accountingRule?.findMany({
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
       orderBy: { line_order: 'asc' },
     })) ?? [];
     const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    const mappings = await this.prisma.accountingMapping?.findMany({ where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true } }) ?? [];
+    const roles = new Map(mappings.map(m => [m.role_code, m.account_code]));
+    const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
+    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO');
+    if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); reverso pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
         companyId: factura.companyId,
@@ -358,21 +419,10 @@ export class InvoiceAccountingBridgeService {
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost-rev:${factura.id}`,
         lines: [
-          { lineOrder: 1, accountCode: porOrden.get(11) ?? '201', accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
-          { lineOrder: 2, accountCode: porOrden.get(10) ?? '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
+          { lineOrder: 1, accountCode: cuentaInventario, accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: cuentaCosto, accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
         ],
       });
-      if (this.capas && await this.capas.metodo(factura.companyId) === 'FIFO') {
-        const almacen = await this.prisma.inventoryWarehouse.findFirst({ where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' }, select: { id: true } });
-        if (almacen) {
-          for (const item of factura.items) {
-            const unitario = costoPorSku.get(item.itemCode?.trim() ?? '') ?? 0;
-            if (!(unitario > 0) || !(item.cantidad > 0)) continue;
-            const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
-            if (producto) await this.capas.registrarEntrada(factura.companyId, almacen.id, producto.id, item.cantidad, unitario);
-          }
-        }
-      }
       return { asientoCostoId: asiento.id, costoVenta: -costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Reverso costo: ${(error as Error).message}`);
@@ -381,38 +431,6 @@ export class InvoiceAccountingBridgeService {
   }
 
   /** Costo FIFO de las líneas vendidas, o null si no hay capas suficientes. */
-  private async costoFifo(factura: FacturaParaPuente): Promise<number | null> {
-    if (!this.capas) return null;
-    const metodo = await this.capas.metodo(factura.companyId);
-    if (metodo !== 'FIFO') return null;
-    const almacen = await this.prisma.inventoryWarehouse.findFirst({
-      where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' },
-      select: { id: true },
-    });
-    if (!almacen) return null;
-    let total = 0;
-    for (const item of factura.items) {
-      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
-      if (!producto || !(item.cantidad > 0)) continue;
-      const layers = await this.capas.capas(factura.companyId, almacen.id, producto.id);
-      if (layers.length === 0) return null;
-      const calculo = this.capas.calcular(layers, 'SALIDA', item.cantidad);
-      total += Number(calculo.movementTotalCost);
-    }
-    return Math.round(total * 100) / 100;
-  }
-
-  /** Consume las capas FIFO después de contabilizar el costo. */
-  private async consumirCapasFactura(factura: FacturaParaPuente): Promise<void> {
-    if (!this.capas) return;
-    const almacen = await this.prisma.inventoryWarehouse.findFirst({ where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' }, select: { id: true } });
-    if (!almacen) return;
-    for (const item of factura.items) {
-      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
-      if (producto && item.cantidad > 0) await this.capas.consumir(factura.companyId, almacen.id, producto.id, item.cantidad);
-    }
-  }
-
   /** Contabiliza el costo de las salidas de almacén de la factura. */
   private async registrarCostoVenta(
     factura: FacturaParaPuente,
@@ -428,10 +446,14 @@ export class InvoiceAccountingBridgeService {
 
     const movimientos = await this.prisma.inventoryMovement.findMany({
       where: { company_id: factura.companyId, source_reference_id: numero, operation_type_code: '01' },
-      select: { quantity: true, previous_unit_cost: true },
+      select: { total_cost: true },
     });
-    const costoFifo = await this.costoFifo(factura);
-    const costo = costoFifo ?? Math.round(movimientos.reduce((sum, m) => sum + Number(m.quantity) * Number(m.previous_unit_cost), 0) * 100) / 100;
+    // El movimiento ya valorizó y consumió el inventario; nunca volver a leer capas.
+    const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.total_cost), 0) * 100) / 100;
+    if (!Number.isFinite(costo)) {
+      errores.push('Costo de ventas: movimiento sin costo real acreditado.');
+      return {};
+    }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
     const mappings = (await (this.prisma as any).accountingMapping?.findMany({
@@ -443,6 +465,9 @@ export class InvoiceAccountingBridgeService {
       orderBy: { line_order: 'asc' },
     })) ?? [];
     const porOrden = new Map<number, string>(reglasCosto.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
+    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO');
+    if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); costo pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
         companyId: factura.companyId,
@@ -453,11 +478,10 @@ export class InvoiceAccountingBridgeService {
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost:${factura.id}`,
         lines: [
-          { lineOrder: 1, accountCode: porOrden.get(10) ?? roles.get('COSTO_VENTA') ?? '691', accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
-          { lineOrder: 2, accountCode: porOrden.get(11) ?? roles.get('INVENTARIO') ?? '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
+          { lineOrder: 1, accountCode: cuentaCosto, accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: cuentaInventario, accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
         ],
       });
-      if (costoFifo !== null) await this.consumirCapasFactura(factura);
       return { asientoCostoId: asiento.id, costoVenta: costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Costo de ventas: ${(error as Error).message}`);
@@ -479,7 +503,9 @@ export class InvoiceAccountingBridgeService {
     companyId: string,
     numeroDocumento: string,
     sku: string,
-  ): Promise<boolean | null> {
+    cantidad: number,
+    operacion: string,
+  ): Promise<boolean | null | 'INCONSISTENTE'> {
     const producto = await this.prisma.inventoryProduct.findFirst({
       where: { company_id: companyId, sku },
       select: { id: true },
@@ -496,12 +522,13 @@ export class InvoiceAccountingBridgeService {
       where: {
         company_id: companyId,
         source_reference_id: numeroDocumento,
-        operation_type_code: '01',
+        operation_type_code: operacion,
         product_id: producto.id,
       },
-      select: { id: true },
+      select: { id: true, quantity: true },
     });
 
+    if (movimiento?.quantity != null && Number(movimiento.quantity) !== cantidad) return 'INCONSISTENTE';
     return movimiento !== null;
   }
 

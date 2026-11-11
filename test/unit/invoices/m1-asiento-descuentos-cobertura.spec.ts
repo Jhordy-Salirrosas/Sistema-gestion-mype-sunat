@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 import { describe, expect, it, jest } from '@jest/globals';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
@@ -17,7 +18,7 @@ function consumidor(payload: unknown, resultado: Record<string, unknown> = {}) {
   const fila = { id: 'inv-1', company_id: 'empresa', tipo_comprobante: '01', serie: 'F001', correlativo: 1,
     fecha_emision: new Date('2026-03-15T00:00:00Z'), payload_ubl: payload, items: [item] };
   const instancia = new InvoiceJobConsumer({} as never, {} as never,
-    { invoice: { findUnique: jest.fn(async () => fila) } } as never,
+    withBridgeTransaction({ invoice: { findUnique: jest.fn(async () => fila) } }) as never,
     {} as never, {} as never, { verifySignature: jest.fn(() => true) } as never, {} as never, {} as never,
     { registrar } as never, {} as never, { execute } as never);
   const interno = instancia as unknown as {

@@ -153,3 +153,10 @@ it.each(['pantalla', 'fiscal'])('sin sale_price bloquea %s antes de numerar o pe
   expect(h.tx.invoice.create).not.toHaveBeenCalled();
   expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
 });
+
+it('7M publicación null aborta antes de confirmar respuesta/idempotencia', async () => {
+ const h = harness(); h.queue.enqueueInvoiceInTx.mockResolvedValueOnce(null as never);
+ await expect(h.service.emitir(pantalla as never, 'empresa', 'request-key-null-0001')).rejects.toMatchObject({ response: { code: 'OUTBOX_WRITE_FAILED' } });
+ expect(h.tx.invoiceCreationRequest.create).not.toHaveBeenCalled();
+ expect(h.tx.invoiceItem.createMany).not.toHaveBeenCalled();
+});

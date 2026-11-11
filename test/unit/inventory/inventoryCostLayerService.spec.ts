@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { InventoryCostLayerService } from '../../../src/modules/inventory/application/services/inventoryCostLayerService';
 
 describe('InventoryCostLayerService', () => {
-  const prisma = {
+  const prisma = { $executeRaw: jest.fn(),
     company: { findUnique: jest.fn(), update: jest.fn() },
     inventoryCostLayer: { findMany: jest.fn(), create: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
     inventoryProduct: { count: jest.fn() },
@@ -35,7 +35,7 @@ describe('InventoryCostLayerService', () => {
 
   it('consume capas en orden', async () => {
     prisma.inventoryCostLayer.findMany.mockResolvedValue([
-      { id: 'l1', quantity_remaining: 2 }, { id: 'l2', quantity_remaining: 5 },
+      { id: 'l1', quantity_remaining: 2, unit_cost: 10 }, { id: 'l2', quantity_remaining: 5, unit_cost: 20 },
     ]);
     prisma.inventoryCostLayer.update.mockResolvedValue({});
     await service.consumir('c1', 'w1', 'p1', 4);

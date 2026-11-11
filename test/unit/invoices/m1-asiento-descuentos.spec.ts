@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 import { describe, expect, it, jest } from '@jest/globals';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { balanceAsiento, lineasAsientoVenta } from '../../../src/modules/invoices/application/services/accountingBridge';
@@ -76,7 +77,7 @@ describe('asiento de descuentos 01 y 03', () => {
     const accounting = { execute: jest.fn() };
     const consumer = new InvoiceJobConsumer(
       {} as never, { processWithRetry: jest.fn(async () => ({ estado: InvoiceStatus.ACEPTADO })) } as never,
-      { invoice: { findUnique: jest.fn(async () => fila), update: jest.fn() } } as never,
+      withBridgeTransaction({ invoice: { findUnique: jest.fn(async () => fila), update: jest.fn() } }) as never,
       {} as never, {} as never, { verifySignature: jest.fn(() => true) } as never,
       { validar: jest.fn(async () => ({ valido: true, errores: [], codigosDesconocidos: [], bloqueado: false, motivoBloqueo: null, validadoDeVerdad: true })) } as never,
       {} as never, { registrar } as never, { guardar: jest.fn(async () => 'hash-fixture') } as never, accounting as never,
