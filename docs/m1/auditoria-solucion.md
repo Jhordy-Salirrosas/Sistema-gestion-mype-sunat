@@ -2634,3 +2634,10 @@ referencias/idempotencia; no construye otro asiento ni borra el motivo original.
 El adaptador de respaldo queda retirado para escrituras. Contabilidad intacta.
 Focal: 5 suites / 93 pruebas aprobadas, incluida reparación del mapeo seguida de
 reproceso sin repetir la descarga física ni consumir otra capa.
+
+### 7M — publicación null revierte creación
+
+Si enqueueInvoiceInTx devuelve null, la transacción de creación falla con el
+contrato OUTBOX_WRITE_FAILED; no confirma respuesta idempotente ni comprobante
+sin trabajo. Resiliencia no se modifica. Focal: 2 suites / 33 pruebas aprobadas;
+PostgreSQL real confirma cero facturas persistidas tras insertar y recibir null.

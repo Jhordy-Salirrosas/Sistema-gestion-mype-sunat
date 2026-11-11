@@ -75,7 +75,8 @@ export class PrismaInvoiceRepository implements IInvoiceRepositoryPort {
             } });
           }
           // Encolar el trabajo utilizando el cliente transaccional.
-          await this.queueService.enqueueInvoiceInTx(tx, created.id);
+          const jobId = await this.queueService.enqueueInvoiceInTx(tx, created.id);
+          if (!jobId) throw new Error('OUTBOX_ENQUEUE_NULL: la cola no confirmó la publicación transaccional.');
 
           return created;
         };

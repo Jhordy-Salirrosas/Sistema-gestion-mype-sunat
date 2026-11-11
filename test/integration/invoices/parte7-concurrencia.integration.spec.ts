@@ -1,3 +1,4 @@
+import { PrismaInvoiceRepository } from '../../../src/modules/invoices/infrastructure/persistence/prismaInvoiceRepository';
 import { RegisterManualMovementUseCase } from '../../../src/modules/inventory/application/use-cases/registerManualMovementUseCase';
 import { InventoryCostLayerService } from '../../../src/modules/inventory/application/services/inventoryCostLayerService';
 import { InventoryTransferService } from '../../../src/modules/inventory/application/services/inventoryTransferService';
@@ -114,6 +115,14 @@ const url = process.env.TEST_DATABASE_URL;
   const layers = await db.inventoryCostLayer.findMany({ where: { company_id: company } });
   expect(layers.reduce((sum,l) => sum + Number(l.quantity_remaining),0)).toBe(1);
   expect(Number((await db.inventoryBalance.findFirstOrThrow({ where: { warehouse_id: warehouse } })).average_unit_cost)).toBe(10);
+ });
+
+ it('7M cola null revierte la factura insertada en PostgreSQL', async () => {
+  const queue = { enqueueInvoiceInTx: jest.fn(async () => null) };
+  const repo = new PrismaInvoiceRepository(db, queue as never);
+  await expect(repo.saveWithTransactionalOutbox({ ...data(7), estado: 'PENDIENTE' } as never)).rejects.toMatchObject({ response: { code: 'OUTBOX_WRITE_FAILED' } });
+  expect(queue.enqueueInvoiceInTx).toHaveBeenCalledTimes(1);
+  expect(await db.invoice.count({ where: { company_id: company } })).toBe(0);
  });
 
 });
