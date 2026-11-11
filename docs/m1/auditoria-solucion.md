@@ -2490,3 +2490,24 @@ esquema, reglas fiscales, estados ni XML. retry-cdr/ESTADOS_REINTENTABLES intact
 la nueva evidencia solo se lee para presentar la acción. Nada de datos históricos
 reescritos, emisiones reales, SUNAT real, PR, merges o despliegues. No queda
 ningún punto abierto dentro del alcance aprobado.
+
+## Parte 7 — puente y guardas (autorización de Jhordy)
+
+Base reconciliada: back dev `7ac5cbbc` (merge #277), front dev `c20a639`
+(merge #188). Back: 279 suites / 2561 pruebas aprobadas, 4 suites / 38
+pruebas omitidas, 12 snapshots. Front: 123 suites / 885 pruebas aprobadas.
+La medición anterior 276/2552 sobre bdb50766 omitía adicionalmente
+`pulidoDlq.integration.spec.ts` (1 prueba) y
+`sireDashboardMetrics.integration.spec.ts` (2), por TEST_DATABASE_URL ausente.
+La referencia origin/dev quedó antes desfasada porque el refspec del clon
+solo actualizaba main; se corrigió con fetch explícito del ref de dev.
+Pruebas DB únicamente en PostgreSQL 16 local desechable (127.0.0.1:5436),
+con migraciones existentes; ninguna migración nueva o base compartida.
+
+### 7A — costo desde el movimiento real
+
+El puente toma total_cost persistido por Kardex. No recalcula el costo de
+venta leyendo las capas restantes ni las consume una segunda vez.
+Regresión focal: TA-68, 1 suite / 41 pruebas aprobadas, incluida FIFO con
+costo ya consumido y aserciones de cero lecturas/consumos adicionales.
+La suite completa se repite al cierre de la ronda; XML fiscal intacto.

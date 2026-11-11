@@ -381,38 +381,6 @@ export class InvoiceAccountingBridgeService {
   }
 
   /** Costo FIFO de las líneas vendidas, o null si no hay capas suficientes. */
-  private async costoFifo(factura: FacturaParaPuente): Promise<number | null> {
-    if (!this.capas) return null;
-    const metodo = await this.capas.metodo(factura.companyId);
-    if (metodo !== 'FIFO') return null;
-    const almacen = await this.prisma.inventoryWarehouse.findFirst({
-      where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' },
-      select: { id: true },
-    });
-    if (!almacen) return null;
-    let total = 0;
-    for (const item of factura.items) {
-      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
-      if (!producto || !(item.cantidad > 0)) continue;
-      const layers = await this.capas.capas(factura.companyId, almacen.id, producto.id);
-      if (layers.length === 0) return null;
-      const calculo = this.capas.calcular(layers, 'SALIDA', item.cantidad);
-      total += Number(calculo.movementTotalCost);
-    }
-    return Math.round(total * 100) / 100;
-  }
-
-  /** Consume las capas FIFO después de contabilizar el costo. */
-  private async consumirCapasFactura(factura: FacturaParaPuente): Promise<void> {
-    if (!this.capas) return;
-    const almacen = await this.prisma.inventoryWarehouse.findFirst({ where: { company_id: factura.companyId, warehouse_code: factura.almacen ?? 'ALM-01' }, select: { id: true } });
-    if (!almacen) return;
-    for (const item of factura.items) {
-      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: item.itemCode?.trim() }, select: { id: true } });
-      if (producto && item.cantidad > 0) await this.capas.consumir(factura.companyId, almacen.id, producto.id, item.cantidad);
-    }
-  }
-
   /** Contabiliza el costo de las salidas de almacén de la factura. */
   private async registrarCostoVenta(
     factura: FacturaParaPuente,
@@ -428,10 +396,14 @@ export class InvoiceAccountingBridgeService {
 
     const movimientos = await this.prisma.inventoryMovement.findMany({
       where: { company_id: factura.companyId, source_reference_id: numero, operation_type_code: '01' },
-      select: { quantity: true, previous_unit_cost: true },
+      select: { total_cost: true },
     });
-    const costoFifo = await this.costoFifo(factura);
-    const costo = costoFifo ?? Math.round(movimientos.reduce((sum, m) => sum + Number(m.quantity) * Number(m.previous_unit_cost), 0) * 100) / 100;
+    // El movimiento ya valorizó y consumió el inventario; nunca volver a leer capas.
+    const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.total_cost), 0) * 100) / 100;
+    if (!Number.isFinite(costo)) {
+      errores.push('Costo de ventas: movimiento sin costo real acreditado.');
+      return {};
+    }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
     const mappings = (await (this.prisma as any).accountingMapping?.findMany({
@@ -457,7 +429,6 @@ export class InvoiceAccountingBridgeService {
           { lineOrder: 2, accountCode: porOrden.get(11) ?? roles.get('INVENTARIO') ?? '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
         ],
       });
-      if (costoFifo !== null) await this.consumirCapasFactura(factura);
       return { asientoCostoId: asiento.id, costoVenta: costo, asientoCostoOmitido: false };
     } catch (error) {
       errores.push(`Costo de ventas: ${(error as Error).message}`);

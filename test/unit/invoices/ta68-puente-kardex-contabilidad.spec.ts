@@ -565,7 +565,7 @@ describe('TA-68 · servicio puente', () => {
           opciones.movimientoYaExiste ? { id: 'mov-0' } : null,
         ),
         findMany: jest.fn(async () => opciones.costoVenta
-          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2, product: { sku: 'CEM-001' } }]
+          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2, total_cost: opciones.costoVenta, product: { sku: 'CEM-001' } }]
           : []),
       },
       accountingEntry: {
@@ -674,19 +674,20 @@ describe('TA-68 · servicio puente', () => {
     expect(capas.registrarEntrada).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20, 30);
   });
 
-  it('usa capas FIFO para el costo de venta', async () => {
+  it('usa el costo FIFO ya consumido del movimiento, sin leer ni consumir capas otra vez', async () => {
     const prisma = {
       inventoryProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }) },
       inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
-      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ total_cost: 600 }]) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
-      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([{ total_cost: 600 }]) },
     };
     const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), capas: jest.fn().mockResolvedValue([{ quantity: 100, unitCost: 30 }]), calcular: jest.fn().mockReturnValue({ movementTotalCost: 600 }), consumir: jest.fn().mockResolvedValue(undefined) };
     const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
     const r = await puente.registrar(facturaPrueba());
     expect(r.costoVenta).toBe(600);
-    expect(capas.consumir).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20);
+    expect(capas.consumir).not.toHaveBeenCalled();
+    expect(capas.capas).not.toHaveBeenCalled();
   });
 
   it('con bloqueo contable conserva Kardex y avisa sin crear asiento', async () => {
