@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -23,6 +24,7 @@ import { GenerateAccountingEntryUseCase } from '../../application/use-cases/gene
 import { GenerateClosingEntryUseCase } from '../../application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUseCase';
+import { ValidateTaxPleUseCase } from '../../application/use-cases/validateTaxPleUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
@@ -45,6 +47,7 @@ export class AccountingController {
     private readonly generateClosingEntryUseCase: GenerateClosingEntryUseCase,
     private readonly exportPleUseCase: ExportPleTxtUseCase,
     private readonly exportTaxPleUseCase: ExportTaxPleUseCase,
+    private readonly validateTaxPleUseCase: ValidateTaxPleUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
@@ -262,6 +265,22 @@ export class AccountingController {
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);
+  }
+
+  @Post('ple/tax-validate')
+  @HttpCode(HttpStatus.OK)
+  async validateTaxPle(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() body: { year: number; month: number; bookCode: '080100' | '140100'; companyRuc: string },
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.validateTaxPleUseCase.execute(
+      companyId,
+      body.companyRuc,
+      Number(body.year),
+      Number(body.month),
+      body.bookCode,
+    );
   }
 
   @Post('ple/tax-export')
