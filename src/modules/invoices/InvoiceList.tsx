@@ -96,7 +96,7 @@ interface VisorState {
 export const InvoiceList = () => {
   const companyId = useAuthStore(state => state.activeCompany?.tenantId);
   const ruc = useAuthStore(state => state.activeCompany?.ruc) ?? '';
-  const { data: configuracionFiscal, recargar: recargarConfiguracion } = useInvoiceConfig(ruc);
+  const { data: configuracionFiscal, recargar: recargarConfiguracion, cargando: configuracionCargando, error: errorConfiguracion } = useInvoiceConfig(ruc);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = tabDesdeRuta(pathname);
@@ -340,6 +340,8 @@ export const InvoiceList = () => {
           productos={productosEmision}
           seriesConfiguradas={configuracionFiscal?.series.map(s => ({ document_type: s.tipoComprobante, series: s.serie, is_active: s.activa, current_correlative: s.siguienteCorrelativo === undefined ? undefined : s.siguienteCorrelativo - 1 }))}
           perfilComercial={configuracionFiscal?.perfil_comercial}
+          configuracionCargando={configuracionCargando}
+          configuracionError={Boolean(errorConfiguracion)}
           onEmitir={agregarComprobante}
           onCerrar={() => setModalEmision(null)}
         />

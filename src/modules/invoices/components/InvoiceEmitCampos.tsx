@@ -38,6 +38,8 @@ interface InvoiceEmitCamposProps {
   borrador: BorradorEmision;
   series?: readonly string[];
   correlativoActual?: number;
+  configuracionCargando?: boolean;
+  configuracionError?: boolean;
   actualizar: (parcial: Partial<BorradorEmision>) => void;
   /** Comprobantes ya emitidos: se usan para vincular las notas. */
   existentes: readonly ComprobanteDemo[];
@@ -67,6 +69,8 @@ export const InvoiceEmitCampos = ({
   borrador: b,
   series = [],
   correlativoActual,
+  configuracionCargando = false,
+  configuracionError = false,
   actualizar,
   existentes,
   total,
@@ -120,7 +124,7 @@ export const InvoiceEmitCampos = ({
         disabled={esNota && Boolean(b.documentoAfectado.trim())}
       />
 
-      <InvoiceNextNumber serie={b.serie} actual={correlativoActual} />
+      <InvoiceNextNumber cargando={configuracionCargando} error={configuracionError} serie={b.serie} actual={correlativoActual} />
 
       {esNota && (
         <>

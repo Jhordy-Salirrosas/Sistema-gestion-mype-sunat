@@ -42,13 +42,13 @@ export default function InvoicesDashboardPage() {
           <PeriodInput id="invoices-dashboard-period" value={period} onChange={setPeriod} />
         </div>
         <Badge variant={m && m.rechazados > 0 ? 'destructive' : 'outline'}>
-          {m && m.rechazados > 0 ? 'Requiere revisión' : 'Sin rechazos'}
+          {!m ? metricas.isError ? 'Indicadores no disponibles' : 'Cargando métricas…' : m.rechazados > 0 ? 'Requiere revisión' : 'Sin rechazos'}
         </Badge>
         <Badge
           variant={alertas.data?.gravedadGlobal === 'CRITICO' ? 'destructive' : 'secondary'}
           title={alertas.data ? `${alertas.data.certificado.mensaje} ${alertas.data.dlq.mensaje}` : undefined}
         >
-          Alerta: {alertas.data?.gravedadGlobal ?? 'SIN_DATOS'}
+          {alertas.isPending ? 'Cargando alertas…' : alertas.isError ? 'Alertas no disponibles' : `Alerta: ${alertas.data?.gravedadGlobal ?? 'SIN_DATOS'}`}
           {alertas.data?.gravedadGlobal === 'CRITICO' ? ` · ${motivoAlerta}` : ''}
         </Badge>
       </div>
@@ -57,11 +57,12 @@ export default function InvoicesDashboardPage() {
         {kpis.map(({ label, value, icon: Icon }) => (
           <Card key={label} className="p-4">
             <div className="flex items-center justify-between text-muted-foreground"><span className="text-xs">{label}</span><Icon className="h-4 w-4" /></div>
-            <p className="text-2xl font-bold mt-2">{value}</p>
+            <p className="text-2xl font-bold mt-2">{!m ? metricas.isError ? 'No disponible' : 'Cargando…' : value}</p>
           </Card>
         ))}
       </div>
 
+      {metricas.isError && !m && <p role="alert">No se pudieron cargar los indicadores.</p>}
       {alertas.data && alertas.data.gravedadGlobal !== 'OK' ? (
         <Card className="p-4 mb-5 text-sm">
           <p className="font-semibold mb-1">Alertas operativas</p>
