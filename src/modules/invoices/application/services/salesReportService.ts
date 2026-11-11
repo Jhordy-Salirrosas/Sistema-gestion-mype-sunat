@@ -4,9 +4,9 @@ import { PrismaService } from '../../../../database/prismaService';
 export interface SalesReportResult {
   from: string;
   to: string;
-  totals: { sales: number; taxable: number; igv: number; cost: number; profit: number; margin: number; documents: number };
+  totals: { sales: number; taxable: number; igv: number; cost: number; profit: number; margin: number; documents: number; withoutCost: { count: number; sales: number }; }
   byCustomer: Array<{ document: string; customer: string; sales: number; cost: number; profit: number; documents: number }>;
-  byDocument: Array<{ id: string; number: string; date: string; customer: string; total: number; cost: number; profit: number }>;
+  byDocument: Array<{ id: string; number: string; date: string; customer: string; total: number; cost: number; profit: number; hasCost: boolean }>;
   daily: Array<{ date: string; sales: number; cost: number; profit: number }>;
 }
 
@@ -45,15 +45,17 @@ export class SalesReportService {
     const porCliente = new Map<string, { document: string; customer: string; sales: number; cost: number; profit: number; documents: number }>();
     const porDia = new Map<string, { sales: number; cost: number; profit: number }>();
     const documentos: SalesReportResult['byDocument'] = [];
-    let ventas = 0, base = 0, igv = 0, costo = 0;
+    let ventas = 0, base = 0, igv = 0, costo = 0, ventasConCosto = 0, sinCosto = 0, ventasSinCosto = 0;
 
     for (const f of facturas) {
       const total = Number(f.monto_total);
       const c = costoPorFactura.get(f.id) ?? 0;
+      const tieneCosto = costoPorFactura.has(f.id);
       const utilidad = r2(total - c);
       ventas += total; base += Number(f.taxable_operations); igv += Number(f.total_igv); costo += c;
+      if (tieneCosto) ventasConCosto += total; else { sinCosto += 1; ventasSinCosto += total; }
       const numero = `${f.serie}-${String(f.correlativo).padStart(8, '0')}`;
-      documentos.push({ id: f.id, number: numero, date: f.fecha_emision.toISOString().slice(0, 10), customer: f.customer_legal_name ?? '', total: r2(total), cost: c, profit: utilidad });
+      documentos.push({ id: f.id, number: numero, date: f.fecha_emision.toISOString().slice(0, 10), customer: f.customer_legal_name ?? '', total: r2(total), cost: c, profit: utilidad, hasCost: tieneCosto });
       const key = f.customer_identity_number || f.customer_legal_name || '';
       const actual = porCliente.get(key) ?? { document: f.customer_identity_number ?? '', customer: f.customer_legal_name ?? '', sales: 0, cost: 0, profit: 0, documents: 0 };
       actual.sales += total; actual.cost += c; actual.profit += utilidad; actual.documents += 1;
@@ -65,7 +67,7 @@ export class SalesReportService {
     }
 
     const redondear = <T extends { sales: number; cost: number; profit: number }>(x: T) => ({ ...x, sales: r2(x.sales), cost: r2(x.cost), profit: r2(x.profit) });
-    const totales = { sales: r2(ventas), taxable: r2(base), igv: r2(igv), cost: r2(costo), profit: r2(ventas - costo), margin: ventas > 0 ? r2(((ventas - costo) / ventas) * 100) : 0, documents: facturas.length };
+    const totales = { sales: r2(ventas), taxable: r2(base), igv: r2(igv), cost: r2(costo), profit: r2(ventas - costo), margin: ventasConCosto > 0 ? r2(((ventasConCosto - costo) / ventasConCosto) * 100) : 0, documents: facturas.length, withoutCost: { count: sinCosto, sales: r2(ventasSinCosto) } };
     return {
       from: inicio.toISOString().slice(0, 10), to: fin.toISOString().slice(0, 10), totals: totales,
       byCustomer: [...porCliente.values()].map(redondear).sort((a, b) => b.sales - a.sales),
