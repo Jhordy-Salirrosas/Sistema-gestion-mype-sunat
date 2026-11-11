@@ -1,0 +1,527 @@
+[
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 0.9745762712,
+      "precioUnitario": 1.15,
+      "afectacion": "10",
+      "totalLinea": 8.17,
+      "igvLinea": 1.25
+    },
+    "total": 8.17,
+    "igv": 1.25
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "00",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 0.9745762712,
+      "precioUnitario": 1.15,
+      "afectacion": "10",
+      "totalLinea": 8.01,
+      "igvLinea": 1.22,
+      "descuentos": [
+        {
+          "codigo": "00",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 8.01,
+    "igv": 1.22
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "01",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 0.9745762712,
+      "precioUnitario": 1.15,
+      "afectacion": "10",
+      "totalLinea": 8.17,
+      "igvLinea": 1.25,
+      "descuentos": [
+        {
+          "codigo": "01",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 8.04,
+    "igv": 1.25
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 3,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 3,
+      "valorUnitario": 0.9745762712,
+      "precioUnitario": 1.15,
+      "afectacion": "10",
+      "totalLinea": 3.45,
+      "igvLinea": 0.53
+    },
+    "total": 3.45,
+    "igv": 0.53
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 3,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "00",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 3,
+      "valorUnitario": 0.9745762712,
+      "precioUnitario": 1.15,
+      "afectacion": "10",
+      "totalLinea": 3.29,
+      "igvLinea": 0.5,
+      "descuentos": [
+        {
+          "codigo": "00",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 3.29,
+    "igv": 0.5
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 3,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "01",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 3,
+      "valorUnitario": 0.9745762712,
+      "precioUnitario": 1.15,
+      "afectacion": "10",
+      "totalLinea": 3.45,
+      "igvLinea": 0.53,
+      "descuentos": [
+        {
+          "codigo": "01",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 3.32,
+    "igv": 0.53
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 0.5,
+      "precioUnitario": 1.01,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 0.5,
+      "valorUnitario": 0.8559322034,
+      "precioUnitario": 1.01,
+      "afectacion": "10",
+      "totalLinea": 0.51,
+      "igvLinea": 0.08
+    },
+    "total": 0.51,
+    "igv": 0.08
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 0.5,
+      "precioUnitario": 1.01,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "00",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 0.5,
+      "valorUnitario": 0.8559322034,
+      "precioUnitario": 1.01,
+      "afectacion": "10",
+      "totalLinea": 0.35,
+      "igvLinea": 0.05,
+      "descuentos": [
+        {
+          "codigo": "00",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 0.35,
+    "igv": 0.05
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 0.5,
+      "precioUnitario": 1.01,
+      "unidad": "NIU",
+      "afectacion": "10",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "01",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 0.5,
+      "valorUnitario": 0.8559322034,
+      "precioUnitario": 1.01,
+      "afectacion": "10",
+      "totalLinea": 0.51,
+      "igvLinea": 0.08,
+      "descuentos": [
+        {
+          "codigo": "01",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 0.38,
+    "igv": 0.08
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "20",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 1.15,
+      "precioUnitario": 1.15,
+      "afectacion": "20",
+      "totalLinea": 8.17,
+      "igvLinea": 0
+    },
+    "total": 8.17,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "20",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "00",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 1.15,
+      "precioUnitario": 1.15,
+      "afectacion": "20",
+      "totalLinea": 8.04,
+      "igvLinea": 0,
+      "descuentos": [
+        {
+          "codigo": "00",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 8.04,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "20",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "01",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 1.15,
+      "precioUnitario": 1.15,
+      "afectacion": "20",
+      "totalLinea": 8.17,
+      "igvLinea": 0,
+      "descuentos": [
+        {
+          "codigo": "01",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 8.04,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "30",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 1.15,
+      "precioUnitario": 1.15,
+      "afectacion": "30",
+      "totalLinea": 8.17,
+      "igvLinea": 0
+    },
+    "total": 8.17,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "30",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "00",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 1.15,
+      "precioUnitario": 1.15,
+      "afectacion": "30",
+      "totalLinea": 8.04,
+      "igvLinea": 0,
+      "descuentos": [
+        {
+          "codigo": "00",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 8.04,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 7.1,
+      "precioUnitario": 1.15,
+      "unidad": "NIU",
+      "afectacion": "30",
+      "cantidadBolsas": 0,
+      "descuento": {
+        "codigo": "01",
+        "monto": 0.13
+      }
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 7.1,
+      "valorUnitario": 1.15,
+      "precioUnitario": 1.15,
+      "afectacion": "30",
+      "totalLinea": 8.17,
+      "igvLinea": 0,
+      "descuentos": [
+        {
+          "codigo": "01",
+          "monto": 0.13
+        }
+      ]
+    },
+    "total": 8.04,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 10000,
+      "precioUnitario": 81.12999725341797,
+      "unidad": "NIU",
+      "afectacion": "20",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 10000,
+      "valorUnitario": 81.12999725341797,
+      "precioUnitario": 81.12999725341797,
+      "afectacion": "20",
+      "totalLinea": 811299.97,
+      "igvLinea": 0
+    },
+    "total": 811299.97,
+    "igv": 0
+  },
+  {
+    "item": {
+      "codigo": "X",
+      "descripcion": "Prueba",
+      "cantidad": 10000,
+      "precioUnitario": 81.12999725341797,
+      "unidad": "NIU",
+      "afectacion": "30",
+      "cantidadBolsas": 0
+    },
+    "linea": {
+      "id": 1,
+      "descripcion": "Prueba",
+      "codigo": "X",
+      "unidad": "NIU",
+      "cantidad": 10000,
+      "valorUnitario": 81.12999725341797,
+      "precioUnitario": 81.12999725341797,
+      "afectacion": "30",
+      "totalLinea": 811299.97,
+      "igvLinea": 0
+    },
+    "total": 811299.97,
+    "igv": 0
+  }
+]
