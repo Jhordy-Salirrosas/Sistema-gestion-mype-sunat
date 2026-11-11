@@ -38,6 +38,8 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
     try {
       for (const row of await this.store.pendientes()) {
         try {
+        const received = (row.result as { receivedCdr?: { contenido: string; status: string | null } } | null)?.receivedCdr;
+        if (received) { await this.store.finalizar(row, received.contenido, received.status); continue; }
         if (row.state === 'RESERVED') {
           if (row.kind === 'RC') { await this.enviarResumenDiario(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: '' }))); continue; }
           await this.enviarComunicacionBaja(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: m.motivo ?? 'Anulación de la operación' })));

@@ -1,3 +1,4 @@
+import { raReversalWork, raWorks } from './raBridgeReversalService';
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
@@ -85,12 +86,12 @@ export class SummaryAggregateStore {
   }
   async revision(id: string, error: string) { await this.prisma.invoiceAggregate.update({ where: { id }, data: { state: 'REVIEW', error } }); }
   async rechazar(id: string, codigo: string, error: string) { await this.prisma.invoiceAggregate.update({ where: { id }, data: { state: 'REJECTED', transport_uncertain: false, error, result: { codigo, mensaje: error } } }); }
-  async pendientes() { return this.prisma.invoiceAggregate.findMany({ where: { OR: [{ state: 'PREPARED' }, { state: 'RESERVED', updated_at: { lt: new Date(Date.now() - 60_000) } }] }, take: 50, orderBy: { created_at: 'asc' } }); }
+  async pendientes() { return this.prisma.invoiceAggregate.findMany({ where: { OR: [{ state: 'PREPARED' }, { state: 'RESERVED', updated_at: { lt: new Date(Date.now() - 60_000) } }, { state: { notIn: ['ACCEPTED', 'REJECTED'] }, result: { path: ['receivedCdr'], not: Prisma.DbNull } }] }, take: 50, orderBy: { created_at: 'asc' } }); }
   async listar(companyId: string) {
     if (!companyId) throw new BadRequestException('SUMMARY_COMPANY_REQUIRED');
     const rows = await this.prisma.invoiceAggregate.findMany({ where: { company_id: companyId }, orderBy: { created_at: 'desc' }, take: 100,
       select: { id: true, kind: true, identifier: true, reference_date: true, state: true, ticket: true, transport_uncertain: true, result: true, error: true, job_id: true, created_at: true } });
-    return rows.map(r => { const result = r.result as Record<string, unknown> | null; return { ...r, result: result ? { codigo: result.codigo, mensaje: result.mensaje, referencia: result.referencia } : null }; });
+    return rows.map(r => { const result = r.result as Record<string, unknown> | null; return { ...r, bridge_reversal: { pending: raWorks(r.result).filter(w => w.status !== 'DONE').length, done: raWorks(r.result).filter(w => w.status === 'DONE').length }, result: result ? { codigo: result.codigo, mensaje: result.mensaje, referencia: result.referencia } : null }; });
   }
   async finalizar(row: InvoiceAggregate, contenido: string, status: string | null) {
     const cdr = parseCdr(contenido);
@@ -121,6 +122,15 @@ export class SummaryAggregateStore {
     inspect(new XMLParser({ removeNSPrefix: true, parseTagValue: false }).parse(cdr.rawXml));
     if (named.length && (new Set(named).size !== snapshot.length || named.some(n => !snapshot.some(m => numberOf(m) === n)))) throw new Error('SUMMARY_CDR_MEMBER_MISMATCH');
     const accepted = cdr.responseCode === '0';
+    // El CDR recibido sobrevive a cualquier fallo posterior de materialización local.
+    await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT id FROM invoice_aggregates WHERE id = ${row.id} AND company_id = ${row.company_id} FOR UPDATE`;
+      const actual = await tx.invoiceAggregate.findUniqueOrThrow({ where: { id: row.id } });
+      if (actual.xml_hash !== row.xml_hash || JSON.stringify(actual.members) !== JSON.stringify(row.members)) throw new Error('SUMMARY_CDR_SNAPSHOT_CHANGED');
+      if (!['ACCEPTED', 'REJECTED'].includes(actual.state)) await tx.invoiceAggregate.update({ where: { id: row.id }, data: {
+        result: { ...(actual.result as object ?? {}), receivedCdr: { contenido, status } } as Prisma.InputJsonValue,
+      } });
+    });
     return this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT id FROM invoice_aggregates WHERE id = ${row.id} AND company_id = ${row.company_id} FOR UPDATE`;
       const actual = await tx.invoiceAggregate.findUniqueOrThrow({ where: { id: row.id } });
@@ -129,6 +139,7 @@ export class SummaryAggregateStore {
       if (accepted && row.kind === 'RA') {
         const updated = await tx.invoice.updateMany({ where: { company_id: row.company_id, id: { in: snapshot.map(m => m.id) }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } }, data: { estado: 'ANULADO' } });
         if (updated.count !== snapshot.length) throw new Error('SUMMARY_MEMBER_STATE_CHANGED');
+        for (const m of snapshot) await tx.transactionHistory.create({ data: { invoice_id: m.id, company_id: row.company_id, estado_anterior: null, estado_nuevo: 'ANULADO', codigo_error: 'M1_RA_REVERSAL_PENDING', mensaje_error: `ANULADO con reversión pendiente: ${row.identifier}.` } });
       }
       if (accepted && row.kind === 'RC') {
         const updated = await tx.invoice.updateMany({ where: { company_id: row.company_id, id: { in: snapshot.map(m => m.id) }, estado: 'PENDIENTE', transport_uncertain: false }, data: { estado: 'ACEPTADO' } });
@@ -138,7 +149,7 @@ export class SummaryAggregateStore {
         for (const member of snapshot) if (!await this.queue.enqueueInvoiceInTx(tx, member.id)) throw new Error('SUMMARY_ACCOUNTING_ENQUEUE_FAILED');
       }
       return tx.invoiceAggregate.update({ where: { id: row.id }, data: { state: accepted ? 'ACCEPTED' : 'REJECTED', transport_uncertain: false, error: accepted ? null : cdr.description,
-        result: { codigo: cdr.responseCode, mensaje: cdr.description, referencia: cdr.referenceId, status, contenido, xml: cdr.rawXml } as Prisma.InputJsonValue } });
+        result: { codigo: cdr.responseCode, mensaje: cdr.description, referencia: cdr.referenceId, status, contenido, xml: cdr.rawXml, ...(accepted && row.kind === 'RA' ? { bridgeReversals: raReversalWork(snapshot.map(m => m.id)) } : {}) } as unknown as Prisma.InputJsonValue } });
     });
   }
 }
