@@ -370,11 +370,11 @@ export class PurchasesService {
   async listPayables(companyId: string) {
     const compras = await this.prisma.nationalPurchase.findMany({
       where: { company_id: companyId, status: { not: 'ANULADA' } },
-      select: { supplier_doc_number: true, supplier_name: true, total_amount: true, paid_amount: true },
+      select: { supplier_doc_number: true, supplier_name: true, total_amount: true, paid_amount: true, issue_date: true },
     });
     const mapa = new Map<
       string,
-      { supplierDocNumber: string; supplierName: string; total: number; paid: number; balance: number; count: number }
+      { supplierDocNumber: string; supplierName: string; total: number; paid: number; balance: number; count: number; aging: { d0_30: number; d31_60: number; d61_90: number; d90_plus: number }; overdue: number; oldestDays: number }
     >();
     for (const c of compras) {
       const actual = mapa.get(c.supplier_doc_number) ?? {
@@ -384,6 +384,9 @@ export class PurchasesService {
         paid: 0,
         balance: 0,
         count: 0,
+        aging: { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 },
+        overdue: 0,
+        oldestDays: 0,
       };
       const total = Number(c.total_amount);
       const paid = Number(c.paid_amount ?? 0);
@@ -391,6 +394,16 @@ export class PurchasesService {
       actual.paid += paid;
       actual.balance += total - paid;
       actual.count += 1;
+      const saldo = total - paid;
+      const dias = c.issue_date ? Math.max(0, Math.floor((Date.now() - new Date(c.issue_date).getTime()) / 86400000)) : 0;
+      if (saldo > 0.005) {
+        if (dias <= 30) actual.aging.d0_30 += saldo;
+        else if (dias <= 60) actual.aging.d31_60 += saldo;
+        else if (dias <= 90) actual.aging.d61_90 += saldo;
+        else actual.aging.d90_plus += saldo;
+        if (dias > 30) actual.overdue += saldo;
+        actual.oldestDays = Math.max(actual.oldestDays, dias);
+      }
       mapa.set(c.supplier_doc_number, actual);
     }
     return [...mapa.values()].map((c) => ({
@@ -398,6 +411,13 @@ export class PurchasesService {
       total: Math.round(c.total * 100) / 100,
       paid: Math.round(c.paid * 100) / 100,
       balance: Math.round(c.balance * 100) / 100,
+      overdue: Math.round(c.overdue * 100) / 100,
+      aging: {
+        d0_30: Math.round(c.aging.d0_30 * 100) / 100,
+        d31_60: Math.round(c.aging.d31_60 * 100) / 100,
+        d61_90: Math.round(c.aging.d61_90 * 100) / 100,
+        d90_plus: Math.round(c.aging.d90_plus * 100) / 100,
+      },
     }));
   }
 
