@@ -10,6 +10,37 @@ export class CollectionsService {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
   }
 
+  async portfolioAging(companyId: string) {
+    const facturas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
+      select: { id: true, customer_identity_number: true, customer_legal_name: true, monto_total: true, fecha_emision: true },
+    });
+    const aging = { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
+    const porCliente = new Map<string, { doc: string; name: string; balance: number }>();
+    let total = 0;
+    let count = 0;
+    const hoy = Date.now();
+    for (const f of facturas) {
+      const { saldo } = await this.saldoFactura(companyId, f.id, Number(f.monto_total));
+      if (saldo <= 0.005) continue;
+      count += 1; total += saldo;
+      const dias = Math.max(0, Math.floor((hoy - new Date(f.fecha_emision).getTime()) / 86400000));
+      if (dias <= 30) aging.d0_30 += saldo;
+      else if (dias <= 60) aging.d31_60 += saldo;
+      else if (dias <= 90) aging.d61_90 += saldo;
+      else aging.d90_plus += saldo;
+      const key = f.customer_identity_number || f.customer_legal_name || '';
+      const actual = porCliente.get(key) ?? { doc: f.customer_identity_number ?? '', name: f.customer_legal_name ?? '', balance: 0 };
+      actual.balance += saldo;
+      porCliente.set(key, actual);
+    }
+    for (const k of Object.keys(aging) as Array<keyof typeof aging>) aging[k] = Math.round(aging[k] * 100) / 100;
+    const deudores = [...porCliente.values()]
+      .map((d) => ({ ...d, balance: Math.round(d.balance * 100) / 100 }))
+      .sort((a, b) => b.balance - a.balance).slice(0, 10);
+    return { total: Math.round(total * 100) / 100, invoiceCount: count, aging, debtors: deudores };
+  }
+
   async customerStatement(companyId: string, customerDoc: string) {
     if (!customerDoc?.trim()) throw new BadRequestException('El documento del cliente es obligatorio.');
     const facturas = await this.prisma.invoice.findMany({
