@@ -2000,3 +2000,216 @@ La única excepción de código fuera de M1 es la presentación de PartnerFormDi
 aprobada expresamente; resolver compartido SUNAT intacto. Documentos históricos
 y datos maestros no se reescriben. Perfil MAYORISTA, limpieza y carga de cuenta BN
 son datos del equipo. No PR, fusión, despliegue, emisión ni llamada real SUNAT.
+
+### Parte 6b — Fase 0, pulido de presentación (10 nov 2026)
+
+Rama back fix/m1-pulido-6b creada desde dev
+fecbe44ab6b5d6d969dd3a7ff1acf0a9123959a2. Front de Carlos, clon local en
+/workspace/work/front, dev 95cf0586080422ef532be18449f8d43033734007 y rama
+local fix/m1-pulido-6b. Entrega futura SOLO por ferry/m1-pulido-6b en el remoto
+back. Aún sin construcción, commits o push: se espera confirmación de bloque.
+
+Línea base front: 112 archivos /849 pruebas aprobadas, cero fallos. Línea base
+back: 276 suites /2544 pruebas aprobadas, 4 suites /38 pruebas omitidas;
+12 snapshots aprobados, cero fallos (280 suites /2582 pruebas totales).
+Corridas completas secuenciales para evitar interferir en el
+presupuesto temporal TA-13. Back usa únicamente PostgreSQL 16 local desechable,
+con migraciones existentes, conforme a la excepción local ya autorizada. No se
+conecta ninguna base compartida ni se genera una migración.
+
+#### 6b-1 — Detracción/retención persistida en la bandeja (back + front)
+
+Causa: InvoiceQueryService ya selecciona payload_ubl (invoiceQueryService.ts:56),
+pero aListado solo publica condiciones de pago (invoiceQueryMapper.ts:121),
+no montoDetraccion/montoRetencion; faltan esos campos en el DTO
+(invoiceQueryDto.ts:34). Además el adaptador front fija detraccion y retencion a
+0, con comentario obsoleto de no persistencia (invoiceApiMapper.ts:178-180).
+InvoiceTableRow.tsx:102-117 muestra «—» al recibir ambos ceros.
+
+Plan: proyectar ambos importes guardados del payload en listado/detalle, sin
+recalcular tasas, umbral ni totales; transportarlos por invoiceMapper/modelo y
+invoiceApiMapper. Ausente/inválido queda como no registrado, no se inventa tasa
+ni se reconstruye desde el catálogo. No modificar el importe total del documento.
+Pruebas: proyección de 009/S73.02 literal, retención literal, combinación,
+ausencia/invalidación defensiva y fila visible sin alterar totales. Archivos:
+back invoiceQueryDto.ts/invoiceQueryMapper.ts; front invoice.types.ts,
+invoiceMapper.ts/invoiceApiMapper.ts (y contrato crudo si corresponde), pruebas
+de mapper y tabla. La celda ya sabe dibujar ambos importes.
+
+#### 6b-2 — Pago directo según depósito BN (front)
+
+Causa: InvoiceEmissionPage.tsx:220-222 pasa detraccion.monto exacto a repartirPago;
+InvoiceEmissionPage.tsx:803 muestra un depósito distinto, redondeado mediante
+roundDetraccion (invoiceRetentions.ts:34-35), y :825 muestra el pago directo
+calculado con el importe exacto. InvoiceEmitResumen.tsx:53/91 también diferencia
+neto exacto y depósito redondeado. El redondeo del depósito vive en el FRONT, no
+hay que cambiarlo en el motor fiscal back.
+
+Límite importante: reparto.pagoDirecto también alimenta el cronograma fiscal
+(InvoiceEmissionPage.tsx:231-233). El back exige neto exacto en
+paymentTermsAndSpotValidator.ts:94/167-174 y mantiene importePagar exacto en
+emitirComprobanteAdapter.ts:321. NO cambiar repartirPago, calcularFlujo, cuotas,
+payload o XML. Separar un cálculo exclusivamente visual del pago directo:
+total − depósito BN redondeado − retención. Con S730.17 y S73.02: depósito S73.00,
+pago directo S657.17. El neto fiscal S657.15 se conserva, rotulado como tal cuando
+se muestra el cronograma. No se afirma que un depósito bancario ya se ejecutó.
+Archivos: componente de resumen, página y helper nuevo de presentación M1.
+Pruebas: suma depósito+pago directo(+retención)=total, ambos sentidos de redondeo,
+sin SPOT y regresión de cuotas/payload/XML fiscal idénticos.
+
+#### 6b-3 — Actualización comprobable de lista y contadores (front)
+
+El cableado del clic SÍ existe: InvoiceFiltersBar.tsx:125 →
+InvoiceList.tsx:195-197 → refetch de ['invoices',1] (:123). Los contadores locales
+se derivan de esa lista (:142/150-157). invoicesApi.ts:121-124 intenta GET real;
+no hay evidencia en este camino de que un éxito de red omita la petición.
+
+Brechas comprobadas: no invalida las otras consultas de métricas M1
+(InvoiceSettingsPage.tsx:36 e InvoicesDashboardPage.tsx:14), descarta el resultado
+y error del refresco; y el wrapper común cachedGet devuelve la copia anterior
+si falla la red (offlineCache.ts:67-70), sin señalarlo a la bandeja. Esto permite
+que «Actualizar» parezca exitoso sin cambiar datos. No se atribuye sin pruebas
+ese fallo de red concreto al incidente de producción.
+
+Plan: refresco explícito desde M1 que fuerce lectura de red, invalide lista y
+métricas pertinentes y muestre cargando/éxito/error; no presentar fallback viejo
+como actualización nueva. Reutilizar mecanismos existentes, sin modificar
+src/lib/offlineCache.ts ni otros módulos. Prueba con respuesta anterior/nueva:
+clic → GET nuevo → fila y contadores nuevos; error con caché → aviso honesto;
+evitar doble petición/publicación y comprobar invalidaciones de métricas. Si el
+caso online ya funciona, conservarlo con regresión y acotar el cambio al defecto
+de coherencia/fallo silencioso identificado.
+
+#### 6b-4 — Próximo correlativo informativo (front)
+
+El dato YA existe: invoiceSeriesService.ts:194-203 expone current_correlative;
+aSerieFe en useInvoiceConfig.ts:101-110 ya lo interpreta como último usado +1.
+Pero la página solo dibuja las opciones de serie
+(InvoiceEmissionPage.tsx:544-548), y el modal reduce la configuración a tipo,
+serie e is_active (InvoiceEmitModal.tsx:82) y usa una estimación desde el listado
+(:241; invoiceEmitDraft.ts:150-161, base artificial 100). No debe usarse ese
+estimador para afirmar numeración real.
+
+Plan: mostrar junto a la serie seleccionada el current_correlative+1 de esa
+configuración, para ambos formularios; mantener ese dato al pasar props al
+modal y refrescar su lectura. Sin dato: indicar no disponible, nunca usar 100 ni
+inferir de la página visible. Avisar que es informativo y el número definitivo
+se asigna al emitir. No tocar reservarCorrelativo, que incrementa de forma atómica
+(invoiceSeriesService.ts:98-105). Pruebas 66→67, 0→1, cambio de serie/tipo,
+dato ausente y ninguna reserva/alta al abrir/cambiar el formulario.
+
+#### 6b-5 — CDR y contador con origen honesto (front)
+
+La regla 5B YA existe: backend presentarResultado en invoiceResultPresentation.ts:23-42;
+front lecturaRechazo en lib/invoiceResultPresentation.ts:7-23. La ficha la usa,
+pero el bloque inferior conserva el encabezado incondicional «Respuesta oficial
+CDR SUNAT (billService)» (InvoiceCdrModal.tsx:273-281), incluso al pintar un motivo
+local. No se encuentra allí un literal independiente «Rechazado por SUNAT» fuera
+del helper que corresponde al origen SUNAT: el defecto comprobado es la
+atribución incondicional del bloque, aunque la etiqueta superior ya distinga.
+
+El contador sí es inequívoco: invoiceMetrics.ts:78-80 suma todo RECHAZADO y
+InvoiceKpiCards.tsx:112 lo rotula «Rechazos SUNAT». El dashboard de métricas remoto
+usa la etiqueta neutral «Rechazados» (InvoicesDashboardPage.tsx:30); no se cambia
+la semántica fiscal ni el agregado de estados del servidor para resolver una
+etiqueta de presentación.
+
+Plan: reutilizar resultadoPresentacion para encuadrar el bloque como bloqueo
+local, rechazo real SUNAT o rechazo de origen no confirmado; mostrar causa real
+y ausencia de CDR, conservando cualquier CDR auténtico sin editar sus bytes.
+Separar contadores visuales SUNAT/local/no confirmado, manteniendo el total y
+los estados internos. Archivos: InvoiceCdrModal.tsx, invoiceMetrics.ts,
+InvoiceKpiCards.tsx y sus pruebas. Casos B001-5/FD01-1 simulados con evidencia de
+bloqueo local, rechazo con CDR/SOAP y origen insuficiente; el motivo local nunca
+se atribuye a SUNAT por el mero estado RECHAZADO.
+
+#### Puerta y alcance
+
+NINGÚN punto requiere migración: se leen payload_ubl, historial/resultado y
+current_correlative ya existentes. 6b-1 requiere back/front; 6b-2/3/4/5 son front.
+Nada de Resiliencia, Contabilidad, Inventario ni caché común. Tras aprobación:
+un commit por punto con pruebas y conteos; suites completas, snapshots fiscales
+intactos, ferry con FERRY.md y push de ambas ramas. Sin PR, merge, despliegue,
+emisión ni llamada real SUNAT. Esta sección es solo el diagnóstico/diseño previo.
+
+#### Construcción aprobada — 6b-1
+
+Proyección literal de montoDetraccion/montoRetencion del payload persistido en
+listado y detalle; inválido/ausente conserva null en contrato. Normalizadores
+transportan los importes hasta la celda sin tasas ni reglas nuevas. Total fiscal
+intacto. Pruebas focales: back 1 suite/8 tests, front 1 archivo/1 test.
+
+#### Construcción — 6b-2
+
+Helper exclusivamente visual de depósito/pago directo; página y resumen lo usan.
+Reparto fiscal, neto de cuotas, payload y XML intactos. Depósito indicado es un
+cálculo de presentación, no constancia bancaria. Focales: front 2 archivos/10
+pruebas aprobadas, incluida regresión del neto fiscal S657.15 y pago S657.17.
+
+#### Construcción — 6b-3
+
+Clic explícito usa GET de red sin fallback, cancela/invalida listado, publica
+respuesta nueva y marca obsoletas métricas M1. Cargando/resultado visibles;
+fallo conserva la lista con aviso honesto. Lecturas normales conservan caché
+offline; archivo común intacto. Focales: front 2 archivos/3 pruebas aprobadas,
+incluidos clic repetido, invalidaciones y lectura estricta que propaga fallo.
+
+#### Construcción — 6b-4
+
+Número visible proviene de configuración en ambos formularios; sin dato muestra
+«no disponible». Retirada toda llamada al estimador desde el modal; correlativo
+interno no enviado queda 0, nunca se presenta como reserva. Lectura de configuración
+se refresca al abrir desde bandeja. Focal: front 1 archivo/3 pruebas aprobadas
+(66→67, 0→1, sin dato y cableado de ambas pantallas), sin escritura de numeración.
+
+#### Construcción — 6b-5
+
+Bloque de respuesta reutiliza la clasificación 5B: local y no confirmado dejan
+de presentarse como respuesta oficial SUNAT. Contador desglosa los tres orígenes
+sin alterar rechazados totales, estados ni documentos CDR. Agregado remoto con
+etiqueta neutral intacto. Focales: front 2 archivos/9 pruebas aprobadas, incluidos
+los casos locales de la ronda 5B y rechazo SUNAT confirmado.
+
+#### Cierre de Parte 6b — verificación y entrega
+
+Construcción completa tras la confirmación de bloque de Emma/Jhordy. Bases:
+back fecbe44ab6b5d6d969dd3a7ff1acf0a9123959a2; front Carlos
+95cf0586080422ef532be18449f8d43033734007. Cinco commits separados por punto
+(también en el ferry); los puntos exclusivamente front llevan constancia en back.
+
+| Suite completa | Base aprobada | Final |
+|---|---:|---:|
+| Back, suites aprobadas | 276 | 277 |
+| Back, pruebas aprobadas | 2544 | 2552 |
+| Back, omitidas | 4 suites /38 pruebas | 4 suites /38 pruebas |
+| Snapshots fiscales | 12 | 12, intactos |
+| Front, archivos aprobados | 112 | 118 |
+| Front, pruebas aprobadas | 849 | 866 |
+
+Cero fallos finales. Back ejecutado con cobertura e integraciones obligatorias
+en PostgreSQL 16 local desechable; sin SUNAT real. Builds back/front OK y lint
+back limpio. ESLint del front conserva 2 errores y 5 avisos de la base; se
+contrastaron las mismas fuentes base por stdin. No se relajan reglas ni se
+presenta ese lint previo como verde. La base local de pruebas se elimina al cerrar.
+Ninguna migración nueva, ningún cambio en esquema ni aplicación en base compartida.
+
+Regresión adicional 6b-2: el resumen real muestra depósito BN S73.00 y pago directo
+S657.17, manteniendo neto fiscal/cuota S657.15. Los cinco casos de aritmética y
+payload más esa prueba de UI pasan (6 pruebas nuevas de ese punto). El XML,
+las reglas tributarias, cuotas y estados fiscales no tienen cambios. El contador
+antiguo que atribuía un rechazo sin evidencia a SUNAT ahora espera origen no
+confirmado, en coherencia con la 5B.
+
+| Punto | Commit back | Commit front de origen | Evidencia focal |
+|---|---|---|---|
+| 6b-1 | 3561414 | 276acb4 | Back 1 suite/8 tests; front 1 archivo/1 test |
+| 6b-2 | 27bfd30 | 61b72bf | 6 pruebas nuevas, incluida UI y neto fiscal intacto |
+| 6b-3 | f3c3572 | c145168 | 2 archivos/3 tests: red estricta, error visible e invalidación |
+| 6b-4 | 79c2929 | 78db515 | 1 archivo/3 tests: configuración, ambos formularios y ausencia |
+| 6b-5 | Este commit | 43fa338 | 2 archivos/9 tests: local/SUNAT/no confirmado |
+
+Entrega front exclusiva por ferry/m1-pulido-6b en el remoto back, con cinco commits
+y FERRY.md completo (23 rutas exactas, hashes SHA256, bases y resultados).
+No se empuja al remoto front. Solo M1 y esta documentación: caché común,
+Resiliencia, Contabilidad e Inventario intactos. Sin emisiones reales, llamadas
+reales SUNAT, PR, fusiones o despliegues.
