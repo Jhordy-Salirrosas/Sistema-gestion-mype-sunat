@@ -74,4 +74,17 @@ describe('CollectionsService', () => {
     expect(r.aging.d0_30).toBe(50);
     expect(r.collections).toHaveLength(1);
   });
+
+  it('consolida cartera y principales deudores', async () => {
+    const prisma = {
+      invoice: { findMany: jest.fn().mockResolvedValue([{ id: 'i1', customer_identity_number: '20100070970', customer_legal_name: 'Cliente', monto_total: 118, fecha_emision: new Date('2026-10-01') }]), aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 0 } }) },
+      collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 18 } }) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    const r = await service.portfolioAging('c1');
+    expect(r.total).toBe(100);
+    expect(r.invoiceCount).toBe(1);
+    expect(r.debtors[0]).toMatchObject({ doc: '20100070970', balance: 100 });
+    expect(r.aging.d31_60 + r.aging.d61_90 + r.aging.d90_plus + r.aging.d0_30).toBe(100);
+  });
 });
