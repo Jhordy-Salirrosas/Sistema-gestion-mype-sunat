@@ -16,6 +16,12 @@ export class CollectionsController {
     return this.collections.annul(companyId, id);
   }
 
+  @Get('reconciliation')
+  reconciliation(@CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.reconciliation(companyId);
+  }
+
   @Get('invoice/:id')
   invoiceCollections(@Param('id') id: string, @CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');

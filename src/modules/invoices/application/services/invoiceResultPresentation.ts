@@ -1,7 +1,10 @@
 import { classifyResponseCode } from '../../../sunat/soap/cdr-classifier';
 
 export interface ResultadoPresentacion {
-  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO';
+  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO' | 'PREPARACION_LOCAL';
+  categoria?: string;
+  etapa?: string;
+  recuperable?: boolean;
   codigo: string | null;
   motivo: string | null;
 }
@@ -19,6 +22,19 @@ export function presentarResultado(estado: string, cdr: { codigo: string | null;
     const ultima = [...consultas].sort((a, b) => (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0))[0];
     return { origen: 'TRANSPORTE_INCIERTO', codigo: 'M1_TRANSPORT_UNCERTAIN',
       motivo: ultima?.mensaje_error ?? 'Incertidumbre de transporte: no hay resultado concluyente; consultar antes de reenviar.' };
+  }
+  if (estado === 'ERROR_RED') {
+    const evento = history.map((e, i) => ({ e, i })).sort((a, b) =>
+      (b.e.created_at?.getTime() ?? b.i) - (a.e.created_at?.getTime() ?? a.i))
+      .find(({ e }) => e.codigo_error && e.codigo_error !== 'M1_NOTE_DESCRIPTION_COMPLETED' && !/^(Rescate manual |Reintento manual )/.test(e.mensaje_error ?? ''))?.e;
+    if (evento?.codigo_error?.startsWith('M1_PREPARATION_')) {
+      try {
+        const causa = JSON.parse(evento.mensaje_error ?? '{}');
+        return { origen: 'PREPARACION_LOCAL', codigo: evento.codigo_error,
+          motivo: 'Bloqueado en preparación local: ' + (causa.causa ?? 'Revise la preparación del documento.'),
+          categoria: causa.categoria, etapa: causa.etapa, recuperable: causa.recuperable };
+      } catch { /* Evidencia mal formada no se atribuye a SUNAT. */ }
+    }
   }
   if (estado !== 'RECHAZADO') return undefined;
   if (cdr?.codigo && classifyResponseCode(cdr.codigo).status === 'RECHAZADO') {

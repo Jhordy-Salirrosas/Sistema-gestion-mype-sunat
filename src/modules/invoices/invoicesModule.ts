@@ -16,10 +16,14 @@ import { ResilienceModule } from '../resilience/resilienceModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { InvoicesController } from './infrastructure/controllers/invoicesController';
 import { InvoiceQueryController } from './infrastructure/controllers/invoiceQueryController';
+import { SalesReportController } from './infrastructure/controllers/salesReportController';
+import { InvoiceDetractionController } from './infrastructure/controllers/invoiceDetractionController';
+import { InvoiceDetractionService } from './application/services/invoiceDetractionService';
 import { InvoiceConfigController } from './infrastructure/controllers/invoiceConfigController';
 import { InvoiceDownloadController } from './infrastructure/controllers/invoiceDownloadController';
 import { InvoicesService } from './application/services/invoicesService';
 import { InvoiceQueryService } from './application/services/invoiceQueryService';
+import { SalesReportService } from './application/services/salesReportService';
 import { InvoiceSeriesService } from './application/services/invoiceSeriesService';
 import { InvoiceConfigService } from './application/services/invoiceConfigService';
 import { InvoiceDownloadService } from './application/services/invoiceDownloadService';
@@ -84,6 +88,8 @@ import { InventoryModule } from '../inventory/inventoryModule';
     // Los controladores con rutas literales (`config`, `series`) van primero.
     InvoiceConfigController,
     InvoiceQueryController,
+    SalesReportController,
+    InvoiceDetractionController,
     InvoiceDownloadController,
   ],
   providers: [
@@ -94,6 +100,8 @@ import { InventoryModule } from '../inventory/inventoryModule';
     CreateInvoiceUseCase,
     InvoicesService,
     InvoiceQueryService,
+    SalesReportService,
+    InvoiceDetractionService,
     // TA-60: series con reserva atomica del correlativo + configuracion.
     InvoiceSeriesService,
     InvoiceConfigService,
@@ -147,6 +155,8 @@ import { InventoryModule } from '../inventory/inventoryModule';
     CreateInvoiceUseCase,
     InvoicesService,
     InvoiceQueryService,
+    SalesReportService,
+    InvoiceDetractionService,
     InvoiceSeriesService,
     InvoiceConfigService,
     InvoiceDownloadService,

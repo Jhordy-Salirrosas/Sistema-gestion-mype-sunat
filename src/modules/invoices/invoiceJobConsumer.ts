@@ -1,3 +1,5 @@
+import { clasificarPreparacion, registrarEtapa, type EtapaPreparacion } from './application/services/preparationFailure';
+import { descripcionCanonicaNota } from './application/services/noteDescription';
 import { InvoiceForcedResendService } from './application/services/invoiceForcedResendService';
 import { claimIndividualSummaryChannel } from './application/services/summaryIndividualClaim';
 import {
@@ -184,15 +186,14 @@ export class InvoiceJobConsumer implements OnModuleInit {
         if (final && [InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO].includes(final.estado as 'ACEPTADO' | 'OBSERVADO')) await this.registrarEnContabilidad(invoiceId, final.estado);
         return null;
       }
-      if (error instanceof ErrorValidacionBloqueada) {
-        return this.bloqueoDeInfraestructura(invoiceId, error);
-      }
-
-      // Un fallo de preparación conserva el documento y el trabajo recuperables.
-      // pg-boss reintentará la preparación, nunca envía este XML inválido.
-      const mensaje = error instanceof Error ? error.message : String(error);
-      this.logger.error(`[TA-28] ${invoiceId} no se pudo preparar: ${mensaje}`);
-      await this.marcar(invoiceId, InvoiceStatus.ERROR_RED);
+      const causa = clasificarPreparacion(error);
+      this.logger.error(`[TA-28] ${invoiceId}: ${causa.codigo} (${causa.etapa})`);
+      // El historial existente conserva JSON estructurado sin migrar el esquema.
+      // La persistencia es atómica y protege estados finales concurrentes.
+      await this.cdrPersistence.persistFailure({ invoiceId, estadoNuevo: InvoiceStatus.ERROR_RED,
+        estadoAnterior: null, intento: 1, codigoError: causa.codigo,
+        mensajeError: JSON.stringify(causa), tiempoRespuestaMs: null });
+      if (error instanceof ErrorValidacionBloqueada) return this.bloqueoDeInfraestructura(invoiceId, error);
       throw new Error('M1_PREPARATION_PENDING');
     }
 
@@ -276,89 +277,127 @@ export class InvoiceJobConsumer implements OnModuleInit {
 
   /** Traduce `{ invoice_id }` a los datos completos del envio. */
   async preparar(invoiceId: string): Promise<JobAprobado> {
-    const invoice = await this.cargar(invoiceId);
-    const xmlSinFirma = this.xmlDelComprobante(invoice);
-    const context = await this.issuerConfig?.resolve(invoice.company_id);
-    const xml = this.firmar(invoice, xmlSinFirma, context);
-    const zip = this.comprimir(invoice, xml);
+    let etapa: EtapaPreparacion = 'CARGA';
+    try {
+      const invoice = await this.cargar(invoiceId);
+      etapa = 'DESCRIPCION_NOTA';
+      await this.completarDescripcionNota(invoice);
+      etapa = 'GENERACION_UBL';
+      const xmlSinFirma = this.xmlDelComprobante(invoice);
+      etapa = 'CONFIGURACION_EMISOR';
+      const context = await this.issuerConfig?.resolve(invoice.company_id);
+      etapa = 'FIRMA';
+      const xml = this.firmar(invoice, xmlSinFirma, context);
+      etapa = 'ZIP';
+      const zip = this.comprimir(invoice, xml);
 
-    // SE GUARDA EL XML FIRMADO, el que se envía.
-    //
-    // Antes no se guardaba y la descarga regeneraba el documento desde el
-    // payload, entregando un XML SIN `<ds:Signature>`: un archivo con el nombre
-    // del comprobante que no era el que viajó a SUNAT. Se detectó abriendo el
-    // XML descargado el 31-10.
-    //
-    // Va antes de la compuerta XSL para que la copia exista incluso si el envío
-    // se bloquea: el documento firmado ya es un hecho y hay que poder auditarlo.
-    const hashGuardado = await this.xmlFirmado.guardar(invoiceId, xml);
-    if (!hashGuardado) throw new ErrorValidacionBloqueada('No se pudo persistir el XML firmado', 'XML_NO_PERSISTIDO');
-    if (hashGuardado) {
-      this.logger.log(
-        `XML firmado de ${invoice.serie}-${invoice.correlativo} guardado (sha256 ${hashGuardado.slice(0, 16)}…)`,
-      );
-    }
-
-    const params: SendInvoiceParams = {
-      companyId: invoice.company_id,
-      context,
-      invoiceId: invoice.id,
-      rucEmisor: invoice.ruc_emisor,
-      tipoComprobante: invoice.tipo_comprobante,
-      serie: invoice.serie,
-      correlativo: invoice.correlativo,
-      zip,
-      estadoActual: invoice.estado,
-    };
-
-    // TA-58: la compuerta va DESPUES de firmar, porque la hoja oficial valida
-    // el XML tal como se envia (el `ds:DigestValue` forma parte del
-    // documento). Puede lanzar `ErrorValidacionBloqueada`, que se captura en
-    // `procesar()`.
-    //
-    // TA-58/DEUDA: `decidirEnvio` es el mismo camino, pero ademas informa si la
-    // compuerta se omitio por la bandera de demostracion. Cuando eso pasa el
-    // aviso sale por consola con nivel WARN para que se vea en la terminal
-    // durante la exposicion y no solo en el historial.
-    const decision = await decidirEnvio(
-      params,
-      xml,
-      this.xslValidator,
-      this.cdrPersistence,
-    );
-    if (decision.noConcluyente) {
-      // Incluye XML ya firmado en intentos anteriores: esa ruta antes no se
-      // volvía a comprobar. El servicio actual aplica estructura y negocio;
-      // no ejecuta los esquemas XSD oficiales completos.
-      const comprobacion = this.xsdValidator.validateInvoiceUbl21(xml);
-      if (!comprobacion.isValid) {
-        throw new Error(
-          `XML invalido contra comprobaciones UBL: ${(comprobacion.errors ?? []).join(' | ')}`,
+      // SE GUARDA EL XML FIRMADO, el que se envía.
+      //
+      // Antes no se guardaba y la descarga regeneraba el documento desde el
+      // payload, entregando un XML SIN `<ds:Signature>`: un archivo con el nombre
+      // del comprobante que no era el que viajó a SUNAT. Se detectó abriendo el
+      // XML descargado el 31-10.
+      //
+      // Va antes de la compuerta XSL para que la copia exista incluso si el envío
+      // se bloquea: el documento firmado ya es un hecho y hay que poder auditarlo.
+      etapa = 'PERSISTENCIA_XML';
+      const hashGuardado = await this.xmlFirmado.guardar(invoiceId, xml);
+      if (!hashGuardado) throw new ErrorValidacionBloqueada('No se pudo persistir el XML firmado', 'XML_NO_PERSISTIDO');
+      if (hashGuardado) {
+        this.logger.log(
+          `XML firmado de ${invoice.serie}-${invoice.correlativo} guardado (sha256 ${hashGuardado.slice(0, 16)}…)`,
         );
       }
-      await this.cdrPersistence.persistFailure({
-        invoiceId: invoice.id,
-        estadoNuevo: invoice.estado,
-        estadoAnterior: invoice.estado,
-        intento: params.intento ?? 1,
-        codigoError: null,
-        mensajeError:
-          'Validación XSL no concluyente: falta commons/error/validate_utils.xsl; el despacho se apoya en comprobaciones estructurales UBL y reglas internas, no en una validación XSD oficial completa.',
-        tiempoRespuestaMs: null,
-      });
-    }
-    if (decision.omitidaPorDemo) {
-      this.logger.warn(`[WARN][DEMO] ${invoiceId}: ${AVISO_DEMO}`);
-    }
 
-    return {
-      // Un XML que ya traia la firma tampoco se vuelve a firmar: cuenta como
-      // firmado porque el sobre sale con XMLDSig.
-      firmado: xml.includes('<ds:Signature'),
-      params,
-      bloqueoXsl: decision.bloqueo,
-      omitidaPorDemo: decision.omitidaPorDemo,
-    };
+      const params: SendInvoiceParams = {
+        companyId: invoice.company_id,
+        context,
+        invoiceId: invoice.id,
+        rucEmisor: invoice.ruc_emisor,
+        tipoComprobante: invoice.tipo_comprobante,
+        serie: invoice.serie,
+        correlativo: invoice.correlativo,
+        zip,
+        estadoActual: invoice.estado,
+      };
+
+      // TA-58: la compuerta va DESPUES de firmar, porque la hoja oficial valida
+      // el XML tal como se envia (el `ds:DigestValue` forma parte del
+      // documento). Puede lanzar `ErrorValidacionBloqueada`, que se captura en
+      // `procesar()`.
+      //
+      // TA-58/DEUDA: `decidirEnvio` es el mismo camino, pero ademas informa si la
+      // compuerta se omitio por la bandera de demostracion. Cuando eso pasa el
+      // aviso sale por consola con nivel WARN para que se vea en la terminal
+      // durante la exposicion y no solo en el historial.
+      etapa = 'VALIDACION_LOCAL';
+      const decision = await decidirEnvio(
+        params,
+        xml,
+        this.xslValidator,
+        this.cdrPersistence,
+      );
+      if (decision.noConcluyente) {
+        // Incluye XML ya firmado en intentos anteriores: esa ruta antes no se
+        // volvía a comprobar. El servicio actual aplica estructura y negocio;
+        // no ejecuta los esquemas XSD oficiales completos.
+        const comprobacion = this.xsdValidator.validateInvoiceUbl21(xml);
+        if (!comprobacion.isValid) {
+          throw new Error(
+            `XML invalido contra comprobaciones UBL: ${(comprobacion.errors ?? []).join(' | ')}`,
+          );
+        }
+        await this.cdrPersistence.persistFailure({
+          invoiceId: invoice.id,
+          estadoNuevo: invoice.estado,
+          estadoAnterior: invoice.estado,
+          intento: params.intento ?? 1,
+          codigoError: null,
+          mensajeError:
+            'Validación XSL no concluyente: falta commons/error/validate_utils.xsl; el despacho se apoya en comprobaciones estructurales UBL y reglas internas, no en una validación XSD oficial completa.',
+          tiempoRespuestaMs: null,
+        });
+      }
+      if (decision.omitidaPorDemo) {
+        this.logger.warn(`[WARN][DEMO] ${invoiceId}: ${AVISO_DEMO}`);
+      }
+
+      return {
+        // Un XML que ya traia la firma tampoco se vuelve a firmar: cuenta como
+        // firmado porque el sobre sale con XMLDSig.
+        firmado: xml.includes('<ds:Signature'),
+        params,
+        bloqueoXsl: decision.bloqueo,
+        omitidaPorDemo: decision.omitidaPorDemo,
+      };
+    } catch (error) {
+      registrarEtapa(error, etapa);
+      throw error;
+    }
+  }
+
+  /** Reparación de legado atómica y auditable antes de generar XML. */
+  private async completarDescripcionNota(invoice: InvoiceRow): Promise<void> {
+    const p = invoice.payload_ubl as InvoicePayload | null;
+    if (!['07', '08'].includes(invoice.tipo_comprobante) || !p || p.descripcionMotivoNota?.trim()) return;
+    const actualizado = await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT id FROM invoices WHERE id = ${invoice.id} FOR UPDATE`;
+      const actual = await tx.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
+      if (ESTADOS_FINALES.includes(actual.estado)) throw new ComprobanteFinalizado();
+      const payload = actual.payload_ubl as unknown as InvoicePayload;
+      if (payload.descripcionMotivoNota?.trim()) return payload;
+      const descripcion = descripcionCanonicaNota(actual.tipo_comprobante, payload.codigoMotivoNota, payload.descripcionMotivoNota);
+      const nuevo = { ...payload, descripcionMotivoNota: descripcion };
+      await tx.invoice.update({ where: { id: invoice.id }, data: { payload_ubl: JSON.parse(JSON.stringify(nuevo)) } });
+      await tx.transactionHistory.create({ data: { invoice_id: actual.id, company_id: actual.company_id,
+        estado_anterior: actual.estado, estado_nuevo: actual.estado,
+        codigo_error: 'M1_NOTE_DESCRIPTION_COMPLETED', mensaje_error: JSON.stringify({
+          etapa: 'PREPARACION_LOCAL', accion: 'DESCRIPCION_CANONICA_COMPLETADA',
+          codigoMotivoNota: payload.codigoMotivoNota, descripcionMotivoNota: descripcion,
+        }) } });
+      return nuevo;
+    });
+    invoice.payload_ubl = actualizado;
   }
 
   /** Lee el comprobante y rechaza los que ya estan en estado final. */
@@ -460,16 +499,4 @@ export class InvoiceJobConsumer implements OnModuleInit {
     return createHash('sha256').update(xml, 'utf8').digest('hex');
   }
 
-  private async marcar(
-    invoiceId: string,
-    estado: InvoiceStatus,
-  ): Promise<void> {
-    await this.prisma.invoice
-      .update({
-        // También protege la carrera: otro worker pudo concluir tras la lectura.
-        where: { id: invoiceId, estado: { notIn: ESTADOS_FINALES } },
-        data: { estado },
-      })
-      .catch(() => null);
-  }
 }

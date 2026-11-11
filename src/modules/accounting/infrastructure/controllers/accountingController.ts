@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -23,6 +24,9 @@ import { GenerateAccountingEntryUseCase } from '../../application/use-cases/gene
 import { GenerateClosingEntryUseCase } from '../../application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase, PleExportResult } from '../../application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUseCase';
+import { ValidateTaxPleUseCase } from '../../application/use-cases/validateTaxPleUseCase';
+import { GetIgvReconciliationUseCase } from '../../application/use-cases/getIgvReconciliationUseCase';
+import { CloseAnnualUseCase } from '../../application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
@@ -45,6 +49,9 @@ export class AccountingController {
     private readonly generateClosingEntryUseCase: GenerateClosingEntryUseCase,
     private readonly exportPleUseCase: ExportPleTxtUseCase,
     private readonly exportTaxPleUseCase: ExportTaxPleUseCase,
+    private readonly validateTaxPleUseCase: ValidateTaxPleUseCase,
+    private readonly getIgvReconciliationUseCase: GetIgvReconciliationUseCase,
+    private readonly closeAnnualUseCase: CloseAnnualUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
@@ -168,6 +175,12 @@ export class AccountingController {
     );
   }
 
+  @Post('periods/year/:year/close-annual')
+  @HttpCode(HttpStatus.OK)
+  closeAnnual(@Param('year') year: string, @CurrentCompany() currentCompanyId?: string) {
+    return this.closeAnnualUseCase.execute(this.empresaDelToken(currentCompanyId), Number(year));
+  }
+
   @Post('periods/year/:year/close')
   @HttpCode(HttpStatus.OK)
   async closeFiscalYear(
@@ -262,6 +275,28 @@ export class AccountingController {
 
     // 2. Generar la trama PLE con los datos reales
     return this.exportPleUseCase.execute({ ...dto, companyId }, entries);
+  }
+
+  @Get('reconciliation/igv')
+  igvReconciliation(@CurrentCompany() companyId: string | undefined, @Query('period') period: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.getIgvReconciliationUseCase.execute(companyId, period);
+  }
+
+  @Post('ple/tax-validate')
+  @HttpCode(HttpStatus.OK)
+  async validateTaxPle(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() body: { year: number; month: number; bookCode: '080100' | '140100'; companyRuc: string },
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.validateTaxPleUseCase.execute(
+      companyId,
+      body.companyRuc,
+      Number(body.year),
+      Number(body.month),
+      body.bookCode,
+    );
   }
 
   @Post('ple/tax-export')

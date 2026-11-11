@@ -67,9 +67,17 @@ describe('ExpensesService', () => {
     expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: 'ANUL-g1', lines: expect.arrayContaining([expect.objectContaining({ accountCode: '42121', debitAmount: 100 })]) }));
   });
 
-  it('bloquea anulación con pagos', async () => {
-    const prisma = { expense: { findFirst: jest.fn().mockResolvedValue({ id: 'g1', paid_amount: 10, status: 'PAGO_PARCIAL' }) } };
-    const service = new ExpensesService(prisma as never, { execute: jest.fn() } as never);
-    await expect(service.annul('c1', 'g1')).rejects.toThrow('pagos registrados');
+  it('anula gasto pagado revirtiendo tesorería y asientos de pago', async () => {
+    const lineas = [{ account_code: '63111', account_name: 'Gasto', debit_amount: 100, credit_amount: 0 }, { account_code: '42121', account_name: 'CxP', debit_amount: 0, credit_amount: 100 }];
+    const prisma = {
+      expense: { findFirst: jest.fn().mockResolvedValue({ id: 'g1', description: 'Luz', document_number: 'F001-1', supplier_name: 'Proveedor', paid_amount: 10, status: 'PAGO_PARCIAL' }), update: jest.fn().mockResolvedValue({ id: 'g1', status: 'ANULADO' }) },
+      accountingEntry: { findFirst: jest.fn().mockResolvedValueOnce({ id: 'e1', lines: lineas }).mockResolvedValueOnce({ id: 'p1', lines: lineas }).mockResolvedValueOnce(null) },
+      treasuryMovement: { findMany: jest.fn().mockResolvedValue([{ id: 'm1', amount: 10, payment_method: 'TRANSFERENCIA', bank_name: 'BCP' }]), create: jest.fn().mockResolvedValue({ id: 'm2' }) },
+    };
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const service = new ExpensesService(prisma as never, accounting as never);
+    await expect(service.annul('c1', 'g1')).resolves.toMatchObject({ status: 'ANULADO' });
+    expect(prisma.treasuryMovement.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ direction: 'INGRESO', amount: 10 }) }));
+    expect(accounting.execute).toHaveBeenCalledTimes(2);
   });
 });

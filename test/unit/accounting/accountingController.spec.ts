@@ -4,6 +4,9 @@ import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/
 import { GenerateClosingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateClosingEntryUseCase';
 import { ExportPleTxtUseCase } from '../../../src/modules/accounting/application/use-cases/exportPleTxtUseCase';
 import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/exportTaxPleUseCase';
+import { ValidateTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/validateTaxPleUseCase';
+import { GetIgvReconciliationUseCase } from '../../../src/modules/accounting/application/use-cases/getIgvReconciliationUseCase';
+import { CloseAnnualUseCase } from '../../../src/modules/accounting/application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
@@ -24,6 +27,9 @@ describe('AccountingController', () => {
   let closingUseCase: jest.Mocked<GenerateClosingEntryUseCase>;
   let exportPleUseCase: jest.Mocked<ExportPleTxtUseCase>;
   let exportTaxPleUseCase: jest.Mocked<ExportTaxPleUseCase>;
+  let validateTaxPleUseCase: jest.Mocked<ValidateTaxPleUseCase>;
+  let getIgvReconciliationUseCase: jest.Mocked<GetIgvReconciliationUseCase>;
+  let closeAnnualUseCase: jest.Mocked<CloseAnnualUseCase>;
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
   let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
@@ -53,6 +59,16 @@ describe('AccountingController', () => {
     exportTaxPleUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<ExportTaxPleUseCase>;
+
+    validateTaxPleUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<ValidateTaxPleUseCase>;
+
+    getIgvReconciliationUseCase = {
+      execute: jest.fn(),
+    } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
+
+    closeAnnualUseCase = { execute: jest.fn() } as unknown as jest.Mocked<CloseAnnualUseCase>;
 
     getEntriesUseCase = {
       execute: jest.fn().mockResolvedValue([]),
@@ -106,6 +122,9 @@ describe('AccountingController', () => {
       closingUseCase,
       exportPleUseCase,
       exportTaxPleUseCase,
+      validateTaxPleUseCase,
+      getIgvReconciliationUseCase,
+      closeAnnualUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
       createAccountUseCase,
@@ -300,5 +319,22 @@ describe('AccountingController', () => {
 
   it('rechaza una regla sin cuenta o lado válido', async () => {
     await expect(controller.upsertRule({ processCode: 'VENTA', lineOrder: 1, accountCode: '', side: 'DEBE', baseCalculation: 'TOTAL' }, 'comp-1')).rejects.toThrow('Regla inválida');
+  });
+
+  it('delega la conciliación de IGV', async () => {
+    getIgvReconciliationUseCase.execute.mockResolvedValue({ reconciled: true } as never);
+    await expect(controller.igvReconciliation('comp-1', '2026-11')).resolves.toEqual({ reconciled: true });
+  });
+
+  it('delega la validación del PLE tributario', async () => {
+    validateTaxPleUseCase.execute.mockResolvedValue({ valid: true } as never);
+    await expect(controller.validateTaxPle('comp-1', { year: 2026, month: 11, bookCode: '140100', companyRuc: '20100070970' })).resolves.toEqual({ valid: true });
+    expect(validateTaxPleUseCase.execute).toHaveBeenCalledWith('comp-1', '20100070970', 2026, 11, '140100');
+  });
+
+  it('delega el cierre anual completo', async () => {
+    closeAnnualUseCase.execute.mockResolvedValue({ closingEntryCreated: true } as never);
+    await expect(controller.closeAnnual('2026', 'comp-1')).resolves.toEqual({ closingEntryCreated: true });
+    expect(closeAnnualUseCase.execute).toHaveBeenCalledWith('comp-1', 2026);
   });
 });

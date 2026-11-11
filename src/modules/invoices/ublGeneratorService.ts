@@ -1,3 +1,4 @@
+import { validarContenidoFiscal } from './validateInvoiceContent';
 import { descuentosGlobalesPrecio } from './globalDiscountPrices';
 import { totalesGratuitos } from './freeOperationReference';
 import { formatoMoneda, redondearMoneda as centimos } from './money';
@@ -26,7 +27,7 @@ import {
   type TotalesCalculados,
 } from './ublTotalesHelper';
 import { construirDocumentoUbl } from './ublDocumentTemplate';
-import { asegurarTipoUbl, raizDe } from './ublTipoGuard';
+import { raizDe } from './ublTipoGuard';
 import { lineaBolsaIcBper } from './ublIcbperLine';
 import { esUnidadFerreteria } from './sunatCatalogsQuery';
 import {
@@ -69,20 +70,9 @@ export class UblGeneratorService {
 
   /** Genera el XML UBL 2.1 completo del comprobante. */
   public generateInvoiceXml(payload: InvoicePayload): string {
-    if (!payload) {
-      throw new BadRequestException('El payload del comprobante es obligatorio');
-    }
-
-    const requeridos = ['rucEmisor', 'razonSocialEmisor', 'tipoComprobante', 'serie', 'fechaEmision', 'tipoMoneda', 'tipoOperacion'] as const;
-    for (const campo of requeridos) if (typeof payload[campo] !== 'string' || !payload[campo]!.trim()) {
-      throw new BadRequestException(`Dato fiscal ausente: ${campo}`);
-    }
+    validarContenidoFiscal(payload);
     if (!Number.isSafeInteger(payload.numero) || payload.numero <= 0) throw new BadRequestException('Correlativo fiscal ausente o inválido');
     const tipo = payload.tipoComprobante;
-    if (['01', '03'].includes(tipo) && !['Contado', 'Credito'].includes(payload.formaPago as string)) throw new BadRequestException('Forma de pago fiscal ausente');
-    if (['07', '08'].includes(tipo) && (!payload.documentoAfectado || !payload.codigoMotivoNota || !payload.descripcionMotivoNota)) throw new BadRequestException('Referencia y motivo de nota obligatorios');
-
-    asegurarTipoUbl(tipo);
 
     const raiz = raizDe(tipo);
     const moneda = payload.tipoMoneda!;
