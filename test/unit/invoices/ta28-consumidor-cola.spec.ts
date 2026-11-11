@@ -268,7 +268,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     expect(d.processWithRetry).not.toHaveBeenCalled();
   });
 
-  it('genera el asiento contable cuando el CDR queda aceptado', async () => {
+  it('7L conserva pendiente el trabajo aceptado sin asiento configurado', async () => {
     const accounting = {
       execute: jest.fn<(args: unknown) => Promise<unknown>>(async () => ({ id: 'asiento-respaldo' })),
     };
@@ -323,18 +323,8 @@ describe('TA-28 InvoiceJobConsumer', () => {
       accounting as never,
     );
 
-    await consumer.procesar({ invoice_id: 'inv-1' });
-
-    expect(accounting.execute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        companyId: 'company-1',
-        invoiceId: 'inv-1',
-        tipoComprobante: '01',
-        base: 100,
-        igv: 18,
-        total: 118,
-      }),
-    );
+    await expect(consumer.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_ACCOUNTING_PENDING');
+    expect(accounting.execute).not.toHaveBeenCalled();
   });
 
   it.each(['01', '03'] as const)('envía descuento %s al puente y bloquea solo el respaldo incompatible', async (codigo) => {

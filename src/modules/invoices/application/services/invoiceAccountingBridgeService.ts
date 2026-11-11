@@ -314,6 +314,16 @@ export class InvoiceAccountingBridgeService {
       ...(cuentaRegla(8, 'RETENCION', 'IGV - Retenciones') ? { porCobrarRetenido: cuentaRegla(8, 'RETENCION', 'IGV - Retenciones')! } : {}),
       ...(cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos') ? { descuento: cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos')! } : {}),
     };
+    const requeridas: [keyof typeof CUENTAS_VENTA, number][] = [
+      ['porCobrar', i.total - i.detraccion - i.retencion], ['descuento', i.descuentoNoAfecto ?? descuento],
+      ['detraccion', i.detraccion], ['porCobrarRetenido', i.retencion], ['gravada', i.gravado],
+      ['exonerada', i.exonerado], ['inafecta', i.inafecto], ['igv', i.igv], ['icbper', i.icbper],
+    ];
+    const faltantes = requeridas.filter(([rol, monto]) => monto > 0 && !cuentas[rol]).map(([rol]) => rol);
+    if (faltantes.length) {
+      errores.push(`Contabilidad: mapeo VENTA incompleto (${faltantes.join(', ')}); asiento pendiente, sin cuentas de respaldo.`);
+      return { asientoOmitido: false };
+    }
     const datos = { ...i, descuento: descuento > 0 ? descuento : 0, cuentas };
     const lineas = factura.tipoComprobante === '07'
       ? lineasAsientoNotaCredito(datos)
@@ -394,6 +404,11 @@ export class InvoiceAccountingBridgeService {
       orderBy: { line_order: 'asc' },
     })) ?? [];
     const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    const mappings = await this.prisma.accountingMapping?.findMany({ where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true } }) ?? [];
+    const roles = new Map(mappings.map(m => [m.role_code, m.account_code]));
+    const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
+    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO');
+    if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); reverso pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
         companyId: factura.companyId,
@@ -404,8 +419,8 @@ export class InvoiceAccountingBridgeService {
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost-rev:${factura.id}`,
         lines: [
-          { lineOrder: 1, accountCode: porOrden.get(11) ?? '201', accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
-          { lineOrder: 2, accountCode: porOrden.get(10) ?? '691', accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
+          { lineOrder: 1, accountCode: cuentaInventario, accountName: 'Mercaderías', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: cuentaCosto, accountName: 'Costo de ventas', debitAmount: 0, creditAmount: costo },
         ],
       });
       return { asientoCostoId: asiento.id, costoVenta: -costo, asientoCostoOmitido: false };
@@ -450,6 +465,9 @@ export class InvoiceAccountingBridgeService {
       orderBy: { line_order: 'asc' },
     })) ?? [];
     const porOrden = new Map<number, string>(reglasCosto.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
+    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO');
+    if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); costo pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
         companyId: factura.companyId,
@@ -460,8 +478,8 @@ export class InvoiceAccountingBridgeService {
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost:${factura.id}`,
         lines: [
-          { lineOrder: 1, accountCode: porOrden.get(10) ?? roles.get('COSTO_VENTA') ?? '691', accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
-          { lineOrder: 2, accountCode: porOrden.get(11) ?? roles.get('INVENTARIO') ?? '201', accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
+          { lineOrder: 1, accountCode: cuentaCosto, accountName: 'Costo de ventas', debitAmount: costo, creditAmount: 0 },
+          { lineOrder: 2, accountCode: cuentaInventario, accountName: 'Mercaderías', debitAmount: 0, creditAmount: costo },
         ],
       });
       return { asientoCostoId: asiento.id, costoVenta: costo, asientoCostoOmitido: false };

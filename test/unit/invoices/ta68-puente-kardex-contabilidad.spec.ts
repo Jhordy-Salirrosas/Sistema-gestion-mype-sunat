@@ -681,7 +681,7 @@ describe('TA-68 · servicio puente', () => {
       inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
       inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ quantity: 20, previous_unit_cost: 30, total_cost: 600, product: { sku: 'CEM-001' } }]) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
-      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue(REGLAS_VENTA_BASE) },
       invoice: { findFirst: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }), findUnique: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }) },
     };
     const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), registrarEntrada: jest.fn().mockResolvedValue(undefined), consumir: jest.fn() };
@@ -696,7 +696,7 @@ describe('TA-68 · servicio puente', () => {
       inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
       inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ total_cost: 600 }]) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
-      accountingRule: { findMany: jest.fn().mockResolvedValue([{ total_cost: 600 }]) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue(REGLAS_VENTA_BASE) },
     };
     const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), capas: jest.fn().mockResolvedValue([{ quantity: 100, unitCost: 30 }]), calcular: jest.fn().mockReturnValue({ movementTotalCost: 600 }), consumir: jest.fn().mockResolvedValue(undefined) };
     const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
@@ -794,6 +794,15 @@ describe('TA-68 · servicio puente', () => {
     const resultado = await puente.registrar(facturaPrueba());
     expect(resultado.completo).toBe(false);
     expect(asientoCreado).not.toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: expect.stringContaining(':COSTO') }));
+  });
+
+  it('7L no sustituye silenciosamente una cuenta IGV ausente', async () => {
+    const { puente, prisma, asientoCreado } = dobles();
+    prisma.accountingRule.findMany.mockResolvedValue(REGLAS_VENTA_BASE.filter(r => r.line_order !== 2));
+    const resultado = await puente.registrar(facturaPrueba());
+    expect(resultado.completo).toBe(false);
+    expect(resultado.errores.join(' ')).toContain('mapeo VENTA incompleto (igv)');
+    expect(asientoCreado).not.toHaveBeenCalled();
   });
 
 });

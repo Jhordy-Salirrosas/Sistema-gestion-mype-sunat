@@ -2,7 +2,6 @@ import { InvoiceRetryService } from '../../../src/modules/resilience/infrastruct
 import { ResilienceStateService } from '../../../src/modules/resilience/application/resilienceStateService';
 import { aceptado, falloDeRed, paramsBase } from '../resilience/invoiceRetryTestSupport';
 import { InvoiceAccountingFallbackService } from '../../../src/modules/invoices/application/services/invoiceAccountingFallbackService';
-import { claveAsientoM1 } from '../../../src/modules/invoices/application/services/invoiceAccountingBridgeService';
 
 function harness(uncertain = false) {
   const row = { transport_uncertain: uncertain };
@@ -52,8 +51,8 @@ it('si el intento pierde respuesta y la consulta falla, no hay segundo envío', 
   expect(h.sunat.sendAndProcess).toHaveBeenCalledTimes(1);
   expect(h.row.transport_uncertain).toBe(true);
 });
-it('el respaldo contable entrega la misma clave durable que el puente a la interfaz existente', async () => {
+it('7L respaldo retirado no crea asiento ni sustituye el mapeo', async () => {
   const generate = { execute: jest.fn(async () => ({ id: 'asiento' })) };
-  await new InvoiceAccountingFallbackService(generate as never).execute({ companyId: 'empresa', invoiceId: 'inv-1', tipoComprobante: '01', serie: 'F001', correlativo: 1, fechaEmision: '2026-11-08', cliente: 'Prueba', base: 100, igv: 18, total: 118 });
-  expect(generate.execute).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: claveAsientoM1('inv-1'), sourceReferenceId: 'inv-1', companyId: 'empresa' }));
+  await expect(new InvoiceAccountingFallbackService(generate as never).execute({ companyId: 'empresa', invoiceId: 'inv-1', tipoComprobante: '01', serie: 'F001', correlativo: 1, fechaEmision: '2026-11-08', cliente: 'Prueba', base: 100, igv: 18, total: 118 })).rejects.toThrow('M1_ACCOUNTING_PENDING');
+  expect(generate.execute).not.toHaveBeenCalled();
 });

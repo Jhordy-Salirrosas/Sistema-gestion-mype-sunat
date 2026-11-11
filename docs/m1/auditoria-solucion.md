@@ -2624,3 +2624,13 @@ Se actualizan dobles para el puerto transaccional nuevo; la prueba de RA de
 fecha fija congela el reloj para no fallar al cruzar el plazo real de siete días.
 La primera corrida completa detectó esos harness obsoletos; el cierre completo
 se reporta al final, sin ocultar fallos ni cambiar configuración/umbrales.
+
+### 7L — cuentas de respaldo retiradas
+
+El puente exige todas las cuentas realmente usadas por VENTA/costo/reverso.
+Un mapeo parcial no cae a cuentas PCGE fijas: informa la cuenta faltante y deja
+trabajo recuperable. El coordinador solo reconoce asientos previos por sus
+referencias/idempotencia; no construye otro asiento ni borra el motivo original.
+El adaptador de respaldo queda retirado para escrituras. Contabilidad intacta.
+Focal: 5 suites / 93 pruebas aprobadas, incluida reparación del mapeo seguida de
+reproceso sin repetir la descarga física ni consumir otra capa.

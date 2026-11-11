@@ -137,7 +137,7 @@ describe('M1 · asiento único en el flujo del worker', () => {
     expect(s.respaldo).not.toHaveBeenCalled();
   });
 
-  it('el respaldo sí crea el asiento cuando el puente no creó ninguno; reprocesar no duplica', async () => {
+  it('7L puente sin asiento queda pendiente, sin cuentas de respaldo', async () => {
     const s = escenario();
     s.registrar.mockResolvedValue({
       movimientosRegistrados: 0,
@@ -146,13 +146,9 @@ describe('M1 · asiento único en el flujo del worker', () => {
       completo: false,
       errores: ['Contabilidad: fallo contable'],
     });
-    await emitir(s.consumer);
-    expect(s.entries.map((e) => e.source_module)).toEqual(['M1_INVOICES']);
-    expect(s.entries[0].idempotency_key).toBe('m1:invoice:invoice-uuid');
-    expect(s.respaldo).toHaveBeenCalledTimes(1);
-    await emitir(s.consumer);
-    expect(s.entries).toHaveLength(1);
-    expect(s.respaldo).toHaveBeenCalledTimes(1);
+    await expect(emitir(s.consumer)).rejects.toThrow('M1_ACCOUNTING_PENDING');
+    expect(s.entries).toHaveLength(0);
+    expect(s.respaldo).not.toHaveBeenCalled();
   });
 
   it('reprocesar con el puente real conserva un solo asiento', async () => {
