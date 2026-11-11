@@ -2425,3 +2425,10 @@ aprobadas, incluidos selección y envío simulado de la maquinaria existente.
 
 Ayuda «Factura o Boleta aceptada u observada», alineada al selector ya existente.
 Sin cambiar guardas ni saldo. Focales front: 2 archivos/28 pruebas aprobadas.
+
+#### Construcción — 6c-9
+
+Panel no pinta cifras/cero ni «Sin rechazos» sin datos. Monitor de agregados
+parte en carga y distingue respuesta vacía de fallo. Configuración pendiente/error
+viaja a los dos formularios y numeración. Focal front: 1 archivo/7 pruebas aprobadas
+con promesas diferidas. Reserva, guardas, consultas y datos fiscales intactos.
