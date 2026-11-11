@@ -2394,3 +2394,9 @@ SIMULADO (pruebas) solo cambia texto; MOCK sigue siendo el valor. Focales front:
 Subtítulo completo en párrafo M1 multilinea; contador «Sin confirmación SUNAT
 (incluye cola)» y explicación de su alcance. Fórmula y cifras intactas. Focal
 front: 1 archivo/3 pruebas aprobadas. No se modifica PageHeader compartido.
+
+#### Construcción — 6c-4
+
+Detalle fiscal condicionado al mismo booleano previo, con datos cargados; endpoints
+siempre con texto efectivo sanitizado/ausencia. Criterios y compuerta intactos.
+Focal back: 1 suite/10 pruebas aprobadas, incluyendo ausencia y secretos en URL.
