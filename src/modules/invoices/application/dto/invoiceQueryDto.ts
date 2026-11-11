@@ -166,6 +166,7 @@ export interface CuotaEnviadaDto {
 
 /** Respuesta del reintento de CDR. */
 export interface ReintentoCdrDto {
+  codigo?: string;
   id: string;
   estado: EstadoComprobante;
   encolado: boolean;
