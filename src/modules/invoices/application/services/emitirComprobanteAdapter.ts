@@ -123,7 +123,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   const referenciaGravada = tributoDe(afectacion) === '1000';
   const gravada = !gratuita && referenciaGravada;
   const tienePrecioConIgv =
-    typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario);
+    typeof item.precioUnitario === 'number' && Number.isFinite(item.precioUnitario) && !(gratuita && item.precioUnitario === 0);
 
   // Cuando llega `precioUnitario` (precio final con IGV incluido digitado en la venta),
   // jamás se trata como base sin impuesto: en operaciones gravadas se desglosa la base
@@ -191,7 +191,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
     unidad,
     cantidad,
     valorUnitario: valorUnitarioEfectivo,
-    precioUnitario: precioUnitarioEfectivo,
+    precioUnitario: gratuita && item.precioUnitario === 0 ? 0 : precioUnitarioEfectivo,
     afectacion,
     totalLinea: totalLineaSinDescuento !== null ? totalLineaSinDescuento : centimos(valorVenta + igv),
     igvLinea: igv,

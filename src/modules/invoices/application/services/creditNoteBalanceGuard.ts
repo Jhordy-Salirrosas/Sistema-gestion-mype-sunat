@@ -1,3 +1,4 @@
+import { cantidadesPendientes, devuelveUnidades } from './noteQuantityBalance';
 import { redondearMoneda as centimos } from '../../money';
 /**
  * Control del saldo disponible de un comprobante antes de emitir una nota
@@ -123,7 +124,7 @@ export class ControlSaldoNotas {
   public async calcular(
     companyId: string,
     comprobanteId: string,
-  ): Promise<SaldoComprobante & { estado: string; serie: string; correlativo: number }> {
+  ): Promise<SaldoComprobante & { estado: string; serie: string; correlativo: number; cantidades_pendientes: { codigo: string; original: number; pendiente: number }[] }> {
     const origen = await this.prisma.invoice.findFirst({
       where: { id: comprobanteId, company_id: companyId },
       select: {
@@ -132,6 +133,7 @@ export class ControlSaldoNotas {
         serie: true,
         correlativo: true,
         monto_total: true,
+        items: { select: { item_code: true, quantity: true }, orderBy: { item_order: 'asc' } },
       },
     });
 
@@ -154,7 +156,7 @@ export class ControlSaldoNotas {
         referenced_invoice_id: origen.id,
         estado: { notIn: ESTADOS_NOTA_SIN_EFECTO as never },
       },
-      select: { monto_total: true },
+      select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } },
     });
 
     const devuelto = notas.reduce(
@@ -164,8 +166,11 @@ export class ControlSaldoNotas {
 
     const saldo = saldoDisponible(Number(origen.monto_total), devuelto);
 
+    const originales = cantidadesPendientes(origen.items ?? [], []);
+    const pendientes = cantidadesPendientes(origen.items ?? [], notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items ?? []));
     return {
       ...saldo,
+      cantidades_pendientes: [...originales].map(([codigo, original]) => ({ codigo, original: original.toNumber(), pendiente: Math.max(0, pendientes.get(codigo)!.toNumber()) })),
       estado: origen.estado,
       serie: origen.serie,
       correlativo: origen.correlativo,
