@@ -12,6 +12,8 @@ describe('PrismaInventoryBalanceRepository', () => {
         upsert: jest.fn(),
         findMany: jest.fn(),
       },
+      inventoryProduct: { findMany: jest.fn().mockResolvedValue([]) },
+      inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     repo = new PrismaInventoryBalanceRepository(mockPrisma);
   });
