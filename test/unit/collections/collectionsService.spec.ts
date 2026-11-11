@@ -134,4 +134,18 @@ describe('CollectionsService', () => {
     await expect(service.create('c1', { customerName: 'Cliente', invoiceNumber: 'F001-00000001', amount: 100 })).resolves.toMatchObject({ id: 'c1' });
     expect(prisma.collection.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ invoice_id: 'i1' }) }));
   });
+
+  it('concilia cartera contra cuenta 121', async () => {
+    const prisma = {
+      invoice: { findMany: jest.fn().mockResolvedValue([{ id: 'i1', monto_total: 118 }]), aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 0 } }) },
+      collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
+      accountingLine: { findMany: jest.fn().mockResolvedValue([{ debit_amount: 100, credit_amount: 0 }]) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    const r = await service.reconciliation('c1');
+    expect(r.receivable).toBe(118);
+    expect(r.accounting).toBe(100);
+    expect(r.difference).toBe(18);
+    expect(r.reconciled).toBe(false);
+  });
 });

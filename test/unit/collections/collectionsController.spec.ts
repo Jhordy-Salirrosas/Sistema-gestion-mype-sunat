@@ -10,6 +10,7 @@ describe('CollectionsController', () => {
     customerStatement: jest.fn().mockResolvedValue({ totals: {} }),
     portfolioAging: jest.fn().mockResolvedValue({ total: 0 }),
     invoiceCollections: jest.fn().mockResolvedValue({ invoice: {}, collections: [] }),
+    reconciliation: jest.fn().mockResolvedValue({ reconciled: true }),
   };
   const controller = new CollectionsController(service as never);
 
@@ -21,6 +22,7 @@ describe('CollectionsController', () => {
     await expect(controller.statement('20100070970', 'co1')).resolves.toEqual({ totals: {} });
     await expect(controller.portfolio('co1')).resolves.toEqual({ total: 0 });
     await expect(controller.invoiceCollections('i1', 'co1')).resolves.toEqual({ invoice: {}, collections: [] });
+    await expect(controller.reconciliation('co1')).resolves.toEqual({ reconciled: true });
   });
 
   it('exige empresa en todas las rutas', () => {
@@ -28,6 +30,7 @@ describe('CollectionsController', () => {
     expect(() => controller.list(undefined)).toThrow(UnauthorizedException);
     expect(() => controller.portfolio(undefined)).toThrow(UnauthorizedException);
     expect(() => controller.invoiceCollections('i1', undefined)).toThrow(UnauthorizedException);
+    expect(() => controller.reconciliation(undefined)).toThrow(UnauthorizedException);
     expect(() => controller.create({} as never, undefined)).toThrow(UnauthorizedException);
     expect(() => controller.annul('c1', undefined)).toThrow(UnauthorizedException);
   });
