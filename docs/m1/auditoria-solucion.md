@@ -2420,3 +2420,8 @@ ni su guarda ni Resiliencia cambian. Focales: back 1 suite/5 pruebas y front
 Selección RA muestra tipo/código, total y estado desde la vista previa ya existente.
 Sin ampliar payload ni cambiar selección/reglas. Focal front: 1 archivo/9 pruebas
 aprobadas, incluidos selección y envío simulado de la maquinaria existente.
+
+#### Construcción — 6c-8
+
+Ayuda «Factura o Boleta aceptada u observada», alineada al selector ya existente.
+Sin cambiar guardas ni saldo. Focales front: 2 archivos/28 pruebas aprobadas.
