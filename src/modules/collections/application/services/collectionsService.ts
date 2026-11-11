@@ -10,6 +10,23 @@ export class CollectionsService {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
   }
 
+  async invoiceCollections(companyId: string, invoiceId: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, company_id: companyId },
+      select: { id: true, serie: true, correlativo: true, customer_legal_name: true, monto_total: true, fecha_emision: true },
+    });
+    if (!invoice) throw new BadRequestException('Comprobante no encontrado.');
+    const cobros = await this.prisma.collection.findMany({
+      where: { company_id: companyId, invoice_id: invoiceId, status: { not: 'ANULADO' } },
+      orderBy: { collection_date: 'desc' },
+    });
+    return {
+      invoice: { id: invoice.id, numero: `${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}`, customerName: invoice.customer_legal_name, total: Number(invoice.monto_total), date: invoice.fecha_emision },
+      collections: cobros.map((c) => ({ id: c.id, date: c.collection_date, amount: Number(c.amount), paymentMethod: c.payment_method, bankName: c.bank_name, status: c.status })),
+      paid: Math.round(cobros.reduce((s, c) => s + Number(c.amount), 0) * 100) / 100,
+    };
+  }
+
   async portfolioAging(companyId: string) {
     const facturas = await this.prisma.invoice.findMany({
       where: { company_id: companyId, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
