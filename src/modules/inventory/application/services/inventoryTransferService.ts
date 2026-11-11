@@ -506,6 +506,7 @@ export class InventoryTransferService {
         entryDate: adjustment.adjustment_date.toISOString().slice(0, 10),
         glosa: `Ajuste ${adjustment.adjustment_number} (${adjustment.reason || adjustment.type}): Almacén ${adjustment.warehouse_code}`,
         sourceModule: 'INVENTORY',
+        journalCode: 'OPV',
         sourceReferenceId: adjustment.id,
         idempotencyKey: `adjustment:${adjustment.id}`,
         lines,

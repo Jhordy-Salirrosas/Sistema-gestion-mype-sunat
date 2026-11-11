@@ -118,7 +118,7 @@ export class ImportCostApprovedEventListener implements OnModuleInit {
     await this.accounting.execute({
       companyId, period, entryDate: fecha.toISOString(),
       glosa: `Importación ${shipmentId} · asiento de nacionalización DAM`,
-      sourceModule: 'PURCHASES_IMPORT', sourceReferenceId: shipmentId,
+      sourceModule: 'PURCHASES_IMPORT', journalCode: 'COM', sourceReferenceId: shipmentId,
       lines: lineas,
     });
   }

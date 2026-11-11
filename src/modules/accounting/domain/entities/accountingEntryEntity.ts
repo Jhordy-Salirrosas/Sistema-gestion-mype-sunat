@@ -14,6 +14,7 @@ export interface AccountingEntryProps {
   entryDate: Date;
   glosa: string;
   sourceModule: string; // INVOICES | CUSTOMS
+  journalCode?: string; // VEN | COM | CAJ | OPV | GAS
   sourceReferenceId?: string;
   idempotencyKey?: string;
   lines: AccountingLine[];
@@ -28,6 +29,7 @@ export class AccountingEntryEntity {
   public readonly entryDate: Date;
   public readonly glosa: string;
   public readonly sourceModule: string;
+  public readonly journalCode: string;
   public readonly sourceReferenceId?: string;
   public readonly idempotencyKey?: string;
   public readonly lines: ReadonlyArray<AccountingLine>;
@@ -41,6 +43,7 @@ export class AccountingEntryEntity {
     this.entryDate = props.entryDate;
     this.glosa = props.glosa;
     this.sourceModule = props.sourceModule;
+    this.journalCode = props.journalCode ?? 'OPV';
     this.sourceReferenceId = props.sourceReferenceId;
     this.idempotencyKey = props.idempotencyKey;
     this.lines = Object.freeze([...props.lines]);
