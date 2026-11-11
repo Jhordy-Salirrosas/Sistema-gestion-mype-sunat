@@ -32,6 +32,8 @@ export interface ComprobanteOrigenNotaDto {
 
 /** Un comprobante del listado, con lo justo para la grilla. */
 export interface ComprobanteListadoDto {
+  /** Solo lectura para acciones de la vista; nunca decide el envío. */
+  transporte_acreditado?: boolean;
   monto_detraccion?: number | null;
   monto_retencion?: number | null;
   /** Lectura derivada del CDR/historial, sin alterar el estado fiscal. */
