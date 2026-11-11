@@ -88,4 +88,16 @@ describe('CollectionsService', () => {
     expect(r.aging.d31_60 + r.aging.d61_90 + r.aging.d90_plus + r.aging.d0_30).toBe(100);
     expect(r.overdue).toEqual({ count: 1, total: 100 });
   });
+
+  it('lista cobros de una factura', async () => {
+    const prisma = {
+      invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', serie: 'F001', correlativo: 1, customer_legal_name: 'Cliente', monto_total: 118, fecha_emision: new Date('2026-11-10') }) },
+      collection: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', collection_date: new Date('2026-11-10'), amount: 50, payment_method: 'TRANSFERENCIA', bank_name: 'BCP', status: 'REGISTRADO' }]) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    const r = await service.invoiceCollections('co1', 'i1');
+    expect(r.invoice.numero).toBe('F001-00000001');
+    expect(r.paid).toBe(50);
+    expect(r.collections).toHaveLength(1);
+  });
 });

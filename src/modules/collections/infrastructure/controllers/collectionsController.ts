@@ -16,6 +16,12 @@ export class CollectionsController {
     return this.collections.annul(companyId, id);
   }
 
+  @Get('invoice/:id')
+  invoiceCollections(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.invoiceCollections(companyId, id);
+  }
+
   @Get('portfolio')
   portfolio(@CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
