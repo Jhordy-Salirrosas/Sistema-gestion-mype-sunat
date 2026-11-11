@@ -2414,3 +2414,9 @@ campos de evidencia de transporte. Consulta incierta, rescate y bloqueo local no
 acreditan envío. La tabla usa la evidencia junto al estado existente; ni retry-cdr
 ni su guarda ni Resiliencia cambian. Focales: back 1 suite/5 pruebas y front
 1 archivo/3 pruebas aprobadas. Escenarios FD01-1 sin transporte y FD01-2 con inicio.
+
+#### Construcción — 6c-7
+
+Selección RA muestra tipo/código, total y estado desde la vista previa ya existente.
+Sin ampliar payload ni cambiar selección/reglas. Focal front: 1 archivo/9 pruebas
+aprobadas, incluidos selección y envío simulado de la maquinaria existente.
