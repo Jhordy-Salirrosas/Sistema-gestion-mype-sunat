@@ -14,6 +14,7 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
         upsert: jest.fn(),
       },
       accountingEntry: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
+      accountingFiscalYear: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), upsert: jest.fn().mockResolvedValue({}) },
     };
     repository = new PrismaAccountingRepository(prismaMock as unknown as PrismaService);
   });
@@ -107,6 +108,10 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
     await expect(repository.openPeriod('comp-1', 2026, 11)).resolves.toMatchObject({
       period: '2026-11',
       status: 'ABIERTO',
+    });
+    expect(prismaMock.accountingFiscalYear.updateMany).toHaveBeenCalledWith({
+      where: { company_id: 'comp-1', year: 2026, status: 'CERRADO' },
+      data: { status: 'ABIERTO', closed_at: null },
     });
     expect(prismaMock.accountingPeriod.upsert).toHaveBeenCalledWith({
       where: { company_id_period: { company_id: 'comp-1', period: '2026-11' } },
