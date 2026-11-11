@@ -2729,3 +2729,18 @@ Contrato compartido de 17 casos (cantidades fraccionarias, gravadas/exoneradas/i
 ### 8A-3 — Edición decimal del descuento
 
 `InvoiceItemsGrid` e `InvoiceDescuentoGlobal` reutilizan `InvoiceMoneyInput`: borrador textual durante la edición, entrada decimal de hasta dos posiciones y formato a dos decimales al abandonar. No cambia la matemática fiscal ni la validación de importes. Pruebas con formulario controlado real y userEvent: escritura secuencial `4.` → `4.13`, pegado, borrado, reescritura `7.1` y blur `7.10` para ambos campos. Focal: 3 suites / 14 pruebas aprobadas, incluidas las regresiones existentes de grilla y descuento global.
+
+### 8A-4 — SPOT al crédito: comportamiento conservado y validado
+
+No se cambia la fórmula ni el validador: cuotas = PayableAmount − detracción exacta − retención cuando concurren ambas. Casos: 1180.00 − 118.00 = 1062.00; con retención 35.40, cuotas 1026.60. Caso con diferencia de depósito BN: 730.17 − detracción exacta 73.02 = 657.15 de cuotas; **no** 657.17 (pago directo presentado después de depósito redondeado a 73.00). El generador rechaza tanto cuotas por el total íntegro como por el neto del depósito redondeado.
+
+Focal: 2 suites / 16 pruebas aprobadas. Los dos casos de crédito con solo detracción se generan, firman con certificado ficticio y pasan XSD + hoja oficial SFS sin errores. SPOT+retención simultánea tiene regresión estructural de cuotas, conforme a la decisión explícita de Emma. La hoja local no sustituye la validación del servicio SUNAT vigente: se verifican también importes y sumas directamente.
+
+### Cierre de verificación 8A
+
+- Back final: **287 suites / 2635 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; **12 snapshots aprobados, ninguno actualizado**. Build y lint global oxlint aprobados.
+- Front final: **125 suites / 908 pruebas aprobadas**, cero fallos. Build aprobado; ESLint de todos los archivos TS/TSX modificados sin errores ni avisos. No se atribuye a esta entrega la limpieza del lint global ajeno a M1.
+- Una corrida concurrente con builds falló la barra temporal de TA-13; la corrida completa final se ejecutó sin esa carga concurrente y pasó, sin modificar tests ni umbrales.
+- Ferry: `ferry/m1-descuento-redondeo`, diez archivos del front en sus rutas exactas y manifiesto `FERRY.md` con SHA-256. 8A-1 y 8A-4 no requieren cambios de front; 8A-2 y 8A-3 se transportan en commits separados.
+- Resto fiscal expresamente sin corregir aquí: gratuita+ICBPER (adapter vs total XML) y exoneradas con SFS 2992 por `TaxCategory/Percent` ausente (la hoja lo exige en `ValidaExprRegFactura-2.0.1.xsl:3100–3104`). No se alteran reglas de gratuitas/exoneradas ni los XML sin descuento para resolverlos de forma incidental.
+- Sin migraciones, emisiones, llamadas reales a SUNAT, PR, fusiones ni despliegues.
