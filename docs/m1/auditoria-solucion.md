@@ -2874,3 +2874,38 @@ El cableado existente incorpora el mensaje a los pendientes del formulario, desh
 Focal P2 back: **2 suites / 41 pruebas aprobadas**, incluida la comprobación del nuevo contrato y la conservación del pool físico de notas históricas 02. Focal front: **2 suites / 21 pruebas aprobadas**, con mínimo, máximo, filas repetidas, SKU omitido, decimales, metadatos recibidos sin lista fija, respuesta incompleta, bloqueo visible y revalidación antes de publicar. Build del front y TypeScript del back aprobados.
 
 Cierre P1/P2: **back 302 suites / 2769 pruebas y 12 snapshots aprobados**, 4 suites / 38 pruebas omitidas como en la base. **Front 128 suites / 938 pruebas aprobadas** en la corrida completa final. La prueba antigua que intentaba publicar media unidad con motivo total se adaptó a cantidades completas y edición conservada; mantiene su intención de verificar el rechazo tardío del servidor y la reutilización de la misma clave. Lint back aprobado; lint front conserva únicamente el error y aviso heredados del modal, reproducidos en la base. Build front y TypeScript back aprobados. Entrega en `ferry/m1-8b-ter-cantidades-totales`, con diez archivos y hashes SHA-256 en FERRY.md. La adenda P3 se construye después, en un commit separado.
+
+### P3 — Adenda aprobada: coherencia física de motivo 02
+
+Esta adenda sustituye la exclusión de P3 indicada al cerrar P1/P2. `notePhysicalReturnPolicy.devuelveUnidades` centraliza la clasificación física 01/02/06/07 y es consumida por el pool, la guarda de creación, Kardex y reversión de costo. Se mantiene separada de `esMotivoCreditoTotal` y su conjunto 01/02/06: el motivo 07 devuelve unidades pero no exige totalidad.
+
+El pool descuenta unidades de notas 02 anteriores, incluidas las históricas. Las notas nuevas 02 creadas con esta versión quedan selladas por el servidor, exclusivamente en el INSERT transaccional del repositorio, con `payload_ubl.politicaDevolucionFisica02 = 1`. El valor no depende del cliente ni se añade al preparar XML, reintentar, recuperar una respuesta idempotente o reprocesar documentos existentes. No se modifica el esquema ni se hace backfill.
+
+Al aceptarse u observarse una 02 sellada, se usa el mismo circuito que para 01: entrada de Kardex con operación 05, capa de entrada al costo histórico acreditado por la salida original, reversión de venta y reversión de costo. Se conservan las claves de idempotencia existentes. ND no mueve existencias y los motivos 01/06/07 conservan su circuito.
+
+Una 02 sin el sello se considera histórica para los efectos locales. El puente devuelve una omisión explícita antes de crear cualquier movimiento o asiento, sin ejecutar el respaldo contable. El coordinador registra una única constancia `M1_LEGACY_02_NO_RETROACTIVITY` en el historial y expone `motivoOmision` en la respuesta. No cambia el payload histórico ni fabrica efectos faltantes al reprocesarlo, incluso por reentrega del worker. El cambio de lectura del pool no implica regularización física ni contable retroactiva.
+
+Regresiones: 40 casos en la suite de guardas, incluidos ambos contratos con nota 02 previa, mínimo/máximo del pool, saldo monetario agotado y sello exclusivo de creación. PostgreSQL local desechable: 6 casos, con entrada/capa/costo histórico y reversos reales persistidos para 01/02/06/07, control 02 en PROMEDIO y FIFO, reentrega sin duplicación, pool con 02 histórica y nuevo total ajustado a 8 unidades; reprocesos repetidos de la histórica sin movimientos ni asientos y con una sola constancia durable. TypeScript y lint back aprobados, sin supresiones.
+
+### Archivos de la Parte 8B-ter (P1/P2/P3)
+
+- `docs/m1/auditoria-solucion.md`
+- `src/modules/invoices/application/services/creationGuards.ts`
+- `src/modules/invoices/application/services/creditNoteBalanceGuard.ts`
+- `src/modules/invoices/application/services/invoiceAccountingBridgeService.ts`
+- `src/modules/invoices/application/services/invoiceBridgeCoordinatorService.ts`
+- `src/modules/invoices/application/services/invoiceNoteService.ts`
+- `src/modules/invoices/application/services/kardexBridge.ts`
+- `src/modules/invoices/application/services/noteCatalogs.ts`
+- `src/modules/invoices/application/services/notePhysicalReturnPolicy.ts`
+- `src/modules/invoices/application/services/noteQuantityBalance.ts`
+- `src/modules/invoices/infrastructure/persistence/prismaInvoiceRepository.ts`
+- `src/modules/invoices/invoicePayload.ts`
+- `test/fixtures/8bTerAtomicHarness.ts`
+- `test/integration/invoices/8b-ter-physical-02.integration.spec.ts`
+- `test/unit/invoices/8b-cantidades-saldo.spec.ts`
+- `test/unit/invoices/8b-ter-totales.spec.ts`
+
+Front: los diez archivos de producción/pruebas se enumeran con sus rutas exactas y hashes SHA-256 en FERRY.md de `ferry/m1-8b-ter-cantidades-totales`. P3 es exclusivamente back; no requiere otro cambio de front.
+
+Cierre final de la adenda: **back 303 suites / 2781 pruebas y 12 snapshots aprobados**, 4 suites / 38 pruebas omitidas; corrida completa sin fallos. **Front 128 suites / 938 pruebas aprobadas**, sin cambios posteriores de front por P3. TypeScript/lint back aprobados; build front aprobado, con el diagnóstico de lint heredado del modal ya descrito. P1, P2 y P3 quedan separados en tres commits de la rama `fix/m1-8b-ter-cantidades-totales`; ferry de P2 y actualización documental de P3 en `ferry/m1-8b-ter-cantidades-totales`. Sin migraciones, emisiones reales, PRs, merges ni despliegues durante el encargo.

@@ -19,6 +19,7 @@ import {
 import { InvoiceAccountingFallbackService } from './invoiceAccountingFallbackService';
 
 export interface ResultadoReprocesoPuente {
+  motivoOmision?: string;
   completo: boolean;
   yaCompleto: boolean;
   asientoId?: string;
@@ -92,6 +93,11 @@ export class InvoiceBridgeCoordinatorService {
     const factura = await this.cargarParaPuente(invoiceId, estado);
     if (!factura) throw new Error('M1_ACCOUNTING_DOCUMENT_UNAVAILABLE');
     const resultado = await this.puenteContable.registrar(factura);
+    if (resultado.motivoOmision && !await this.prisma.transactionHistory.findFirst({ where: { invoice_id: invoiceId, codigo_error: resultado.motivoOmision } })) {
+      await this.prisma.transactionHistory.create({ data: { invoice_id: invoiceId, company_id: factura.companyId,
+        estado_anterior: estado, estado_nuevo: estado, codigo_error: resultado.motivoOmision,
+        mensaje_error: 'Nota 02 histórica sin política física nueva: no se generan movimientos ni asientos retroactivos.' } });
+    }
     const { error, respaldo } =
       resultado.completo && (resultado.asientoId || resultado.asientoOmitido)
         ? {}
@@ -140,6 +146,7 @@ export class InvoiceBridgeCoordinatorService {
     const asientoOmitido = respaldo?.omitido ?? resultado.asientoOmitido;
     return {
       completo,
+      ...(resultado.motivoOmision ? { motivoOmision: resultado.motivoOmision } : {}),
       yaCompleto:
         completo &&
         resultado.movimientosRegistrados === 0 &&
@@ -214,6 +221,7 @@ export class InvoiceBridgeCoordinatorService {
       })),
       importes,
       motivoNota: fila.credit_debit_reason_code ?? undefined,
+      politicaDevolucionFisica02: payload.politicaDevolucionFisica02,
       documentoAfectadoId: fila.referenced_invoice_id ?? undefined,
       documentoAfectadoNumero: fila.referenced_series_correlative ?? undefined,
       motivoBloqueoAsiento: null,

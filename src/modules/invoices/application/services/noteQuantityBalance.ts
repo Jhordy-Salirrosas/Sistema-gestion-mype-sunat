@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '../../../../generated/client/client';
 
 export interface CantidadOrigen { item_code: string | null; quantity: Prisma.Decimal | number }
-export const devuelveUnidades = (motivo: string | null | undefined): boolean => ['01', '06', '07'].includes(motivo ?? '');
+export { devuelveUnidades } from './notePhysicalReturnPolicy';
 
 /** Saldo físico independiente del monetario, con la misma precisión de la persistencia. */
 export function cantidadesPendientes(originales: readonly CantidadOrigen[], anteriores: readonly CantidadOrigen[]): Map<string, Prisma.Decimal> {

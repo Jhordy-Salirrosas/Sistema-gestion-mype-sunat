@@ -3,10 +3,12 @@ import { esMotivoCreditoTotal, CATALOGO_09_MOTIVOS } from '../../../src/modules/
 import { validarCantidadesNota, devuelveUnidades } from '../../../src/modules/invoices/application/services/noteQuantityBalance';
 import { Prisma } from '../../../src/generated/client/client';
 
-it('totalidad deriva del catálogo; clasificación física 02 permanece fuera', () => {
+it('totalidad deriva del catálogo y es distinta de la clasificación física', () => {
   for (const motivo of CATALOGO_09_MOTIVOS) expect(esMotivoCreditoTotal(motivo.codigo)).toBe(motivo.total);
   expect(esMotivoCreditoTotal('99')).toBe(false);
-  expect(devuelveUnidades('02')).toBe(false);
+  expect(devuelveUnidades('02')).toBe(true);
+  expect(devuelveUnidades('07')).toBe(true);
+  expect(esMotivoCreditoTotal('07')).toBe(false);
 });
 describe.each(['pantalla', 'fiscal'])('8B-ter totalidad, contrato %s', ruta => {
   it.each(['01', '02', '06'])('bloquea unidades parciales aunque el dinero sea exacto: %s', async motivo => {
@@ -67,4 +69,34 @@ it.each(['pantalla', 'fiscal'].flatMap(ruta => ['01', '02', '06'].map(motivo => 
   expect(h.tx.$queryRaw).not.toHaveBeenCalled();
   expect(h.tx.invoice.create).not.toHaveBeenCalled();
   expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
+});
+
+it.each(['pantalla', 'fiscal'])('P3: nota 02 aceptada previa reduce el pool de cualquier nueva NC total: %s', async ruta => {
+ for (const motivo of ['01','02','06']) {
+  const h = harness(); h.origin.items[0].quantity = 10;
+  h.tx.invoice.findMany.mockResolvedValue([{ monto_total: 23.6, credit_debit_reason_code: '02', items: [{ item_code: 'SERV', quantity: 2 }] }]);
+  const d = nota(); d.codigo_motivo_nota = motivo; d.items[0].cantidad = 8; d.items[0].precioUnitario = 11.8;
+  await expect(h.run(entradaNota(d, ruta))).resolves.toBeDefined();
+  d.items[0].cantidad = 4; d.items[0].precioUnitario = 23.6;
+  await expect(h.run(entradaNota(d, ruta))).rejects.toThrow('TOTAL_INCOMPLETA');
+  d.items[0].cantidad = 10; d.items[0].precioUnitario = 9.44;
+  await expect(h.run(entradaNota(d, ruta))).rejects.toThrow('EXCEDE_CANTIDAD');
+ }
+});
+it.each(['pantalla','fiscal'])('P3: el servidor sella la política 02 al crear por %s', async ruta => {
+ const h = scenario();
+ const pantalla = { ...nota(), codigo_motivo_nota: '02', documento_afectado: 'F001-00000069',
+  items: [{ codigo: 'SERV', descripcion: 'Producto', cantidad: 10, precioUnitario: 11.8, afectacion: '10', unidad: 'NIU' }] };
+ const fiscal = traducirEmision(pantalla as never, { ruc: '20100070970', razonSocial: 'Emisor' }, 1).dto;
+ fiscal.payload_ubl.politicaDevolucionFisica02 = 999;
+ if (ruta === 'pantalla') await h.service.emitir(pantalla as never, 'empresa', 'p3-creation-policy-01');
+ else await h.service.create(fiscal, 'empresa', 'p3-creation-policy-01');
+ expect(h.tx.invoice.create.mock.calls[0][0].data.payload_ubl.politicaDevolucionFisica02).toBe(1);
+});
+
+it.each(['pantalla','fiscal'])('P3: una 02 previa que agotó el dinero impide otra NC total aunque queden unidades: %s', async ruta => {
+ const h = harness(); h.origin.items[0].quantity = 10;
+ h.tx.invoice.findMany.mockResolvedValue([{ monto_total: 118, credit_debit_reason_code: '02', items: [{ item_code: 'SERV', quantity: 2 }] }]);
+ const d = nota(); d.codigo_motivo_nota = '02'; d.items[0].cantidad = 8; d.items[0].precioUnitario = 11.8;
+ await expect(h.run(entradaNota(d, ruta))).rejects.toThrow('NOTA_EXCEDE_SALDO');
 });
