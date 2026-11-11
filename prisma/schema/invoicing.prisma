@@ -59,6 +59,9 @@ model Invoice {
   xml_storage_url             String?
   xml_hash_sha256             String?
   cdr_storage_url             String?
+  detraccion_deposited_at     DateTime?
+  detraccion_deposited_amount Decimal?   @db.Decimal(14, 2)
+  detraccion_constancia       String?
   
   // Referencias para Notas de CrÃ©dito / DÃ©bito
   referenced_invoice_id       String?
