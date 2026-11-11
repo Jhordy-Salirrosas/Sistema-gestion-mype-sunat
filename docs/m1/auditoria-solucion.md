@@ -2705,3 +2705,17 @@ Resiliencia/Contabilidad, sin modificar datos del equipo/producción. Las
 migraciones existentes solo prepararon la base local desechable autorizada.
 Ninguna emisión, llamada real a SUNAT, PR, merge o despliegue. La ejecución
 operativa y correcciones históricas siguen a cargo de Emma tras su revisión.
+
+## Parte 8A — Descuento y redondeo
+
+Bases: back dev `4877dc1c6dac306c187be043e765612a81134a33` (284 suites / 2604 pruebas aprobadas; 4 suites / 38 pruebas omitidas; 12 snapshots); front dev `315f50ccf2e9de73e5cef713d03121febf63d8d9` (123 suites / 886 pruebas). Sin migraciones ni llamadas reales a SUNAT.
+
+### 8A-1 — Precio alternativo neto
+
+El adapter conserva el precio bruto del catálogo y no cambia su contrato. Solo el precio alternativo 01 de líneas con descuento pasa a informar el neto unitario con impuestos, HALF_UP a dos decimales; gratuitas 02 y XML sin descuento se conservan. El descuento de línea añade `MultiplierFactorNumeric` (monto/base). La hoja del repositorio valida ese factor **si existe**: su ausencia no era por sí sola prueba de rechazo.
+
+El descuento global se atribuye proporcionalmente a las bases de línea (02 solo gravadas, excluyendo gratuitas), HALF_UP a céntimos; residuo a la mayor base y empate a la primera. El IGV reducido de cabecera se atribuye con la misma regla. Esta atribución solo informa el precio alternativo: **no** vuelve a reducir `LineExtensionAmount` ni `TaxTotal` de línea; el allowance global de cabecera sigue siendo la única deducción en los totales. Ejemplo global: bases de línea 35.00 menos allowance 3.50 = base de cabecera 31.50; IGV 5.67; total 37.17. Reducir además las bases XML de línea descontaría dos veces. El código 01/03 conserva sus bases/impuesto y reduce el precio neto con la rebaja no afecta.
+
+Pruebas focales: 3 suites / 18 pruebas. XML generado y firmado con certificado ficticio pasa XSD/XSL SFS real tanto con descuento de línea equivalente al caso F001-68 como global 02 y no afectos 01/03. Dos hashes SHA256 tomados del generador previo prueban igualdad byte a byte sin descuento, incluido SPOT 009 contado. No se actualiza ningún snapshot fiscal.
+
+Bordes previos detectados, fuera de esta corrección: una gratuita con dos bolsas ICBPER produce total 1.00 en el adapter y 0.00 en el generador (el agregador omite ICBPER de gratuitas); resolverlo cambiaría XML sin descuento. Una prueba exploratoria mixta gravada/exonerada obtuvo SFS 2992 en el tributo 9997; no se cambia su categoría fiscal en esta ronda. La distribución de bases mixtas tiene prueba matemática; los casos SFS exigidos de descuento son gravados.

@@ -1,3 +1,4 @@
+import { descuentosGlobalesPrecio } from './globalDiscountPrices';
 import { totalesGratuitos } from './freeOperationReference';
 import { formatoMoneda, redondearMoneda as centimos } from './money';
 import { Injectable, BadRequestException } from '@nestjs/common';
@@ -337,7 +338,8 @@ export class UblGeneratorService {
       throw new BadRequestException('El comprobante requiere líneas reales: no se sintetiza Servicio prestado');
     }
 
-    const xml = validadas.map((l) => bloqueLinea(l, moneda, raiz));
+    const descuentosPrecio = descuentosGlobalesPrecio(validadas, payload.descuentoGlobal);
+    const xml = validadas.map((l, i) => bloqueLinea(l, moneda, raiz, descuentosPrecio[i]));
 
     // ICBPER: se añade su línea al final si el payload declara bolsas y
     // ninguna línea del detalle ya la representa.
