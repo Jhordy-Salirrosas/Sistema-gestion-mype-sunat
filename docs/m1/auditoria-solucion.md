@@ -2382,3 +2382,9 @@ Esta Fase 0 solo añade documentación; no se ha construido ninguno de los punto
 Hora America/Lima solo en el éxito de red, visible junto a Actualizar. Fallo y
 carga conservan la última hora buena. Focales front: 2 archivos/3 pruebas verdes.
 La Fase 0 fue aprobada en bloque; no cambian reglas, estados ni XML.
+
+#### Construcción — 6c-2
+
+Cierre Cerrar compuesto desde M1 con API compartida existente, sin editar UI común.
+SIMULADO (pruebas) solo cambia texto; MOCK sigue siendo el valor. Focales front:
+2 archivos/13 pruebas aprobadas, incluidos guardado y secretos de configuración.
