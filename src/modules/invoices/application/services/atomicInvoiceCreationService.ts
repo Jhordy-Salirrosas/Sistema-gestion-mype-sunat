@@ -1,3 +1,5 @@
+import { validarContenidoFiscal } from '../../validateInvoiceContent';
+import { traducirEmision } from './emitirComprobanteAdapter';
 import { validarReservaVenta } from './invoiceStockReservation';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
@@ -48,10 +50,13 @@ export class AtomicInvoiceCreationService {
     const validated = await prepareCreation(tx, dto, companyId);
     await validarReservaVenta(tx, validated, companyId);
     const scoped = tx as unknown as PrismaService;
-    return new EmitirComprobanteService(scoped, new InvoiceSeriesService(scoped),
+    const service = new EmitirComprobanteService(scoped, new InvoiceSeriesService(scoped),
       new StockValidationService(scoped), new InvoiceNoteService(scoped),
       new PrismaInvoiceRepository(this.prisma, this.queue).inTransaction(tx),
-    ).emitir(validated, companyId);
+    );
+    const emisor = await service.datosDelEmisor(companyId);
+    validarContenidoFiscal(traducirEmision(validated, emisor, 0).dto.payload_ubl as never);
+    return service.emitir(validated, companyId);
   }
 
   private async execute<T>(route: string, dto: unknown, companyId: string, key: string | undefined,

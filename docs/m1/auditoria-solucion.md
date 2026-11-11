@@ -2826,3 +2826,9 @@ El worker completa la descripción de notas 07/08 almacenadas antes de generar X
 Pruebas nuevas: 1 suite / 5 casos (matrices 07/08 × ausente/blanca/personalizada para ambas rutas, motivo inválido/no habilitado y trabajo que continúa tras la reparación auditable). Se adaptaron fixtures de pruebas antiguas a la validación anticipada, conservando sus aserciones de negocio.
 
 P1 verificado: suite general 289 suites / 2680 pruebas aprobadas más 3 suites / 15 pruebas PostgreSQL activadas explícitamente: **292 suites / 2695 pruebas; 12 snapshots**. Las restantes 4 suites / 38 pruebas quedan omitidas como en la base. TypeScript back aprobado tras regenerar el cliente Prisma del esquema vigente. No se añadió ni aplicó migración; se materializó el esquema existente exclusivamente en PostgreSQL local desechable.
+
+### P2 — Contenido fiscal antes del correlativo
+
+`validarContenidoFiscal` es una función pura compartida por el generador y `AtomicInvoiceCreationService.runEmission`. Valida campos obligatorios con los datos reales del emisor, después de las guardas de negocio y antes de reservar número; acepta el número provisional 0. El generador mantiene separada su exigencia de correlativo positivo. No se invoca el generador sobre el cálculo previo.
+
+Focal P2: **3 suites / 34 pruebas aprobadas**, incluidas **2 pruebas sobre PostgreSQL real**, una por ruta HTTP: razón social del emisor blanca produce `Dato fiscal ausente: razonSocialEmisor`; la serie permanece en 69, no existen comprobante ni respuesta idempotente y no se llama a publicación de trabajo. El esquema vigente se materializó en una base local desechable; no hay migraciones nuevas ni acceso a producción. TypeScript back aprobado. Se añaden 2 suites / 13 pruebas al total de P1.
