@@ -1,3 +1,4 @@
+import { descripcionCanonicaNota } from './noteDescription';
 import { multiplicarMoneda, dividirMoneda, dividirUnitario } from '../../money';
 import { redondearMoneda as centimos } from '../../money';
 /**
@@ -306,6 +307,7 @@ export const traducirEmision = (
   emisor: DatosEmisor,
   correlativo: number,
 ): ComprobanteTraducido => {
+  const descripcionNota = descripcionCanonicaNota(dto.tipo_comprobante, dto.codigo_motivo_nota, dto.descripcion_motivo_nota);
   const avisos: string[] = [];
   const liquidadas = dto.items.map((item, indice) => liquidarLinea(item, indice));
   const originales = repartirBases(liquidadas);
@@ -420,7 +422,7 @@ export const traducirEmision = (
 
     documentoAfectado: dto.documento_afectado,
     codigoMotivoNota: dto.codigo_motivo_nota,
-    descripcionMotivoNota: dto.descripcion_motivo_nota,
+    descripcionMotivoNota: descripcionNota,
   };
 
   const createDto: CreateInvoiceDto = {

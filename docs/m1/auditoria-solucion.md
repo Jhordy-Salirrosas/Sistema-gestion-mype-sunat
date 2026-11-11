@@ -2812,3 +2812,17 @@ F1 completa: **127 suites / 921 pruebas aprobadas** en el front (base 126/913); 
 Focales F2: **2 suites / 13 pruebas aprobadas**. La spec nueva contiene cuatro casos: detalle de 400; conflicto específico; otros 409/sin detalle; nota parcial motivo 06 que recibe un 400, conserva datos y vuelve a usar exactamente la misma solicitud/clave al reintentar. Build del front y ESLint de los dos archivos F2 aprobados. Se mantienen los dos diagnósticos heredados del modal descritos en F1 (1 error y 1 aviso), sin incidencias nuevas.
 
 F2 completa y cierre: **128 suites / 925 pruebas aprobadas** en el front; back permanece en **291 suites / 2684 pruebas**, 4 suites / 38 omitidas y **12 snapshots intactos**. Builds aprobados; lint back aprobado, lint de F2 limpio y sin nuevas incidencias en F1. Se comprobó en seco la reversión del parche B1 sin modificar el árbol de trabajo; no se ejecutó ninguna reversión real. La aceptación del candidato XML sigue pendiente de la única prueba de producción de Emma. Ramas `fix/m1-notas-descuento` y `ferry/m1-notas-descuento`; ferry con F1/F2 separados, archivos en rutas exactas, manifiesto y SHA-256. Sin migraciones, emisiones, llamadas reales a SUNAT, PR, merges o despliegues por Codex. Las ramas de 8B ya mergeadas no se modifican.
+
+## Continuación: preparación local de notas — 11 de noviembre de 2026
+
+Base de construcción: main a4534b91768902392c2c3bba31a873d52817e006; rama fix/preparacion-local-notas. Fase 0 y decisiones conservadas.
+
+### P1 — Descripción canónica y recuperación del legado
+
+El helper compartido `descripcionCanonicaNota` valida primero el motivo con las mismas guardas de Parte 8B. Deriva ausentes/blancos de noteCatalogs en el adaptador de pantalla, conversión fiscal y preparación de creación; preserva literalmente descripciones personalizadas no vacías y no amplía catálogos habilitados.
+
+El worker completa la descripción de notas 07/08 almacenadas antes de generar XML. Bloquea/relee la fila y persiste payload e historial en una sola transacción, con `M1_NOTE_DESCRIPTION_COMPLETED`, etapa y texto derivado. Si la auditoría falla, no continúa. Una reentrega no duplica el evento cuando la descripción ya existe. No cambia estado fiscal, saldo ni marcador de transporte.
+
+Pruebas nuevas: 1 suite / 5 casos (matrices 07/08 × ausente/blanca/personalizada para ambas rutas, motivo inválido/no habilitado y trabajo que continúa tras la reparación auditable). Se adaptaron fixtures de pruebas antiguas a la validación anticipada, conservando sus aserciones de negocio.
+
+P1 verificado: suite general 289 suites / 2680 pruebas aprobadas más 3 suites / 15 pruebas PostgreSQL activadas explícitamente: **292 suites / 2695 pruebas; 12 snapshots**. Las restantes 4 suites / 38 pruebas quedan omitidas como en la base. TypeScript back aprobado tras regenerar el cliente Prisma del esquema vigente. No se añadió ni aplicó migración; se materializó el esquema existente exclusivamente en PostgreSQL local desechable.

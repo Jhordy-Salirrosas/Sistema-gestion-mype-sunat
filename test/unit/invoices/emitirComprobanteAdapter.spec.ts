@@ -426,7 +426,7 @@ describe('traducirEmision — datos del adquirente y del comprobante', () => {
 
   it('sin origen resuelto no inventa un UUID', () => {
     const { dto } = traducirEmision(
-      formulario({ tipo_comprobante: '07', documento_afectado: 'F001-00000042' }),
+      formulario({ tipo_comprobante: '07', codigo_motivo_nota: '06', documento_afectado: 'F001-00000042' }),
       emisor,
       1,
     );

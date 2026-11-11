@@ -1,3 +1,4 @@
+import { descripcionCanonicaNota } from './application/services/noteDescription';
 import { InvoiceForcedResendService } from './application/services/invoiceForcedResendService';
 import { claimIndividualSummaryChannel } from './application/services/summaryIndividualClaim';
 import {
@@ -277,6 +278,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
   /** Traduce `{ invoice_id }` a los datos completos del envio. */
   async preparar(invoiceId: string): Promise<JobAprobado> {
     const invoice = await this.cargar(invoiceId);
+    await this.completarDescripcionNota(invoice);
     const xmlSinFirma = this.xmlDelComprobante(invoice);
     const context = await this.issuerConfig?.resolve(invoice.company_id);
     const xml = this.firmar(invoice, xmlSinFirma, context);
@@ -359,6 +361,30 @@ export class InvoiceJobConsumer implements OnModuleInit {
       bloqueoXsl: decision.bloqueo,
       omitidaPorDemo: decision.omitidaPorDemo,
     };
+  }
+
+  /** Reparación de legado atómica y auditable antes de generar XML. */
+  private async completarDescripcionNota(invoice: InvoiceRow): Promise<void> {
+    const p = invoice.payload_ubl as InvoicePayload | null;
+    if (!['07', '08'].includes(invoice.tipo_comprobante) || !p || p.descripcionMotivoNota?.trim()) return;
+    const actualizado = await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT id FROM invoices WHERE id = ${invoice.id} FOR UPDATE`;
+      const actual = await tx.invoice.findUniqueOrThrow({ where: { id: invoice.id } });
+      if (ESTADOS_FINALES.includes(actual.estado)) throw new ComprobanteFinalizado();
+      const payload = actual.payload_ubl as unknown as InvoicePayload;
+      if (payload.descripcionMotivoNota?.trim()) return payload;
+      const descripcion = descripcionCanonicaNota(actual.tipo_comprobante, payload.codigoMotivoNota, payload.descripcionMotivoNota);
+      const nuevo = { ...payload, descripcionMotivoNota: descripcion };
+      await tx.invoice.update({ where: { id: invoice.id }, data: { payload_ubl: JSON.parse(JSON.stringify(nuevo)) } });
+      await tx.transactionHistory.create({ data: { invoice_id: actual.id, company_id: actual.company_id,
+        estado_anterior: actual.estado, estado_nuevo: actual.estado,
+        codigo_error: 'M1_NOTE_DESCRIPTION_COMPLETED', mensaje_error: JSON.stringify({
+          etapa: 'PREPARACION_LOCAL', accion: 'DESCRIPCION_CANONICA_COMPLETADA',
+          codigoMotivoNota: payload.codigoMotivoNota, descripcionMotivoNota: descripcion,
+        }) } });
+      return nuevo;
+    });
+    invoice.payload_ubl = actualizado;
   }
 
   /** Lee el comprobante y rechaza los que ya estan en estado final. */

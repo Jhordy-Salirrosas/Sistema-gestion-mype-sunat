@@ -6,11 +6,11 @@ import { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS } from '../../../src/modules/i
 describe.each(['pantalla', 'fiscal'])('motivos e importes, %s', ruta => {
  it.each(['07', '08'])('rechaza motivo 99 en documento %s', async tipo => {
   const d = nota(); d.tipo_comprobante = tipo; d.serie = tipo === '07' ? 'FC01' : 'FD01'; d.codigo_motivo_nota = '99';
-  await expect(harness().run(entradaNota(d, ruta))).rejects.toThrow('no pertenece al Catálogo');
+  await expect(Promise.resolve().then(() => harness().run(entradaNota(d, ruta)))).rejects.toThrow('no pertenece al Catálogo');
  });
  it.each(['07', '08'])('rechaza precio cero oneroso en documento %s', async tipo => {
   const d = nota(); d.tipo_comprobante = tipo; d.serie = tipo === '07' ? 'FC01' : 'FD01'; d.codigo_motivo_nota = tipo === '07' ? '07' : '02'; d.items[0].precioUnitario = 0;
-  await expect(harness().run(entradaNota(d, ruta))).rejects.toThrow('línea onerosa');
+  await expect(Promise.resolve().then(() => harness().run(entradaNota(d, ruta)))).rejects.toThrow('línea onerosa');
  });
  it('rechaza una línea onerosa cero aunque el total sea positivo', async () => {
   const h = harness(); h.origin.items[0].quantity = 2;
@@ -19,11 +19,11 @@ describe.each(['pantalla', 'fiscal'])('motivos e importes, %s', ruta => {
  });
  it('oficial 08 no habilitado es distinto de inválido 99', async () => {
   const d = nota(); d.codigo_motivo_nota = '08';
-  await expect(harness().run(entradaNota(d, ruta))).rejects.toThrow('oficial pero no está habilitado');
+  await expect(Promise.resolve().then(() => harness().run(entradaNota(d, ruta)))).rejects.toThrow('oficial pero no está habilitado');
  });
  it('un descuento no permite esconder una nota de total cero', async () => {
   const d = nota(); d.codigo_motivo_nota = '07'; Object.assign(d, { descuento_global: { codigo: '02', monto: 100 } });
-  await expect(harness().run(entradaNota(d, ruta))).rejects.toThrow('importe total');
+  await expect(Promise.resolve().then(() => harness().run(entradaNota(d, ruta)))).rejects.toThrow('importe total');
  });
  it('gratuita con precio cero y referencia positiva no se trata como onerosa', async () => {
   const h = harness(); h.tx.inventoryProduct.findMany.mockResolvedValue([h.product, { ...h.product, sku: 'GRAT', tax_affectation: '11' }]); h.origin.items.push({ item_code: 'GRAT', quantity: 1, unit_code: 'NIU', igv_affectation_type: '11' });

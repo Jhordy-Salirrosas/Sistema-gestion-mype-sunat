@@ -1,3 +1,4 @@
+import { descripcionCanonicaNota } from './noteDescription';
 import { validarMotivoNota, validarImporteNota } from './noteReasonGuard';
 import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
 import { validarCantidadesNota, devuelveUnidades } from './noteQuantityBalance';
@@ -46,7 +47,7 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
     forma_pago: p.formaPago, cuotas, descuento_global: p.descuentoGlobal,
     medio_pago_detraccion: p.medioPagoDetraccion, cuenta_banco_nacion: p.cuentaBancoNacion,
     documento_afectado: p.documentoAfectado, referenced_invoice_id: dto.referenced_invoice_id,
-    codigo_motivo_nota: p.codigoMotivoNota, descripcion_motivo_nota: p.descripcionMotivoNota,
+    codigo_motivo_nota: p.codigoMotivoNota, descripcion_motivo_nota: descripcionCanonicaNota(dto.tipo_comprobante, p.codigoMotivoNota, p.descripcionMotivoNota),
     items: p.lineas.map((l: any) => {
       if (!l || typeof l !== 'object') throw new BadRequestException('Línea fiscal inválida');
       if (l.descuentos !== undefined && l.descuentos !== null && !Array.isArray(l.descuentos)) throw new BadRequestException('La lista de descuentos de línea debe ser un arreglo');
@@ -76,7 +77,10 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   const codigos = dto.items.map((l) => l.codigo?.trim());
   if (codigos.some((c) => !c)) throw new BadRequestException('Cada producto o servicio debe estar registrado con código y afectación');
   const esNota = dto.tipo_comprobante === '07' || dto.tipo_comprobante === '08';
-  if (esNota) validarMotivoNota(dto.tipo_comprobante, dto.codigo_motivo_nota);
+  if (esNota) {
+    validarMotivoNota(dto.tipo_comprobante, dto.codigo_motivo_nota);
+    dto.descripcion_motivo_nota = descripcionCanonicaNota(dto.tipo_comprobante, dto.codigo_motivo_nota, dto.descripcion_motivo_nota);
+  }
   let historicas: { item_code: string | null; unit_code: string | null; igv_affectation_type: string | null }[] = [];
   if (esNota) {
     const numero = /^([A-Za-z0-9]{4})-(\d{1,8})$/.exec(dto.documento_afectado?.trim() ?? '');
