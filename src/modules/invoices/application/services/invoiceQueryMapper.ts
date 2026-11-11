@@ -1,3 +1,4 @@
+import { transporteAcreditado, type EvidenciaTransporteVista } from './invoiceTransportPresentation';
 function mensajeHistorial(codigo: string | null, mensaje: string | null): string | null {
  if (codigo !== 'M1_FORCE_RESEND_AUTHORIZED') return mensaje;
  try { const data = JSON.parse(mensaje ?? '{}'); return `Reenvío forzado por decisión registrada. Usuario: ${data.usuarioId}; motivo: ${data.motivo}`; } catch { return mensaje; }
@@ -25,7 +26,7 @@ import type { InvoiceStatus } from '../../../../generated/client/enums';
 /** Fila del listado (lo que se le pide a Prisma con `select`). */
 export interface FilaListado {
   transport_uncertain?: boolean | null;
-  history?: EventoPresentacion[];
+  history?: (EventoPresentacion & EvidenciaTransporteVista)[];
   id: string;
   tipo_comprobante: string;
   serie: string;
@@ -93,6 +94,7 @@ export function numeroComprobante(serie: string, correlativo: number): string {
 export function aListado(fila: FilaListado): ComprobanteListadoDto {
   const cdr = aCdr(fila.cdr_sunat);
   return {
+    transporte_acreditado: transporteAcreditado(cdr, fila.history),
     resultado_presentacion: presentarResultado(fila.estado, cdr, fila.history, fila.transport_uncertain),
     id: fila.id,
     tipo_comprobante: fila.tipo_comprobante,

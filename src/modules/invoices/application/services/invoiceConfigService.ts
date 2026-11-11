@@ -96,13 +96,15 @@ export class InvoiceConfigService {
     const { punto: puntoCertificado, resumen: resumenCertificado } =
       this.evaluarCertificado(context);
     const motor = await diagnosticarSfs();
+    const domicilioConfigurado = Boolean(context && /^\d{4}$/.test(context.local_anexo ?? '') && /^\d{6}$/.test(context.ubigeo_fiscal ?? '') && [context.domicilio_fiscal, context.departamento_fiscal, context.provincia_fiscal, context.distrito_fiscal].every(v => v?.trim()));
     const checklist: EstadoConfiguracion[] = [
       { clave: 'domicilio_emisor', descripcion: 'Local anexo y domicilio fiscal del emisor', obligatorio: true,
-        configurado: Boolean(context && /^\d{4}$/.test(context.local_anexo ?? '') && /^\d{6}$/.test(context.ubigeo_fiscal ?? '') && [context.domicilio_fiscal, context.departamento_fiscal, context.provincia_fiscal, context.distrito_fiscal].every(v => v?.trim())),
-        detalle: 'Complete los datos fiscales reales de la empresa; su ausencia bloquea antes de numerar' },
+        configurado: domicilioConfigurado,
+        detalle: domicilioConfigurado ? `Local anexo ${context!.local_anexo}; ubigeo ${context!.ubigeo_fiscal}; ${context!.domicilio_fiscal}; ${context!.departamento_fiscal} / ${context!.provincia_fiscal} / ${context!.distrito_fiscal}` : 'Complete los datos fiscales reales de la empresa; su ausencia bloquea antes de numerar' },
       this.chequeoEntorno(entorno),
       { clave: 'endpoints', descripcion: 'Endpoints coherentes con el entorno', obligatorio: true,
-        configurado: endpointCoherente(entorno, billEndpoint) && endpointCoherente(entorno, consultEndpoint) },
+        configurado: endpointCoherente(entorno, billEndpoint) && endpointCoherente(entorno, consultEndpoint),
+        detalle: `Emisión: ${this.publicEndpoint(billEndpoint) ?? 'Sin endpoint efectivo'}; consulta: ${this.publicEndpoint(consultEndpoint) ?? 'Sin endpoint efectivo'}` },
       { clave: 'validacion_oficial', descripcion: 'Validación oficial previa al envío', obligatorio: true,
         configurado: motor.disponible,
         detalle: motor.disponible ? 'SFS disponible: Python, lxml, assets y prueba XSD verificados' : `${motor.motor}: ${motor.causa}` },

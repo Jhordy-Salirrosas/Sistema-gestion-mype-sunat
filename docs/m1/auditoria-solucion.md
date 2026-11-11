@@ -2213,3 +2213,280 @@ y FERRY.md completo (23 rutas exactas, hashes SHA256, bases y resultados).
 No se empuja al remoto front. Solo M1 y esta documentación: caché común,
 Resiliencia, Contabilidad e Inventario intactos. Sin emisiones reales, llamadas
 reales SUNAT, PR, fusiones o despliegues.
+
+### Parte 6c — Fase 0, cierre pre-revisión del docente (10 nov 2026, Lima)
+
+Rama nueva fix/m1-cierre-6c creada desde dev back
+bdb50766a3354980e399459811b0d4d067744526. Clon front de Carlos en
+/workspace/work/front: dev 8c3c6880eb5c744ed88af1df9c4f1884c4740b1f,
+rama local fix/m1-cierre-6c. Entrega futura del front solo por ferry/m1-cierre-6c
+en el remoto back. No construcción, commits ni push: espera confirmación de bloque.
+
+| Línea base completa | Aprobadas | Omitidas | Fallos |
+|---|---|---|---:|
+| Back | 278 suites /2555 pruebas; 12 snapshots | 4 suites /38 pruebas | 0 |
+| Front | 118 archivos /866 pruebas | 0 | 0 |
+
+Back ejecutado con cobertura e integraciones obligatorias en PostgreSQL 16
+local desechable, aplicando solo migraciones existentes conforme a la excepción
+local autorizada. Ninguna conexión a bases compartidas; ninguna migración nueva.
+Logs locales: /workspace/work/6c-back-base.log y 6c-front-base.log.
+
+#### 6c-1 — Hora de actualización exitosa (front)
+
+Causa: useInvoiceRefresh.ts:9/23 conserva resultado textual, no la hora del éxito;
+InvoiceFiltersBar.tsx:127-130 solo presenta botón/estado en curso. El mensaje de
+éxito en dev YA se escribe después de GET estricto e invalidaciones, no al montar.
+Falta dato temporal demostrable y ubicación junto al botón, no rehacer la red.
+Plan: guardar fecha únicamente en el camino exitoso del refresco explícito y
+mostrar «Actualizado a las HH:MM:SS», hora America/Lima, junto a Actualizar.
+Inicialmente no afirmar un éxito manual; durante carga/error conservar la última
+hora buena. Pruebas con reloj controlado: inicial, pendiente, éxito, fallo y nuevo
+éxito; fallo/doble clic no adelantan la hora. Archivos: hook, FiltersBar y cableado
+InvoiceList. Caché común intacta.
+
+#### 6c-2 — Etiquetas en español (front, solo M1)
+
+Close procede del botón automático compartido (src/components/ui/dialog.tsx:51,
+70-79), usado por InvoiceEmitModal.tsx:441. El componente común YA ofrece
+showCloseButton=false y exporta DialogClose (index.ts:10), por lo que NO requiere
+excepción ni modificación fuera de M1. Plan: cierre equivalente compuesto dentro
+del modal M1 con etiqueta Cerrar. Mantener foco/cierre y comportamiento existente.
+InvoiceIssuerConfigForm.tsx:69/76 contiene los textos MOCK (simulado); sustituir
+solo etiqueta visible por SIMULADO (pruebas), conservando value='MOCK'. Pruebas
+de nombre accesible del cierre y valor enviado/configurado, sin cambiar entorno.
+
+#### 6c-3 — Panel legible y semántica del contador (front)
+
+InvoicesDashboardPage.tsx:36 contiene el subtítulo COMPLETO, incluido «más ND»;
+no falta ese literal en dev. El recorte reportado es de presentación; no se
+atribuye a una supuesta cadena incompleta. PageHeader común usa distribución flex
+(page.tsx:160-170); se comprobará ancho estrecho y se presentará el párrafo completo
+en un bloque M1 con ajuste de línea, sin editar el componente común.
+
+Matiz comprobado: la tarjeta :29 usa m.pendientes. InvoiceMetricsService declara
+ESTADOS_PENDIENTES=['EN_COLA','ENVIADO','PENDIENTE','ERROR_RED'] (:70,133,139), NO
+solo incertidumbre. Rotular únicamente «Incertidumbre de transporte» sería falso.
+Propuesta: «Sin confirmación SUNAT (incluye cola)» y ayuda «Incluye comprobantes
+en cola o enviados sin respuesta definitiva». Así En Cola Outbox es claramente
+un subconjunto; no cambian fórmula, valor ni estados. Pruebas de texto completo,
+ajuste responsive y rótulo sin alterar las cifras recibidas.
+
+#### 6c-4 — Detalles coherentes de Configuración (back, presentación del DTO)
+
+invoiceConfigService.ts:100-102 calcula correctamente configurado, pero siempre
+adjunta la orden «Complete…». La entrada endpoints (:104-105) no tiene detalle.
+Plan: detalle condicionado al MISMO resultado existente: si completo, describir
+local anexo, ubigeo y domicilio cargados; si falta, mantener instrucción honesta.
+Mostrar endpoints efectivos de emisión/consulta o texto de ausencia usando
+publicEndpoint (:157-166), que elimina usuario, contraseña, query y fragmento.
+No cambiar endpointCoherente, criterios fiscales, checklist booleano ni compuerta.
+Pruebas true/false, URL efectiva sanitizada y ausencia; mismos estados/listo.
+
+#### 6c-5 — Un filtro visual de incertidumbre (front)
+
+InvoiceMonitorPage.tsx:53 incluye ERROR_RED en estados solicitados al back;
+:255 añade INCERTIDUMBRE_TRANSPORTE y rotula AMBOS como el mismo texto. :74 compara
+valores literalmente, por lo que borrar una etiqueta sin ajustar el filtro
+ocultaría parte de las filas. Plan: una opción visual que incluya los dos valores
+al filtrar. Mantener ESTADOS_EN_VUELO y consultas originales: no dejar de pedir
+ERROR_RED ni cambiar estados. Pruebas de una única opción y ambas clases visibles.
+
+#### 6c-6 — Acción de CDR solo con transporte acreditado (back lectura + front)
+
+InvoiceTableRow.tsx:160-169 muestra la acción solo por RECHAZADO/EN_COLA/SIN_CONFIRMAR,
+sin atender al origen local. resultado_presentacion distingue validación local,
+pero no acredita por sí solo que TODOS los demás casos se transportaron.
+SELECT_LISTADO (invoiceQueryService.ts:59-60) limita historial a 20 y el front
+no recibe un indicador de transporte acreditado. No asumir envío por ERROR_RED,
+marcador incierto ni consulta inconclusa.
+
+Plan: proyección M1 de lectura de evidencia ya persistida (CDR, evento explícito
+M1_TRANSPORT_STARTED o resultado de transporte/SOAP), sobre historial suficiente,
+sin reescribirlo. Exponer el indicador al listado/detalle y usarlo solo para
+presentar la acción, manteniendo la condición de estado vigente. Las reglas de
+evidencia ya están en invoiceTransportEvidence.ts:11-29; no modificar su lógica
+ni el flujo de conciliación. Si falta prueba, no afirmar transporte. Consulta
+incierta/rescate manual no son prueba de envío. No tocar retry-cdr ni sus estados,
+colas, validaciones o política de reintento.
+
+Pruebas de escenarios FD01-1 (bloqueo local sin transporte → oculta) y FD01-2
+(con transporte acreditado → conserva), además de historial antiguo >20 entradas,
+evidencia insuficiente y consulta inconclusa sola. Son escenarios de regresión,
+no se presentan fixtures inventadas como exportación literal de producción.
+Archivos: proyección/query DTO/mapper M1 y adaptadores/tabla front; sin esquema.
+
+#### 6c-7 — Detalle de selección RA (front)
+
+EnviarBajaPanel.tsx:34 imprime solo serie/correlativo y estado. El payload YA
+incluye tipoComprobante y total: invoiceSummaryService.ts:309-317, contrato front
+LineaResumen en invoiceResumenes.ts:34-48; ETIQUETA_TIPO existe en :70-75.
+Plan: mostrar tipo (código/nombre), número, total y estado de cada fila, sin
+recalcular importe ni tocar selección/motivos/exclusiones. NO requiere back.
+Pruebas de distintos tipos y totales tal como los devuelve la vista previa.
+
+#### 6c-8 — Ayuda de origen de notas (front)
+
+InvoiceEmitCampos.tsx:177 conserva «Factura o Boleta aceptada» mientras el selector
+ya admite aceptada u observada. Cambiar únicamente la ayuda a «aceptada u observada».
+Prueba de texto y regresión de origen OBSERVADO; ninguna guarda modificada.
+
+#### 6c-9 — Primera carga, vacío y error diferenciados (front)
+
+(a) InvoicesDashboardPage.tsx:25-31 usa ??0 antes de metricas.data y :42-43 afirma
+«Sin rechazos» sin datos. Plan: Cargando/skeleton hasta respuesta; error real
+visible, ceros solo cuando la API confirmó cero. Alertas y métricas tienen
+consultas independientes y no deben fingir la respuesta de la otra.
+(b) InvoiceAggregateMonitor.tsx:7/10 inicia rows=[] y ocupado=false; :24 pinta vacío
+incondicionalmente, y el efecto difiere cargar a una microtarea (:13). Plan:
+primer render en carga, vacío solo tras éxito con [] y error separado; mantener
+filas previas al refrescar, con indicador de actualización.
+(c) InvoiceEmissionPage.tsx:129-143 inicia series=[] sin estado de petición; :550/553
+muestran ausencia como conclusión inicial. El modal recibe configuración sin la
+señal cargando disponible en useInvoiceConfig.ts:151 (InvoiceList.tsx:99/340).
+Plan: llevar estado de carga/error a ambos formularios y a InvoiceNextNumber;
+mostrar «Cargando configuración…» hasta saber, «Sin serie activa» solo tras
+respuesta vacía, y error si falló. No cambiar reserva, validación ni envío.
+Pruebas con promesas diferidas para pendiente/éxito vacío/éxito con datos/error.
+
+#### 6c-10 — Precio visible y numeración uniforme (front)
+
+InvoicePricesPage.tsx:15-16 copia el precio recibido y :76 lo pone crudo en el
+input. Plan: borrador de edición inicial de dos decimales (81.129997… → 81.13),
+blank para ausente. No PATCH automático ni cambio en catálogo al cargar; Guardar
+sigue siendo explícito y envía el valor visible con la validación existente
+(:26-35), sin alterar condiciones, impuestos ni reglas de precio.
+
+InvoiceTableRow.tsx:61 usa padStart(4); sus etiquetas accesibles (:49/136/145/154/164)
+y InvoiceOutboxMonitor.tsx:90 usan correlativo sin relleno. EnviarBajaPanel.tsx:34
+también. En cambio invoiceApiMapper.ts:173 y InvoiceCdrModal.tsx:125 ya usan 8.
+Unificar formato visual en listados/monitor/notas/selección y rótulos accesibles
+con 8 dígitos, sin cambiar serie/correlativo almacenados, IDs, rutas, numeración
+fiscal o XML. Pruebas F001-00000066, FC01-00000013 y detalle consistente; precio
+inicial dos decimales, ninguna escritura al montar y validaciones intactas.
+
+#### Puerta y alcance
+
+NINGÚN punto requiere migración ni código fuera de M1. Solo 6c-4 y la proyección
+de lectura de 6c-6 requieren back; los restantes son front. 6c-7 ya tiene todos
+los datos y no requiere ampliar el payload. Para Close se usa la interfaz común
+existente sin tocarla. Históricos y datos del equipo intactos.
+
+Tras confirmación: un commit por punto con pruebas/conteos; suite completa y
+snapshots fiscales intactos; ferry por punto con FERRY.md. No emisiones reales,
+SUNAT real, PR, merges, despliegue ni cambios en reglas fiscales/validaciones.
+Esta Fase 0 solo añade documentación; no se ha construido ninguno de los puntos.
+
+#### Construcción aprobada — 6c-1
+
+Hora America/Lima solo en el éxito de red, visible junto a Actualizar. Fallo y
+carga conservan la última hora buena. Focales front: 2 archivos/3 pruebas verdes.
+La Fase 0 fue aprobada en bloque; no cambian reglas, estados ni XML.
+
+#### Construcción — 6c-2
+
+Cierre Cerrar compuesto desde M1 con API compartida existente, sin editar UI común.
+SIMULADO (pruebas) solo cambia texto; MOCK sigue siendo el valor. Focales front:
+2 archivos/13 pruebas aprobadas, incluidos guardado y secretos de configuración.
+
+#### Construcción — 6c-3
+
+Subtítulo completo en párrafo M1 multilinea; contador «Sin confirmación SUNAT
+(incluye cola)» y explicación de su alcance. Fórmula y cifras intactas. Focal
+front: 1 archivo/3 pruebas aprobadas. No se modifica PageHeader compartido.
+
+#### Construcción — 6c-4
+
+Detalle fiscal condicionado al mismo booleano previo, con datos cargados; endpoints
+siempre con texto efectivo sanitizado/ausencia. Criterios y compuerta intactos.
+Focal back: 1 suite/10 pruebas aprobadas, incluyendo ausencia y secretos en URL.
+
+#### Construcción — 6c-5
+
+Una opción de incertidumbre incluye ERROR_RED y la clase visual explícita;
+consultas y estados del servidor intactos. Focal front: 1 archivo/11 pruebas
+aprobadas; ajustada la selección de la opción antigua al nuevo rótulo único.
+
+#### Construcción — 6c-6
+
+Proyección booleana de lectura de CDR/historial completo (sin límite de 20), con
+campos de evidencia de transporte. Consulta incierta, rescate y bloqueo local no
+acreditan envío. La tabla usa la evidencia junto al estado existente; ni retry-cdr
+ni su guarda ni Resiliencia cambian. Focales: back 1 suite/5 pruebas y front
+1 archivo/3 pruebas aprobadas. Escenarios FD01-1 sin transporte y FD01-2 con inicio.
+
+#### Construcción — 6c-7
+
+Selección RA muestra tipo/código, total y estado desde la vista previa ya existente.
+Sin ampliar payload ni cambiar selección/reglas. Focal front: 1 archivo/9 pruebas
+aprobadas, incluidos selección y envío simulado de la maquinaria existente.
+
+#### Construcción — 6c-8
+
+Ayuda «Factura o Boleta aceptada u observada», alineada al selector ya existente.
+Sin cambiar guardas ni saldo. Focales front: 2 archivos/28 pruebas aprobadas.
+
+#### Construcción — 6c-9
+
+Panel no pinta cifras/cero ni «Sin rechazos» sin datos. Monitor de agregados
+parte en carga y distingue respuesta vacía de fallo. Configuración pendiente/error
+viaja a los dos formularios y numeración. Focal front: 1 archivo/7 pruebas aprobadas
+con promesas diferidas. Reserva, guardas, consultas y datos fiscales intactos.
+
+#### Construcción — 6c-10
+
+Borrador inicial de precio a dos decimales, sin PATCH al cargar; Guardar explícito
+conserva las validaciones previas y aplica el visible. Formato visual central de
+8 dígitos en filas/selección/monitor y etiquetas accesibles. Identidad, correlativo,
+rutas y XML intactos. Focal front: 1 archivo/3 pruebas aprobadas, con guardado
+simulado y rechazo intacto de más de dos decimales. Selectores de pruebas ajustados
+al nuevo número visible.
+
+#### Cierre de Parte 6c — verificación y entrega
+
+Construidos los diez puntos tras confirmación de bloque. Bases congeladas:
+back bdb50766a3354980e399459811b0d4d067744526; front Carlos
+8c3c6880eb5c744ed88af1df9c4f1884c4740b1f.
+
+| Suite completa | Base aprobada | Final |
+|---|---:|---:|
+| Back, suites aprobadas | 278 | 279 |
+| Back, pruebas aprobadas | 2555 | 2561 |
+| Back, omitidas | 4 suites /38 pruebas | 4 suites /38 pruebas |
+| Snapshots fiscales | 12 | 12, archivos intactos |
+| Front, archivos aprobados | 118 | 123 |
+| Front, pruebas aprobadas | 866 | 885 |
+
+Cero fallos finales. Builds back/front OK; lint back limpio. ESLint de los archivos
+front revisados conserva los 2 errores y 6 avisos de su base, contrastados por
+stdin; no se cambian reglas/umbrales ni se silencian problemas. El conjunto revisado
+incluye Monitor (su aviso FastRefresh también existía); no se atribuye como nuevo.
+Regresión focal adicional tras consolidación: 2 archivos/9 pruebas, cierre
+compartido preservado en posición/icono/comportamiento con etiqueta Cerrar y carga.
+Cobertura local back del código nuevo intersectado con LCOV respecto de bdb5076:
+9/9 líneas (100%) y 32/35 condiciones, combinada 41/44 = 93.18%; no es un resultado
+remoto Sonar. Integraciones en PostgreSQL 16 local desechable; base eliminada al
+terminar. Solo migraciones YA existentes en esa base aislada; ninguna nueva,
+ninguna generación/aplicación en base compartida.
+
+| Punto | Commit back | Commit front de origen |
+|---|---|---|
+| 6c-1, hora real | d1ae508 | 4b52aa0 |
+| 6c-2, etiquetas | 54ed2b1 | 6fcfac9 |
+| 6c-3, panel | 0891e23 | 5d1bd1e |
+| 6c-4, detalles diagnósticos | 0dce3b2 | — (solo back) |
+| 6c-5, filtro único | c9d6709 | 360d4bb |
+| 6c-6, evidencia para vista | 2e8f903 | af992a4 |
+| 6c-7, detalle RA | 8619a02 | 68025fd |
+| 6c-8, ayuda notas | 43b0982 | 4d76a8b |
+| 6c-9, cargas honestas | fdf7666 | ae5a059 |
+| 6c-10, formato | Este commit | 390d549 |
+
+Entrega front exclusiva por ferry/m1-cierre-6c en el remoto back: diez commits
+separados (6c-4 documenta la dependencia exclusivamente back), FERRY.md completo,
+31 rutas exactas con SHA-256 contrastado byte a byte con el clon front. No push
+al remoto front. No cambios en UI común, Resiliencia, Contabilidad, Inventario,
+esquema, reglas fiscales, estados ni XML. retry-cdr/ESTADOS_REINTENTABLES intactos;
+la nueva evidencia solo se lee para presentar la acción. Nada de datos históricos
+reescritos, emisiones reales, SUNAT real, PR, merges o despliegues. No queda
+ningún punto abierto dentro del alcance aprobado.

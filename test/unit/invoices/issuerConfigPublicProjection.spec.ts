@@ -133,3 +133,12 @@ describe('D1 public configuration projection and legacy fallback', () => {
     await expect(config.obtener('a')).rejects.toBe(error);
   });
 });
+
+it('6c-4 describe datos reales y endpoints sanitizados sin modificar los booleanos',async()=>{
+ let context = fakeIssuerContext('a',{local_anexo:'0000',ubigeo_fiscal:'150101',domicilio_fiscal:'Calle ficticia 123',departamento_fiscal:'LIMA',provincia_fiscal:'LIMA',distrito_fiscal:'LIMA',endpoint:'https://usuario:secreto@example.invalid/billService?token=secreto#secreto',consultEndpoint:''});
+ const c = new InvoiceConfigService({listar:async()=>[]} as never,{inspectCertificate:()=>{throw Error('sin certificado');}} as never,{resolve:async()=>context} as never);
+ const r=await c.obtener('a');const domicilio=r.checklist.find(p=>p.clave==='domicilio_emisor')!;
+ expect(domicilio.configurado).toBe(true);expect(domicilio.detalle).toContain('0000');expect(domicilio.detalle).toContain('Calle ficticia 123');expect(domicilio.detalle).not.toContain('Complete');
+ const endpoint=r.checklist.find(p=>p.clave==='endpoints')!;expect(endpoint.detalle).toContain('https://example.invalid/billService');expect(endpoint.detalle).toContain('Sin endpoint efectivo');expect(endpoint.detalle).not.toContain('secreto');expect(endpoint.detalle).not.toContain('usuario');
+ context={...context,domicilio_fiscal:null};expect((await c.obtener('a')).checklist.find(p=>p.clave==='domicilio_emisor')).toMatchObject({configurado:false,detalle:expect.stringContaining('Complete')});
+});
