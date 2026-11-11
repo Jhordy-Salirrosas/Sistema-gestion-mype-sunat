@@ -2530,3 +2530,11 @@ La evidencia de Emma (FD01-3 sin salida y FC01-13 sin devolución) no se reescri
 esta ronda corrige el motor para la recuperación explícita posterior.
 Focal: 2 suites / 44 pruebas aprobadas; se corrige la prueba antigua que exigía
 incorrectamente salida de ND. Tipado de producción aprobado.
+
+### 7D — cantidades y pertenencia de notas
+
+La guarda común exige que todos los SKU pertenezcan al origen. Bajo FOR UPDATE
+del origen suma unidades originales, líneas repetidas y NC físicas anteriores
+(incluidas pendientes); no permite devolver más unidades reduciendo su precio.
+Las notas económicas no consumen devoluciones físicas acumuladas. OBSERVADO
+conserva las mismas reglas monetarias. Focal: 3 suites / 77 pruebas aprobadas.
