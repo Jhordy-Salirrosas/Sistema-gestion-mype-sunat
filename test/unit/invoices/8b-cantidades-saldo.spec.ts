@@ -33,3 +33,11 @@ it.each(['pantalla', 'fiscal'])('B3 conserva tope del servidor para 3 contra 2: 
  const d = nota(); d.codigo_motivo_nota = '07'; d.items[0].precioUnitario = 1; d.items[0].cantidad = 3;
  await expect(h.run(entradaNota(d, ruta))).rejects.toThrow('NOTA_EXCEDE_CANTIDAD');
 });
+
+import { CATALOGO_09_MOTIVOS } from '../../../src/modules/invoices/application/services/noteCatalogs';
+it('saldo transporta totales del catálogo y descuenta unidades de notas 02 anteriores', async () => {
+ const h = lectura([{ item_code: 'A', quantity: 10 }], [{ monto_total: 118, credit_debit_reason_code: '02', items: [{ item_code: 'A', quantity: 5 }] }]);
+ const saldo = await h.run();
+ expect(saldo.motivos_totales).toEqual(CATALOGO_09_MOTIVOS.filter(m => m.total).map(m => m.codigo));
+ expect(saldo.cantidades_pendientes).toEqual([{ codigo: 'A', original: 10, pendiente: 5 }]);
+});

@@ -1,3 +1,4 @@
+import { CATALOGO_09_MOTIVOS, esMotivoCreditoTotal } from './noteCatalogs';
 import { cantidadesPendientes, devuelveUnidades } from './noteQuantityBalance';
 import { redondearMoneda as centimos } from '../../money';
 /**
@@ -124,7 +125,7 @@ export class ControlSaldoNotas {
   public async calcular(
     companyId: string,
     comprobanteId: string,
-  ): Promise<SaldoComprobante & { estado: string; serie: string; correlativo: number; cantidades_pendientes: { codigo: string; original: number; pendiente: number }[] }> {
+  ): Promise<SaldoComprobante & { estado: string; serie: string; correlativo: number; cantidades_pendientes: { codigo: string; original: number; pendiente: number }[]; motivos_totales: string[] }> {
     const origen = await this.prisma.invoice.findFirst({
       where: { id: comprobanteId, company_id: companyId },
       select: {
@@ -170,6 +171,7 @@ export class ControlSaldoNotas {
     const pendientes = cantidadesPendientes(origen.items ?? [], notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items ?? []));
     return {
       ...saldo,
+      motivos_totales: CATALOGO_09_MOTIVOS.filter(m => esMotivoCreditoTotal(m.codigo)).map(m => m.codigo),
       cantidades_pendientes: [...originales].map(([codigo, original]) => ({ codigo, original: original.toNumber(), pendiente: Math.max(0, pendientes.get(codigo)!.toNumber()) })),
       estado: origen.estado,
       serie: origen.serie,
