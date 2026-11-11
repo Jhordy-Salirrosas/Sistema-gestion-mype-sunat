@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 import { StockValidationService } from '../../../src/modules/invoices/application/services/stockValidationService';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
@@ -13,7 +14,7 @@ it('el consumidor entrega al puente el almacén persistido, sin resolver otro', 
   const registrar = jest.fn(async () => ({ asientoId: 'asiento', completo: true, movimientosRegistrados: 1, movimientosOmitidos: 0, asientoOmitido: false, errores: [] }));
   const fila = { id: 'inv', company_id: 'empresa', tipo_comprobante: '01', serie: 'F001', correlativo: 1,
     fecha_emision: new Date('2026-11-10'), payload_ubl: { almacen: 'ALM-02', montoTotal: 118 }, items: [{ item_code: 'CEM', quantity: 1, unit_value: 100, igv_affectation_type: '10' }] };
-  const consumer = new InvoiceJobConsumer({} as never, {} as never, { invoice: { findUnique: async () => fila } } as never,
+  const consumer = new InvoiceJobConsumer({} as never, {} as never, withBridgeTransaction({ invoice: { findUnique: async () => fila } }) as never,
     {} as never, {} as never, {} as never, {} as never, {} as never, { registrar } as never, {} as never, {} as never);
   await (consumer as any).registrarEnContabilidad('inv', InvoiceStatus.ACEPTADO);
   expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ almacen: 'ALM-02', companyId: 'empresa' }));

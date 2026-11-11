@@ -9,6 +9,8 @@ describe('InventoryOpeningService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $executeRaw: jest.fn(), company: { findUnique: jest.fn(async () => ({ inventory_cost_method: 'PROMEDIO' })) },
+      inventoryCostLayer: { findMany: jest.fn(async () => [{ id: 'layer', quantity_remaining: 100000, unit_cost: 1 }]), update: jest.fn(), create: jest.fn(async () => ({ id: 'layer-new' })) },
       inventoryWarehouse: {
         findFirst: jest.fn(),
       },
@@ -17,7 +19,7 @@ describe('InventoryOpeningService', () => {
       },
       inventoryMovement: {
         findFirst: jest.fn(),
-        create: jest.fn(),
+        create: jest.fn(async () => ({ id: 'mov' })),
       },
       inventoryBalance: {
         findUnique: jest.fn(),
@@ -117,6 +119,7 @@ describe('InventoryOpeningService', () => {
     expect(res.items[0].resultingAverageCost).toBe(120);
     expect(mockPrisma.inventoryMovement.create).toHaveBeenCalled();
     expect(mockPrisma.inventoryBalance.upsert).toHaveBeenCalled();
+    expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ quantity_remaining: 50, unit_cost: 120, source_movement_id: 'mov' }) }));
   });
 });
 

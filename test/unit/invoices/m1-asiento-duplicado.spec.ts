@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 import { InvoiceStatus } from '../../../src/generated/client/enums';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
 import { InvoiceAccountingBridgeService } from '../../../src/modules/invoices/application/services/invoiceAccountingBridgeService';
@@ -91,7 +92,7 @@ function escenario() {
         estado: InvoiceStatus.ACEPTADO,
       })),
     } as never,
-    prisma as never,
+    withBridgeTransaction(prisma) as never,
     {} as never,
     {} as never,
     { verifySignature: jest.fn(() => true) } as never,

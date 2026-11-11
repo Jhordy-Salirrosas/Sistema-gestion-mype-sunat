@@ -82,7 +82,7 @@ export class PurchasesService {
       where: { id: companyId },
       select: { inventory_cost_method: true },
     });
-    const usaFifo = empresa?.inventory_cost_method === 'FIFO';
+    const _usaFifo = empresa?.inventory_cost_method === 'FIFO';
 
     if (this.accounting) {
       const reglasCompra = await this.prisma.accountingRule.findMany({
@@ -248,7 +248,8 @@ export class PurchasesService {
           },
         });
 
-        if (usaFifo) {
+        {
+          if (unitCostNet == null || !Number.isFinite(unitCostNet)) throw new BadRequestException(`Ingreso ${sku} sin costo neto acreditado.`);
           await tx.inventoryCostLayer.create({
             data: {
               company_id: companyId,

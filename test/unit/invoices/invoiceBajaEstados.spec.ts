@@ -1,6 +1,8 @@
 import { InvoiceSummaryService } from '../../../src/modules/invoices/application/services/invoiceSummaryService';
 
 describe('vista previa RA: estados admisibles', () => {
+  beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(new Date('2026-11-03T12:00:00Z')); });
+  afterEach(() => jest.useRealTimers());
   it('incluye aceptados y observados, y excluye ERROR_RED y pendientes', async () => {
     const fecha = new Date('2026-11-03T00:00:00.000Z');
     const filas = ['ACEPTADO', 'OBSERVADO', 'ERROR_RED', 'PENDIENTE'].map((estado, i) => ({ serie: 'F001', correlativo: i + 1, tipo_comprobante: '01', fecha_emision: fecha, estado, monto_total: 118, customer_identity_type: '6', customer_identity_number: '20100070970', total_igv: 18 }));

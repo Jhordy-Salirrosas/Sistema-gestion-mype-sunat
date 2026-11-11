@@ -2592,3 +2592,35 @@ al repetir; «Preparar una nueva decisión explícita» vacía motivo/confirmaci
 genera identidad nueva. No modifica la conciliación automática ni Resiliencia.
 Focal back: 1 suite / 16 pruebas aprobadas. Front: 1 suite / 2 pruebas aprobadas.
 Front se entrega exclusivamente por ferry/m1-puente-guardas.
+
+### 7K — entradas y salidas con capas atómicas (excepción autorizada)
+
+Jhordy autoriza el cambio acotado de Inventario y la edición puntual de
+purchasesService.ts (Compras): la capa al unitCostNet nace dentro de la misma
+transacción existente. No se cambia cálculo de compra, IGV, saldo ni promedio.
+El puente InventoryPurchaseService permanece intacto. Avisar a los dueños de
+Inventario y Compras en revisión.
+
+Ingreso manual e importación usan los repositorios existentes ligados al mismo
+cliente transaccional; movimiento/capas/saldo hacen commit o rollback juntos.
+Apertura conserva su motor y transacción. El servicio de capas acepta cliente
+transaccional, bloquea almacén/saldo y comprueba disponibilidad completa antes
+de consumir. Usa source_movement_id existente: no requiere migración.
+
+Toda entrada crea capa al costo acreditado y toda salida mantiene cantidades
+simétricas, también en PROMEDIO. FIFO traslada piezas al costo original en orden;
+PROMEDIO conserva exactamente la valorización previa y crea la capa destino a
+ese costo promedio. La capa no redefine el motor de promedio. Falta de costo
+explícito admite el promedio del saldo previo como costo acreditado (ajustes y
+manual); ausencia de ambos bloquea atómicamente, nunca precio de venta/cero
+por defecto. No se reconstruyen capas/saldos históricos: la carga espejo y las
+correcciones de datos son de Emma. Si falta alguna descarga, el asiento de costo
+queda pendiente; no se guarda como completo un costo de documento parcial.
+
+Focal: 8 suites / 100 pruebas aprobadas, 11 casos de PostgreSQL real incluidos
+(rollback tras movimiento, consumos, traslado FIFO/PROMEDIO, ajustes y carencia
+de capas/costo). Regresiones adicionales: 8 suites / 84 pruebas aprobadas.
+Se actualizan dobles para el puerto transaccional nuevo; la prueba de RA de
+fecha fija congela el reloj para no fallar al cruzar el plazo real de siete días.
+La primera corrida completa detectó esos harness obsoletos; el cierre completo
+se reporta al final, sin ocultar fallos ni cambiar configuración/umbrales.

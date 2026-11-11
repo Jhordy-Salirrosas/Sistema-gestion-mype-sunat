@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../../../database/prismaService';
+import { Prisma } from '../../../../generated/client/client';
+import { PrismaInventoryWarehouseRepository } from '../../infrastructure/persistence/prismaInventoryWarehouseRepository';
+import { PrismaInventoryProductRepository } from '../../infrastructure/persistence/prismaInventoryProductRepository';
+import { PrismaInventoryBalanceRepository } from '../../infrastructure/persistence/prismaInventoryBalanceRepository';
+import { PrismaInventoryMovementRepository } from '../../infrastructure/persistence/prismaInventoryMovementRepository';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import {
   INVENTORY_WAREHOUSE_REPOSITORY_PORT,
   type IInventoryWarehouseRepositoryPort,
@@ -33,9 +39,17 @@ export class RegisterManualMovementUseCase {
     @Inject(INVENTORY_MOVEMENT_REPOSITORY_PORT)
     private readonly movementRepository: IInventoryMovementRepositoryPort,
     private readonly costLayers?: InventoryCostLayerService,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
-  async execute(dto: RegisterManualMovementDto, companyId: string) {
+  enTransaccion(tx: Prisma.TransactionClient): RegisterManualMovementUseCase {
+    const scoped = tx as unknown as PrismaService;
+    return new RegisterManualMovementUseCase(new PrismaInventoryWarehouseRepository(scoped), new PrismaInventoryProductRepository(scoped),
+      new PrismaInventoryBalanceRepository(scoped), new PrismaInventoryMovementRepository(scoped), new InventoryCostLayerService(scoped).enTransaccion(tx));
+  }
+
+  async execute(dto: RegisterManualMovementDto, companyId: string): Promise<{ movementId: string | undefined; movementNumber: string; sku: string; direction: string; quantity: number; unitCost: number; totalCost: number; resultingStock: number; resultingAverageCost: number; resultingTotalValue: number }> {
+    if (this.prisma) return this.prisma.$transaction(tx => this.enTransaccion(tx).execute(dto, companyId), { timeout: 30000 });
     if (!companyId) throw new BadRequestException('company_id requerido.');
 
     const warehouse = dto.warehouse_code
@@ -48,6 +62,8 @@ export class RegisterManualMovementUseCase {
       throw new NotFoundException(`El producto con SKU "${dto.sku}" no existe.`);
     }
 
+    if (this.costLayers) await this.costLayers.bloquear(companyId, warehouse.id!, product.id!);
+
     const balance = await this.balanceRepository.findByWarehouseAndProduct(
       warehouse.id!,
       product.id!,
@@ -58,8 +74,12 @@ export class RegisterManualMovementUseCase {
     const prevAvgCost = balance?.averageUnitCost ?? 0;
     const prevTotalVal = balance?.totalInventoryValue ?? 0;
 
+    if (dto.direction === 'ENTRADA' && dto.unit_cost == null) {
+      if (!(prevStock > 0) || !Number.isFinite(prevAvgCost)) throw new BadRequestException('Ingreso sin costo acreditado: informe el costo o registre un saldo previo valorizado.');
+      dto = { ...dto, unit_cost: prevAvgCost };
+    }
+
     let calculation;
-    let fifo = false;
     try {
       const metodo = this.costLayers ? await this.costLayers.metodo(companyId) : 'PROMEDIO';
       if (metodo === 'FIFO' && this.costLayers) {
@@ -73,7 +93,6 @@ export class RegisterManualMovementUseCase {
           resultingAverageCost: r.resultingAverageCost,
           resultingTotalValue: r.resultingTotalValue,
         };
-        fifo = true;
       } else {
         calculation = MovingWeightedAverageEngine.calculate({
           previousStock: prevStock,
@@ -119,9 +138,9 @@ export class RegisterManualMovementUseCase {
 
     const savedMovement = await this.movementRepository.create(movement);
 
-    if (fifo && this.costLayers) {
+    if (this.costLayers) {
       if (dto.direction === 'ENTRADA') {
-        await this.costLayers.registrarEntrada(companyId, warehouse.id!, product.id!, dto.quantity, calculation.movementUnitCost);
+        await this.costLayers.registrarEntrada(companyId, warehouse.id!, product.id!, dto.quantity, calculation.movementUnitCost, savedMovement.id);
       } else {
         await this.costLayers.consumir(companyId, warehouse.id!, product.id!, dto.quantity);
       }

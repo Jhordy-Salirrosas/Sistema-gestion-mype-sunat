@@ -76,7 +76,7 @@ export class InvoiceBridgeCoordinatorService {
 
   private async ejecutar(
     invoiceId: string,
-    estado: InvoiceStatus,
+    _estado: InvoiceStatus,
   ): Promise<{ respuesta: ResultadoReprocesoPuente; error?: Error }> {
     return this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`m1:bridge:${invoiceId}`}, 0))`;

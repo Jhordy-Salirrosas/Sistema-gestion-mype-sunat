@@ -1,3 +1,4 @@
+import { withBridgeTransaction } from '../../fixtures/bridgeTransactionPrisma';
 /**
  * TA-28 - Consumidor de la cola de facturas.
  *
@@ -91,7 +92,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker } as never,
     { processWithRetry } as never,
-    { invoice: { findUnique, update } } as never,
+    withBridgeTransaction({ invoice: { findUnique, update } }) as never,
     { generateInvoiceXml } as never,
     { validateInvoiceUbl21: validate } as never,
     { verifySignature: jest.fn(() => true), signXml } as never,
@@ -290,8 +291,8 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() },
-        accountingEntry: { findFirst: jest.fn(async () => null) } } as never,
+      withBridgeTransaction({ invoice: { findUnique, update: jest.fn() },
+        accountingEntry: { findFirst: jest.fn(async () => null) } }) as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
@@ -345,7 +346,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() } } as never,
+      withBridgeTransaction({ invoice: { findUnique, update: jest.fn() } }) as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,
@@ -366,7 +367,7 @@ describe('TA-28 InvoiceJobConsumer', () => {
     const consumer = new InvoiceJobConsumer(
       { registerInvoiceWorker: jest.fn() } as never,
       { processWithRetry: jest.fn<() => Promise<RetryInvoiceResult>>(async () => RESULTADO) } as never,
-      { invoice: { findUnique, update: jest.fn() } } as never,
+      withBridgeTransaction({ invoice: { findUnique, update: jest.fn() } }) as never,
       { generateInvoiceXml: jest.fn(() => '<?xml version="1.0"?><Invoice/>') } as never,
       { validateInvoiceUbl21: jest.fn(() => ({ isValid: true, errors: [] })) } as never,
       { verifySignature: jest.fn(() => true), signXml: jest.fn((xml: string) => ({ signedXml: `${xml}<ds:Signature/>` })) } as never,

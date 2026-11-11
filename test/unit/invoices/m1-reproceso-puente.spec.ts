@@ -92,7 +92,7 @@ function escenario(capa = true) {
       ),
     },
   };
-  Object.assign(prisma, { $transaction: async (work: any) => work({ $executeRaw: jest.fn(), invoice: prisma.invoice }) });
+  Object.assign(prisma, { $executeRaw: jest.fn(), $transaction: async (work: any) => work(prisma) });
   const createMovement = jest.fn(async (m: any) => {
     movimientos.push(m);
     return { ...m, id: 'mov-64' };

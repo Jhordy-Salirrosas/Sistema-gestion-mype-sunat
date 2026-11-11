@@ -123,6 +123,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     expect(result.itemsCount).toBe(2);
 
     // Verificación de asientos Kardex generados
+    expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalled(); // también PROMEDIO, dentro de la misma tx
     expect(mockPrisma.inventoryMovement.create).toHaveBeenCalledTimes(2);
     expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalledTimes(2);
     const mov1 = mockPrisma.inventoryMovement.create.mock.calls[0][0].data;

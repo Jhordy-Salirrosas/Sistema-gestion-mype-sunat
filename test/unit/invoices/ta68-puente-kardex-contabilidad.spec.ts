@@ -525,6 +525,24 @@ describe('TA-68 · servicio puente', () => {
     };
   }
 
+  it.each(['01', '07'])('7F servicio gratuito %s con SKU no descarga ni exige costo histórico', async tipoComprobante => {
+    const { puente, prisma, movimientoCreado } = dobles();
+    prisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'servicio', is_inventory: false } as never);
+    const factura = facturaPrueba();
+    const resultado = await puente.registrar({ ...factura, tipoComprobante, motivoNota: '01', documentoAfectadoId: 'original', items: factura.items.map(l => ({ ...l, afectacion: '11' })) });
+    expect(resultado.completo).toBe(true);
+    expect(resultado.movimientosRegistrados).toBe(0);
+    expect(movimientoCreado).not.toHaveBeenCalled();
+  });
+
+  it('7C una devolución usa la salida histórica aunque el catálogo cambie a servicio', async () => {
+    const { puente, prisma, movimientoCreado } = dobles({ costoVenta: 600 });
+    prisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'producto', is_inventory: false } as never);
+    const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'original' });
+    expect(resultado.completo).toBe(true);
+    expect(movimientoCreado).toHaveBeenCalledWith(expect.objectContaining({ unit_cost: 30, quantity: 20, operation_type_code: '05' }), 'emp-1');
+  });
+
   it('descarga ALM-02 y calcula costo con previous_unit_cost del movimiento, sin usar el precio vendido', async () => {
     const { puente, prisma, movimientoCreado, asientoCreado } = dobles({ costoVenta: 56 });
     await puente.registrar({ ...facturaPrueba(), almacen: 'ALM-02' });
@@ -770,4 +788,12 @@ describe('TA-68 · servicio puente', () => {
     expect(dto.glosa).toContain('F001-00000143');
     expect(dto.glosa).toContain('CONSTRUCTORA DEL NORTE');
   });
+  it('7K no contabiliza costo parcial cuando falta una descarga física', async () => {
+    const { puente, movimientoCreado, asientoCreado } = dobles({ costoVenta: 600 });
+    movimientoCreado.mockRejectedValueOnce(new Error('sin capa'));
+    const resultado = await puente.registrar(facturaPrueba());
+    expect(resultado.completo).toBe(false);
+    expect(asientoCreado).not.toHaveBeenCalledWith(expect.objectContaining({ sourceReferenceId: expect.stringContaining(':COSTO') }));
+  });
+
 });

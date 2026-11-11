@@ -117,13 +117,14 @@ export class InvoiceAccountingBridgeService {
       factura.numeroCompleto ??
       `${factura.serie}-${String(factura.correlativo).padStart(8, '0')}`;
 
-    const kardex = await this.registrarKardex(factura, numero, errores);
+    const { requiereCosto, ...kardex } = await this.registrarKardex(factura, numero, errores);
     const contabilidad = factura.motivoBloqueoAsiento
       ? (errores.push(factura.motivoBloqueoAsiento), { asientoOmitido: true })
       : await this.registrarAsiento(factura, numero, errores);
 
-    const costo = factura.motivoBloqueoAsiento
+    const costo = factura.motivoBloqueoAsiento || errores.some(e => e.startsWith('Kardex'))
       ? {}
+      : !requiereCosto ? { costoVenta: 0, asientoCostoOmitido: true }
       : factura.tipoComprobante === '07'
         ? await this.revertirCostoNota(factura, numero, errores)
         : !['01', '03'].includes(factura.tipoComprobante)
@@ -153,7 +154,7 @@ export class InvoiceAccountingBridgeService {
     factura: FacturaParaPuente,
     numero: string,
     errores: string[],
-  ): Promise<{ movimientosRegistrados: number; movimientosOmitidos: number }> {
+  ): Promise<{ movimientosRegistrados: number; movimientosOmitidos: number; requiereCosto: boolean }> {
     let pendientes = movimientosDeFactura(factura.items, {
       tipoComprobante: factura.tipoComprobante,
       serie: factura.serie,
@@ -163,16 +164,25 @@ export class InvoiceAccountingBridgeService {
       motivoNota: factura.motivoNota,
     });
 
+    let servicios = 0;
+    const fisicos: typeof pendientes[number][] = [];
+    for (const movimiento of pendientes) {
+      const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: movimiento.sku }, select: { is_inventory: true } });
+      if (producto?.is_inventory === false && factura.tipoComprobante !== '07') servicios++;
+      else fisicos.push(movimiento);
+    }
+    pendientes = fisicos;
+    let requiereCosto = pendientes.length > 0;
     if (factura.tipoComprobante === '07' && pendientes.length) {
       if (!factura.documentoAfectadoId) {
         errores.push('Kardex: falta el comprobante original para acreditar el costo de devolución.');
-        return { movimientosRegistrados: 0, movimientosOmitidos: 0 };
+        return { movimientosRegistrados: 0, movimientosOmitidos: servicios, requiereCosto };
       }
       const original = await this.prisma.invoice.findFirst({ where: { id: factura.documentoAfectadoId, company_id: factura.companyId },
         select: { serie: true, correlativo: true, payload_ubl: true } });
       if (!original) {
         errores.push('Kardex: el comprobante original no existe.');
-        return { movimientosRegistrados: 0, movimientosOmitidos: 0 };
+        return { movimientosRegistrados: 0, movimientosOmitidos: servicios, requiereCosto };
       }
       const referencia = `${original.serie}-${String(original.correlativo).padStart(8, '0')}`;
       const originales = await this.prisma.inventoryMovement.findMany({ where: {
@@ -181,6 +191,10 @@ export class InvoiceAccountingBridgeService {
       const valorizados: typeof pendientes[number][] = [];
       for (const movimiento of pendientes) {
         const salida = originales.find(m => m.product.sku === movimiento.sku);
+        if (!salida) {
+          const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: movimiento.sku }, select: { is_inventory: true } });
+          if (producto?.is_inventory === false) { servicios++; continue; }
+        }
         if (!salida || !(Number(salida.quantity) > 0) || salida.total_cost == null || !Number.isFinite(Number(salida.total_cost)) || movimiento.quantity > Number(salida.quantity)) {
           errores.push(`Kardex ${movimiento.sku}: falta costo histórico o la devolución supera la salida original.`);
           continue;
@@ -189,10 +203,11 @@ export class InvoiceAccountingBridgeService {
           unit_cost: Number(salida.total_cost) / Number(salida.quantity) });
       }
       pendientes = valorizados;
+      requiereCosto = pendientes.length > 0;
     }
 
     let registrados = 0;
-    let omitidos = 0;
+    let omitidos = servicios;
 
     for (const movimiento of pendientes) {
       const sku = movimiento.sku;
@@ -241,7 +256,7 @@ export class InvoiceAccountingBridgeService {
       }
     }
 
-    return { movimientosRegistrados: registrados, movimientosOmitidos: omitidos };
+    return { movimientosRegistrados: registrados, movimientosOmitidos: omitidos, requiereCosto };
   }
 
   /** Crea el asiento contable si esa factura no tiene uno ya. */

@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { PrismaService } from '../../../../database/prismaService';
+import { Prisma } from '../../../../generated/client/client';
+import { PrismaInventoryWarehouseRepository } from '../../infrastructure/persistence/prismaInventoryWarehouseRepository';
+import { PrismaInventoryProductRepository } from '../../infrastructure/persistence/prismaInventoryProductRepository';
+import { PrismaInventoryBalanceRepository } from '../../infrastructure/persistence/prismaInventoryBalanceRepository';
+import { PrismaInventoryMovementRepository } from '../../infrastructure/persistence/prismaInventoryMovementRepository';
+import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   INVENTORY_WAREHOUSE_REPOSITORY_PORT,
   type IInventoryWarehouseRepositoryPort,
@@ -58,9 +64,17 @@ export class ProcessImportCostOrderUseCase {
     private readonly movementRepository: IInventoryMovementRepositoryPort,
     @Optional()
     private readonly costLayers?: InventoryCostLayerService,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
+  enTransaccion(tx: Prisma.TransactionClient): ProcessImportCostOrderUseCase {
+    const scoped = tx as unknown as PrismaService;
+    return new ProcessImportCostOrderUseCase(new PrismaInventoryWarehouseRepository(scoped), new PrismaInventoryProductRepository(scoped),
+      new PrismaInventoryBalanceRepository(scoped), new PrismaInventoryMovementRepository(scoped), new InventoryCostLayerService(scoped).enTransaccion(tx));
+  }
+
   async execute(command: ProcessImportCostOrderCommand): Promise<ProcessImportCostOrderResult> {
+    if (this.prisma) return this.prisma.$transaction(tx => this.enTransaccion(tx).execute(command), { timeout: 30000 });
     const { companyId, shipmentId, damNumber, items } = command;
 
     const warehouse = command.warehouseCode
@@ -68,7 +82,7 @@ export class ProcessImportCostOrderUseCase {
         (await this.warehouseRepository.ensureDefaultWarehouse(companyId))
       : await this.warehouseRepository.ensureDefaultWarehouse(companyId);
 
-    const metodo = this.costLayers ? await this.costLayers.metodo(companyId) : 'PROMEDIO';
+    const _metodo = this.costLayers ? await this.costLayers.metodo(companyId) : 'PROMEDIO';
 
     let processedMovements = 0;
     let skippedFixedAssets = 0;
@@ -111,6 +125,7 @@ export class ProcessImportCostOrderUseCase {
       }
 
       // 4. Obtener saldo previo
+      if (this.costLayers) await this.costLayers.bloquear(companyId, warehouse.id!, product.id!);
       const balance = await this.balanceRepository.findByWarehouseAndProduct(
         warehouse.id!,
         product.id!,
@@ -121,6 +136,7 @@ export class ProcessImportCostOrderUseCase {
       const prevAvgCost = balance?.averageUnitCost ?? 0;
       const prevTotalVal = balance?.totalInventoryValue ?? 0;
 
+      if (item.unitLandedCostPen == null || !Number.isFinite(item.unitLandedCostPen)) throw new BadRequestException(`Ingreso ${item.sku} sin costo nacionalizado acreditado.`);
       // 5. Calcular CPP Perpetuo Móvil
       const calculation = MovingWeightedAverageEngine.calculate({
         previousStock: prevStock,
@@ -159,15 +175,16 @@ export class ProcessImportCostOrderUseCase {
         notes: `Nacionalización DAM ${damNumber}`,
       });
 
-      await this.movementRepository.create(movementEntity);
+      const savedMovement = await this.movementRepository.create(movementEntity);
 
-      if (metodo === 'FIFO' && this.costLayers) {
+      if (this.costLayers) {
         await this.costLayers.registrarEntrada(
           companyId,
           warehouse.id!,
           product.id!,
           item.receivedQuantity,
           calculation.movementUnitCost,
+          savedMovement.id,
         );
       }
 
