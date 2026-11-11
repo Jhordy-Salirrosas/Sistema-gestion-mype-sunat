@@ -72,7 +72,7 @@ function escenario(capa = true) {
       findMany: async () =>
         movimientos.map((m) => ({
           quantity: m.quantity,
-          previous_unit_cost: m.previousUnitCost,
+          previous_unit_cost: m.previousUnitCost, total_cost: m.totalCost,
         })),
     },
     inventoryCostLayer: {
@@ -92,6 +92,7 @@ function escenario(capa = true) {
       ),
     },
   };
+  Object.assign(prisma, { $transaction: async (work: any) => work({ $executeRaw: jest.fn(), invoice: prisma.invoice }) });
   const createMovement = jest.fn(async (m: any) => {
     movimientos.push(m);
     return { ...m, id: 'mov-64' };

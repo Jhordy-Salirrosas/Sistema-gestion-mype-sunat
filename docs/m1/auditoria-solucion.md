@@ -2564,3 +2564,12 @@ pruebas aprobadas, incluyendo liquidación fiscal y ausencia de mutación de lí
 retry-cdr y los POST de envío RA/RC exigen RolesGuard + ADMIN, además de la
 autenticación existente. No cambian estados admitidos, retry-cdr ni Resiliencia.
 Focal de metadatos y guardia real: 2 suites / 6 pruebas aprobadas.
+
+### 7H — exclusión distribuida por documento
+
+Coordinador compartido por endpoint/consumidor toma advisory lock transaccional
+por invoice y vuelve a comprobar el estado antes de ejecutar el puente. Dos
+procesos no intercalan el mismo documento. Se mantiene la recuperación por etapa
+con las claves contables existentes. Focal: 2 suites / 15 pruebas aprobadas;
+PostgreSQL real confirma máximo un puente activo por documento, y las pruebas
+F001-64 mantienen recuperación, no-op, ausencia de capa y OBSERVADO.

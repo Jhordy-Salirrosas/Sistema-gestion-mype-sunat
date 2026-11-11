@@ -1,3 +1,4 @@
+import { InvoiceBridgeCoordinatorService } from '../../../src/modules/invoices/application/services/invoiceBridgeCoordinatorService';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../src/database/prismaService';
 import { validarReservaVenta } from '../../../src/modules/invoices/application/services/invoiceStockReservation';
@@ -41,4 +42,16 @@ const url = process.env.TEST_DATABASE_URL;
   expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
   expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
  });
+ it('7H dos reprocesos del mismo comprobante no intercalan el puente', async () => {
+  const invoice = await db.invoice.create({ data: { ...data(1), estado: 'ACEPTADO' } });
+  let active = 0, max = 0;
+  const bridge = { registrar: async () => {
+   active++; max = Math.max(max, active); await new Promise(resolve => setTimeout(resolve, 30)); active--;
+   return { completo: true, asientoId: 'asiento', asientoOmitido: true, movimientosRegistrados: 0, movimientosOmitidos: 1, errores: [] };
+  } };
+  const coordinator = new InvoiceBridgeCoordinatorService(db, bridge as never);
+  await Promise.all([coordinator.reprocesar(company, invoice.id), coordinator.reprocesar(company, invoice.id)]);
+  expect(max).toBe(1);
+ });
+
 });

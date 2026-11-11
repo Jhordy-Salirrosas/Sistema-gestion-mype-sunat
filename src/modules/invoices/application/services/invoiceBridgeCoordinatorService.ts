@@ -78,6 +78,17 @@ export class InvoiceBridgeCoordinatorService {
     invoiceId: string,
     estado: InvoiceStatus,
   ): Promise<{ respuesta: ResultadoReprocesoPuente; error?: Error }> {
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`m1:bridge:${invoiceId}`}, 0))`;
+      const actual = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { estado: true } });
+      if (!actual || ![InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO].includes(actual.estado as 'ACEPTADO' | 'OBSERVADO')) {
+        throw new BadRequestException('Solo se puede reprocesar el puente de un comprobante ACEPTADO u OBSERVADO');
+      }
+      return this.ejecutarExclusivo(invoiceId, actual.estado);
+    }, { timeout: 30000 });
+  }
+
+  private async ejecutarExclusivo(invoiceId: string, estado: InvoiceStatus): Promise<{ respuesta: ResultadoReprocesoPuente; error?: Error }> {
     const factura = await this.cargarParaPuente(invoiceId, estado);
     if (!factura) throw new Error('M1_ACCOUNTING_DOCUMENT_UNAVAILABLE');
     const resultado = await this.puenteContable.registrar(factura);
