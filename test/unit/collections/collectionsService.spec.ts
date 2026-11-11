@@ -71,6 +71,7 @@ describe('CollectionsService', () => {
     const r = await service.customerStatement('co1', '20100070970');
     expect(r.totals).toEqual({ total: 118, credited: 18, paid: 50, balance: 50 });
     expect(r.invoices).toHaveLength(1);
+    expect(r.aging.d0_30).toBe(50);
     expect(r.collections).toHaveLength(1);
   });
 });
