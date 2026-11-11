@@ -468,6 +468,7 @@ export class PurchasesService {
         entryDate: fecha.toISOString(),
         glosa: `Pago ${nuevoEstado === 'PAGADA' ? 'total' : 'parcial'} compra ${purchase.purchase_number} · ${purchase.supplier_name}`,
         sourceModule: 'PURCHASES',
+        journalCode: 'CAJ',
         sourceReferenceId: `PAGO-${purchase.purchase_number}-${movimiento.id}`,
         idempotencyKey: `purchase-payment:${movimiento.id}`,
         lines: [
@@ -540,6 +541,7 @@ export class PurchasesService {
         entryDate: issueDate.toISOString(),
         glosa: `Compra ${purchase.documentSerial}-${purchase.documentNumber} · ${purchase.supplierName}`,
         sourceModule: 'PURCHASES',
+        journalCode: 'COM',
         sourceReferenceId: purchase.purchaseNumber,
         lines: [
           // 1. Naturaleza: Compra de mercaderías

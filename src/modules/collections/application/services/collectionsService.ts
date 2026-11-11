@@ -30,7 +30,7 @@ export class CollectionsService {
     } });
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Anulación cobro ${cobro.customer_name}`,
-      sourceModule: 'COLLECTIONS', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,
+      sourceModule: 'COLLECTIONS', journalCode: 'CAJ', sourceReferenceId: `ANUL-${id}`, idempotencyKey: `collection-annul:${id}`,
       lines: original.lines.map((l, i) => ({ lineOrder: i + 1, accountCode: l.account_code, accountName: l.account_name, debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount) })),
     });
     return this.prisma.collection.update({ where: { id }, data: { status: 'ANULADO' } });
@@ -110,7 +110,7 @@ export class CollectionsService {
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(),
       glosa: `Cobro de ${cobro.customer_name}${cobro.invoice_number ? ` · ${cobro.invoice_number}` : ''}`,
-      sourceModule: 'COLLECTIONS', sourceReferenceId: cobro.id, idempotencyKey: `collection:${cobro.id}`,
+      sourceModule: 'COLLECTIONS', journalCode: 'CAJ', sourceReferenceId: cobro.id, idempotencyKey: `collection:${cobro.id}`,
       lines: [
         { lineOrder: 1, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(1) ?? '1041'), accountName: 'Caja o banco', debitAmount: monto, creditAmount: 0 },
         { lineOrder: 2, accountCode: porOrden.get(2) ?? '12121', accountName: 'Cuentas por cobrar', debitAmount: 0, creditAmount: monto },

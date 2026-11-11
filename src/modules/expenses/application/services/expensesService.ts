@@ -53,7 +53,7 @@ export class ExpensesService {
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(),
       glosa: `Gasto ${gasto.description} · ${gasto.supplier_name}`,
-      sourceModule: 'EXPENSES', sourceReferenceId: gasto.id, idempotencyKey: `expense:${gasto.id}`,
+      sourceModule: 'EXPENSES', journalCode: 'GAS', sourceReferenceId: gasto.id, idempotencyKey: `expense:${gasto.id}`,
       lines: [
         { lineOrder: 1, accountCode: porOrden.get(1) ?? '63111', accountName: 'Gasto', debitAmount: base, creditAmount: 0 },
         { lineOrder: 2, accountCode: porOrden.get(2) ?? '40111', accountName: 'IGV crédito fiscal', debitAmount: igv, creditAmount: 0 },
@@ -119,7 +119,7 @@ export class ExpensesService {
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Pago gasto ${gasto.description}`,
-      sourceModule: 'EXPENSES', sourceReferenceId: `PAGO-GASTO-${id}-${mov.id}`, idempotencyKey: `expense-payment:${mov.id}`,
+      sourceModule: 'EXPENSES', journalCode: 'CAJ', sourceReferenceId: `PAGO-GASTO-${id}-${mov.id}`, idempotencyKey: `expense-payment:${mov.id}`,
       lines: [
         { lineOrder: 1, accountCode: porOrden.get(1) ?? '42121', accountName: 'Cuentas por pagar', debitAmount: monto, creditAmount: 0 },
         { lineOrder: 2, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(2) ?? '1041'), accountName: 'Caja o banco', debitAmount: 0, creditAmount: monto },

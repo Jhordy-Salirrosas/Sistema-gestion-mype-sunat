@@ -133,6 +133,7 @@ model AccountingEntry {
   entry_date            DateTime
   glosa                 String
   source_module         String
+  journal_code          String            @default("OPV")
   source_reference_id   String?
   idempotency_key       String?
   total_debit           Decimal           @db.Decimal(14, 2)

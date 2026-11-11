@@ -64,6 +64,7 @@ export class GenerateAccountingEntryUseCase {
       entryDate: new Date(dto.entryDate),
       glosa: dto.glosa,
       sourceModule: dto.sourceModule,
+      journalCode: dto.journalCode,
       sourceReferenceId: dto.sourceReferenceId,
       idempotencyKey: dto.idempotencyKey,
       lines: dto.lines.map((l, index) => ({

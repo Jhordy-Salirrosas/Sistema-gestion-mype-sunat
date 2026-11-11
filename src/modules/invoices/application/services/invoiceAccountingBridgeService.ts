@@ -347,6 +347,7 @@ export class InvoiceAccountingBridgeService {
         entryDate: new Date(`${factura.fechaEmision}T00:00:00Z`).toISOString(),
         glosa: this.glosaDe(factura, numero),
         sourceModule: MODULO_ORIGEN,
+        journalCode: 'VEN',
         sourceReferenceId: factura.id,
         idempotencyKey: claveAsientoM1(factura.id),
         lines: lineas.map((l) => ({ ...l })),
@@ -416,6 +417,7 @@ export class InvoiceAccountingBridgeService {
         entryDate: new Date(`${factura.fechaEmision}T00:00:00Z`).toISOString(),
         glosa: `Reverso costo de ventas según ${numero}`,
         sourceModule: MODULO_ORIGEN,
+        journalCode: 'VEN',
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost-rev:${factura.id}`,
         lines: [
@@ -475,6 +477,7 @@ export class InvoiceAccountingBridgeService {
         entryDate: new Date(`${factura.fechaEmision}T00:00:00Z`).toISOString(),
         glosa: `Costo de ventas según ${numero}`,
         sourceModule: MODULO_ORIGEN,
+        journalCode: 'VEN',
         sourceReferenceId: referencia,
         idempotencyKey: `m1:invoice-cost:${factura.id}`,
         lines: [
