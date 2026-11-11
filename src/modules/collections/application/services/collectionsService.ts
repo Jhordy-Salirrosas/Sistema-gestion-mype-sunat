@@ -92,6 +92,14 @@ export class CollectionsService {
     }
     const metodo = dto.paymentMethod ?? 'TRANSFERENCIA';
 
+    const reglas = await this.prisma.accountingRule.findMany({
+      where: { company_id: companyId, process_code: 'COBRO', is_active: true }, orderBy: { line_order: 'asc' },
+    });
+    const lineas = new Set(reglas.map((r) => r.line_order));
+    if (reglas.length === 0 || ![1, 2].every((n) => lineas.has(n))) {
+      throw new BadRequestException('Las reglas COBRO están incompletas: se requieren las líneas 1 y 2.');
+    }
+
     const cobro = await this.prisma.collection.create({
       data: {
         company_id: companyId, collection_date: fecha, customer_name: dto.customerName.trim(),
@@ -101,10 +109,6 @@ export class CollectionsService {
       },
     });
 
-    const reglas = await this.prisma.accountingRule.findMany({
-      where: { company_id: companyId, process_code: 'COBRO', is_active: true }, orderBy: { line_order: 'asc' },
-    });
-    if (reglas.length === 0) throw new BadRequestException('No hay reglas contables para COBRO. Configúrelas antes de registrar el cobro.');
     const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
     await this.accounting.execute({
