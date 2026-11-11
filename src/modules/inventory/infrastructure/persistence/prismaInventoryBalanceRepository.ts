@@ -75,7 +75,7 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
       orderBy: { updated_at: 'desc' },
     });
 
-    return rows.map((r) => {
+    const mapped: any[] = rows.map((r) => {
       const entity = this.toDomain(r);
       return Object.assign(entity, {
         sku: r.product?.sku ?? 'SIN-SKU',
@@ -107,6 +107,59 @@ export class PrismaInventoryBalanceRepository implements IInventoryBalanceReposi
         minStockAlert: r.product?.min_stock_alert ? Number(r.product.min_stock_alert) : 0,
       });
     });
+
+    // Productos activos sin movimiento aún no tienen fila en inventory_balances.
+    // Se listan igual para que el alta sea visible y no parezca que no se guardó.
+    const products = await this.prisma.inventoryProduct.findMany({
+      where: { company_id: companyId, is_inventory: true, is_active: true },
+    });
+    const conBalance = new Set(rows.map((r) => r.product_id));
+    const almacen = await this.prisma.inventoryWarehouse.findFirst({
+      where: { company_id: companyId }, orderBy: { created_at: 'asc' },
+    });
+    for (const product of products) {
+      if (conBalance.has(product.id)) continue;
+      const entity = new InventoryBalanceEntity({
+        id: `sin-stock-${product.id}`,
+        companyId,
+        warehouseId: almacen?.id ?? 'ALM-01',
+        productId: product.id,
+        currentStock: 0,
+        averageUnitCost: 0,
+        totalInventoryValue: 0,
+        lastMovementAt: undefined,
+      });
+      mapped.push(Object.assign(entity, {
+        sku: product.sku,
+        productDescription: product.description,
+        warehouseCode: almacen?.warehouse_code ?? 'ALM-01',
+        origin_type: product.origin_type,
+        is_service: product.is_service,
+        brand: product.brand,
+        model: product.model,
+        category: product.category,
+        manufacturer: product.manufacturer,
+        country_of_origin: product.country_of_origin,
+        tags: product.tags ?? [],
+        barcode: product.barcode,
+        hsCode: product.hs_code,
+        weightKg: product.weight_kg ? Number(product.weight_kg) : null,
+        volumeM3: product.volume_m3 ? Number(product.volume_m3) : null,
+        taxAffectation: product.tax_affectation,
+        cost_price: product.cost_price ? Number(product.cost_price) : null,
+        sale_price: product.sale_price ? Number(product.sale_price) : null,
+        wholesale_price: product.wholesale_price ? Number(product.wholesale_price) : null,
+        promo_price: product.promo_price ? Number(product.promo_price) : null,
+        commission_rate: product.commission_rate ? Number(product.commission_rate) : null,
+        min_price: product.min_price ? Number(product.min_price) : null,
+        warehouse_location: product.warehouse_location,
+        attributes: Array.isArray(product.attributes) ? product.attributes : [],
+        sunatTypeCode: product.sunat_type_code,
+        sunatUnitCode: product.sunat_unit_code,
+        minStockAlert: product.min_stock_alert ? Number(product.min_stock_alert) : 0,
+      }));
+    }
+    return mapped;
   }
 
   private toDomain(row: {

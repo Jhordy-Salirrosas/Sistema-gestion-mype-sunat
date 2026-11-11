@@ -12,6 +12,8 @@ describe('PrismaInventoryBalanceRepository', () => {
         upsert: jest.fn(),
         findMany: jest.fn(),
       },
+      inventoryProduct: { findMany: jest.fn().mockResolvedValue([]) },
+      inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     repo = new PrismaInventoryBalanceRepository(mockPrisma);
   });
@@ -131,3 +133,24 @@ describe('PrismaInventoryBalanceRepository', () => {
   });
 });
 
+
+describe('PrismaInventoryBalanceRepository - productos sin stock', () => {
+  it('lista productos activos sin saldo con stock cero', async () => {
+    const prisma: any = {
+      inventoryBalance: { findMany: jest.fn().mockResolvedValue([]) },
+      inventoryProduct: { findMany: jest.fn().mockResolvedValue([{
+        id: 'p1', sku: 'HP01', description: 'Laptop HP', origin_type: 'NACIONAL', is_service: false,
+        brand: 'HP', model: '15', category: 'Cómputo', manufacturer: 'HP', country_of_origin: 'PE',
+        tags: ['laptop'], barcode: '7751234567890', hs_code: null, weight_kg: null, volume_m3: null,
+        tax_affectation: '10', cost_price: null, sale_price: 2500, wholesale_price: null, promo_price: null,
+        commission_rate: null, min_price: null, warehouse_location: null, attributes: [],
+        sunat_type_code: '01', sunat_unit_code: 'NIU', min_stock_alert: 2,
+      }]) },
+      inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'w1', warehouse_code: 'ALM-01' }) },
+    };
+    const repo = new PrismaInventoryBalanceRepository(prisma);
+    const rows = await repo.findAllByCompany('c1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ sku: 'HP01', currentStock: 0, warehouseCode: 'ALM-01', sale_price: 2500 });
+  });
+});
