@@ -2744,3 +2744,15 @@ Focal: 2 suites / 16 pruebas aprobadas. Los dos casos de crédito con solo detra
 - Ferry: `ferry/m1-descuento-redondeo`, diez archivos del front en sus rutas exactas y manifiesto `FERRY.md` con SHA-256. 8A-1 y 8A-4 no requieren cambios de front; 8A-2 y 8A-3 se transportan en commits separados.
 - Resto fiscal expresamente sin corregir aquí: gratuita+ICBPER (adapter vs total XML) y exoneradas con SFS 2992 por `TaxCategory/Percent` ausente (la hoja lo exige en `ValidaExprRegFactura-2.0.1.xsl:3100–3104`). No se alteran reglas de gratuitas/exoneradas ni los XML sin descuento para resolverlos de forma incidental.
 - Sin migraciones, emisiones, llamadas reales a SUNAT, PR, fusiones ni despliegues.
+
+## Parte 8B — Guardas de notas
+
+Bases aceptadas: back dev `b4b8febd497db0a1b3572c44d2fc9acec216f680`, 287 suites / 2635 pruebas aprobadas, 4 suites / 38 pruebas omitidas y 12 snapshots; front dev `316e681ec89c72f5de0ac4e6bac71a8ee992d1a3`, 125 suites / 908 pruebas. Sin migraciones, emisiones ni llamadas reales a SUNAT.
+
+### B1 — Devolución total física y monetaria
+
+El motivo 06 exige todas las unidades pendientes de cada SKU y el saldo monetario exacto. Se extrae el cálculo Decimal por SKU de la Parte 7 a `noteQuantityBalance`, reutilizable por la proyección de lectura. Se mantiene el lock del origen dentro de la transacción de creación, antes de leer notas vigentes; 01/06/07 reservan cantidades sin esperar su CDR y RECHAZADO/ANULADO no consumen saldo. No se inventa identidad entre líneas: se acumula por SKU. Los otros motivos conservan su control anterior.
+
+Focales B1: 3 suites / 74 pruebas aprobadas. Casos en ambos contratos de creación: 1 de 2 unidades al saldo completo se rechaza; todas las unidades y dinero exacto sobre OBSERVADO se admiten; devolución parcial previa; dinero incompleto; SKU omitido y repetido. Prueba secuencial de segunda solicitud con primera nota ya reservada y verificación de que el bloqueo precede a leer las notas (no se presenta esta prueba unitaria como carrera real de dos conexiones).
+
+Suite completa tras B1: **288 suites / 2645 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; 12 snapshots intactos. Front sin cambios de este punto: baseline 125/908.

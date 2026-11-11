@@ -1,3 +1,5 @@
+import { validarCantidadesNota, devuelveUnidades } from './noteQuantityBalance';
+export { validarCantidadesNota } from './noteQuantityBalance';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
@@ -148,7 +150,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       const notas = await tx.invoice.findMany({ where: { company_id: companyId,
         referenced_invoice_id: actual.id, tipo_comprobante: '07', estado: { notIn: ['RECHAZADO', 'ANULADO'] } },
       select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } } });
-      validarCantidadesNota(dto.items, actual.items, ['01', '06', '07'].includes(dto.codigo_motivo_nota ?? '') ? notas.filter(n => ['01', '06', '07'].includes(n.credit_debit_reason_code ?? '')).flatMap(n => n.items) : []);
+      validarCantidadesNota(dto.items, actual.items, devuelveUnidades(dto.codigo_motivo_nota) ? notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items) : [], dto.codigo_motivo_nota === '06');
       const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
       const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
       if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
@@ -174,21 +176,4 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     fechaEmision: liquidado.dto.payload_ubl.fechaEmision as string, montoTotal: liquidado.importes.total,
     detraccion: liquidado.importes.detraccion, retencion: liquidado.importes.retencion });
   return dto;
-}
-
-/** El lock del origen cubre también cantidades pendientes de devolución. */
-export function validarCantidadesNota(
-  nuevas: { codigo?: string; cantidad: number }[],
-  originales: { item_code: string | null; quantity: Prisma.Decimal | number }[],
-  anteriores: { item_code: string | null; quantity: Prisma.Decimal | number }[],
-): void {
-  const vendidos = new Map<string, Prisma.Decimal>(), pedidos = new Map<string, Prisma.Decimal>();
-  for (const l of originales) if (l.item_code) vendidos.set(l.item_code.trim(), (vendidos.get(l.item_code.trim()) ?? new Prisma.Decimal(0)).plus(l.quantity));
-  for (const l of anteriores) if (l.item_code) pedidos.set(l.item_code.trim(), (pedidos.get(l.item_code.trim()) ?? new Prisma.Decimal(0)).plus(l.quantity));
-  for (const l of nuevas) {
-    const sku = l.codigo!.trim();
-    if (!vendidos.has(sku)) throw new BadRequestException('La nota contiene un producto ajeno al comprobante origen');
-    pedidos.set(sku, (pedidos.get(sku) ?? new Prisma.Decimal(0)).plus(l.cantidad));
-  }
-  for (const [sku, cantidad] of pedidos) if (cantidad.greaterThan(vendidos.get(sku) ?? 0)) throw new ConflictException(`NOTA_EXCEDE_CANTIDAD: ${sku}`);
 }
