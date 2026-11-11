@@ -8,3 +8,6 @@ it('7B suma cantidades decimales sin residuos y mantiene SKU distintos', () => {
  const r = movimientosDeFactura([{ ...linea, cantidad: .1 }, { ...linea, cantidad: .2 }, { ...linea, itemCode: 'ARE' }], doc);
  expect(r.map(m => [m.sku, m.quantity])).toEqual([['CEM', .3], ['ARE', 2]]);
 });
+it('7C una ND económica no crea ninguna salida física', () => {
+ expect(movimientosDeFactura([linea], { ...doc, tipoComprobante: '08' })).toEqual([]);
+});

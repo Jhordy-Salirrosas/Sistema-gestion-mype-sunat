@@ -457,14 +457,12 @@ describe('TA-68 · movimientos de Kardex de una factura', () => {
     expect(movimientos[0].operation_type_code).toBe('05');
   });
 
-  it('una Nota de Débito 08 genera SALIDA de Kardex', () => {
+  it('una Nota de Débito 08 no genera movimiento físico', () => {
     const movimientos = movimientosDeFactura(
       [{ itemCode: 'CEM-001', descripcion: 'Cemento', unidad: 'NIU', cantidad: 2, valorUnitario: 50, afectacion: '10' }],
       { tipoComprobante: '08', serie: 'FD01', correlativo: 3, fechaEmision: '2026-11-06' },
     );
-    expect(movimientos).toHaveLength(1);
-    expect(movimientos[0].direction).toBe('SALIDA');
-    expect(movimientos[0].operation_type_code).toBe('01');
+    expect(movimientos).toHaveLength(0);
   });
 
   it('omite movimientos si la Nota de Crédito es por motivo económico / descuento', () => {
@@ -565,7 +563,7 @@ describe('TA-68 · servicio puente', () => {
           opciones.movimientoYaExiste ? { id: 'mov-0' } : null,
         ),
         findMany: jest.fn(async () => opciones.costoVenta
-          ? [{ quantity: 2, previous_unit_cost: opciones.costoVenta / 2, total_cost: opciones.costoVenta, product: { sku: 'CEM-001' } }]
+          ? [{ quantity: 20, previous_unit_cost: opciones.costoVenta / 20, total_cost: opciones.costoVenta, product: { sku: 'CEM-001' } }]
           : []),
       },
       accountingEntry: {
@@ -574,6 +572,7 @@ describe('TA-68 · servicio puente', () => {
         ),
       },
       invoice: {
+        findFirst: jest.fn(async () => opciones.originalExiste === false ? null : ({ serie: 'F001', correlativo: 100 })),
         findUnique: jest.fn(async () => opciones.originalExiste === false ? null : ({ serie: 'F001', correlativo: 100 })),
       },
       accountingRule: {
@@ -613,14 +612,15 @@ describe('TA-68 · servicio puente', () => {
   });
 
   it('revierte el costo original en una nota de crédito por devolución', async () => {
-    const { puente, asientoCreado } = dobles({ costoVenta: 600 });
+    const { puente, asientoCreado, movimientoCreado } = dobles({ costoVenta: 600 });
     const resultado = await puente.registrar({
       ...facturaPrueba(),
       tipoComprobante: '07',
       motivoNota: '06',
       documentoAfectadoId: 'inv-original',
     });
-    expect(resultado.costoVenta).toBe(-6000);
+    expect(resultado.costoVenta).toBe(-600);
+    expect(movimientoCreado).toHaveBeenCalledWith(expect.objectContaining({ direction: 'ENTRADA', operation_type_code: '05', unit_cost: 30 }), 'emp-1');
     expect(resultado.asientoCostoId).toBe('asiento-1');
     expect(asientoCreado).toHaveBeenCalledTimes(2);
   });
@@ -637,10 +637,11 @@ describe('TA-68 · servicio puente', () => {
     expect(resultado.errores.join(' ')).toContain('el comprobante original no existe');
   });
 
-  it('no genera costo si la venta original no tuvo salida valorizada', async () => {
+  it('deja pendiente la devolución sin costo histórico acreditado', async () => {
     const { puente } = dobles();
     const resultado = await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
-    expect(resultado.costoVenta).toBe(0);
+    expect(resultado.completo).toBe(false);
+    expect(resultado.errores.join(' ')).toContain('falta costo histórico');
   });
 
   it('usa las cuentas de accounting_rules en la venta', async () => {
@@ -659,19 +660,19 @@ describe('TA-68 · servicio puente', () => {
     expect(asientoCreado).not.toHaveBeenCalled();
   });
 
-  it('repone capas FIFO al revertir una nota de devolución', async () => {
+  it('no repone capas otra vez al contabilizar una devolución', async () => {
     const prisma = {
       inventoryProduct: { findFirst: jest.fn().mockResolvedValue({ id: 'prod-1' }) },
       inventoryWarehouse: { findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
-      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ quantity: 20, previous_unit_cost: 30, product: { sku: 'CEM-001' } }]) },
+      inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([{ quantity: 20, previous_unit_cost: 30, total_cost: 600, product: { sku: 'CEM-001' } }]) },
       accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
       accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
-      invoice: { findUnique: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }) },
+      invoice: { findFirst: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }), findUnique: jest.fn().mockResolvedValue({ serie: 'F001', correlativo: 100 }) },
     };
     const capas = { metodo: jest.fn().mockResolvedValue('FIFO'), registrarEntrada: jest.fn().mockResolvedValue(undefined), consumir: jest.fn() };
     const puente = new InvoiceAccountingBridgeService(prisma as never, { execute: jest.fn() } as never, { execute: jest.fn().mockResolvedValue({ id: 'a1' }) } as never, capas as never);
     await puente.registrar({ ...facturaPrueba(), tipoComprobante: '07', motivoNota: '06', documentoAfectadoId: 'inv-original' });
-    expect(capas.registrarEntrada).toHaveBeenCalledWith('emp-1', 'wh-1', 'prod-1', 20, 30);
+    expect(capas.registrarEntrada).not.toHaveBeenCalled();
   });
 
   it('usa el costo FIFO ya consumido del movimiento, sin leer ni consumir capas otra vez', async () => {

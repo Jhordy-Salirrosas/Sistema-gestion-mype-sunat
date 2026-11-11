@@ -2518,3 +2518,15 @@ Una descarga por SKU suma todas sus líneas con Decimal. Un movimiento históric
 con cantidad distinta deja pendiente la conciliación, sin omitirlo como completo
 ni publicar otra descarga que duplique lo anterior. Focal: 2 suites / 43 pruebas
 aprobadas (SKU repetido, decimales, regresiones del puente).
+
+### 7C — tipos y devolución a costo histórico
+
+ND no genera movimiento físico ni exige stock de salida. La NC física acredita
+costo y almacén desde la salida original (total_cost / quantity), nunca desde
+el precio de venta. La idempotencia consulta la operación 05 para devoluciones.
+El reverso contable usa el total_cost de la devolución persistida; no vuelve a
+crear capas. Sin movimiento original/costo acreditado queda pendiente con motivo.
+La evidencia de Emma (FD01-3 sin salida y FC01-13 sin devolución) no se reescribe:
+esta ronda corrige el motor para la recuperación explícita posterior.
+Focal: 2 suites / 44 pruebas aprobadas; se corrige la prueba antigua que exigía
+incorrectamente salida de ND. Tipado de producción aprobado.

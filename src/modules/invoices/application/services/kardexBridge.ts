@@ -80,6 +80,7 @@ export const movimientosDeFactura = (
   lineas: readonly LineaParaKardex[],
   documento: DocumentoKardex,
 ): readonly RegisterManualMovementDto[] => {
+  if (documento.tipoComprobante === '08') return [];
   const porSku = new Map<string, LineaParaKardex>();
   for (const linea of lineas.filter(generaMovimiento)) {
     const sku = linea.itemCode!.trim();
