@@ -102,7 +102,7 @@ export class InventoryTransferService {
       for (const item of dto.items) {
         const { sku, product } = await this.findInventoryProductOrThrow(tx, companyId, item.sku);
 
-        for (const id of [from.id, to.id].sort()) await capas.bloquear(companyId, id, product.id);
+        for (const id of [from.id, to.id].sort((a, b) => a.localeCompare(b))) await capas.bloquear(companyId, id, product.id);
         const origin = await tx.inventoryBalance.findUnique({
           where: {
             company_id_warehouse_id_product_id: {
