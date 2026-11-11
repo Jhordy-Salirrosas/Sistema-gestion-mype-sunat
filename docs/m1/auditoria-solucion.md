@@ -2780,3 +2780,27 @@ Focales B3: **3 suites / 44 pruebas** en el back y **4 suites / 22 pruebas** en 
 Suite completa tras B3 (back): **290 suites / 2672 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; **12 snapshots fiscales intactos**, sin actualizaciones. Build y lint global del back aprobados. Build del front aprobado. El lint de los archivos del ferry conserva **1 error y 2 avisos previos** de InvoiceEmitModal; contraste por stdin contra la base 316e681: mismas reglas, mensajes y fragmentos (set-state-in-effect, exhaustive-deps y only-export-components), sin incidencias añadidas. No se desactivan reglas ni se tocan configuraciones.
 
 Front final tras B3: **126 suites / 913 pruebas aprobadas**, cero fallos (base 125/908). Ferry `ferry/m1-guardas-notas`: nueve archivos del front en rutas exactas y FERRY.md con manifiesto y SHA-256. B1/B2 no cambian la UI ni amplían motivos; B3 conserva las opciones visibles. No hay cambios en Resiliencia, Inventario o Contabilidad, migraciones, emisiones reales, llamadas a SUNAT, PR, merges o despliegues.
+
+## Parte 8B-bis — Notas con descuento y pulido del formulario
+
+Bases: back main `da61217c24c3ffe2f31a1912779a51a2d0986b02` (290 suites / 2672 pruebas, 4 suites / 38 omitidas y 12 snapshots); front main `be2c1cde8b790e1b67b3dc1574a7b751f4b7a233` (126 suites / 913 pruebas). El front incluye #195 y #196; este último solo toca Colecciones, sin diferencias en M1. Sin migraciones ni otros módulos.
+
+### B1 — Construcción de certificación NO certificada
+
+Commit aislado `bcbb33cdc12fd9cf849967f3f40ebcd8a697c367`. Solo notas 07/08, descuento de línea 00: Price unitario neto y sin su AllowanceCharge; AlternativeConditionPrice, impuestos, totales y payload se conservan. Adapter, descuento 01, facturas y boletas intactos. Caso real monetario: 41.30 − descuento base 3.50 → Price/LineExtensionAmount 31.50, IGV 5.67, precio alternativo/total 37.17.
+
+**NO se declara cerrado 3271.** El XML anterior también pasa el set SFS local; este set no ejecuta 3271 y su comprobación equivalente 4288 es no bloqueante. Emma certificará después del despliegue con UNA NC total sobre F001-00000069, cuyo saldo sigue intacto según su evidencia porque FC01-00000015 fue rechazada. Si beta acepta, se cierra; si reaparece 3271, se revierte exclusivamente B1 y se replantea. Codex no ejecuta esa prueba real.
+
+[Nota de certificación congelada en el commit B1](https://github.com/Jhordy-Salirrosas/Sistema-gestion-mype-sunat/blob/bcbb33cdc12fd9cf849967f3f40ebcd8a697c367/docs/m1/certificacion-8b-bis-notas-descuento.md). Se mantiene independiente de este documento de estado y de F1/F2 para que su reversión no arrastre el front.
+
+B1: focales 3 suites / 24 pruebas; completa **291 suites / 2684 pruebas aprobadas**, 4 suites / 38 pruebas omitidas; **12 snapshots intactos**. Ocho hashes del XML previo comprueban igualdad byte a byte fuera del caso candidato. Build y lint del back aprobados.
+
+### F1 — Precarga capada y prorrateada
+
+El formulario espera detalle y cantidades antes de precargar la NC, consume el pool por orden original y excluye filas agotadas. F001-00000067, origen 2+3 y pendiente 4 del mismo SKU, inicia en 2+2, sin la pareja inicial de máximos condicionales 1/2. Motivos 01/06/07 usan pendiente; los motivos que no devuelven físicamente unidades conservan el pool original. ND conserva su precarga previa.
+
+Con la regla fijada por Emma, en una fila recortada se prorratean el descuento de línea y el importe de ICBPER por cantidad nueva / original con Decimal HALF_UP a dos decimales. Precios/valores unitarios y referencias no se alteran. Si un descuento prorrateado redondea a cero se omite, en vez de enviar un descuento cero que el DTO prohíbe. Se conservan las validaciones existentes de bolsas y tarifa ICBPER, sin habilitar fracciones de bolsa. No se reprorratea una fila no recortada.
+
+Una precarga tardía no sustituye una edición del usuario; refrescar el saldo no vuelve a precargar el borrador. Cambiar origen/tipo inicia otro intento de precarga con protección frente a respuestas antiguas. El backend mantiene la autoridad sobre saldo/cantidades, incluido el motivo 06. Focales F1: 4 suites / 22 pruebas; la nueva spec contiene ocho casos.
+
+F1 completa: **127 suites / 921 pruebas aprobadas** en el front (base 126/913); back se mantiene en 291/2684, con 12 snapshots. Build front aprobado. ESLint del alcance conserva el error previo set-state-in-effect y el aviso previo only-export-components del modal; desaparece el aviso anterior de dependencias de la precarga. No hay incidencias nuevas ni supresiones/configuraciones modificadas.
