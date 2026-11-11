@@ -221,6 +221,12 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
 
   async openPeriod(companyId: string, year: number, month: number) {
     const period = `${year}-${String(month).padStart(2, '0')}`;
+    // Reabrir un mes de un año cerrado debe reabrir también el ejercicio;
+    // de lo contrario el período queda ABIERTO pero el año sigue bloqueado.
+    await this.prisma.accountingFiscalYear?.updateMany({
+      where: { company_id: companyId, year, status: 'CERRADO' },
+      data: { status: 'ABIERTO', closed_at: null },
+    });
     const row = await this.prisma.accountingPeriod.upsert({
       where: { company_id_period: { company_id: companyId, period } },
       update: { status: 'ABIERTO', closed_at: null },
