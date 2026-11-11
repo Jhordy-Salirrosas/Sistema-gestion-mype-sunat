@@ -98,7 +98,8 @@ describe('compuerta de despacho con XSL no concluyente', () => {
   it('no despacha si no se puede persistir el aviso', async () => {
     const d = escenario(xml);
     d.auditar.mockImplementation(async () => { throw new Error('auditoría no disponible'); });
-    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
+    await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('auditoría no disponible');
+    expect(d.auditar).toHaveBeenCalledTimes(2);
     expect(d.enviar).not.toHaveBeenCalled();
   });
 });

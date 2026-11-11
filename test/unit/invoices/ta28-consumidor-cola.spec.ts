@@ -43,6 +43,7 @@ const RESULTADO: RetryInvoiceResult = {
 };
 
 interface Dobles {
+  persistFailure: jest.Mock;
   consumidor: InvoiceJobConsumer;
   registerInvoiceWorker: jest.Mock<
     (handler: (payload: { invoice_id: string }) => Promise<unknown>) => Promise<string>
@@ -89,6 +90,7 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
     completo: true,
   }));
 
+  const persistFailure = jest.fn();
   const consumidor = new InvoiceJobConsumer(
     { registerInvoiceWorker } as never,
     { processWithRetry } as never,
@@ -108,14 +110,14 @@ function crearDobles(fila: unknown = COMPROBANTE, generadorReal = false): Dobles
         motivoBloqueo: null,
       })),
     } as never,
-    { persistFailure: jest.fn() } as never,
+    { persistFailure } as never,
     // TA-68: puente contable. En esta suite es un doble que no hace nada.
     { registrar } as never,
     // Guarda el XML firmado para que la descarga entregue el documento real.
     { guardar: jest.fn(async () => 'hash-de-prueba') } as never,
   );
 
-  return { verifySignature: jest.fn(() => true),
+  return { persistFailure, verifySignature: jest.fn(() => true),
     consumidor,
     registerInvoiceWorker,
     processWithRetry,
@@ -248,23 +250,16 @@ describe('TA-28 InvoiceJobConsumer', () => {
     },
   );
 
-  it('condiciona el fallo de preparación para no sobrescribir un estado final concurrente', async () => {
+  it('delega el fallo al puerto durable que protege estados finales concurrentes', async () => {
     const d = crearDobles(null);
     await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
-    expect(d.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'inv-1', estado: { notIn: [InvoiceStatus.ACEPTADO,
-        InvoiceStatus.OBSERVADO, InvoiceStatus.RECHAZADO, InvoiceStatus.ANULADO] } },
-    }));
+    expect(d.persistFailure).toHaveBeenCalledWith(expect.objectContaining({ invoiceId: 'inv-1', estadoNuevo: InvoiceStatus.ERROR_RED, codigoError: 'M1_PREPARATION_INFRAESTRUCTURA' }));
   });
 
   it('deja ERROR_RED si el comprobante no se puede preparar', async () => {
     const d = crearDobles(null);
     await expect(d.consumidor.procesar({ invoice_id: 'inv-1' })).rejects.toThrow('M1_PREPARATION_PENDING');
-    expect(d.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { estado: InvoiceStatus.ERROR_RED },
-      }),
-    );
+    expect(d.persistFailure).toHaveBeenCalledWith(expect.objectContaining({ estadoNuevo: InvoiceStatus.ERROR_RED, mensajeError: expect.stringContaining('CARGA') }));
     expect(d.processWithRetry).not.toHaveBeenCalled();
   });
 

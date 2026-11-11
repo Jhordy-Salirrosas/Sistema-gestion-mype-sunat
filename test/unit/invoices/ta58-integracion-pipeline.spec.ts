@@ -216,9 +216,9 @@ describe('TA-58 · compuerta XSL dentro del consumidor', () => {
     ).rejects.toBeInstanceOf(ErrorValidacionBloqueada);
 
     expect(d.processWithRetry).not.toHaveBeenCalled();
-    // No se marca RECHAZADO ni ERROR_RED: el comprobante puede estar perfecto.
+    // No se rechaza fiscalmente: queda causa recuperable durable de infraestructura.
     expect(d.update).not.toHaveBeenCalled();
-    expect(d.persistFailure).not.toHaveBeenCalled();
+    expect(d.persistFailure).toHaveBeenCalledWith(expect.objectContaining({ estadoNuevo: 'ERROR_RED', codigoError: 'M1_PREPARATION_INFRAESTRUCTURA' }));
   });
 
   it('un ERROR de la compuerta no se confunde con un fallo de preparación', async () => {
