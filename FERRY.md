@@ -3,7 +3,8 @@
 Destino: CarlosSoles/Fronted-sistema-mype-sunat.
 Base front main: `59cbbb48fba579b10917dcf151151f637fcfad54`.
 Base back main: `68575577abed679326f2bb116c15151bb12a0044`.
-Back asociado: `fix/m1-8b-ter-cantidades-totales` (P1 y P2).
+Back asociado: `fix/m1-8b-ter-cantidades-totales`, `266c1d587b298f0c41671cf8059cc3f36397d42c` (P1/P2 y adenda P3).
+Clon front validado: `1d768e2` (P2).
 Ferry: `ferry/m1-8b-ter-cantidades-totales`, un commit P2.
 Sin push directo al repositorio front.
 
@@ -40,7 +41,8 @@ con saldo fresco justo antes de publicar. La precarga y el prorrateo no cambian.
 
 ND y motivos parciales mantienen su comportamiento. El motivo 02 usa el pool
 pendiente para validar totalidad, pero no se cambia su clasificación física,
-las reservas históricas, Kardex ni la reversión de costo. P3 queda fuera.
+las reservas históricas, Kardex ni la reversión de costo dentro de P1/P2.
+La adenda P3 se entrega exclusivamente en el back, como se detalla abajo.
 No se amplían las opciones visibles del selector.
 
 ## Verificación
@@ -56,3 +58,20 @@ se adaptó a cantidades completas conservando el control de rechazo tardío y cl
 La adenda P3 se entrega después, en un commit back separado.
 
 Sin migraciones, emisiones reales, PRs, merges ni despliegues durante el encargo.
+
+
+## Adenda P3 — exclusivamente back
+
+P3 incorpora 02 al helper físico de M1 (01/02/06/07), distinto del conjunto total
+(01/02/06). El pool lee las unidades de 02 anteriores como devueltas. No se amplía
+el selector ni se modifican los diez archivos de este ferry.
+
+Las 02 nuevas se identifican con una política versionada que el servidor sella
+al insertarlas. Tras aceptación usan entrada 05, capa al costo histórico y
+reversos de venta/costo como 01. Las 02 sin sello no reciben efectos retroactivos:
+el reproceso omite movimientos y asientos y registra una constancia durable.
+No se hace backfill, migración ni ejecución en producción.
+
+Cierre tras P3: **back 303 suites / 2781 pruebas y 12 snapshots**;
+**front 128 suites / 938 pruebas aprobadas**. Los diez archivos y sus hashes
+permanecen iguales a la entrega P2.
