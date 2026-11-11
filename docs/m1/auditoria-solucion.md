@@ -2573,3 +2573,10 @@ procesos no intercalan el mismo documento. Se mantiene la recuperación por etap
 con las claves contables existentes. Focal: 2 suites / 15 pruebas aprobadas;
 PostgreSQL real confirma máximo un puente activo por documento, y las pruebas
 F001-64 mantienen recuperación, no-op, ausencia de capa y OBSERVADO.
+
+### 7I — RA sin notas asociadas aceptadas
+
+Vista previa y revalidación de reserva excluyen origen con cualquier NC/ND
+aceptada u observada, aunque sea parcial. Motivo: «Tiene notas asociadas».
+Se conserva la exclusión por nota pendiente y las demás guardas del agregado.
+Focal: 2 suites / 63 pruebas aprobadas, incluida selección anterior no elegible.

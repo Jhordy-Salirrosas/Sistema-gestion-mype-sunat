@@ -217,16 +217,16 @@ export class InvoiceSummaryService {
     });
 
     const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RA', db);
-    const notas = await db.invoice.findMany({ where: { company_id: companyId, tipo_comprobante: '07', referenced_invoice_id: { in: filas.map(f => f.id) }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } }, select: { referenced_invoice_id: true, estado: true, monto_total: true } });
+    const notas = await db.invoice.findMany({ where: { company_id: companyId, tipo_comprobante: { in: ['07', '08'] }, referenced_invoice_id: { in: filas.map(f => f.id) }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } }, select: { referenced_invoice_id: true, estado: true, monto_total: true } });
     const reservas = await db.invoiceAggregate?.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(excludeAggregateId ? { id: { not: excludeAggregateId } } : {}) }, select: { members: true } }) ?? [];
     const reservados = new Set(reservas.flatMap(r => (r.members as unknown as { id: string }[]).map(m => m.id)));
     const agregados = filas.map((f) => {
       const linea = this.aAgregado(f, fecha);
       const creditos = notas.filter(n => n.referenced_invoice_id && n.referenced_invoice_id === f.id);
-      const neutralizado = Number(f.monto_total) > 0 && creditos.filter(n => ['ACEPTADO', 'OBSERVADO'].includes(n.estado)).reduce((sum, n) => sum + Math.round(Number(n.monto_total) * 100), 0) >= Math.round(Number(f.monto_total) * 100);
+      const asociada = creditos.some(n => ['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const pendiente = creditos.some(n => !['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const diasHastaHoy = diasDesdeEmision(fechaCorta(f.fecha_emision), cabecera.fechaGeneracion);
-      const motivo = f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : neutralizado ? 'Neutralizado por nota de crédito de saldo completo.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
+      const motivo = f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
       const admiteBaja = !motivo && (!seleccion || seleccion.some(l => l.id === f.id));
       return {
         ...linea,
