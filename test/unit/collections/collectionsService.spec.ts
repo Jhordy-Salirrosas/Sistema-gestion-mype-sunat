@@ -100,4 +100,38 @@ describe('CollectionsService', () => {
     expect(r.paid).toBe(50);
     expect(r.collections).toHaveLength(1);
   });
+
+  it('cubre tramos 61-90 y +90 en cartera', async () => {
+    const vieja = (dias: number, id: string) => ({ id, customer_identity_number: `doc-${id}`, customer_legal_name: 'Cliente', monto_total: 50, fecha_emision: new Date(Date.now() - dias * 86400000) });
+    const prisma = {
+      invoice: { findMany: jest.fn().mockResolvedValue([vieja(70, 'a'), vieja(100, 'b')]), aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 0 } }) },
+      collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    const r = await service.portfolioAging('c1');
+    expect(r.aging.d61_90).toBe(50);
+    expect(r.aging.d90_plus).toBe(50);
+  });
+
+  it('cubre tramos 61-90 y +90 en estado de cuenta', async () => {
+    const prisma = {
+      invoice: { findMany: jest.fn().mockResolvedValue([{ id: 'i1', serie: 'F001', correlativo: 1, monto_total: 50, fecha_emision: new Date(Date.now() - 70 * 86400000) }, { id: 'i2', serie: 'F001', correlativo: 2, monto_total: 50, fecha_emision: new Date(Date.now() - 100 * 86400000) }]), aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 0 } }) },
+      collection: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }), findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn() } as never);
+    const r = await service.customerStatement('c1', '20100070970');
+    expect(r.aging.d61_90).toBe(50);
+    expect(r.aging.d90_plus).toBe(50);
+  });
+
+  it('registra cobro con factura válida y saldo suficiente', async () => {
+    const prisma = {
+      invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', monto_total: 118, estado: 'ACEPTADO', serie: 'F001', correlativo: 1 }), aggregate: jest.fn().mockResolvedValue({ _sum: { monto_total: 0 } }) },
+      collection: { create: jest.fn().mockResolvedValue({ id: 'c1', customer_name: 'Cliente', invoice_number: 'F001-00000001' }), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '1041' }, { line_order: 2, account_code: '12121' }]) },
+    };
+    const service = new CollectionsService(prisma as never, { execute: jest.fn().mockResolvedValue({}) } as never);
+    await expect(service.create('c1', { customerName: 'Cliente', invoiceNumber: 'F001-00000001', amount: 100 })).resolves.toMatchObject({ id: 'c1' });
+    expect(prisma.collection.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ invoice_id: 'i1' }) }));
+  });
 });
