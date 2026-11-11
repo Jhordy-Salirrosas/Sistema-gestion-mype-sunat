@@ -32,6 +32,8 @@ export interface ComprobanteOrigenNotaDto {
 
 /** Un comprobante del listado, con lo justo para la grilla. */
 export interface ComprobanteListadoDto {
+  monto_detraccion?: number | null;
+  monto_retencion?: number | null;
   /** Lectura derivada del CDR/historial, sin alterar el estado fiscal. */
   resultado_presentacion?: ResultadoPresentacion;
   id: string;

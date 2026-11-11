@@ -52,6 +52,7 @@ function escenario() {
     inventoryMovement: {
       findMany: jest.fn(async () => []),
     },
+    accountingRule: { findMany: jest.fn(async () => REGLAS_VENTA_BASE) },
     accountingEntry: {
       findFirst: jest.fn(async ({ where, orderBy }: any) =>
         orderBy
@@ -118,6 +119,12 @@ async function emitir(consumer: InvoiceJobConsumer) {
   ).resolves.toMatchObject({ estado: InvoiceStatus.ACEPTADO });
 }
 
+const REGLAS_VENTA_BASE = [
+  { line_order: 1, account_code: '12121' }, { line_order: 2, account_code: '40111' }, { line_order: 3, account_code: '70121' },
+  { line_order: 4, account_code: '70321' }, { line_order: 5, account_code: '70521' }, { line_order: 6, account_code: '74111' },
+  { line_order: 7, account_code: '12129' }, { line_order: 8, account_code: '40114' }, { line_order: 9, account_code: '74' },
+  { line_order: 10, account_code: '69111' }, { line_order: 11, account_code: '20111' },
+];
 describe('M1 · asiento único en el flujo del worker', () => {
   it('tras la emisión aceptada persiste un solo asiento y propaga su id al worker', async () => {
     const s = escenario();
