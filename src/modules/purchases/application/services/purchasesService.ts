@@ -84,6 +84,17 @@ export class PurchasesService {
     });
     const usaFifo = empresa?.inventory_cost_method === 'FIFO';
 
+    if (this.accounting) {
+      const reglasCompra = await this.prisma.accountingRule.findMany({
+        where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
+        orderBy: { line_order: 'asc' },
+      });
+      const lineas = new Set(reglasCompra.map((r) => r.line_order));
+      if (reglasCompra.length === 0 || ![1, 2, 3, 4, 5].every((n) => lineas.has(n))) {
+        throw new BadRequestException('Las reglas COMPRA están incompletas: se requieren las líneas 1 a 5.');
+      }
+    }
+
     const result = await this.prisma.$transaction(async (tx: any) => {
       // 1. Validar almacén
       const warehouse = await tx.inventoryWarehouse.findFirst({
@@ -505,24 +516,20 @@ export class PurchasesService {
     });
     if (existente) return;
 
-    // Consultar mapeador dinámico de cuentas para COMPRA si existe
-    const mappings =
-      (await (this.prisma as any).accountingMapping?.findMany({
-        where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
-      })) ?? [];
-    const mapRoles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
-
-    const reglas = (await (this.prisma as any).accountingRule?.findMany({
+    const reglas = await this.prisma.accountingRule.findMany({
       where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
       orderBy: { line_order: 'asc' },
-    })) ?? [];
-    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
-
-    const accGastoCompra = porOrden.get(1) ?? mapRoles.get('GASTO_COMPRA') ?? '601';
-    const accIgvCredito = porOrden.get(2) ?? mapRoles.get('IGV_CREDITO') ?? '40111';
-    const accCxp = porOrden.get(3) ?? mapRoles.get('CXP') ?? '421';
-    const accDestinoInv = porOrden.get(4) ?? mapRoles.get('DESTINO_INVENTARIO') ?? '201';
-    const accVariacionExist = porOrden.get(5) ?? mapRoles.get('VARIACION_EXISTENCIA') ?? '611';
+    });
+    const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
+    if (![1, 2, 3, 4, 5].every((n) => porOrden.has(n))) {
+      this.logger.error(`Compra ${purchase.purchaseNumber} sin reglas COMPRA completas; no se genera asiento.`);
+      return;
+    }
+    const accGastoCompra = porOrden.get(1)!;
+    const accIgvCredito = porOrden.get(2)!;
+    const accCxp = porOrden.get(3)!;
+    const accDestinoInv = porOrden.get(4)!;
+    const accVariacionExist = porOrden.get(5)!;
 
     const periodo = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}`;
     try {
