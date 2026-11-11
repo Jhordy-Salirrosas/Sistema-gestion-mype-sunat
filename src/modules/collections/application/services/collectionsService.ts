@@ -10,6 +10,28 @@ export class CollectionsService {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
   }
 
+  async reconciliation(companyId: string) {
+    const facturas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
+      select: { id: true, monto_total: true },
+    });
+    let cartera = 0;
+    for (const f of facturas) cartera += (await this.saldoFactura(companyId, f.id, Number(f.monto_total))).saldo;
+    const lineas = await this.prisma.accountingLine.findMany({
+      where: { entry: { company_id: companyId, status: 'ASENTADO' }, account_code: { startsWith: '121' } },
+      select: { debit_amount: true, credit_amount: true },
+    });
+    const contabilidad = lineas.reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0);
+    const diferencia = Math.round((cartera - contabilidad) * 100) / 100;
+    return {
+      receivable: Math.round(cartera * 100) / 100,
+      accounting: Math.round(contabilidad * 100) / 100,
+      difference: diferencia,
+      reconciled: Math.abs(diferencia) <= 0.1,
+      invoiceCount: facturas.length,
+    };
+  }
+
   async invoiceCollections(companyId: string, invoiceId: string) {
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: invoiceId, company_id: companyId },
