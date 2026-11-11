@@ -213,7 +213,7 @@ export class EmitirComprobanteService {
   }
 
   /** Datos fiscales del emisor desde la base, jamás desde el formulario. */
-  private async datosDelEmisor(companyId: string): Promise<DatosEmisor> {
+  async datosDelEmisor(companyId: string): Promise<DatosEmisor> {
     const empresa = await this.prisma.company.findUnique({
       where: { id: companyId },
       select: {

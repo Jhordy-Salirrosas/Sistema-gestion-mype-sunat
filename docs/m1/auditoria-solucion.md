@@ -2812,3 +2812,41 @@ F1 completa: **127 suites / 921 pruebas aprobadas** en el front (base 126/913); 
 Focales F2: **2 suites / 13 pruebas aprobadas**. La spec nueva contiene cuatro casos: detalle de 400; conflicto específico; otros 409/sin detalle; nota parcial motivo 06 que recibe un 400, conserva datos y vuelve a usar exactamente la misma solicitud/clave al reintentar. Build del front y ESLint de los dos archivos F2 aprobados. Se mantienen los dos diagnósticos heredados del modal descritos en F1 (1 error y 1 aviso), sin incidencias nuevas.
 
 F2 completa y cierre: **128 suites / 925 pruebas aprobadas** en el front; back permanece en **291 suites / 2684 pruebas**, 4 suites / 38 omitidas y **12 snapshots intactos**. Builds aprobados; lint back aprobado, lint de F2 limpio y sin nuevas incidencias en F1. Se comprobó en seco la reversión del parche B1 sin modificar el árbol de trabajo; no se ejecutó ninguna reversión real. La aceptación del candidato XML sigue pendiente de la única prueba de producción de Emma. Ramas `fix/m1-notas-descuento` y `ferry/m1-notas-descuento`; ferry con F1/F2 separados, archivos en rutas exactas, manifiesto y SHA-256. Sin migraciones, emisiones, llamadas reales a SUNAT, PR, merges o despliegues por Codex. Las ramas de 8B ya mergeadas no se modifican.
+
+## Continuación: preparación local de notas — 11 de noviembre de 2026
+
+Base de construcción: main a4534b91768902392c2c3bba31a873d52817e006; rama fix/preparacion-local-notas. Fase 0 y decisiones conservadas.
+
+### P1 — Descripción canónica y recuperación del legado
+
+El helper compartido `descripcionCanonicaNota` valida primero el motivo con las mismas guardas de Parte 8B. Deriva ausentes/blancos de noteCatalogs en el adaptador de pantalla, conversión fiscal y preparación de creación; preserva literalmente descripciones personalizadas no vacías y no amplía catálogos habilitados.
+
+El worker completa la descripción de notas 07/08 almacenadas antes de generar XML. Bloquea/relee la fila y persiste payload e historial en una sola transacción, con `M1_NOTE_DESCRIPTION_COMPLETED`, etapa y texto derivado. Si la auditoría falla, no continúa. Una reentrega no duplica el evento cuando la descripción ya existe. No cambia estado fiscal, saldo ni marcador de transporte.
+
+Pruebas nuevas: 1 suite / 5 casos (matrices 07/08 × ausente/blanca/personalizada para ambas rutas, motivo inválido/no habilitado y trabajo que continúa tras la reparación auditable). Se adaptaron fixtures de pruebas antiguas a la validación anticipada, conservando sus aserciones de negocio.
+
+P1 verificado: suite general 289 suites / 2680 pruebas aprobadas más 3 suites / 15 pruebas PostgreSQL activadas explícitamente: **292 suites / 2695 pruebas; 12 snapshots**. Las restantes 4 suites / 38 pruebas quedan omitidas como en la base. TypeScript back aprobado tras regenerar el cliente Prisma del esquema vigente. No se añadió ni aplicó migración; se materializó el esquema existente exclusivamente en PostgreSQL local desechable.
+
+### P2 — Contenido fiscal antes del correlativo
+
+`validarContenidoFiscal` es una función pura compartida por el generador y `AtomicInvoiceCreationService.runEmission`. Valida campos obligatorios con los datos reales del emisor, después de las guardas de negocio y antes de reservar número; acepta el número provisional 0. El generador mantiene separada su exigencia de correlativo positivo. No se invoca el generador sobre el cálculo previo.
+
+Focal P2: **3 suites / 34 pruebas aprobadas**, incluidas **2 pruebas sobre PostgreSQL real**, una por ruta HTTP: razón social del emisor blanca produce `Dato fiscal ausente: razonSocialEmisor`; la serie permanece en 69, no existen comprobante ni respuesta idempotente y no se llama a publicación de trabajo. El esquema vigente se materializó en una base local desechable; no hay migraciones nuevas ni acceso a producción. TypeScript back aprobado. Se añaden 2 suites / 13 pruebas al total de P1.
+
+### P3 — Causa durable y presentación honesta
+
+Un fallo de preparación registra en TransactionHistory un código `M1_PREPARATION_*` y JSON con `codigo`, `etapa`, `categoria`, `recuperable` y `causa`. Las etapas distinguen carga, reparación de descripción, generación UBL, configuración del emisor, firma, ZIP, persistencia XML y validación local. La causa usa una lista cerrada de textos saneados: no persiste mensajes crudos de drivers, credenciales, XML ni payload. El puerto existente CdrPersistenceService escribe ERROR_RED e historial atómicamente y protege estados finales concurrentes. Si falla esa escritura, se propaga el fallo; no se despacha ni se simula una auditoría exitosa.
+
+El back presenta `PREPARACION_LOCAL` y «Bloqueado en preparación local», con categoría y recuperabilidad. Un evento posterior de transporte impide revivir un bloqueo antiguo. La incertidumbre explícita conserva máxima prioridad. En el front, lista/detalle/bitácora/Monitor muestran esa lectura; la bitácora distingue datos inválidos de certificado/configuración/infraestructura recuperables. El Monitor conserva Reintentar y añade filtro de preparación local. No hay estado fiscal nuevo, cambios de guarda de saldo ni liberación de reservas: ERROR_RED sigue consumiendo. Descarte terminal fuera de alcance.
+
+Focal P3 back: 5 suites / 65 pruebas más 1 suite / 10 pruebas de compuerta no concluyente aprobadas. Focal front: 2 suites / 19 pruebas aprobadas. Suite completa front final: **128 suites / 928 pruebas**, build aprobado. ESLint de los siete archivos: 0 errores, 1 aviso heredado de only-export-components en InvoiceMonitorPage.tsx; sin supresiones ni cambios de configuración. TypeScript y lint back aprobados.
+
+Cierre back: la corrida completa activando TEST_DATABASE_URL local obtuvo 293 suites / 2712 pruebas aprobadas y 2 fallos, 4 suites / 38 pruebas omitidas, 12 snapshots aprobados. Se corrigió únicamente la expectativa antigua de la prueba de fallo de auditoría (ahora se propaga el fallo durable) y su suite completa pasó 10/10. La suite outbox tuvo un fallo de umbral de latencia mientras corrían build/front; repetida aislada, sin cambiar umbral ni implementación, pasó 3/3 en PostgreSQL real. **Total validado final: 295 suites / 2714 pruebas; 12 snapshots**, incluidos ambos reruns. No quedan fallos pendientes. Primera corrida P1 agotó el heap predeterminado; las completas siguientes usaron NODE_OPTIONS=--max-old-space-size=6144.
+
+### Acción de producto: reanudación de FC01-00000016
+
+Tras el despliegue del back, FC01-00000016 se reanuda desde el Monitor: con rol ADMIN de la empresa, buscar el documento y pulsar **Reintentar**. Equivalente exacto: `POST /api/v1/invoices/{UUID-de-FC01-00000016}/retry-cdr`, con autenticación normal del tenant. El parámetro es el UUID del documento, no el número fiscal. La ruta existente rescata DLQ con rescatarDlq:true; si ya existe un trabajo activo no lo duplica. Revisar la respuesta encolado/resultadoCola antes de repetir.
+
+La preparación completa `descripcionMotivoNota` con «Devolución total» y registra `M1_NOTE_DESCRIPTION_COMPLETED` en el historial antes de generar. No editar el payload ni crear otra nota para sustituirla. No cambia transport_uncertain: si es true o histórico desconocido, el flujo existente concilia antes de cualquier reenvío; si la consulta no concluye, seguirá pendiente. Reanudar no garantiza aceptación fiscal y no libera saldo. Esta acción no se ejecutó en producción durante el encargo.
+
+Entrega front por `ferry/preparacion-local-notas` en el repositorio back, con siete rutas exactas y FERRY.md con hashes SHA-256. Base front actual: f7c4191b0c4dbf57364a6a56ed031f82752f4497; clon front validado: ed31e1e33526b90b3f94dacf3cf262c0faba2fa5. Sin push al repositorio front. Sin migraciones nuevas o aplicadas, emisiones reales, PRs, merges ni despliegues.
