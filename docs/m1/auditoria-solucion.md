@@ -2432,3 +2432,61 @@ Panel no pinta cifras/cero ni «Sin rechazos» sin datos. Monitor de agregados
 parte en carga y distingue respuesta vacía de fallo. Configuración pendiente/error
 viaja a los dos formularios y numeración. Focal front: 1 archivo/7 pruebas aprobadas
 con promesas diferidas. Reserva, guardas, consultas y datos fiscales intactos.
+
+#### Construcción — 6c-10
+
+Borrador inicial de precio a dos decimales, sin PATCH al cargar; Guardar explícito
+conserva las validaciones previas y aplica el visible. Formato visual central de
+8 dígitos en filas/selección/monitor y etiquetas accesibles. Identidad, correlativo,
+rutas y XML intactos. Focal front: 1 archivo/3 pruebas aprobadas, con guardado
+simulado y rechazo intacto de más de dos decimales. Selectores de pruebas ajustados
+al nuevo número visible.
+
+#### Cierre de Parte 6c — verificación y entrega
+
+Construidos los diez puntos tras confirmación de bloque. Bases congeladas:
+back bdb50766a3354980e399459811b0d4d067744526; front Carlos
+8c3c6880eb5c744ed88af1df9c4f1884c4740b1f.
+
+| Suite completa | Base aprobada | Final |
+|---|---:|---:|
+| Back, suites aprobadas | 278 | 279 |
+| Back, pruebas aprobadas | 2555 | 2561 |
+| Back, omitidas | 4 suites /38 pruebas | 4 suites /38 pruebas |
+| Snapshots fiscales | 12 | 12, archivos intactos |
+| Front, archivos aprobados | 118 | 123 |
+| Front, pruebas aprobadas | 866 | 885 |
+
+Cero fallos finales. Builds back/front OK; lint back limpio. ESLint de los archivos
+front revisados conserva los 2 errores y 6 avisos de su base, contrastados por
+stdin; no se cambian reglas/umbrales ni se silencian problemas. El conjunto revisado
+incluye Monitor (su aviso FastRefresh también existía); no se atribuye como nuevo.
+Regresión focal adicional tras consolidación: 2 archivos/9 pruebas, cierre
+compartido preservado en posición/icono/comportamiento con etiqueta Cerrar y carga.
+Cobertura local back del código nuevo intersectado con LCOV respecto de bdb5076:
+9/9 líneas (100%) y 32/35 condiciones, combinada 41/44 = 93.18%; no es un resultado
+remoto Sonar. Integraciones en PostgreSQL 16 local desechable; base eliminada al
+terminar. Solo migraciones YA existentes en esa base aislada; ninguna nueva,
+ninguna generación/aplicación en base compartida.
+
+| Punto | Commit back | Commit front de origen |
+|---|---|---|
+| 6c-1, hora real | d1ae508 | 4b52aa0 |
+| 6c-2, etiquetas | 54ed2b1 | 6fcfac9 |
+| 6c-3, panel | 0891e23 | 5d1bd1e |
+| 6c-4, detalles diagnósticos | 0dce3b2 | — (solo back) |
+| 6c-5, filtro único | c9d6709 | 360d4bb |
+| 6c-6, evidencia para vista | 2e8f903 | af992a4 |
+| 6c-7, detalle RA | 8619a02 | 68025fd |
+| 6c-8, ayuda notas | 43b0982 | 4d76a8b |
+| 6c-9, cargas honestas | fdf7666 | ae5a059 |
+| 6c-10, formato | Este commit | 390d549 |
+
+Entrega front exclusiva por ferry/m1-cierre-6c en el remoto back: diez commits
+separados (6c-4 documenta la dependencia exclusivamente back), FERRY.md completo,
+31 rutas exactas con SHA-256 contrastado byte a byte con el clon front. No push
+al remoto front. No cambios en UI común, Resiliencia, Contabilidad, Inventario,
+esquema, reglas fiscales, estados ni XML. retry-cdr/ESTADOS_REINTENTABLES intactos;
+la nueva evidencia solo se lee para presentar la acción. Nada de datos históricos
+reescritos, emisiones reales, SUNAT real, PR, merges o despliegues. No queda
+ningún punto abierto dentro del alcance aprobado.
