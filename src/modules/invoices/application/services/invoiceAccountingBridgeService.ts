@@ -578,7 +578,7 @@ export class InvoiceAccountingBridgeService {
   /** Glosa del asiento: describe el documento sin superar el largo de columna. */
   private glosaDe(factura: FacturaParaPuente, numero: string): string {
     const cliente = factura.cliente?.razonSocial?.trim() || 'cliente';
-    const glosa = `${factura.tipoComprobante === '07' ? 'Reverso de venta' : 'Venta'} según ${numero} a ${cliente}`;
+    const glosa = `${factura.tipoComprobante === '07' ? 'Reverso de venta' : factura.tipoComprobante === '08' ? 'Cargo' : 'Venta'} según ${numero} a ${cliente}`;
     return glosa.length > 200 ? `${glosa.slice(0, 197)}...` : glosa;
   }
 }
