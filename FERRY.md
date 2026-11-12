@@ -3,8 +3,8 @@
 Rama: `ferry/m1-8e-presentacion`.
 Base front: `1f03cbd73026f79f53c303162f5299996b369d9e`.
 Base back y de esta rama ferry: `76e043eb4d0b9dd1cbf20af34d898e35c81cc440`.
-Árbol de origen front probado: `abe1a815fa3d618709917923032e7ae97bec580f`.
-Back requerido: `fix/m1-8e-presentacion` en `2b4cebb2d2d6f2d369f360215667be1071dad5dc`.
+Árbol de origen front probado: `f96875cdbec9dd844c93e93d395526c38b1910ff`.
+Back requerido: `fix/m1-8e-presentacion` en `dde755fc5da903f7ea6c24563c1817dc46a23502`.
 
 Esta rama transporta archivos front en sus rutas originales sobre una base back. Trasladar únicamente los dieciocho archivos enumerados al repositorio front, después de aplicar el back; no fusionar el árbol back con el front. FERRY.md es el manifiesto y no se copia al producto. Sin cambios de dependencias ni migraciones.
 
@@ -75,7 +75,13 @@ E2 no requiere archivos front. El manifiesto se incorpora al commit E4 del ferry
 | `src/modules/invoices/lib/invoiceItems.ts` | `aecd4ce06be3cda8e1ec58835f48940ca5520671fea347ec86a6f650a2e5b6ea` |
 | `src/modules/invoices/pages/InvoiceEmissionPage.tsx` | `7c382245a27cf8de6a7b409c2b47c44a4827c15eeecadfad73cc947881b0b172` |
 | `test/unit/modules/inventory/inventory8eDocumentReference.test.tsx` | `003fd2acb28e579731ab3aa6e607522de74647bb8b5b638921b242433440eea1` |
-| `test/unit/modules/invoices/invoice8eCustomerIdentity.test.tsx` | `84337cca2ddb883e15c905488556f38afb3cb6cbc4165652dc82d21a5202d659` |
+| `test/unit/modules/invoices/invoice8eCustomerIdentity.test.tsx` | `67d265f826209065e364ba6017da2448077788cd08a4a58f2d20fabf56430f99` |
 | `test/unit/modules/invoices/invoice8eUnitValue.test.tsx` | `fd9657d3dee7937e7e9db44b2642193c050860422dab41b08be1e2f9c3e39261` |
 | `test/unit/modules/invoices/invoiceItemsLayout.test.tsx` | `ba3c98439f0b0ede4522d60d7f2a87880749d6ce3bc165c6f2f41ed5af649fb7` |
 | `test/unit/modules/invoices/invoiceNotasLineasOrigen.test.tsx` | `3d99da49f77a53347c0c520728c6a61ad84970279edf7a4229015ceb3a58aca6` |
+
+## Correcciones acotadas posteriores de CI
+
+Back: `dde755fc5da903f7ea6c24563c1817dc46a23502` precomputa el número en PLE 12.1 para evitar la duplicación marcada por Sonar; PLE 13.1 permanece intacto. Focales 20 suites / 134 pruebas y corrida completa 314 suites / 2931 pruebas / 12 snapshots aprobados (4 suites / 38 pruebas omitidas).
+
+Front: `f96875cdbec9dd844c93e93d395526c38b1910ff` añade únicamente el tipado de params.q en los dos mocks de apiClient.get de invoice8eCustomerIdentity.test.tsx. No cambian las aserciones ni el comportamiento de las pruebas. Typecheck `tsc -b --force` aprobado; focal 1 suite / 7 pruebas y corrida completa 134 suites / 967 pruebas aprobadas. La tabla anterior contiene el SHA-256 actualizado del único archivo front modificado; los otros diecisiete conservan su contenido.
