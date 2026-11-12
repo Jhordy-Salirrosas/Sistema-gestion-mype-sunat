@@ -367,6 +367,27 @@ export class PurchasesService {
     }));
   }
 
+  async supplierStatement(companyId: string, supplierDoc: string) {
+    const compras = await this.prisma.nationalPurchase.findMany({
+      where: { company_id: companyId, supplier_doc_number: supplierDoc.trim(), status: { not: 'ANULADA' } },
+      orderBy: { issue_date: 'desc' },
+      select: { id: true, purchase_number: true, document_serial: true, document_number: true, issue_date: true, total_amount: true, paid_amount: true, status: true },
+    });
+    const numeros = compras.map((c) => c.purchase_number);
+    const pagos = numeros.length === 0 ? [] : await this.prisma.treasuryMovement.findMany({
+      where: { company_id: companyId, source_module: 'PURCHASES', source_reference_id: { in: numeros }, direction: 'EGRESO' },
+      orderBy: { movement_date: 'desc' },
+    });
+    const total = compras.reduce((s, c) => s + Number(c.total_amount), 0);
+    const pagado = compras.reduce((s, c) => s + Number(c.paid_amount ?? 0), 0);
+    return {
+      supplierDoc: supplierDoc.trim(),
+      purchases: compras.map((c) => ({ id: c.id, number: c.purchase_number, document: `${c.document_serial}-${c.document_number}`, date: c.issue_date, total: Number(c.total_amount), paid: Number(c.paid_amount ?? 0), balance: Math.round((Number(c.total_amount) - Number(c.paid_amount ?? 0)) * 100) / 100, status: c.status })),
+      payments: pagos.map((p) => ({ id: p.id, date: p.movement_date, amount: Number(p.amount), method: p.payment_method, reference: p.source_reference_id, concept: p.concept })),
+      totals: { total: Math.round(total * 100) / 100, paid: Math.round(pagado * 100) / 100, balance: Math.round((total - pagado) * 100) / 100 },
+    };
+  }
+
   async listPayables(companyId: string) {
     const compras = await this.prisma.nationalPurchase.findMany({
       where: { company_id: companyId, status: { not: 'ANULADA' } },

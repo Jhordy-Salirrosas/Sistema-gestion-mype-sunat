@@ -52,6 +52,11 @@ export class PurchasesController {
     return this.purchasesService.payPurchase(requirePurchaseCompanyId(companyId), id, dto);
   }
 
+  @Get('suppliers/:doc/statement')
+  async supplierStatement(@Param('doc') doc: string, @CurrentCompany() companyId?: string) {
+    return this.purchasesService.supplierStatement(requirePurchaseCompanyId(companyId), doc);
+  }
+
   @Get('payables')
   async listPayables(@CurrentCompany() companyId?: string) {
     return this.purchasesService.listPayables(requirePurchaseCompanyId(companyId));
