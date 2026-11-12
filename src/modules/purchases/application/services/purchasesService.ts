@@ -367,6 +367,40 @@ export class PurchasesService {
     }));
   }
 
+  async createManualPayable(companyId: string, dto: { supplierName: string; supplierDocNumber: string; description: string; amount: number; issueDate?: string }) {
+    const monto = Math.round(Number(dto.amount) * 100) / 100;
+    if (!(monto > 0)) throw new BadRequestException('El monto debe ser mayor a cero.');
+    if (!dto.supplierName?.trim() || !dto.supplierDocNumber?.trim()) throw new BadRequestException('Proveedor y documento son obligatorios.');
+    const reglas = await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'GASTO', is_active: true }, orderBy: { line_order: 'asc' } });
+    const lineas = new Set(reglas.map((r) => r.line_order));
+    if (reglas.length === 0 || ![1, 3].every((n) => lineas.has(n))) {
+      throw new BadRequestException('Las reglas GASTO están incompletas: se requieren las líneas 1 y 3.');
+    }
+    const fecha = dto.issueDate ? new Date(dto.issueDate) : new Date();
+    const numero = `CXP-${Date.now().toString().slice(-8)}`;
+    const compra = await this.prisma.nationalPurchase.create({
+      data: {
+        company_id: companyId, purchase_number: numero, supplier_doc_type: '6', supplier_doc_number: dto.supplierDocNumber.trim(),
+        supplier_name: dto.supplierName.trim(), document_type_code: '00', document_serial: 'MANUAL', document_number: numero,
+        issue_date: fecha, accounting_date: fecha, net_amount: monto, igv_amount: 0, total_amount: monto,
+        status: 'REGISTRADA', paid_amount: 0, notes: `CxP manual: ${dto.description.trim()}`,
+      },
+    });
+    if (this.accounting) {
+      const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
+      const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      await this.accounting.execute({
+        companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `CxP manual ${dto.supplierName.trim()} · ${dto.description.trim()}`,
+        sourceModule: 'MANUAL_PAYABLE', journalCode: 'GAS', sourceReferenceId: compra.id, idempotencyKey: `manual-payable:${compra.id}`,
+        lines: [
+          { lineOrder: 1, accountCode: porOrden.get(1)!, accountName: 'Gasto', debitAmount: monto, creditAmount: 0 },
+          { lineOrder: 2, accountCode: porOrden.get(3)!, accountName: 'Cuentas por pagar', debitAmount: 0, creditAmount: monto },
+        ],
+      });
+    }
+    return compra;
+  }
+
   async supplierStatement(companyId: string, supplierDoc: string) {
     const compras = await this.prisma.nationalPurchase.findMany({
       where: { company_id: companyId, supplier_doc_number: supplierDoc.trim(), status: { not: 'ANULADA' } },
