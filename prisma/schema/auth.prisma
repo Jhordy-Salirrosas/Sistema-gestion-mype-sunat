@@ -23,6 +23,7 @@ model Company {
   sol_user              String
   sol_pass_encrypted    String
   cert_storage_url      String?
+  issuer_ruc            String?       @db.VarChar(11)
   issuer_environment    String?
   issuer_config_activated_at DateTime?
   issuer_sol_configured Boolean?

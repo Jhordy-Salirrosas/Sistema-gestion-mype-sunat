@@ -1,3 +1,4 @@
+import { resolveIssuerIdentity, issuerSolUsername, type IssuerIdentity } from './issuerIdentity';
 import {
   BadRequestException,
   Injectable,
@@ -18,6 +19,7 @@ export interface IssuerContext {
   readonly distrito_fiscal?: string | null;
 
   readonly ruc: string;
+  readonly rucSource?: IssuerIdentity['origen'];
   readonly version: string;
   readonly source: 'company' | 'deployment';
   readonly solSource?: 'company' | 'deployment';
@@ -34,6 +36,7 @@ export interface IssuerContext {
 export function deploymentContext(
   companyId: string,
   ruc: string,
+  rucSource: IssuerIdentity['origen'] = 'company',
 ): IssuerContext {
   const environment = normalizarEntorno(process.env.SUNAT_ENV);
   const user = process.env.SUNAT_SOL_USER;
@@ -44,6 +47,7 @@ export function deploymentContext(
   return Object.freeze({
     companyId,
     ruc,
+    rucSource,
     version: 'deployment',
     source: 'deployment',
     solSource: 'deployment',
@@ -58,7 +62,7 @@ export function deploymentContext(
     sol:
       user && password
         ? Object.freeze({
-            username: user.startsWith(ruc) ? user : ruc + user,
+            username: issuerSolUsername({ ruc, origen: rucSource }, user),
             password,
           })
         : null,
@@ -89,6 +93,7 @@ export class IssuerConfigResolver {
     company: {
       id: string;
       ruc: string;
+      issuer_ruc?: string | null;
       issuer_config_activated_at: Date | null;
       issuer_config_version: string | null;
       issuer_sol_configured?: boolean | null;
@@ -112,7 +117,9 @@ export class IssuerConfigResolver {
     const rawProfile = company.commercial_profile?.trim().toUpperCase();
     const commercialProfile: 'MAYORISTA' | 'MINORISTA' | null =
       rawProfile === 'MAYORISTA' || rawProfile === 'MINORISTA' ? rawProfile : null;
-    const fallback = Object.freeze({ ...deploymentContext(company.id, company.ruc),
+    const identity = resolveIssuerIdentity(company);
+    const fallback = Object.freeze({ ...deploymentContext(company.id, identity.ruc),
+      rucSource: identity.origen,
       local_anexo: company.local_anexo ?? null,
       domicilio_fiscal: company.domicilio_fiscal ?? null,
       ubigeo_fiscal: company.ubigeo_fiscal ?? null,
@@ -120,24 +127,27 @@ export class IssuerConfigResolver {
       provincia_fiscal: company.provincia_fiscal ?? null,
       distrito_fiscal: company.distrito_fiscal ?? null,
     });
+    const deploymentSol = () => fallback.sol ? Object.freeze({
+      ...fallback.sol, username: issuerSolUsername(identity, process.env.SUNAT_SOL_USER!),
+    }) : null;
     if (!company.issuer_config_activated_at) {
-      return commercialProfile ? Object.freeze({ ...fallback, commercialProfile }) : fallback;
+      const sol = deploymentSol();
+      const resolved = Object.freeze({ ...fallback, sol });
+      return commercialProfile ? Object.freeze({ ...resolved, commercialProfile }) : resolved;
     }
     const hasSol = company.issuer_sol_configured === true;
     if (hasSol && !(company.sol_user && company.sol_pass_encrypted))
       throw new BadRequestException('ISSUER_SOL_GROUP_INCOMPLETE');
     const sol = hasSol
       ? Object.freeze({
-          username: company.sol_user.startsWith(company.ruc)
-            ? company.sol_user
-            : company.ruc + company.sol_user,
+          username: issuerSolUsername(identity, company.sol_user),
           password: this.encryption.decrypt(
             company.sol_pass_encrypted,
             company.id,
             'sol_pass_encrypted',
           ),
         })
-      : fallback.sol;
+      : deploymentSol();
     const hasCert = company.issuer_cert_configured === true;
     let certificate = fallback.certificate;
     if (hasCert) {

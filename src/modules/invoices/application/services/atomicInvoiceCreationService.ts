@@ -1,3 +1,4 @@
+import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 import { validarContenidoFiscal } from '../../validateInvoiceContent';
 import { traducirEmision } from './emitirComprobanteAdapter';
 import { validarReservaVenta } from './invoiceStockReservation';
@@ -32,8 +33,8 @@ export class AtomicInvoiceCreationService {
 
   create(dto: CreateInvoiceDto, companyId: string, key?: string): Promise<InvoicePersistenceResult> {
     return this.execute('fiscal', dto, companyId, key, async (tx) => {
-      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ruc: true } });
-      if (!company || company.ruc !== dto.ruc_emisor) throw new BadRequestException('ISSUER_IDENTITY_MISMATCH');
+      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ruc: true, issuer_ruc: true } });
+      if (!company || resolveIssuerIdentity(company).ruc !== dto.ruc_emisor) throw new BadRequestException('ISSUER_IDENTITY_MISMATCH');
       const result = await this.runEmission(tx, fiscalToEmission(dto), companyId);
       if (result.monto_total !== dto.monto_total) throw new BadRequestException('El total fiscal no coincide con la liquidación del servidor');
       const created = await tx.invoice.findUniqueOrThrow({ where: { id: result.id },

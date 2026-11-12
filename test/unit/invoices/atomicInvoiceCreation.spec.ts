@@ -160,3 +160,23 @@ it('7M publicación null aborta antes de confirmar respuesta/idempotencia', asyn
  expect(h.tx.invoiceCreationRequest.create).not.toHaveBeenCalled();
  expect(h.tx.invoiceItem.createMany).not.toHaveBeenCalled();
 });
+
+it.each(['create', 'emitir'] as const)('pin emisor en %s llega al payload y al RUC persistido sin cambiar la empresa', async route => {
+  const h = harness();
+  const company = { ruc: '20614142503', issuer_ruc: '20601234567', legal_name: 'Empresa', ...fakeFiscalAddress };
+  h.tx.company.findUnique.mockResolvedValue(company as never);
+  const dto = { ...fiscal, ruc_emisor: company.issuer_ruc, payload_ubl: { ...fiscal.payload_ubl, rucEmisor: company.issuer_ruc } };
+  if (route === 'create') await h.service.create(dto as never, 'empresa', 'pinned-request-0001');
+  else await h.service.emitir(pantalla as never, 'empresa', 'pinned-request-0001');
+  const data = h.tx.invoice.create.mock.calls[0][0].data;
+  expect(data).toMatchObject({ ruc_emisor: company.issuer_ruc, payload_ubl: { rucEmisor: company.issuer_ruc } });
+  expect(company.ruc).toBe('20614142503');
+});
+it('con pin la API rechaza incluso el RUC compartido antes de reservar número o publicar', async () => {
+  const h = harness();
+  h.tx.company.findUnique.mockResolvedValue({ ruc: fiscal.ruc_emisor, issuer_ruc: '20601234567', ...fakeFiscalAddress } as never);
+  await expect(h.service.create(fiscal as never, 'empresa', 'pinned-request-0002')).rejects.toThrow('ISSUER_IDENTITY_MISMATCH');
+  expect(h.tx.$queryRaw).not.toHaveBeenCalled();
+  expect(h.tx.invoice.create).not.toHaveBeenCalled();
+  expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
+});
