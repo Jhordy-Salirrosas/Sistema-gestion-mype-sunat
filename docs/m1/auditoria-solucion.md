@@ -3116,3 +3116,19 @@ Build back `npx nest build` y build front `npm run build` aprobados. Lint back s
 - `test/unit/modules/invoices/invoiceItemsLayout.test.tsx`
 
 D2, D3 y D4 no modifican archivos del producto front. FERRY.md añade únicamente el manifiesto e instrucciones de traslado y los SHA-256 finales de los cinco archivos front.
+
+## Parte 8E — presentación
+
+Base back `76e043eb4d0b9dd1cbf20af34d898e35c81cc440`; front `1f03cbd73026f79f53c303162f5299996b369d9e`. Orden de construcción E1, E2, E3 y E4. Los cambios de producto front se entregan por ferry. Sin emisiones reales, PRs ni migraciones.
+
+### E1 — corrección fronteriza autorizada en Inventario
+
+Se autoriza expresamente el ajuste aditivo y compatible de Inventario por su efecto directo sobre M1. Las vistas de Kardex y movimientos usan un formateador de representación que conserva un número completo y añade la serie cuando recibe un correlativo suelto. Se conservan los fallbacks de cada vista y las referencias manuales completas. Los exportadores separan el prefijo únicamente cuando coincide con la serie declarada; los PLE 12.1/13.1 reciben el número sin la serie duplicada. No se modifica document_number guardado, el contrato persistido de M1, la lógica de movimientos, el costo ni el saldo. La composición se reutiliza en las vistas relacionadas y en los CSV/PLE front. Diez regresiones back prueban ambos PLE y la ausencia de mutación de sus inputs; siete front cubren formatos, fallbacks y el render real del Kardex.
+
+### E2 — glosa de reversión de venta
+
+El asiento nuevo de una NC tipo 07 usa «Reverso de venta según…». Las ventas de otros tipos, el cliente por defecto, el máximo de 200 caracteres y la elipsis conservan su comportamiento. No cambian importes, cuentas, claves de idempotencia ni la glosa de reversión de costo. El asiento 63 histórico conserva su glosa: no se renombra ningún asiento guardado. Siete regresiones ejercitan la generación del asiento y el reconocimiento de un asiento ya existente.
+
+### E3 — edición coherente del valor unitario
+
+El campo muestra y rotula valor unitario sin IGV; en gratuitas muestra el valor referencial. Al editar esa base, actualizarItem deriva el precio con la afectación de la línea: gravada onerosa × 1.18, exonerada/inafecta igual a la base; gratuita conserva precio cobrado cero. Se mantiene la conversión inversa de un cambio explícito de precio y la precisión unitaria existente. Catálogo y precargas de notas actualizan total y payload de forma coherente. La grilla gratuita de 8D mantiene referencia editable e ICBPER independiente. No se relajan las guardas comerciales del servidor. Las expectativas anteriores de etiqueta/precio mostrado se adaptan al contrato de base sin IGV, conservando la intención de los controles.
