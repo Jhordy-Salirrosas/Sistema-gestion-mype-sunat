@@ -13,6 +13,7 @@ import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { PurchasesService } from '../../application/services/purchasesService';
 import { CreatePurchaseDto } from '../../application/dto/createPurchaseDto';
 import { PayPurchaseDto } from '../../application/dto/payPurchaseDto';
+import { CreateManualPayableDto } from '../../application/dto/createManualPayableDto';
 import {
   mapPurchaseRecord,
   mapPurchasesListResponse,
@@ -55,6 +56,12 @@ export class PurchasesController {
   @Get('suppliers/:doc/statement')
   async supplierStatement(@Param('doc') doc: string, @CurrentCompany() companyId?: string) {
     return this.purchasesService.supplierStatement(requirePurchaseCompanyId(companyId), doc);
+  }
+
+  @Post('payables')
+  @HttpCode(HttpStatus.CREATED)
+  async createManualPayable(@Body() dto: CreateManualPayableDto, @CurrentCompany() companyId?: string) {
+    return this.purchasesService.createManualPayable(requirePurchaseCompanyId(companyId), dto);
   }
 
   @Get('payables')
