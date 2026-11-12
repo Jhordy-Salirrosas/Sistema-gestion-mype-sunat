@@ -1,3 +1,5 @@
+import { InvoiceMoneyInput } from '../components/InvoiceMoneyInput';
+import { errorMontoDeposito } from '../lib/invoiceDepositValidation';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Page, PageHeader, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui';
@@ -15,8 +17,12 @@ export default function InvoiceDetractionsPage() {
   const [form, setForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), constancia: '' });
   const [error, setError] = useState('');
   const { data = [], isLoading } = useQuery({ queryKey: ['detractions', period], queryFn: async () => (await apiClient.get<Detraccion[]>('/invoices/detractions', { params: { period } })).data });
+  const errorMonto = selected ? errorMontoDeposito(Number(form.amount), selected.detraction) : undefined;
   const registrar = useMutation({
-    mutationFn: async () => (await apiClient.post(`/invoices/detractions/${selected!.id}`, { amount: Number(form.amount || selected!.detraction), date: form.date, constancia: form.constancia })).data,
+    mutationFn: async () => {
+      if (!selected || errorMonto) throw new Error(errorMonto ?? 'Seleccione un comprobante.');
+      return (await apiClient.post(`/invoices/detractions/${selected.id}`, { amount: Number(form.amount), date: form.date, constancia: form.constancia })).data;
+    },
     onSuccess: async () => { setSelected(null); setForm({ amount: '', date: new Date().toISOString().slice(0, 10), constancia: '' }); setError(''); await qc.invalidateQueries({ queryKey: ['detractions'] }); },
     onError: (e: any) => setError(e?.response?.data?.message ?? 'No se pudo registrar el depósito.'),
   });
@@ -31,7 +37,7 @@ export default function InvoiceDetractionsPage() {
     </TableBody></Table></Card>
     <Dialog open={selected !== null} onOpenChange={(open) => { if (!open) setSelected(null); }}>
       <DialogContent><DialogHeader><DialogTitle>Depósito de detracción</DialogTitle><DialogDescription>{selected?.numero} · {selected?.customer} · Detracción {selected ? formatCurrency(selected.detraction, 'PEN') : ''}</DialogDescription></DialogHeader>
-        <div className="space-y-3"><label className="text-xs block">Monto<Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label><label className="text-xs block">Fecha<Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label className="text-xs block">Constancia<Input value={form.constancia} onChange={(e) => setForm({ ...form, constancia: e.target.value })} /></label><Button onClick={() => registrar.mutate()} disabled={registrar.isPending}>{registrar.isPending ? 'Guardando…' : 'Guardar depósito'}</Button></div>
+        <div className="space-y-3"><label className="text-xs block">Monto<InvoiceMoneyInput aria-invalid={Boolean(errorMonto)} aria-describedby="deposit-amount-error" value={Number(form.amount)} onValue={(amount) => setForm({ ...form, amount: String(amount) })} /></label>{errorMonto && <p id="deposit-amount-error" role="alert" className="text-xs text-destructive">{errorMonto}</p>}<label className="text-xs block">Fecha<Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label className="text-xs block">Constancia<Input value={form.constancia} onChange={(e) => setForm({ ...form, constancia: e.target.value })} /></label><Button onClick={() => registrar.mutate()} disabled={registrar.isPending || Boolean(errorMonto)}>{registrar.isPending ? 'Guardando…' : 'Guardar depósito'}</Button></div>
       </DialogContent>
     </Dialog>
   </Page>;
