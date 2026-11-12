@@ -12,6 +12,14 @@ describe('GenerateAccountingEntryUseCase', () => {
       saveEntry: jest.fn().mockImplementation(async (entry) => entry),
       findByCompany: jest.fn().mockResolvedValue([]),
       deleteById: jest.fn().mockResolvedValue(true),
+      findAccounts: jest.fn().mockResolvedValue([
+        { code: '1212', parentCode: '12', isActive: true },
+        { code: '40111', parentCode: '4011', isActive: true },
+        { code: '70121', parentCode: '7012', isActive: true },
+        { code: '6012', parentCode: '60', isActive: true },
+        { code: '60121', parentCode: '6012', isActive: true },
+        { code: '60122', parentCode: '6012', isActive: true },
+      ] as never),
     } as unknown as jest.Mocked<IAccountingRepositoryPort>;
 
     useCase = new GenerateAccountingEntryUseCase(mockRepository);
@@ -100,5 +108,27 @@ describe('GenerateAccountingEntryUseCase', () => {
         ],
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rechaza asiento manual en cuenta de mayor con subcuentas', async () => {
+    mockRepository.findAccounts.mockResolvedValue([
+      { code: '6012', parentCode: null, isActive: true },
+      { code: '60121', parentCode: '6012', isActive: true },
+      { code: '60122', parentCode: '6012', isActive: true },
+    ] as never);
+    await expect(useCase.execute({
+      companyId: 'company-uuid-1', period: '2026-03', entryDate: '2026-03-10T00:00:00.000Z',
+      glosa: 'Asiento manual', sourceModule: 'MANUAL',
+      lines: [{ lineOrder: 1, accountCode: '6012', accountName: 'Compras', debitAmount: 10, creditAmount: 0 }],
+    })).rejects.toThrow('es de mayor y tiene subcuentas');
+  });
+
+  it('rechaza asiento manual en cuenta inactiva', async () => {
+    mockRepository.findAccounts.mockResolvedValue([{ code: '60121', parentCode: '6012', isActive: false }] as never);
+    await expect(useCase.execute({
+      companyId: 'company-uuid-1', period: '2026-03', entryDate: '2026-03-10T00:00:00.000Z',
+      glosa: 'Asiento manual', sourceModule: 'MANUAL',
+      lines: [{ lineOrder: 1, accountCode: '60121', accountName: 'Compras', debitAmount: 10, creditAmount: 0 }],
+    })).rejects.toThrow('está inactiva');
   });
 });
