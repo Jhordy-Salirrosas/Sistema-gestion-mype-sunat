@@ -11,6 +11,7 @@ it('6G alta conserva bloqueo previo y asocia errores/foco sin cambiar reglas ni 
  expect(numero.getAttribute('aria-invalid')).toBe('true'); expect(nombre.getAttribute('aria-describedby')).toBe('partner-nombre-error');
  expect((screen.getByRole('button', { name: 'Guardar tercero' }) as HTMLButtonElement).disabled).toBe(true);
  await waitFor(() => expect(document.activeElement).toBe(numero));
+ fireEvent.change(screen.getByLabelText('Tipo de documento'), { target: { value: '1' } });
  fireEvent.change(numero, { target: { value: '12345678' } }); fireEvent.change(nombre, { target: { value: 'Cliente' } });
  expect((screen.getByRole('button', { name: 'Guardar tercero' }) as HTMLButtonElement).disabled).toBe(false);
 });
