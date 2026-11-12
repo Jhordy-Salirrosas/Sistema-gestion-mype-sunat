@@ -1,3 +1,4 @@
+import { errorConfiguracionFiscal } from '../lib/invoiceConfigurationValidation';
 import { useState } from 'react';
 import { Alert, AlertDescription, Badge, Button, Card, PageField, PageText } from '@/components/ui';
 import type { ConfiguracionBackend, ConfiguracionInput, EntornoFiscal, PerfilComercial } from '../hooks/useInvoiceConfig';
@@ -45,6 +46,8 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
     event.preventDefault();
     setError(''); setGuardado(false); setEnviando(true);
     try {
+      const problema = errorConfiguracionFiscal(fiscal);
+      if (problema) throw new Error(problema);
       const input: ConfiguracionInput = {};
       if (entorno && entorno !== config.entorno) input.entorno = entorno as EntornoFiscal;
       const perfilActual = config.perfil_comercial ?? '';
@@ -88,12 +91,12 @@ export const InvoiceIssuerConfigForm = ({ config, ruc, guardar }: {
         </select>
       </PageField>
       <PageField label="Cuenta de detracciones del Banco de la Nación" htmlFor="cfg-cuenta-bn"><input id="cfg-cuenta-bn" className={clase} inputMode="numeric" pattern="[0-9]{11}" maxLength={11} value={fiscal.cuenta_banco_nacion} onChange={e => setFiscal({ ...fiscal, cuenta_banco_nacion: e.target.value })} /><p>Cuenta propia de la empresa (11 dígitos). Sin ella se bloquean las operaciones sujetas a SPOT.</p></PageField>
-      <PageField label="Local anexo (Catálogo 59)" htmlFor="cfg-local_anexo"><input id="cfg-local_anexo" className={clase} maxLength={4} value={fiscal.local_anexo} onChange={e => setFiscal({ ...fiscal, local_anexo: e.target.value })} /></PageField>
-      <PageField label="Domicilio fiscal" htmlFor="cfg-domicilio_fiscal"><input id="cfg-domicilio_fiscal" className={clase} maxLength={500} value={fiscal.domicilio_fiscal} onChange={e => setFiscal({ ...fiscal, domicilio_fiscal: e.target.value })} /></PageField>
-      <PageField label="Ubigeo fiscal" htmlFor="cfg-ubigeo_fiscal"><input id="cfg-ubigeo_fiscal" className={clase} maxLength={6} value={fiscal.ubigeo_fiscal} onChange={e => setFiscal({ ...fiscal, ubigeo_fiscal: e.target.value })} /></PageField>
-      <PageField label="Departamento fiscal" htmlFor="cfg-departamento_fiscal"><input id="cfg-departamento_fiscal" className={clase} maxLength={100} value={fiscal.departamento_fiscal} onChange={e => setFiscal({ ...fiscal, departamento_fiscal: e.target.value })} /></PageField>
-      <PageField label="Provincia fiscal" htmlFor="cfg-provincia_fiscal"><input id="cfg-provincia_fiscal" className={clase} maxLength={100} value={fiscal.provincia_fiscal} onChange={e => setFiscal({ ...fiscal, provincia_fiscal: e.target.value })} /></PageField>
-      <PageField label="Distrito fiscal" htmlFor="cfg-distrito_fiscal"><input id="cfg-distrito_fiscal" className={clase} maxLength={100} value={fiscal.distrito_fiscal} onChange={e => setFiscal({ ...fiscal, distrito_fiscal: e.target.value })} /></PageField>
+      <PageField label="Local anexo (Catálogo 59)" htmlFor="cfg-local_anexo"><input id="cfg-local_anexo" inputMode="numeric" pattern="[0-9]{4}" className={clase} maxLength={4} value={fiscal.local_anexo} onChange={e => setFiscal({ ...fiscal, local_anexo: e.target.value })} /></PageField>
+      <PageField label="Domicilio fiscal" htmlFor="cfg-domicilio_fiscal"><input id="cfg-domicilio_fiscal" className={clase} maxLength={200} value={fiscal.domicilio_fiscal} onChange={e => setFiscal({ ...fiscal, domicilio_fiscal: e.target.value })} /></PageField>
+      <PageField label="Ubigeo fiscal" htmlFor="cfg-ubigeo_fiscal"><input id="cfg-ubigeo_fiscal" inputMode="numeric" pattern="[0-9]{6}" className={clase} maxLength={6} value={fiscal.ubigeo_fiscal} onChange={e => setFiscal({ ...fiscal, ubigeo_fiscal: e.target.value })} /></PageField>
+      <PageField label="Departamento fiscal" htmlFor="cfg-departamento_fiscal"><input id="cfg-departamento_fiscal" className={clase} maxLength={30} value={fiscal.departamento_fiscal} onChange={e => setFiscal({ ...fiscal, departamento_fiscal: e.target.value })} /></PageField>
+      <PageField label="Provincia fiscal" htmlFor="cfg-provincia_fiscal"><input id="cfg-provincia_fiscal" className={clase} maxLength={30} value={fiscal.provincia_fiscal} onChange={e => setFiscal({ ...fiscal, provincia_fiscal: e.target.value })} /></PageField>
+      <PageField label="Distrito fiscal" htmlFor="cfg-distrito_fiscal"><input id="cfg-distrito_fiscal" className={clase} maxLength={30} value={fiscal.distrito_fiscal} onChange={e => setFiscal({ ...fiscal, distrito_fiscal: e.target.value })} /></PageField>
       <PageField label="Usuario SOL" htmlFor="cfg-sol-user"><input id="cfg-sol-user" className={clase} autoComplete="off" maxLength={64} value={solUser} onChange={(e) => setSolUser(e.target.value)} />
         <p>El usuario actual no se publica. Escriba solo para reemplazarlo.</p></PageField>
       <PageField label="Nueva contraseña SOL" htmlFor="cfg-sol-password"><input id="cfg-sol-password" className={clase} type="password" autoComplete="new-password" maxLength={256} value={solPassword} onChange={(e) => setSolPassword(e.target.value)} />
