@@ -390,7 +390,11 @@ export class InvoiceDownloadService {
     );
     const total = fila.monto_total !== undefined && fila.monto_total !== null ? Number(fila.monto_total) : typeof payload.montoTotal === 'number' ? payload.montoTotal : centimos(gravadoR + igv + exonerado + inafecto + icbper);
     const tipoDocCliente = fila.customer_identity_type;
-    const hashCpe = typeof payload.hashCpe === 'string' ? payload.hashCpe : /<(?:\w+:)?DigestValue[^>]*>([^<]+)</.exec(fila.xml_storage_url ?? '')?.[1]?.trim();
+    const xmlFirmado = fila.xml_storage_url?.trimStart().startsWith('<') ? fila.xml_storage_url : null;
+    // El XML conservado manda; un payload no puede sustituir su digest ni suplirlo si falta en ese XML.
+    const hashCpe = xmlFirmado
+      ? /<(?:\w+:)?DigestValue[^>]*>([^<]+)</.exec(xmlFirmado)?.[1]?.trim()
+      : typeof payload.hashCpe === 'string' ? payload.hashCpe : undefined;
 
     const fecha = fila.fecha_emision.toISOString().slice(0, 10);
     const qrBase64 = tipoDocCliente && fila.customer_identity_number && hashCpe ? await this.qr.generarPng({
