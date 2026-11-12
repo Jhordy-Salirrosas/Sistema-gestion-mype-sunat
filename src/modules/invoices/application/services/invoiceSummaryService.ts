@@ -1,3 +1,4 @@
+import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 /**
  * Vista previa de resúmenes diarios (RC) y comunicaciones de baja (RA) — M1.
  *
@@ -346,7 +347,7 @@ export class InvoiceSummaryService {
     };
   }
 
-  /** Cabecera del envío, con el RUC de la empresa. */
+  /** Cabecera del envío, con la identidad efectiva del emisor M1. */
   private async cabecera(
     companyId: string,
     fechaReferencia: string,
@@ -356,7 +357,7 @@ export class InvoiceSummaryService {
   ): Promise<CabeceraResumen> {
     const empresa = await db.company.findUnique({
       where: { id: companyId },
-      select: { ruc: true, legal_name: true },
+      select: { ruc: true, issuer_ruc: true, legal_name: true },
     });
 
     if (!empresa) {
@@ -364,7 +365,7 @@ export class InvoiceSummaryService {
     }
 
     return {
-      rucEmisor: empresa.ruc,
+      rucEmisor: resolveIssuerIdentity(empresa).ruc,
       razonSocialEmisor: empresa.legal_name,
       correlativo,
       fechaResumen: fechaReferencia,

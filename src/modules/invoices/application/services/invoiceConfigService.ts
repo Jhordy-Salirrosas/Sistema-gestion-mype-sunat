@@ -47,6 +47,7 @@ export interface ConfiguracionFiscal {
   sol_password_configurada?: boolean;
   cert_password_configurada?: boolean;
   ruc?: string;
+  origen_ruc?: 'issuer_config' | 'company';
   local_anexo?: string | null;
   cuenta_banco_nacion?: string | null;
   domicilio_fiscal?: string | null;
@@ -98,6 +99,9 @@ export class InvoiceConfigService {
     const motor = await diagnosticarSfs();
     const domicilioConfigurado = Boolean(context && /^\d{4}$/.test(context.local_anexo ?? '') && /^\d{6}$/.test(context.ubigeo_fiscal ?? '') && [context.domicilio_fiscal, context.departamento_fiscal, context.provincia_fiscal, context.distrito_fiscal].every(v => v?.trim()));
     const checklist: EstadoConfiguracion[] = [
+      { clave: 'ruc_emisor', descripcion: 'RUC del emisor M1', obligatorio: true,
+        configurado: Boolean(context && /^[0-9]{11}$/.test(context.ruc)),
+        detalle: `RUC emisor: ${context?.ruc ?? 'sin configurar'} · Origen: ${context?.rucSource === 'issuer_config' ? 'configuración propia de M1' : 'RUC de la empresa'}` },
       { clave: 'domicilio_emisor', descripcion: 'Local anexo y domicilio fiscal del emisor', obligatorio: true,
         configurado: domicilioConfigurado,
         detalle: domicilioConfigurado ? `Local anexo ${context!.local_anexo}; ubigeo ${context!.ubigeo_fiscal}; ${context!.domicilio_fiscal}; ${context!.departamento_fiscal} / ${context!.provincia_fiscal} / ${context!.distrito_fiscal}` : 'Complete los datos fiscales reales de la empresa; su ausencia bloquea antes de numerar' },
@@ -124,6 +128,7 @@ export class InvoiceConfigService {
         ? Boolean(context.certificate)
         : Boolean(process.env.CERT_PASSWORD),
       ruc: context?.ruc,
+      origen_ruc: context?.rucSource ?? 'company',
       local_anexo: context?.local_anexo ?? null,
       cuenta_banco_nacion: empresa?.detraction_account ?? null,
       domicilio_fiscal: context?.domicilio_fiscal ?? null,
