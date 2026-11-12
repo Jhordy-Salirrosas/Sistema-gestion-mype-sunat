@@ -1,10 +1,10 @@
-# Deuda: el validador XSL no valida
+# Histórico cerrado: sustitución del validador XSL por SFS oficial
 
-**Detectado:** 31 de octubre de 2026, durante TA-62.
-**Estado:** abierto. Requiere tarea propia.
-**Afecta a:** TA-31 (validador XSL), TA-58 (compuerta previa al envío).
+**Estado:** deuda original cerrada por TA-70. La validación por defecto utiliza el juego oficial completo de assets/sunat-sfs mediante el ejecutor SFS y bloquea el envío si no puede validar. Los síntomas y propuestas siguientes se conservan como diagnóstico histórico, no como descripción del motor vigente.
 
----
+**Actualización Parte 8F-F2:** se retiraron la compatibilidad explícita SUNAT_XSL_DIR y el árbol assets/sunat-xsl. El SFS oficial es el único motor del validador y de su diagnóstico. La disponibilidad de Python/lxml y del juego oficial sigue siendo un requisito operativo; su ausencia bloquea el envío.
+
+## Diagnóstico histórico (31 de octubre de 2026)
 
 ## 1. El síntoma
 

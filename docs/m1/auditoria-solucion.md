@@ -1208,9 +1208,7 @@ de las gratuitas). No se modifica la estructura ni las fórmulas del generador.
 Ambas rutas pasan por la guarda común: un producto sin precio impide numerar,
 persistir y encolar. Un precio de venta enviado que difiere del catálogo se
 rechaza con petición de actualizarlo: tampoco se sustituye silenciosamente un
-precio obsoleto. Los descuentos siguen su contrato existente. Las notas 07/08
-quedan expresamente fuera del cotejo de precio de catálogo y no se reprecian:
-conservan las líneas/precios del origen, incluso si hoy no hay sale_price.
+precio obsoleto. Los descuentos siguen su contrato existente. Las notas 07/08 quedan fuera del cotejo de precio de venta vigente y no se reprecian desde el catálogo. La precarga de la interfaz toma datos del comprobante de origen, pero el back no garantiza en todos los contratos la igualdad de sus precios unitarios con los del origen. Las guardas de referencia, saldo monetario y cantidades conservan su alcance; no equivalen a esa garantía de precios.
 
 **Almacén:** los dos formularios muestran el selector, con ALM-01 inicial
 explícito, y consultan los almacenes activos de la empresa en M1. No se elige
@@ -1468,16 +1466,7 @@ backoff, retry-cdr ni ESTADOS_REINTENTABLES. Los harness de pruebas se adaptan a
 contrato nuevo y a la traza adicional, conservando las aserciones de los cuatro
 envíos y esperas 5/15/45 s cuando la consulta confirma ausencia.
 
-**Decisión y persistencia sin migración:** M1 clasifica el historial COMPLETO
-(`transaction_history`, sin límite de filas). Un evento explícito de bloqueo
-previo XSL, sin inicio/resultado de transporte posterior, es
-BLOQUEO_PREVIO_PROBADO: se resuelve el marcador presunto y se permite el envío.
-Un inicio/resultado de transporte sin resultado final es ENVIO_INCIERTO.
-Lo demás es EVIDENCIA_INSUFICIENTE: conserva la protección y exige consulta.
-Un empate de fecha entre bloqueo y transporte no autoriza a descartar el envío.
-Ni el número de intento ni la ausencia de eventos de red prueban por sí solos
-que nunca salió. Rescates manuales y consultas inconclusas no se cuentan como
-intentos de transporte.
+La clasificación inicial de Parte 5b se basaba en el historial completo, pero podía degradar una incertidumbre previa al aparecer un bloqueo local posterior. La Parte 8C-C1 corrigió esa limitación: separa evidencia histórica de envío e incertidumbre pendiente; un bloqueo local posterior no borra ninguna. Solo una resolución concluyente cierra la incertidumbre. M1_TRANSPORT_UNCERTAIN impide concluir que no hubo envío, pero no acredita por sí solo un envío.
 
 Todo envío individual, incluido el flujo normal, confirma el evento durable
 `M1_TRANSPORT_STARTED` en el historial antes de invocar sendBill. Si falla esa
@@ -1574,9 +1563,7 @@ Una nota puede contener una línea histórica/inactiva perfectamente válida.
 Propuesta: fuente M1 compartida y estado de carga/error explícito; distinguir
 catálogo de venta, existencia de inventario y línea histórica del origen. Para
 notas, recuperar existencia/stock desde esa misma consulta M1 con filtro adecuado
-al origen, sin ofrecer productos no vendibles para nuevas ventas. Conservar
-precios/unidad/afectación del origen; advertencia específica cuando sea histórico,
-y nunca afirmar inexistencia si la consulta falla o todavía carga.
+al origen, sin ofrecer productos no vendibles para nuevas ventas. La precarga debe conservar los valores fiscales del origen. La comparación obligatoria de precios contra el origen en todos los contratos del back queda como alcance pendiente, independiente de la validación de cantidades y saldo ya construida. Mantener advertencia específica cuando sea histórico y nunca afirmar inexistencia si la consulta falla o todavía carga.
 Pruebas: placeholder vacío, reapertura, dos decimales sin mutación fiscal,
 producto común, carga/error e histórico inactivo. Sin migración ni código de
 Inventario; solo lectura de sus datos por la interfaz M1 actual.
@@ -2415,6 +2402,8 @@ acreditan envío. La tabla usa la evidencia junto al estado existente; ni retry-
 ni su guarda ni Resiliencia cambian. Focales: back 1 suite/5 pruebas y front
 1 archivo/3 pruebas aprobadas. Escenarios FD01-1 sin transporte y FD01-2 con inicio.
 
+Esta proyección debe leerse con la corrección posterior de 8C-C1: no acreditar envío por una consulta incierta no autoriza a descartar la incertidumbre que esa consulta mantiene pendiente.
+
 #### Construcción — 6c-7
 
 Selección RA muestra tipo/código, total y estado desde la vista previa ya existente.
@@ -2541,12 +2530,9 @@ conserva las mismas reglas monetarias. Focal: 3 suites / 77 pruebas aprobadas.
 
 ### 7E — reserva durable derivada y exclusión del stock
 
-Ambas rutas de creación bloquean el almacén/saldos y descuentan, del disponible,
-las unidades de ventas persistidas no descargadas. Usa invoice/items/movimientos
-existentes: sin tabla nueva ni reservas volátiles. Rechazos/anulados liberan la
-reserva; incertidumbre y aceptación con puente pendiente la conservan. El saldo
-ya descargado no se descuenta dos veces. Los históricos sin almacén siguen la
-misma resolución ALM-01 del puente; no se reparan saldos históricos.
+La reserva de stock se deriva de ventas persistidas no descargadas y se computa para los estados distintos de RECHAZADO y ANULADO. ERROR_RED conserva esa reserva pendiente; una aceptación con puente pendiente también. La reserva no se descuenta de nuevo si la descarga ya existe. Esta regla no garantiza conservar stock para un documento RECHAZADO que mantenga una incertidumbre de transporte: el filtro actual lo excluye por estado. La separación entre estado fiscal e incertidumbre no modifica por sí sola esa guarda.
+
+Usa invoice/items/movimientos existentes, sin tabla nueva ni reservas volátiles; no se reparan saldos históricos.
 Focal: 3 suites / 26 pruebas aprobadas. PostgreSQL real local: stock 1 y dos
 creaciones simultáneas confirman solo una; dos NC simultáneas sobre OBSERVADO
 confirman solo una devolución. Sin SOAP ni consumidor. La exclusión compartida
