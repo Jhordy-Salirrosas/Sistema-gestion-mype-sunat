@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { referenciaGratuita } from './freeOperationReference';
-import { dividirUnitario, dividirMoneda, formatoMoneda, formatoUnitario, multiplicarMoneda, redondearMoneda } from './money';
+import { dividirUnitario, dividirPrecioAlternativo, formatoMoneda, formatoUnitario, multiplicarMoneda, redondearMoneda } from './money';
 /**
  * Constructores de nodos XML para el generador UBL 2.1 (M1).
  *
@@ -175,7 +175,7 @@ export const bloqueLinea = (
 
   // Tipo 02 informa valor referencial sin IGV; cac:Price conserva precio de venta cero.
   const precioXml = gratuita ? l.valorUnitario : descuentos.length || descuentoGlobalPrecio > 0
-    ? dividirMoneda(redondearMoneda(neto + l.igvLinea + (l.icbperLinea ?? 0) - descuentos.filter(d => d.codigo === '01').reduce((s, d) => s + d.monto, 0) - descuentoGlobalPrecio), l.cantidad)
+    ? dividirPrecioAlternativo(redondearMoneda(neto + l.igvLinea + (l.icbperLinea ?? 0) - descuentos.filter(d => d.codigo === '01').reduce((s, d) => s + d.monto, 0) - descuentoGlobalPrecio), l.cantidad)
     : precio;
   const tipoPrecio = gratuita ? '02' : '01';
 

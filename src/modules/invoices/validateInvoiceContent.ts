@@ -42,4 +42,30 @@ export function validarContenidoFiscal(payload: InvoicePayload): void {
     throw new BadRequestException('Referencia y motivo de nota obligatorios');
 
   asegurarTipoUbl(tipo);
+  validarLongitudesFiscales(payload);
+
+}
+
+/** Máximos de los nodos serializados según el juego oficial SFS 2.X. */
+function validarLongitudesFiscales(payload: InvoicePayload): void {
+  const maximo = (campo: string, valor: string | undefined, limite: number) => {
+    if (valor !== undefined && Array.from(valor).length > limite) {
+      throw new BadRequestException(`El campo ${campo} admite como máximo ${limite} caracteres`);
+    }
+  };
+  maximo('razonSocialEmisor', payload.razonSocialEmisor, 1500);
+  maximo('nombreComercialEmisor', payload.nombreComercialEmisor, 1500);
+  maximo('cliente.razonSocial', payload.cliente?.razonSocial, 1500);
+  maximo('direccionEmisor', payload.direccionEmisor, 200);
+  if (payload.direccionEmisor) {
+    maximo('provinciaEmisor', payload.provinciaEmisor, 30);
+    maximo('departamentoEmisor', payload.departamentoEmisor, 30);
+    maximo('distritoEmisor', payload.distritoEmisor, 30);
+  }
+  maximo('ordenCompra', payload.ordenCompra, 20);
+  if (['07', '08'].includes(payload.tipoComprobante)) {
+    maximo('descripcionMotivoNota', payload.descripcionMotivoNota, 500);
+  }
+  const lineas = payload.lineas ?? (payload.linea ? [payload.linea] : []);
+  lineas.forEach((linea, i) => maximo(`lineas[${i}].descripcion`, linea.descripcion, 500));
 }

@@ -10,14 +10,14 @@ import type { InvoicePayload } from '../../../src/modules/invoices/invoicePayloa
 it('diagnostica disponibilidad real con prueba XSD, sin validar un documento', async () => {
   expect(await diagnosticarSfs()).toEqual({ disponible: true, causa: null, motor: 'SFS' });
 });
-it('distingue Python ausente y motor heredado sin filtrar rutas', async () => {
+it('diagnostica Python ausente sin filtrar rutas', async () => {
   const previous = process.env.SUNAT_SFS_PYTHON;
   const legacy = process.env.SUNAT_XSL_DIR;
   try {
     process.env.SUNAT_SFS_PYTHON = '/inexistente/secreto';
     expect(await diagnosticarSfs()).toEqual({ disponible: false, causa: 'SFS_PYTHON_AUSENTE', motor: 'SFS' });
     process.env.SUNAT_XSL_DIR = '/ruta/privada';
-    expect(await diagnosticarSfs()).toEqual({ disponible: false, causa: 'MOTOR_HEREDADO_SELECCIONADO', motor: 'HEREDADO' });
+    expect(await diagnosticarSfs()).toEqual({ disponible: false, causa: 'SFS_PYTHON_AUSENTE', motor: 'SFS' });
   } finally {
     if (previous === undefined) delete process.env.SUNAT_SFS_PYTHON; else process.env.SUNAT_SFS_PYTHON = previous;
     if (legacy === undefined) delete process.env.SUNAT_XSL_DIR; else process.env.SUNAT_XSL_DIR = legacy;

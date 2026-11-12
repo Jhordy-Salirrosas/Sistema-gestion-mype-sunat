@@ -1208,9 +1208,7 @@ de las gratuitas). No se modifica la estructura ni las fórmulas del generador.
 Ambas rutas pasan por la guarda común: un producto sin precio impide numerar,
 persistir y encolar. Un precio de venta enviado que difiere del catálogo se
 rechaza con petición de actualizarlo: tampoco se sustituye silenciosamente un
-precio obsoleto. Los descuentos siguen su contrato existente. Las notas 07/08
-quedan expresamente fuera del cotejo de precio de catálogo y no se reprecian:
-conservan las líneas/precios del origen, incluso si hoy no hay sale_price.
+precio obsoleto. Los descuentos siguen su contrato existente. Las notas 07/08 quedan fuera del cotejo de precio de venta vigente y no se reprecian desde el catálogo. La precarga de la interfaz toma datos del comprobante de origen, pero el back no garantiza en todos los contratos la igualdad de sus precios unitarios con los del origen. Las guardas de referencia, saldo monetario y cantidades conservan su alcance; no equivalen a esa garantía de precios.
 
 **Almacén:** los dos formularios muestran el selector, con ALM-01 inicial
 explícito, y consultan los almacenes activos de la empresa en M1. No se elige
@@ -1468,16 +1466,7 @@ backoff, retry-cdr ni ESTADOS_REINTENTABLES. Los harness de pruebas se adaptan a
 contrato nuevo y a la traza adicional, conservando las aserciones de los cuatro
 envíos y esperas 5/15/45 s cuando la consulta confirma ausencia.
 
-**Decisión y persistencia sin migración:** M1 clasifica el historial COMPLETO
-(`transaction_history`, sin límite de filas). Un evento explícito de bloqueo
-previo XSL, sin inicio/resultado de transporte posterior, es
-BLOQUEO_PREVIO_PROBADO: se resuelve el marcador presunto y se permite el envío.
-Un inicio/resultado de transporte sin resultado final es ENVIO_INCIERTO.
-Lo demás es EVIDENCIA_INSUFICIENTE: conserva la protección y exige consulta.
-Un empate de fecha entre bloqueo y transporte no autoriza a descartar el envío.
-Ni el número de intento ni la ausencia de eventos de red prueban por sí solos
-que nunca salió. Rescates manuales y consultas inconclusas no se cuentan como
-intentos de transporte.
+La clasificación inicial de Parte 5b se basaba en el historial completo, pero podía degradar una incertidumbre previa al aparecer un bloqueo local posterior. La Parte 8C-C1 corrigió esa limitación: separa evidencia histórica de envío e incertidumbre pendiente; un bloqueo local posterior no borra ninguna. Solo una resolución concluyente cierra la incertidumbre. M1_TRANSPORT_UNCERTAIN impide concluir que no hubo envío, pero no acredita por sí solo un envío.
 
 Todo envío individual, incluido el flujo normal, confirma el evento durable
 `M1_TRANSPORT_STARTED` en el historial antes de invocar sendBill. Si falla esa
@@ -1574,9 +1563,7 @@ Una nota puede contener una línea histórica/inactiva perfectamente válida.
 Propuesta: fuente M1 compartida y estado de carga/error explícito; distinguir
 catálogo de venta, existencia de inventario y línea histórica del origen. Para
 notas, recuperar existencia/stock desde esa misma consulta M1 con filtro adecuado
-al origen, sin ofrecer productos no vendibles para nuevas ventas. Conservar
-precios/unidad/afectación del origen; advertencia específica cuando sea histórico,
-y nunca afirmar inexistencia si la consulta falla o todavía carga.
+al origen, sin ofrecer productos no vendibles para nuevas ventas. La precarga debe conservar los valores fiscales del origen. La comparación obligatoria de precios contra el origen en todos los contratos del back queda como alcance pendiente, independiente de la validación de cantidades y saldo ya construida. Mantener advertencia específica cuando sea histórico y nunca afirmar inexistencia si la consulta falla o todavía carga.
 Pruebas: placeholder vacío, reapertura, dos decimales sin mutación fiscal,
 producto común, carga/error e histórico inactivo. Sin migración ni código de
 Inventario; solo lectura de sus datos por la interfaz M1 actual.
@@ -2415,6 +2402,8 @@ acreditan envío. La tabla usa la evidencia junto al estado existente; ni retry-
 ni su guarda ni Resiliencia cambian. Focales: back 1 suite/5 pruebas y front
 1 archivo/3 pruebas aprobadas. Escenarios FD01-1 sin transporte y FD01-2 con inicio.
 
+Esta proyección debe leerse con la corrección posterior de 8C-C1: no acreditar envío por una consulta incierta no autoriza a descartar la incertidumbre que esa consulta mantiene pendiente.
+
 #### Construcción — 6c-7
 
 Selección RA muestra tipo/código, total y estado desde la vista previa ya existente.
@@ -2541,12 +2530,9 @@ conserva las mismas reglas monetarias. Focal: 3 suites / 77 pruebas aprobadas.
 
 ### 7E — reserva durable derivada y exclusión del stock
 
-Ambas rutas de creación bloquean el almacén/saldos y descuentan, del disponible,
-las unidades de ventas persistidas no descargadas. Usa invoice/items/movimientos
-existentes: sin tabla nueva ni reservas volátiles. Rechazos/anulados liberan la
-reserva; incertidumbre y aceptación con puente pendiente la conservan. El saldo
-ya descargado no se descuenta dos veces. Los históricos sin almacén siguen la
-misma resolución ALM-01 del puente; no se reparan saldos históricos.
+La reserva de stock se deriva de ventas persistidas no descargadas y se computa para los estados distintos de RECHAZADO y ANULADO. ERROR_RED conserva esa reserva pendiente; una aceptación con puente pendiente también. La reserva no se descuenta de nuevo si la descarga ya existe. Esta regla no garantiza conservar stock para un documento RECHAZADO que mantenga una incertidumbre de transporte: el filtro actual lo excluye por estado. La separación entre estado fiscal e incertidumbre no modifica por sí sola esa guarda.
+
+Usa invoice/items/movimientos existentes, sin tabla nueva ni reservas volátiles; no se reparan saldos históricos.
 Focal: 3 suites / 26 pruebas aprobadas. PostgreSQL real local: stock 1 y dos
 creaciones simultáneas confirman solo una; dos NC simultáneas sobre OBSERVADO
 confirman solo una devolución. Sin SOAP ni consumidor. La exclusión compartida
@@ -3195,3 +3181,25 @@ Un commit back por frente; E3/E4 son documentales porque su producto cambia úni
 - `test/unit/modules/invoices/invoice8eCustomerIdentity.test.tsx`
 
 E2 no necesita archivos front. E3 y E4 son correcciones de producto exclusivamente front; sus commits back son documentales. FERRY.md contiene el manifiesto completo de los dieciocho archivos front y sus SHA-256, y se añade al cierre E4 del ferry.
+
+## Parte 8F — higiene y robustez
+
+Bases de construcción: back main `7faef9767949c91666d9267561694f14acd2c58f`; front main `dc626d34234334a4a1026d0c6460d5382a62a162`. Sin migraciones, columnas nuevas, emisiones reales ni modificación de datos históricos. Los cambios de front se entregan por ferry.
+
+- **F1:** se conservan ambos clasificadores de CDR, que se complementan. Se retiran exclusivamente `getStatusCdrLegacy`, sus imports TA-28 y la operación sin llamadores operativos; TA-30 permanece intacta.
+- **F2:** SFS oficial es el único motor del validador y del diagnóstico de disponibilidad. Se retiran el árbol XSL legado y el selector `SUNAT_XSL_DIR`; conservar una variable antigua ya no selecciona otro motor. Las regresiones usan las hojas del juego SFS oficial. La indisponibilidad del motor sigue bloqueando el envío.
+- **F3:** el bypass demo exige NODE_ENV development/test explícito y contexto MOCK local. La omisión solo se autoriza después del registro durable AVISO_DEMO; un fallo de auditoría se propaga. BETA y PRODUCCION no admiten bypass.
+- **F4:** los endpoints mutantes de M1 que carecían de guarda exigen ADMIN u OPERADOR_FACTURACION. Las acciones ya exclusivas de ADMIN conservan ese alcance. AUDITOR mantiene lectura y vista previa de baja; la descarga de XML de auditor entrega el archivo existente sin regenerar ni persistir uno ausente. El login de un clic no recibe excepciones por ser demo.
+- **F5:** el alta de series usa DTO validado y los filtros/paginado rechazan valores no escalares con 400 y mensaje específico. Los fallos internos genuinos no se convierten en errores de entrada.
+- **F6:** el chequeo puro compartido, antes de reservar número, valida los máximos oficiales de los nodos serializados: descripción y motivo 500, nombres comerciales/razones sociales 1500, AddressLine 200, ciudad/departamento/distrito 30 y orden de compra 20. No hay recortes silenciosos ni topes nuevos para textos sin máximo identificado. PostgreSQL verifica ambas rutas sin avance de serie, documento ni publicación ante descripción sobredimensionada.
+- **F7:** la reserva conserva el mismo UPDATE atómico y añade el límite de 99999999. El agotamiento responde 409/SERIE_AGOTADA; alta/reactivación valida el correlativo inicial y no reinicia series usadas. El endpoint y la presentación del siguiente número no anuncian un noveno dígito. La regresión PostgreSQL concurrente acredita una última reserva válida y un bloqueo.
+- **F8:** se corrigen las garantías documentales de precios de notas, clasificación de transporte y alcance de la reserva en RECHAZADO. La deuda XSL original queda cerrada por TA-70; resúmenes reflejan el trabajo de Parte 2; ACTIVO/HABIDO del padrón RUC sigue abierto y separado del padrón de retención.
+- **F9:** datosPdf prefiere DigestValue del XML conservado. payload.hashCpe queda solo como respaldo cuando ese XML no está disponible. Se conservan los dos generadores de PDF y no se modifica la trama QR, la fecha ni su padding. **Verificación abierta:** contrastar la paridad de ambas representaciones y su normalización con el anexo aplicable de SUNAT; las pruebas internas no equivalen a esa certificación normativa.
+- **F10:** solo el precio alternativo calculado conserva hasta cinco decimales; los importes monetarios y el precio neto de notas conservan su precisión previa. El caso exacto 37.17 mantiene el XML completo y su SHA-256 previo al cambio. Las regresiones de cantidades 3/7 y descuentos 00/01/global pasan SFS local; no se reescriben XML guardados.
+- **F11:** el importador de agentes de retención exige ruta explícita y rechaza el CSV de ejemplo, enlaces al mismo y copias de contenido idéntico antes de abrir conexión a base. No se ejecutó la siembra ni se importaron datos. **Deuda de datos abierta:** acreditar procedencia oficial, fecha de actualización y vigencias del padrón efectivo; aceptar una ruta no certifica su contenido. El contenido productivo no se deduce del ejemplo versionado. Se conserva la decisión manual auditada cuando falta dato vigente y no se modifica el maestro existente.
+
+### Validación final de Parte 8F
+
+Corrida completa back con PostgreSQL local y conexión beta real deshabilitada: **321 suites aprobadas / 4 omitidas (325 totales); 2998 pruebas aprobadas / 38 omitidas (3036 totales); 12 snapshots aprobados**. Front completo: **135 archivos / 970 pruebas aprobadas**. Build Nest del back, typecheck `tsc -b` y build Vite del front aprobados. Lint del back sin errores; conserva dos avisos previos en el coordinador/almacén de resúmenes, fuera de los archivos modificados.
+
+La corrida completa final del back se ejecutó con heap Node de 6 GB y sin la carga simultánea del front: el primer intento agotó el heap de 2 GB y había reportado un fallo de latencia del outbox. La corrida final conserva el umbral de esa prueba y pasa sin cambios en ella. Los cambios se distribuyen en un commit por frente; el ferry solo contiene la presentación de agotamiento de F7, su regresión y el manifiesto de archivos con SHA-256.

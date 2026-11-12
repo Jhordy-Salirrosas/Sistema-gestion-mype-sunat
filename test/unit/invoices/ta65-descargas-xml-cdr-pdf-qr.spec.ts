@@ -447,7 +447,7 @@ it.each(['ACEPTADO', 'OBSERVADO', 'ANULADO'])('no reconstruye XML original perdi
 it('el PDF usa los importes registrados, sin recalcular IGV ni inferir tipo de documento por longitud', async () => {
   const generar = jest.fn().mockResolvedValue(Buffer.from('%PDF-prueba'));
   const generarPng = jest.fn().mockResolvedValue('');
-  const fila = filaComprobante({ monto_total: 1.01, customer_identity_type: '6', customer_identity_number: '20100066603',
+  const fila = filaComprobante({ xml_storage_url: '<?xml version="1.0"?><Invoice><ds:DigestValue>hash-registrado=</ds:DigestValue></Invoice>', monto_total: 1.01, customer_identity_type: '6', customer_identity_number: '20100066603',
     payload_ubl: { montoGravado: 0.86, montoIgv: 0.15, montoTotal: 1.01, razonSocialEmisor: 'Emisor registrado', hashCpe: 'hash-real-guardado' },
     items: [{ description: 'Artículo', unit_code: 'NIU', quantity: 3, unit_value: 0.2838983051, igv_amount: 0.15, total_amount: 1.01, igv_affectation_type: '10' }] });
   const s = new InvoiceDownloadService({ invoice: { findFirst: async () => fila } } as never, {} as never,
