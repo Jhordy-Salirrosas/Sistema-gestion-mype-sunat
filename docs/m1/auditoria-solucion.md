@@ -3203,3 +3203,35 @@ Bases de construcción: back main `7faef9767949c91666d9267561694f14acd2c58f`; fr
 Corrida completa back con PostgreSQL local y conexión beta real deshabilitada: **321 suites aprobadas / 4 omitidas (325 totales); 2998 pruebas aprobadas / 38 omitidas (3036 totales); 12 snapshots aprobados**. Front completo: **135 archivos / 970 pruebas aprobadas**. Build Nest del back, typecheck `tsc -b` y build Vite del front aprobados. Lint del back sin errores; conserva dos avisos previos en el coordinador/almacén de resúmenes, fuera de los archivos modificados.
 
 La corrida completa final del back se ejecutó con heap Node de 6 GB y sin la carga simultánea del front: el primer intento agotó el heap de 2 GB y había reportado un fallo de latencia del outbox. La corrida final conserva el umbral de esa prueba y pasa sin cambios en ella. Los cambios se distribuyen en un commit por frente; el ferry solo contiene la presentación de agotamiento de F7, su regresión y el manifiesto de archivos con SHA-256.
+
+## Formularios de M1: validaciones compartidas
+
+Bases sincronizadas: back `d5115adc109e311a29f84b86203028887f8f0118`; front `73af439c48d1e8937133b52f8b525bbecfe7540f`. Línea base completa: back 321 suites aprobadas y 4 omitidas, 2998 pruebas aprobadas y 38 omitidas, 12 snapshots; front 136 archivos y 972 pruebas aprobadas.
+
+### Grupo 1 — Contenido de emisión
+
+Página y modal comparten las validaciones de identidad del cliente, descripción (500), razón social (1500), cantidad positiva con hasta tres decimales y valor oneroso positivo. Se conserva la excepción explícita de notas y documentos íntegramente gratuitos. Un descuento global que deja un documento oneroso en cero bloquea el envío con error visible. No se modifica el back ni el circuito ICBPER. Verificación focal: 46 pruebas aprobadas y typecheck del front.
+
+### Grupo 3 — Series y configuración
+
+La pantalla valida las series según el tipo documental, incluidos FC/BC/FD/BD, y limita el correlativo inicial a 99999999; la vista previa no ofrece un noveno dígito. El writer y el formulario del emisor comparten máximos de domicilio 200 y departamento/provincia/distrito 30; ubigeo y local anexo se conservan como texto de seis y cuatro dígitos. No hay cambios de esquema ni de numeración atómica. Verificación focal: 51 pruebas del back y 20 del front aprobadas.
+
+### Grupo 4 — Depósitos de detracción
+
+El editor monetario admite importes positivos con dos decimales como máximo y hasta la detracción del comprobante; muestra el error junto al monto y bloquea Guardar. El servicio rechaza subcéntimos con 400 antes de escribir, sin redondearlos, y reutiliza la validación ISO estricta de cuotas. Se mantienen las reglas de constancia y fechas anteriores/futuras. Verificación focal: 17 pruebas del back y 10 del front aprobadas.
+
+### Grupo 5 — Maestro compartido de clientes y proveedores
+
+La validación documental ya no queda anulada para tipos distintos de RUC: DNI exige ocho dígitos, RUC once y módulo 11, CE/TAX ID conservan documentos alfanuméricos no vacíos. La guarda aditiva del servicio cubre también llamadas sin ValidationPipe; las actualizaciones parciales validan solo campos aportados. Razón social y nombre comercial aportado no pueden estar vacíos ni superar 200 caracteres; país tiene dos caracteres y email formato válido. Nombre comercial y email siguen siendo opcionales. La pantalla reutiliza el mismo validador de email que el back y bloquea guardar valores inválidos. No se amplía el contrato ni se reescriben datos históricos. Se sustituye un RUC ficticio inválido en la prueba previa de duplicados por uno válido, conservando sus aserciones. Verificación focal: 34 pruebas del back y 16 del front aprobadas.
+
+### Grupo 6 — Período y filtros
+
+PeriodInput conserva un borrador de edición inválido sin propagarlo: año entero de cuatro dígitos y mes 1–12, sin el antiguo rango arbitrario 2000–2100. Bandeja y reporte de ventas muestran el error de Desde/Hasta y no consultan un rango invertido; se permiten rangos amplios sin imponer un máximo de días. Las guardas del back se conservan como autoridad. La prueba anterior de separación de notas usa ahora un rango válido que excluye sus documentos, manteniendo las aserciones de ambas secciones. Verificación focal: ocho pruebas aprobadas.
+
+El grupo 2 (bolsas e ICBPER) permanece fuera de construcción. La auditoría adicional identifica una línea sintética con SKU ICBPER que el contrato comercial rechaza si no existe en el catálogo; su solución requiere confirmación conjunta con ese grupo. No se crean productos, no se omiten líneas ni se relajan guardas. Tampoco se construyen cambios en el hook de atajos o navegación desde resúmenes; el paso nativo de cantidad sí se corrige como parte del grupo 1 autorizado.
+
+### Validación final de formularios
+
+Back completo con PostgreSQL local y conexión beta real deshabilitada: **322 suites aprobadas y 4 omitidas (326 totales); 3034 pruebas aprobadas y 38 omitidas (3072 totales); 12 snapshots aprobados**. Front completo: **141 archivos y 1030 pruebas aprobadas**. Builds Nest y Vite, y typecheck del front `tsc -b`, aprobados. Lint del back y lint focal del front sin errores; conservan avisos previos fuera de la lógica añadida. Sin migraciones, emisiones reales ni PRs.
+
+El ferry `ferry/m1-formularios-validacion` parte de `73af439c48d1e8937133b52f8b525bbecfe7540f`; FERRY.md contiene los archivos por grupo y sus 29 SHA-256 verificados. La rama de construcción del back es `fix/m1-formularios-validacion`. La promoción y batería en vivo quedan fuera de esta ejecución.
