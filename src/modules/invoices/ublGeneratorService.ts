@@ -251,7 +251,7 @@ export class UblGeneratorService {
       lineas: this.lineasDe(payload, raiz).join('\n'),
       // `cbc:Note` (leyenda 2006 y observaciones) va antes de
       // DocumentCurrencyCode; la referencia de nota, después de las partes.
-      notas: `${leyenda1000}${leyenda2006}${observaciones}`,
+      notas: `${leyenda1000}${leyenda2006}${(totales.gratuito ?? 0) > 0 ? '\n  <cbc:Note languageLocaleID="1002">TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE</cbc:Note>' : ''}${observaciones}`,
       referenciaNota: `${ordenCompra}${referenciaNota}`,
     });
   }
