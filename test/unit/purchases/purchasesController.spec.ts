@@ -45,6 +45,7 @@ describe('PurchasesController', () => {
       listPayments: jest.fn().mockResolvedValue([{ id: 'pay-1', amount: 500 }]),
       payPurchase: jest.fn().mockResolvedValue({ id: 'pur-1', status: 'PAGADA' }),
       listPayables: jest.fn().mockResolvedValue([{ id: 'pur-1', pendingAmount: 680 }]),
+      createManualPayable: jest.fn().mockResolvedValue({ id: 'cxp-1' }),
       listPurchases: jest.fn().mockResolvedValue([samplePurchase]),
       getPurchaseById: jest.fn().mockResolvedValue(samplePurchase),
     };
@@ -56,6 +57,7 @@ describe('PurchasesController', () => {
     await expect(controller.listPayments('pur-1', undefined)).rejects.toThrow(UnauthorizedException);
     await expect(controller.payPurchase('pur-1', {}, undefined)).rejects.toThrow(UnauthorizedException);
     await expect(controller.listPayables(undefined)).rejects.toThrow(UnauthorizedException);
+    await expect(controller.createManualPayable({} as any, undefined)).rejects.toThrow(UnauthorizedException);
     await expect(controller.listPurchases(undefined)).rejects.toThrow(UnauthorizedException);
     await expect(controller.getPurchaseById('pur-1', undefined)).rejects.toThrow(UnauthorizedException);
   });
@@ -68,6 +70,7 @@ describe('PurchasesController', () => {
       status: 'PAGADA',
     });
     expect(await controller.listPayables(companyId)).toEqual([{ id: 'pur-1', pendingAmount: 680 }]);
+    expect(await controller.createManualPayable({ supplierName: 'Proveedor', supplierDocNumber: '20100070970', description: 'Servicio', amount: 100 }, companyId)).toEqual({ id: 'cxp-1' });
 
     const list = await controller.listPurchases(companyId);
     expect(list.total).toBe(1);
