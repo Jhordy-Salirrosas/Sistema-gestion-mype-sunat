@@ -131,6 +131,9 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     l.afectacion = afectacion;
     l.unidad = unidad;
   }
+  if (dto.tipo_comprobante === '03' && dto.items.every(l => esAfectacionGratuita(l.afectacion!)) && dto.items.some(l => (l.cantidadBolsas ?? 0) > 0 || (l.icbper ?? 0) > 0)) {
+    throw new BadRequestException({ code: 'BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA', message: 'Una boleta íntegramente gratuita no admite bolsas plásticas. Retire las bolsas o emita una factura.' });
+  }
   const descuento = Boolean(dto.descuento_global) || dto.items.some((l) => Boolean(l.descuento));
   if (dto.forma_pago === 'Credito' || descuento) {
     const cliente = await tx.businessPartner.findFirst({ where: { company_id: companyId,

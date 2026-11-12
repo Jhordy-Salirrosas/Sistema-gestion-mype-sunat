@@ -1,3 +1,4 @@
+import { separarBolsasGratuitas } from './freeBagXml';
 import { validarContenidoFiscal } from './validateInvoiceContent';
 import { descuentosGlobalesPrecio } from './globalDiscountPrices';
 import { totalesGratuitos } from './freeOperationReference';
@@ -71,6 +72,7 @@ export class UblGeneratorService {
   /** Genera el XML UBL 2.1 completo del comprobante. */
   public generateInvoiceXml(payload: InvoicePayload): string {
     validarContenidoFiscal(payload);
+    payload = separarBolsasGratuitas(payload);
     if (!Number.isSafeInteger(payload.numero) || payload.numero <= 0) throw new BadRequestException('Correlativo fiscal ausente o inválido');
     const tipo = payload.tipoComprobante;
 

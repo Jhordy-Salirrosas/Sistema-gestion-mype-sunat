@@ -189,3 +189,18 @@ it('6J ambas entradas validan SPOT y congelan cuenta propia antes de crear/reser
   await expect(h.run(dto)).rejects.toThrow('falta la cuenta');
  }
 });
+
+it.each([0,1])('boleta íntegramente gratuita con %s bolsas conserva la guarda anterior a numerar',async bolsas=>{
+ const h=harness();h.product.tax_affectation='11';
+ const dto={...base(),tipo_comprobante:'03',serie:'B001',items:[{codigo:'SERV',descripcion:'Servicio gratuito',precioUnitario:0,valorUnitario:100,cantidad:2,afectacion:'11',cantidadBolsas:bolsas,icbper:bolsas*.5}]};
+ if(bolsas){try{await h.run(dto);throw Error('Debió rechazar');}catch(e){expect((e as any).getResponse()).toEqual({code:'BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA',message:'Una boleta íntegramente gratuita no admite bolsas plásticas. Retire las bolsas o emita una factura.'});}}
+ else await expect(h.run(dto)).resolves.toMatchObject({tipo_comprobante:'03'});
+});
+it('la guarda de boleta reconoce ICBPER histórico sin cantidad y permite gratuitas sin campos de bolsas',async()=>{
+ const h=harness();h.product.tax_affectation='11';const item={codigo:'SERV',descripcion:'Servicio gratuito',precioUnitario:0,valorUnitario:100,cantidad:2,afectacion:'11'};
+ await expect(h.run({...base(),tipo_comprobante:'03',serie:'B001',items:[item]})).resolves.toBeDefined();
+ await expect(h.run({...base(),tipo_comprobante:'03',serie:'B001',items:[{...item,icbper:1}]})).rejects.toMatchObject({response:{code:'BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA'}});
+});
+it('una boleta onerosa con bolsas conserva el flujo actual',async()=>{
+ const h=harness();await expect(h.run({...base(),tipo_comprobante:'03',serie:'B001',items:[{...base().items[0],cantidadBolsas:1,icbper:.5}]})).resolves.toBeDefined();
+});
