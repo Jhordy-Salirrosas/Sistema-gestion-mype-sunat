@@ -167,7 +167,7 @@ _Este proyecto es desarrollado bajo un esquema de Sprints iterativos con integra
 [[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=coverage]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
 [[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=bugs]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
 [[https://sonarcloud.io/api/project_badges/measure?project=Jhordy-Salirrosas_Sistema-gestion-mype-sunat&metric=vulnerabilities]](https://sonarcloud.io/summary/new_code?id=Jhordy-Salirrosas_Sistema-gestion-mype-sunat)
-[[https://img.shields.io/badge/Lighthouse-90%2B-green.svg]](https://sistema-gestion-mype-sunat.vercel.app/)
+[[https://img.shields.io/badge/Lighthouse-90%2B-green.svg]](https://fronted-sistema-mype-sunat.vercel.app/)
 
 ### Métricas de Calidad y Rendimiento (Sprint 1)
 
@@ -175,6 +175,6 @@ _Este proyecto es desarrollado bajo un esquema de Sprints iterativos con integra
   - Cobertura de pruebas unitarias: $\ge 80\%$
   - Vulnerabilidades y Bugs: 0
   - Duplicación de código: $\le 3\%$
-- **Lighthouse CI Performance:** [Ver reporte Lighthouse](https://sistema-gestion-mype-sunat.vercel.app/)
+- **Lighthouse CI Performance:** [Ver reporte Lighthouse](https://fronted-sistema-mype-sunat.vercel.app/)
   - Rendimiento (Performance): $\ge 90$
   - Accesibilidad (Accessibility): $\ge 90$
