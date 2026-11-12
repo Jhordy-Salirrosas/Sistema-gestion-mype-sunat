@@ -1,3 +1,4 @@
+import { validarSerieNoAgotada } from '../../application/services/invoiceSeriesService';
 import { Roles } from '../../../../common/decorators';
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 /**
@@ -156,6 +157,7 @@ export class InvoiceConfigController {
       );
     }
 
+    validarSerieNoAgotada(encontrada.current_correlative);
     return {
       serie: encontrada.series,
       document_type: encontrada.document_type,

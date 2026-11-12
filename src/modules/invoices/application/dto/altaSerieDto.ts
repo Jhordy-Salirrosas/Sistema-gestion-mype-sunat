@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
 /** Entrada de alta/reactivación: los tipos se validan antes de normalizar. */
 export class AltaSerieDto {
@@ -13,5 +13,6 @@ export class AltaSerieDto {
   @IsOptional()
   @IsInt({ message: 'correlativo_inicial debe ser un entero' })
   @Min(0, { message: 'correlativo_inicial debe ser mayor o igual que 0' })
+  @Max(99999999, { message: 'correlativo_inicial no puede superar 99999999' })
   correlativo_inicial?: number;
 }

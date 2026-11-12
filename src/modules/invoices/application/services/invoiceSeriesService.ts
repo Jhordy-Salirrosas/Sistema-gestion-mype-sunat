@@ -24,9 +24,16 @@
  * comprobantes con el mismo número, y SUNAT relaciona el rechazo con el número:
  * reutilizarlo hace que el comprobante nuevo herede el historial del rechazado.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '../../../../generated/client/client';
 import { PrismaService } from '../../../../database/prismaService';
+
+export const MAXIMO_CORRELATIVO = 99999999;
+export function validarSerieNoAgotada(actual: number): void {
+  if (actual >= MAXIMO_CORRELATIVO) throw new ConflictException({
+    code: 'SERIE_AGOTADA', message: 'SERIE_AGOTADA: se alcanzó el correlativo máximo de ocho dígitos; configure otra serie',
+  });
+}
 
 /** Una serie de la empresa, tal como la expone la API. */
 export interface SerieFiscal {
@@ -102,6 +109,7 @@ export class InvoiceSeriesService {
            AND document_type = ${tipo}
            AND series = ${serie}
            AND is_active = true
+           AND current_correlative < 99999999
         RETURNING current_correlative
       `,
     );
@@ -124,7 +132,7 @@ export class InvoiceSeriesService {
     companyId: string,
     documentType: string,
     series: string,
-  ): Promise<SerieNoDisponibleError> {
+  ): Promise<SerieNoDisponibleError | ConflictException> {
     const existente = await this.prisma.invoiceSeries.findUnique({
       where: {
         company_id_document_type_series: {
@@ -133,7 +141,7 @@ export class InvoiceSeriesService {
           series,
         },
       },
-      select: { is_active: true },
+      select: { is_active: true, current_correlative: true },
     });
 
     if (!existente) {
@@ -143,6 +151,9 @@ export class InvoiceSeriesService {
       );
     }
 
+    if (existente.is_active) {
+      validarSerieNoAgotada(existente.current_correlative);
+    }
     return new SerieNoDisponibleError(
       `La serie ${documentType}-${series} está dada de baja: reactívela antes de emitir`,
       'INACTIVA',
@@ -160,7 +171,10 @@ export class InvoiceSeriesService {
   async asegurarSerie(params: AltaSerieParams): Promise<SerieFiscal> {
     const tipo = params.documentType.trim().padStart(2, '0');
     const serie = params.series.trim().toUpperCase();
-    const inicial = Math.max(0, params.correlativoInicial ?? 0);
+    const inicial = params.correlativoInicial ?? 0;
+    if (!Number.isInteger(inicial) || inicial < 0 || inicial > MAXIMO_CORRELATIVO) {
+      throw new BadRequestException('correlativo_inicial debe ser un entero entre 0 y 99999999');
+    }
 
     return this.prisma.invoiceSeries.upsert({
       where: {
