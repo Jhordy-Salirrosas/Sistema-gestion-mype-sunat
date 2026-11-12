@@ -159,22 +159,11 @@ describe('compuerta XSL - bandera de demostración (BYPASS_XSL_GATE_DEMO)', () =
       expect(registro.codigoError).toBeNull();
     });
 
-    it('si el historial falla, el envío sigue autorizado y no se propaga el error', async () => {
-      const persistencia = {
-        persistFailure: jest.fn(async () => {
-          throw new Error('base de datos caída');
-        }),
-      };
-
-      const decision = await decidirEnvio(
-        params(),
-        '<Invoice/>',
-        validadorEspia() as never,
-        persistencia as never,
-      );
-
-      expect(decision.bloqueo).toBeNull();
-      expect(decision.omitidaPorDemo).toBe(true);
+    it('si el historial falla no autoriza la omisión', async () => {
+      const validar = validadorEspia();
+      const persistencia = { persistFailure: jest.fn(async () => { throw new Error('base de datos caída'); }) };
+      await expect(decidirEnvio(params(), '<Invoice/>', validar as never, persistencia as never)).rejects.toThrow('base de datos caída');
+      expect(validar.validar).not.toHaveBeenCalled();
     });
 
     it('el aviso entregado a la consola coincide con el del historial', () => {
@@ -249,4 +238,18 @@ describe('compuerta XSL - bandera de demostración (BYPASS_XSL_GATE_DEMO)', () =
       expect(decision.omitidaPorDemo).toBe(false);
     });
   });
+});
+
+it.each(['production', undefined, 'staging'])('no autoriza bypass fuera de desarrollo/pruebas explícitos: %s', async environment => {
+ const oldEnv=process.env.NODE_ENV, oldFlag=process.env[BANDERA_DEMO];
+ try {
+  if(environment===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=environment;
+  process.env[BANDERA_DEMO]='true';
+  const persistFailure=jest.fn();
+  await expect(decidirEnvio(params(),'<Invoice/>',validadorEspia() as never,{persistFailure} as never)).rejects.toMatchObject({motivo:'BYPASS_NO_PERMITIDO'});
+  expect(persistFailure).not.toHaveBeenCalled();
+ } finally {
+  if(oldEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=oldEnv;
+  if(oldFlag===undefined)delete process.env[BANDERA_DEMO];else process.env[BANDERA_DEMO]=oldFlag;
+ }
 });
