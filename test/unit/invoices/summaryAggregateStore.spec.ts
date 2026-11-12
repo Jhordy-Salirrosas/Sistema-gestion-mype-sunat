@@ -66,7 +66,7 @@ it('reclamación única persiste incertidumbre antes de red, ticket y estados de
 it('monitor exige empresa y reduce resultados sin XML/ZIP/CDR', async () => {
   const h=aggregateHarness(); await expect(h.store.listar('')).rejects.toThrow('COMPANY_REQUIRED');
   h.delegate.findMany.mockResolvedValue([{id:'a',result:{codigo:'0',mensaje:'ok',referencia:'RA',contenido:'private',xml:'private'}},{id:'b',result:null}]);
-  expect(await h.store.listar('company')).toEqual([{id:'a',bridge_reversal:{pending:0,done:0},result:{codigo:'0',mensaje:'ok',referencia:'RA'}},{id:'b',bridge_reversal:{pending:0,done:0},result:null}]);
+  expect(await h.store.listar('company')).toEqual([{id:'a',members:[],bridge_reversal:{pending:0,done:0},result:{codigo:'0',mensaje:'ok',referencia:'RA'}},{id:'b',members:[],bridge_reversal:{pending:0,done:0},result:null}]);
   expect(h.delegate.findMany).toHaveBeenLastCalledWith(expect.objectContaining({where:{company_id:'company'}}));
 });
 it.each(['RA','RC'])('aceptación %s cotejada conserva resultado y efectos dentro de la transacción', async kind => {
@@ -100,4 +100,111 @@ it.each(['ACCEPTED','REJECTED'])('CDR repetido en %s no repite efectos', async s
 it.each(['00000000','00000001','1'])('normaliza correlativo RC %s sin alterar el cotejo', async digits => {
   const h=aggregateHarness('RC'); h.row.xml=h.row.xml.replace('00000001',digits); h.member.correlativo=Number(digits); h.row.xml_hash=hashSummary(h.row.xml);
   expect((await h.store.finalizar(h.row as never,h.cdr(),'0')).state).toBe('ACCEPTED');
+});
+
+ it.each(['RA','RC'])('proyecta miembros %s en lote, por empresa y sin secretos del snapshot', async kind => {
+  const h=aggregateHarness(kind);
+  h.delegate.findMany.mockResolvedValue([{id:'a',members:[{id:'invoice',motivo:'privado',xml:'privado'},{id:'ajeno'},null,{id:5}],result:{xml:'secreto'}},{id:'b',members:[{id:'invoice'}],result:null}]);
+  const findMany=jest.fn().mockResolvedValue([{id:'invoice',serie:'B001',correlativo:14,tipo_comprobante:'03',monto_total:'118.50',estado:'ACEPTADO',payload_ubl:'no proyectar'}]);
+  Object.assign(h.db.invoice,{findMany});
+  const rows=await h.store.listar('company');
+  expect(findMany).toHaveBeenCalledTimes(1);
+  expect(findMany).toHaveBeenCalledWith({where:{company_id:'company',id:{in:['invoice','ajeno']}},select:{id:true,serie:true,correlativo:true,tipo_comprobante:true,monto_total:true,estado:true}});
+  expect(rows[0].members).toEqual([{id:'invoice',numero:'B001-00000014',tipo:'03',monto:118.50,estado:'ACEPTADO'}]);
+  expect(rows[1].members).toEqual(rows[0].members);
+  expect(JSON.stringify(rows)).not.toContain('privado');expect(JSON.stringify(rows)).not.toContain('payload_ubl');expect(JSON.stringify(rows)).not.toContain('secreto');
+ });
+ it('sin miembros no consulta comprobantes ni expone un snapshot inválido', async () => {
+  const h=aggregateHarness();h.delegate.findMany.mockResolvedValue([{id:'a',members:{id:'inválido'},result:null}]);
+  const rows=await h.store.listar('company');expect(rows[0].members).toEqual([]);
+ });
+
+it('listado vacío no consulta comprobantes', async () => {
+  const h = aggregateHarness();
+  const findMany = jest.fn();
+  Object.assign(h.db.invoice, { findMany });
+  h.delegate.findMany.mockResolvedValue([]);
+
+  expect(await h.store.listar('company')).toEqual([]);
+  expect(findMany).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['ausentes', undefined],
+  ['nulos', null],
+  ['lista vacía', []],
+])('miembros %s producen una lista vacía sin consultar comprobantes', async (_label, members) => {
+  const h = aggregateHarness();
+  const findMany = jest.fn();
+  Object.assign(h.db.invoice, { findMany });
+  h.delegate.findMany.mockResolvedValue([{ id: 'a', members, result: null }]);
+
+  expect(await h.store.listar('company')).toEqual([
+    { id: 'a', members: [], bridge_reversal: { pending: 0, done: 0 }, result: null },
+  ]);
+  expect(findMany).not.toHaveBeenCalled();
+});
+
+it('descarta miembros sin id válido antes de consultar comprobantes', async () => {
+  const h = aggregateHarness();
+  const findMany = jest.fn();
+  Object.assign(h.db.invoice, { findMany });
+  h.delegate.findMany.mockResolvedValue([{
+    id: 'a', result: null,
+    members: [null, false, 0, 'invoice', [], {}, { numero: 'F001-1' },
+      { id: null }, { id: 5 }, { id: '' }, { id: ' \t\n' }],
+  }]);
+
+  expect((await h.store.listar('company'))[0].members).toEqual([]);
+  expect(findMany).not.toHaveBeenCalled();
+});
+
+it.each(['RA', 'RC'])('mapea los cinco campos actuales en orden del snapshot %s', async kind => {
+  const h = aggregateHarness(kind);
+  h.delegate.findMany.mockResolvedValue([{
+    id: 'a', kind, result: null,
+    members: [{ id: 'primero', numero: 'obsoleto', monto: 999, estado: 'obsoleto' },
+      { id: 'inexistente' }, { id: 'segundo' }],
+  }]);
+  const findMany = jest.fn().mockResolvedValue([
+    { id: 'segundo', serie: 'B002', correlativo: 12345678, tipo_comprobante: '03', monto_total: 0, estado: 'RECHAZADO' },
+    { id: 'primero', serie: 'F001', correlativo: 7, tipo_comprobante: '01', monto_total: '123.45', estado: 'ANULADO' },
+  ]);
+  Object.assign(h.db.invoice, { findMany });
+
+  expect((await h.store.listar('company'))[0].members).toEqual([
+    { id: 'primero', numero: 'F001-00000007', tipo: '01', monto: 123.45, estado: 'ANULADO' },
+    { id: 'segundo', numero: 'B002-12345678', tipo: '03', monto: 0, estado: 'RECHAZADO' },
+  ]);
+  expect(findMany).toHaveBeenCalledWith({
+    where: { company_id: 'company', id: { in: ['primero', 'inexistente', 'segundo'] } },
+    select: { id: true, serie: true, correlativo: true, tipo_comprobante: true, monto_total: true, estado: true },
+  });
+});
+
+it.each([
+  { label: 'sin lease ni flags opcionales', extra: {}, exhausted: false, historyUnknown: false, inProgress: false },
+  { label: 'con lease vencido y flags explícitos', extra: { exhausted: true, historyUnknown: true, lease: { token: 'privado', until: '2000-01-01T00:00:00Z' } }, exhausted: true, historyUnknown: true, inProgress: false },
+  { label: 'con lease vigente', extra: { exhausted: false, historyUnknown: false, lease: { token: 'privado', until: '2999-01-01T00:00:00Z' } }, exhausted: false, historyUnknown: false, inProgress: true },
+])('proyección de miembros conserva sondeos y reversiones: $label', async ({ extra, exhausted, historyUnknown, inProgress }) => {
+  const h = aggregateHarness();
+  h.delegate.findMany.mockResolvedValue([{
+    id: 'a', members: [{ id: 'invoice' }],
+    result: {
+      codigo: '0', mensaje: 'Aceptado', referencia: 'RA-1', xml: 'privado',
+      polling: { attempts: 2, nextAt: null, ...extra },
+      bridgeReversals: [{ status: 'PENDING' }, { status: 'DONE' }],
+    },
+  }]);
+  Object.assign(h.db.invoice, { findMany: jest.fn().mockResolvedValue([
+    { id: 'invoice', serie: 'F001', correlativo: 1, tipo_comprobante: '01', monto_total: 118, estado: 'ANULADO' },
+  ]) });
+
+  expect(await h.store.listar('company')).toEqual([{
+    id: 'a',
+    members: [{ id: 'invoice', numero: 'F001-00000001', tipo: '01', monto: 118, estado: 'ANULADO' }],
+    polling: { attempts: 2, nextAt: null, exhausted, historyUnknown, inProgress },
+    bridge_reversal: { pending: 1, done: 1 },
+    result: { codigo: '0', mensaje: 'Aceptado', referencia: 'RA-1' },
+  }]);
 });

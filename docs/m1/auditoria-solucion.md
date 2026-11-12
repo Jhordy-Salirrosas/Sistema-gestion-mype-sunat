@@ -3235,3 +3235,65 @@ El grupo 2 (bolsas e ICBPER) permanece fuera de construcción. La auditoría adi
 Back completo con PostgreSQL local y conexión beta real deshabilitada: **322 suites aprobadas y 4 omitidas (326 totales); 3034 pruebas aprobadas y 38 omitidas (3072 totales); 12 snapshots aprobados**. Front completo: **141 archivos y 1030 pruebas aprobadas**. Builds Nest y Vite, y typecheck del front `tsc -b`, aprobados. Lint del back y lint focal del front sin errores; conservan avisos previos fuera de la lógica añadida. Sin migraciones, emisiones reales ni PRs.
 
 El ferry `ferry/m1-formularios-validacion` parte de `73af439c48d1e8937133b52f8b525bbecfe7540f`; FERRY.md contiene los archivos por grupo y sus 29 SHA-256 verificados. La rama de construcción del back es `fix/m1-formularios-validacion`. La promoción y batería en vivo quedan fuera de esta ejecución.
+
+## Pantalla de emisión y acceso desde agregados
+
+Bases sincronizadas: back `d5115adc109e311a29f84b86203028887f8f0118`; front `73af439c48d1e8937133b52f8b525bbecfe7540f`. La promoción de formularios aún no está en estos main: esta construcción parte de main y no incorpora aquel tren.
+
+### B1 — Bolsas sobre líneas registradas
+
+La cantidad de bolsas y su ICBPER se declaran sobre la línea del producto, sin fabricar SKU ni precio. El botón suma una bolsa al producto seleccionado en la grilla; se retira el auxiliar de cabecera que no viajaba por sí solo. Cantidad entera no negativa, impuesto derivado y coincidencia validada antes del envío; no se truncan fracciones. La cantidad de productos sigue siendo independiente de las bolsas entregadas. Se retira la excepción de catálogo que presentaba el SKU sintético desconocido como conforme. El contrato API certificado y las guardas del back no cambian. Verificación focal: 21 pruebas del front aprobadas, incluidas ambas vías de emisión con producto elegido del catálogo y payload cantidadBolsas=2/icbper=1.
+
+El contraste de la auditoría antigua conserva deudas fuera de B1–B3: selector Crédito para boleta aunque el XML no declara PaymentTerms; PDF local de fila con numeración a cuatro dígitos y detalle vacío (ya usa DigestValue del XML firmado, no el hash hexadecimal alegado); etiqueta CDR sobre exportación CSV RVIE; y adición de segunda fila en modal frente a reemplazo de vacío en página. El toggle gratuito, su catálogo y la excepción de stock quedaron resueltos por 8D y su corrección; no se relajan guardas ni se cambia la afectación heredada onerosa.
+
+### B2 — Atajos con ámbito de página
+
+Alt+C, Alt+P y Alt+L se reconocen por key/code desde cualquier foco de la página de emisión; Alt+P usa una marca estable del buscador real. Ctrl+Enter abre la revisión y confirmar conserva requestSubmit y las validaciones del formulario. No se captura el atajo de la página cuando hay un diálogo abierto; el modal conserva su ámbito propio. El listener se elimina al desmontar y no duplica acciones al recibir eventos dentro del formulario. Verificación focal: siete pruebas aprobadas, incluida confirmación con un único POST simulado. No se cambia la navegación inicial con flecha arriba, deuda separada de este encargo.
+
+### B3 — Miembros del agregado y acceso al comprobante
+
+El listado de RA/RC proyecta de forma aditiva los miembros como id, número fiscal completo, tipo, monto y estado actual del comprobante. Una sola consulta en lote contrasta los ids del snapshot contra comprobantes de la misma empresa; no se exponen los datos adicionales del JSON ni se reutilizan montos/estados no acreditados del snapshot. Miembros inexistentes o ajenos no se proyectan. Los controles de ticket, sondeos, incertidumbre y reversión pendiente se conservan.
+
+La tarjeta muestra los miembros y permite abrir el detalle existente por id, consultado desde el back, con error visible si no está disponible; no se fabrica un detalle ni se depende de que el comprobante esté en la página actual de la bandeja. Durante la carga se bloquean aperturas simultáneas. Verificación focal: 40 pruebas del almacén del back y cinco del Monitor del front aprobadas. No hay migración ni modificación del envío fiscal.
+
+### Validación final de B1–B3
+
+Back completo con PostgreSQL local y conexión beta real deshabilitada: **321 suites aprobadas y 4 omitidas (325 totales); 3001 pruebas aprobadas y 38 omitidas (3039 totales); 12 snapshots aprobados**. Front completo final: **139 archivos y 986 pruebas aprobadas**; el typecheck identificó el número obligatorio ausente en el fixture nuevo de miembros, que se completó sin modificar aserciones; se repitió la corrida completa sobre ese fixture final. Builds Nest/Vite y `tsc -b` aprobados. Lint del back y focal del front sin errores; el back conserva dos avisos previos en el área de resúmenes.
+
+Ramas `fix/m1-bolsas-atajos-resumenes` y `ferry/m1-bolsas-atajos-resumenes`, un commit por arreglo en cada rama. Los commits B1/B2 del back son documentales: su construcción funcional es de front. FERRY.md incluye SHA-256 verificados de 20 archivos únicos (21 entradas por compartir la página entre B1 y B2) y detalla la base pendiente de promoción de formularios. No se ejecutaron emisiones reales, migraciones ni PRs. La certificación en vivo queda para la promoción posterior.
+
+## Integración B1–B3 sobre main con formularios y SIRE
+
+Cabezas verificadas antes de construir: back main `4e21f3e3583dc8c892d53a47788499ee116cae09`, front main `39d55f3a08d25cce5a5aafa7af8c744b89e659a0`, back fuente `199c0f1a3bd35981b8ad9622afae70e869ff09fd` y ferry fuente `2d20be2389bbb6482b6199e835b0aa506f0ad56b`. Las secciones anteriores describen construcciones históricas; esta integración incorpora ambos comportamientos sobre los main actuales.
+
+Se porta el delta original, sin reconstruir B1–B3. Rama back `fix/m1-bolsas-atajos-resumenes-int`; transporte front `ferry/m1-bolsas-atajos-resumenes-int` en el repositorio back. Los archivos funcionales del back coinciden con la fuente. Los archivos front sin solape también coinciden con la fuente y los archivos ajenos al cambio conservan el main actual. SIRE y el esquema permanecen idénticos a main.
+
+| Archivo con solape | Resolución |
+|---|---|
+| `docs/m1/auditoria-solucion.md` (back) | Se conservan las secciones de formularios y B1–B3; esta sección registra la integración sobre las bases actuales. |
+| `src/modules/invoices/components/InvoiceEmitModal.tsx` | Se mantiene `problemasContenidoEmision`; el botón de bolsas actualiza la línea elegida mediante `actualizarItem`. |
+| `src/modules/invoices/components/InvoiceItemsGrid.tsx` | Se conservan `cantidadValida`, máximo 500, paso 0.001 y avisos de validación; las bolsas usan cantidad entera no negativa y selector de producto. |
+| `src/modules/invoices/lib/invoiceItems.ts` | Se conservan Decimal, límites de descripción y precisión; se añaden `cantidadBolsas`, validación y sincronización del impuesto. |
+| `src/modules/invoices/pages/InvoiceEmissionPage.tsx` | Se mantiene el validador compartido; se añade el ámbito de página al hook y se reemplaza el alta de línea sintética por actualización de bolsas del producto. |
+
+| Suite | Línea base | Integrada |
+|---|---|---|
+| Back Jest | 326 aprobadas / 4 omitidas; 3139 pruebas aprobadas / 38 omitidas | 326 aprobadas / 4 omitidas; 3142 pruebas aprobadas / 38 omitidas |
+| Front Vitest | 141 archivos / 1030 pruebas aprobadas | 144 archivos / 1044 pruebas aprobadas |
+| Back E2E | 3 aprobadas / 4 fallidas / 1 omitida; 11 pruebas aprobadas / 21 fallidas / 10 omitidas | Mismos conteos y mismas pruebas fallidas |
+
+Jest conserva 12 snapshots aprobados. Las cuatro suites opcionales omitidas son agregados (20 pruebas), configuración del emisor (10), búsqueda de terceros (7) y conexión real SUNAT beta (1). E2E falla previamente en los dobles de cola de auth, customs, invoices e invoiceQuery: falta `registerSirePeriodsWorker`. No se modifica SIRE ni se corrigen esos dobles en esta integración. No hay fallos nuevos.
+
+Builds Nest y Vite, incluido `tsc -b`, aprobados. Lint back: cero errores y dos avisos previos. Lint focal front: los mismos dos errores `react-hooks/set-state-in-effect` y un aviso `react-refresh/only-export-components` que en main, verificados sobre un worktree de la base exacta.
+
+```sh
+# Back: PostgreSQL local aislado con las migraciones existentes aplicadas.
+NODE_OPTIONS=--max-old-space-size=6144 TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/sunat_test RUN_INTEGRATION_TESTS=required RUN_SUNAT_BETA_INTEGRATION=false npm test -- --runInBand --json
+TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/sunat_test RUN_SUNAT_BETA_INTEGRATION=false npm run test:e2e -- --runInBand --setupFiles="$PWD/test/setup.ts" --json
+# Front
+npm test -- --reporter=json
+# Ambos repos
+npm run build
+```
+
+FERRY.md contiene los veinte SHA-256 finales del front. No se abren PRs, no se despliega y no se ejecutan emisiones reales.

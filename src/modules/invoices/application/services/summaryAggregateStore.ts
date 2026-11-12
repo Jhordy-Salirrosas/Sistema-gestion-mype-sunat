@@ -17,6 +17,8 @@ export interface AggregateMember { id: string; serie: string; correlativo: numbe
 export const membersOf = (row: Pick<InvoiceAggregate, 'members'>): AggregateMember[] => row.members as unknown as AggregateMember[];
 export const resumenFingerprint = (kind: string, fecha: string, selection: SeleccionBaja[]) => createHash('sha256').update(JSON.stringify([kind, fecha, [...selection].sort((a, b) => a.id.localeCompare(b.id))])).digest('hex');
 export const hoyLima = () => new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+const memberIds = (value: unknown): string[] => Array.isArray(value)
+  ? value.flatMap(m => m && typeof m === 'object' && typeof m.id === 'string' && m.id.trim() ? [m.id] : []) : [];
 const numberOf = (m: AggregateMember) => `${m.serie}-${Number(m.correlativo)}`;
 const normalizeNumber = (s: string) => {
   const separator = s.lastIndexOf('-');
@@ -92,8 +94,19 @@ export class SummaryAggregateStore {
   async listar(companyId: string) {
     if (!companyId) throw new BadRequestException('SUMMARY_COMPANY_REQUIRED');
     const rows = await this.prisma.invoiceAggregate.findMany({ where: { company_id: companyId }, orderBy: { created_at: 'desc' }, take: 100,
-      select: { id: true, kind: true, identifier: true, reference_date: true, state: true, ticket: true, transport_uncertain: true, result: true, error: true, job_id: true, created_at: true } });
-    return rows.map(r => { const result = r.result as Record<string, unknown> | null; return { ...r, polling: pollingOf(r.result) ? { attempts: pollingOf(r.result)!.attempts, nextAt: pollingOf(r.result)!.nextAt, exhausted: pollingOf(r.result)!.exhausted ?? false, historyUnknown: pollingOf(r.result)!.historyUnknown ?? false, inProgress: Boolean(pollingOf(r.result)!.lease && Date.parse(pollingOf(r.result)!.lease!.until)>Date.now()) } : undefined, bridge_reversal: { pending: raWorks(r.result).filter(w => w.status !== 'DONE').length, done: raWorks(r.result).filter(w => w.status === 'DONE').length }, result: result ? { codigo: result.codigo, mensaje: result.mensaje, referencia: result.referencia } : null }; });
+      select: { id: true, kind: true, identifier: true, reference_date: true, state: true, ticket: true, transport_uncertain: true, result: true, error: true, job_id: true, created_at: true, members: true } });
+    const ids = [...new Set(rows.flatMap(r => memberIds(r.members)))];
+    const invoices = ids.length ? await this.prisma.invoice.findMany({
+      where: { company_id: companyId, id: { in: ids } },
+      select: { id: true, serie: true, correlativo: true, tipo_comprobante: true, monto_total: true, estado: true },
+    }) : [];
+    const byId = new Map(invoices.map(invoice => [invoice.id, invoice]));
+    return rows.map(r => { const result = r.result as Record<string, unknown> | null; const { members: snapshot, ...summary } = r;
+      const members = memberIds(snapshot).flatMap(id => { const invoice = byId.get(id); return invoice ? [{
+        id: invoice.id, numero: `${invoice.serie}-${String(invoice.correlativo).padStart(8, '0')}`,
+        tipo: invoice.tipo_comprobante, monto: Number(invoice.monto_total), estado: invoice.estado,
+      }] : []; });
+      return { ...summary, members, polling: pollingOf(r.result) ? { attempts: pollingOf(r.result)!.attempts, nextAt: pollingOf(r.result)!.nextAt, exhausted: pollingOf(r.result)!.exhausted ?? false, historyUnknown: pollingOf(r.result)!.historyUnknown ?? false, inProgress: Boolean(pollingOf(r.result)!.lease && Date.parse(pollingOf(r.result)!.lease!.until)>Date.now()) } : undefined, bridge_reversal: { pending: raWorks(r.result).filter(w => w.status !== 'DONE').length, done: raWorks(r.result).filter(w => w.status === 'DONE').length }, result: result ? { codigo: result.codigo, mensaje: result.mensaje, referencia: result.referencia } : null }; });
   }
   async finalizar(row: InvoiceAggregate, contenido: string, status: string | null) {
     const cdr = parseCdr(contenido);
