@@ -106,7 +106,7 @@ export const aSerieFe = (fila: {
 }): SerieFe => ({
   serie: fila.series,
   tipoComprobante: fila.document_type,
-  siguienteCorrelativo: fila.current_correlative + 1,
+  siguienteCorrelativo: Number.isSafeInteger(fila.current_correlative) && fila.current_correlative >= 0 && fila.current_correlative < 99999999 ? fila.current_correlative + 1 : undefined,
   activa: fila.is_active,
 });
 
