@@ -51,7 +51,7 @@ interface InvoiceEmitCamposProps {
   onItemCambiado: (indice: number, parcial: Partial<BorradorEmision['items'][number]>) => void;
   onItemEliminado: (indice: number) => void;
   onItemAgregado: () => void;
-  onBolsaAgregada: () => void;
+  onBolsaAgregada: (indice: number) => void;
   /** TA-61: productos del almacén para el buscador de la grilla. */
   productos?: readonly ProductoBuscado[];
   catalogoEstado?: 'listo' | 'cargando' | 'error';

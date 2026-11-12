@@ -50,6 +50,7 @@ export interface LineaEmisionPayload {
   codigoDetraccion?: string;
   /** ICBPER de la línea cuando es una bolsa plástica. */
   icbper?: number;
+  cantidadBolsas?: number;
 }
 
 /** Alta de comprobante desde la pantalla. */

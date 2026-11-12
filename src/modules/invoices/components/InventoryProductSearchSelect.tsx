@@ -47,7 +47,7 @@ export const InventoryProductSearchSelect = ({
   return (
     <div className="relative space-y-1">
       <input
-        aria-label="Buscar producto" role="combobox" aria-expanded={resultados.length > 0} aria-controls={listaId} aria-activedescendant={activo >= 0 ? `${listaId}-${activo}` : undefined}
+        data-invoice-product-search aria-label="Buscar producto" role="combobox" aria-expanded={resultados.length > 0} aria-controls={listaId} aria-activedescendant={activo >= 0 ? `${listaId}-${activo}` : undefined}
         className="h-9 w-full rounded-md border bg-background px-3 text-sm"
         value={texto}
         placeholder={placeholder}

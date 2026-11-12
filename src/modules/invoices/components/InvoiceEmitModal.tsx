@@ -1,4 +1,5 @@
 import { problemasContenidoEmision } from '../lib/invoiceEmissionValidation';
+import { cantidadBolsasDe } from '../lib/invoiceBags';
 import { limitesNota, precargarCantidadesNota } from '../lib/invoiceNoteQuantities';
 import { XIcon } from 'lucide-react';
 import { problemaSpotMinimo } from '../lib/invoiceDetraccion';
@@ -53,7 +54,6 @@ import {
   actualizarItem,
   agregarItem,
   eliminarItem,
-  itemBolsa,
   itemDesdeProducto,
   itemVacio,
   type ItemBorrador,
@@ -362,14 +362,9 @@ export const InvoiceEmitModal = ({
     } catch (error) { setErrorEmision(error instanceof Error ? error.message : 'Producto incompatible'); }
   };
 
-  const nuevaBolsa = () =>
-    setB((previo) => {
-      const cantidad = previo.bolsas > 0 ? previo.bolsas : 1;
-      return {
-        ...previo,
-        items: agregarItem(previo.items, itemBolsa(nuevaClave(), cantidad)),
-      };
-    });
+  const nuevaBolsa = (indice: number) => setB(previo => ({
+    ...previo, items: actualizarItem(previo.items, indice, {cantidadBolsas: cantidadBolsasDe(previo.items[indice]) + 1}),
+  }));
 
   /**
    * Nombre del comprobante que se va a emitir.
