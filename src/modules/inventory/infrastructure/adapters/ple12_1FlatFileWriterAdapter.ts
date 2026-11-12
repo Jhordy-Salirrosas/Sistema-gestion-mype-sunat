@@ -1,3 +1,4 @@
+import { numeroDocumentoSinSerie } from '../../presentation/documentReference';
 import { Injectable } from '@nestjs/common';
 import { PleStructureValidatorService } from './pleStructureValidatorService';
 
@@ -49,6 +50,7 @@ export class Ple12_1FlatFileWriterAdapter {
       const inQty = isEntry ? m.quantity.toFixed(4) : '0.0000';
       const outQty = !isEntry ? m.quantity.toFixed(4) : '0.0000';
 
+      const numeroDocumento = numeroDocumentoSinSerie(m.documentSerial, m.documentNumber);
       const rowFields = [
         m.periodYearMonth,
         this.validator.sanitizeField(m.cuo, 40),
@@ -61,7 +63,7 @@ export class Ple12_1FlatFileWriterAdapter {
         formatDate(m.documentDate),
         this.validator.sanitizeField(m.documentTypeCode || '00', 2),
         this.validator.sanitizeField(m.documentSerial || '-', 20),
-        this.validator.sanitizeField(m.documentNumber || '-', 20),
+        this.validator.sanitizeField(numeroDocumento || '-', 20),
         this.validator.sanitizeField(m.operationTypeCode, 2),
         this.validator.sanitizeField(m.description, 80),
         this.validator.sanitizeField(m.unitCode, 3),
