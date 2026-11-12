@@ -19,3 +19,22 @@ describe('InvoiceDetractionService', () => {
     await expect(service.registerDeposit('c1', 'i1', { amount: 200 })).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+describe('depósitos: precisión y fecha estrictas', () => {
+  const factura = { id: 'i1', estado: 'ACEPTADO', payload_ubl: { montoDetraccion: 118 } };
+  const update = jest.fn().mockResolvedValue({ id: 'i1' });
+  const service = new InvoiceDetractionService({ invoice: { findFirst: jest.fn().mockResolvedValue(factura), update } } as never);
+  beforeEach(() => update.mockClear());
+  it.each([-1, 0, 1.001, 118.001, 119, NaN, Infinity])('rechaza monto %s sin escritura', async amount => {
+    await expect(service.registerDeposit('c1', 'i1', { amount })).rejects.toBeInstanceOf(BadRequestException);
+    expect(update).not.toHaveBeenCalled();
+  });
+  it.each(['', '2026-02-30', '2026-13-01', '2026-2-01', 'no-fecha'])('rechaza fecha %s', async date => {
+    await expect(service.registerDeposit('c1', 'i1', { amount: 1.23, date })).rejects.toBeInstanceOf(BadRequestException);
+    expect(update).not.toHaveBeenCalled();
+  });
+  it.each(['2024-02-29', '2020-01-01', '2099-12-31'])('admite fecha válida sin nueva restricción temporal %s', async date => {
+    await service.registerDeposit('c1', 'i1', { amount: 1.23, date, constancia: ' ABC ' });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { detraccion_deposited_at: new Date(`${date}T00:00:00Z`), detraccion_deposited_amount: 1.23, detraccion_constancia: 'ABC' } });
+  });
+});

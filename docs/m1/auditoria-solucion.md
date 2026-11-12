@@ -3215,3 +3215,7 @@ Página y modal comparten las validaciones de identidad del cliente, descripció
 ### Grupo 3 — Series y configuración
 
 La pantalla valida las series según el tipo documental, incluidos FC/BC/FD/BD, y limita el correlativo inicial a 99999999; la vista previa no ofrece un noveno dígito. El writer y el formulario del emisor comparten máximos de domicilio 200 y departamento/provincia/distrito 30; ubigeo y local anexo se conservan como texto de seis y cuatro dígitos. No hay cambios de esquema ni de numeración atómica. Verificación focal: 51 pruebas del back y 20 del front aprobadas.
+
+### Grupo 4 — Depósitos de detracción
+
+El editor monetario admite importes positivos con dos decimales como máximo y hasta la detracción del comprobante; muestra el error junto al monto y bloquea Guardar. El servicio rechaza subcéntimos con 400 antes de escribir, sin redondearlos, y reutiliza la validación ISO estricta de cuotas. Se mantienen las reglas de constancia y fechas anteriores/futuras. Verificación focal: 17 pruebas del back y 10 del front aprobadas.
