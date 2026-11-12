@@ -10,11 +10,12 @@ import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { PrismaClient } from '../src/generated/client/client';
+import { archivoPadronOficial } from '../src/modules/invoices/application/services/retentionSeedSource';
 import { parsearPadron } from '../src/modules/invoices/application/services/retentionPadronParser';
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient | undefined;
 
-async function tablaDisponible(): Promise<boolean> {
+async function tablaDisponible(prisma: PrismaClient): Promise<boolean> {
   const [row] = await prisma.$queryRaw<Array<{ existe: string | null }>>`
     SELECT to_regclass('public.partner_tax_status')::text AS existe
   `;
@@ -22,10 +23,11 @@ async function tablaDisponible(): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
-  const archivo = process.argv[2] ?? 'scripts/data/agentes-retencion.csv';
+  const archivo = archivoPadronOficial(process.argv[2]);
   const companyId = process.argv[3];
 
-  if (!(await tablaDisponible())) {
+  const db = prisma = new PrismaClient();
+  if (!(await tablaDisponible(db))) {
     throw new Error(
       'Falta la tabla partner_tax_status. Aplicar la migración de D4 antes de ejecutar este script.',
     );
@@ -33,17 +35,16 @@ async function main(): Promise<void> {
 
   const filas = parsearPadron(readFileSync(archivo, 'utf8'));
   const empresas = companyId
-    ? await prisma.company.findMany({ where: { id: companyId }, select: { id: true } })
-    : await prisma.company.findMany({ select: { id: true } });
+    ? await db.company.findMany({ where: { id: companyId }, select: { id: true } })
+    : await db.company.findMany({ select: { id: true } });
 
   if (empresas.length === 0) throw new Error('No hay empresas para cargar el padrón.');
 
   let creados = 0;
-  let actualizados = 0;
 
   for (const empresa of empresas) {
     for (const fila of filas) {
-      const partner = await prisma.businessPartner.upsert({
+      const partner = await db.businessPartner.upsert({
         where: {
           company_id_doc_type_doc_number: {
             company_id: empresa.id,
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
         select: { id: true },
       });
 
-      const vigente = await prisma.partnerTaxStatus.findFirst({
+      const vigente = await db.partnerTaxStatus.findFirst({
         where: {
           partner_id: partner.id,
           indicator: 'RETENCION',
@@ -74,12 +75,12 @@ async function main(): Promise<void> {
       });
       if (vigente) continue;
 
-      await prisma.$transaction([
-        prisma.partnerTaxStatus.updateMany({
+      await db.$transaction([
+        db.partnerTaxStatus.updateMany({
           where: { partner_id: partner.id, indicator: 'RETENCION', valid_to: null },
           data: { valid_to: fila.validFrom },
         }),
-        prisma.partnerTaxStatus.create({
+        db.partnerTaxStatus.create({
           data: {
             partner_id: partner.id,
             indicator: 'RETENCION',
@@ -103,5 +104,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(error instanceof Error ? error.message : error);
       process.exit(1);
     })
-    .finally(() => prisma.$disconnect());
+    .finally(() => prisma?.$disconnect());
 }
