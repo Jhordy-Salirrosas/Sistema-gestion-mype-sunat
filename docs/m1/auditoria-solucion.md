@@ -3217,3 +3217,15 @@ El contraste de la auditoría antigua conserva deudas fuera de B1–B3: selector
 ### B2 — Atajos con ámbito de página
 
 Alt+C, Alt+P y Alt+L se reconocen por key/code desde cualquier foco de la página de emisión; Alt+P usa una marca estable del buscador real. Ctrl+Enter abre la revisión y confirmar conserva requestSubmit y las validaciones del formulario. No se captura el atajo de la página cuando hay un diálogo abierto; el modal conserva su ámbito propio. El listener se elimina al desmontar y no duplica acciones al recibir eventos dentro del formulario. Verificación focal: siete pruebas aprobadas, incluida confirmación con un único POST simulado. No se cambia la navegación inicial con flecha arriba, deuda separada de este encargo.
+
+### B3 — Miembros del agregado y acceso al comprobante
+
+El listado de RA/RC proyecta de forma aditiva los miembros como id, número fiscal completo, tipo, monto y estado actual del comprobante. Una sola consulta en lote contrasta los ids del snapshot contra comprobantes de la misma empresa; no se exponen los datos adicionales del JSON ni se reutilizan montos/estados no acreditados del snapshot. Miembros inexistentes o ajenos no se proyectan. Los controles de ticket, sondeos, incertidumbre y reversión pendiente se conservan.
+
+La tarjeta muestra los miembros y permite abrir el detalle existente por id, consultado desde el back, con error visible si no está disponible; no se fabrica un detalle ni se depende de que el comprobante esté en la página actual de la bandeja. Durante la carga se bloquean aperturas simultáneas. Verificación focal: 40 pruebas del almacén del back y cinco del Monitor del front aprobadas. No hay migración ni modificación del envío fiscal.
+
+### Validación final de B1–B3
+
+Back completo con PostgreSQL local y conexión beta real deshabilitada: **321 suites aprobadas y 4 omitidas (325 totales); 3001 pruebas aprobadas y 38 omitidas (3039 totales); 12 snapshots aprobados**. Front completo final: **139 archivos y 986 pruebas aprobadas**; el typecheck identificó el número obligatorio ausente en el fixture nuevo de miembros, que se completó sin modificar aserciones; se repitió la corrida completa sobre ese fixture final. Builds Nest/Vite y `tsc -b` aprobados. Lint del back y focal del front sin errores; el back conserva dos avisos previos en el área de resúmenes.
+
+Ramas `fix/m1-bolsas-atajos-resumenes` y `ferry/m1-bolsas-atajos-resumenes`, un commit por arreglo en cada rama. Los commits B1/B2 del back son documentales: su construcción funcional es de front. FERRY.md incluye SHA-256 verificados de 20 archivos únicos (21 entradas por compartir la página entre B1 y B2) y detalla la base pendiente de promoción de formularios. No se ejecutaron emisiones reales, migraciones ni PRs. La certificación en vivo queda para la promoción posterior.
