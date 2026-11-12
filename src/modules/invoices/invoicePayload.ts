@@ -13,6 +13,8 @@ import type { DatosTributarios } from './ublTotalesHelper';
 import type { MedioPagoDetraccion } from './domain/rules/medioPagoDetraccion';
 
 export interface InvoicePayload extends DatosTributarios {
+  /** Foto del maestro al crear, sellada por M1; no altera el XML fiscal. */
+  m1InventorySnapshot?: Record<string, boolean>;
   /** Política física sellada por el servidor al crear notas 02 nuevas. */
   politicaDevolucionFisica02?: number;
   /** Almacén congelado al crear; los históricos pueden no tenerlo. */

@@ -17,14 +17,18 @@ function esTransporte(e: EventoTransporte): boolean {
     e.http_status_code != null || e.tiempo_respuesta_ms != null ||
     /^(SOAP Fault del billService|Timeout de .*billService|Error de red contra el billService)/.test(e.mensaje_error ?? '');
 }
-export function clasificarTransporte(history: readonly EventoTransporte[]): ClaseTransporte {
-  const bloqueos = history.filter(esBloqueo);
+/** La evidencia de envío es histórica; solo una resolución concluyente cierra la incertidumbre. */
+export function resumirTransporte(history: readonly EventoTransporte[]) {
   const transportes = history.filter(esTransporte);
-  const ultimoBloqueo = Math.max(...bloqueos.map(e => e.created_at.getTime()));
-  // Empates de fecha son ambiguos: no permiten descartar un envío.
-  if (bloqueos.length && !transportes.some(e => e.created_at.getTime() >= ultimoBloqueo)) return 'BLOQUEO_PREVIO_PROBADO';
-  const ultimoTransporte = Math.max(...transportes.map(e => e.created_at.getTime()));
-  const final = history.some(e => ['ACEPTADO', 'OBSERVADO', 'RECHAZADO', 'ANULADO'].includes(e.estado_nuevo) &&
-    !esBloqueo(e) && esTransporte(e) && e.codigo_error !== INICIO_TRANSPORTE && e.created_at.getTime() >= ultimoTransporte);
-  return transportes.length && !final ? 'ENVIO_INCIERTO' : 'EVIDENCIA_INSUFICIENTE';
+  const actividad = history.filter(e => esTransporte(e) || e.codigo_error === CONSULTA_INCIERTA);
+  const ultimaActividad = Math.max(...actividad.map(e => e.created_at.getTime()));
+  const resuelto = history.some(e => ['ACEPTADO', 'OBSERVADO', 'RECHAZADO', 'ANULADO'].includes(e.estado_nuevo) &&
+    esTransporte(e) && e.codigo_error !== INICIO_TRANSPORTE && e.created_at.getTime() >= ultimaActividad);
+  return { envioAcreditado: transportes.length > 0, incertidumbrePendiente: actividad.length > 0 && !resuelto,
+    bloqueoPrevioProbado: history.some(esBloqueo) && actividad.length === 0 };
+}
+export function clasificarTransporte(history: readonly EventoTransporte[]): ClaseTransporte {
+  const evidencia = resumirTransporte(history);
+  if (evidencia.incertidumbrePendiente) return 'ENVIO_INCIERTO';
+  return evidencia.bloqueoPrevioProbado ? 'BLOQUEO_PREVIO_PROBADO' : 'EVIDENCIA_INSUFICIENTE';
 }

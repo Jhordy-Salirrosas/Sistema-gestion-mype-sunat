@@ -8,8 +8,8 @@ import { SummaryAggregateStore } from './summaryAggregateStore';
 import { SummaryGate, hashSummary } from './summaryGate';
 export type TipoEnvioResumen = 'RESUMEN_DIARIO' | 'COMUNICACION_BAJA';
 export interface SummaryJobData { tipo: TipoEnvioResumen; identificador: string; zipBase64: string; fileName: string; companyId: string; }
-export interface ResultadoEnvioResumen { enviado: boolean; identificador: string; ticket: string | null; status: string | null; contenido: string | null; consultas: number; error: string | null; }
-export interface OpcionesEnvio { credentials?: CredencialesSol | null; maxConsultas?: number; esperaMs?: number; ticketEsperado?: string; }
+export interface ResultadoEnvioResumen { enviado: boolean; identificador: string; ticket: string | null; status: string | null; contenido: string | null; consultas: number; error: string | null; automaticAttempt?: number; }
+export interface OpcionesEnvio { credentials?: CredencialesSol | null; maxConsultas?: number; esperaMs?: number; ticketEsperado?: string; automatico?: boolean; sondeoIntento?: number; }
 export const SUMMARY_QUEUE = 'sunat-summary-queue';
 export const CONSULTAS_POR_DEFECTO = 30;
 export const ESPERA_POR_DEFECTO_MS = 1000;
@@ -19,6 +19,10 @@ export class SummaryDispatchService {
   private readonly logger = new Logger(SummaryDispatchService.name);
   constructor(private readonly cola: QueueService, private readonly cliente: SunatSummaryClient,
     private readonly issuerConfig: IssuerConfigResolver, private readonly store: SummaryAggregateStore, private readonly gate: SummaryGate) {}
+
+  async programarSondeo(job: SummaryJobData & {sondeoIntento?:number;ticketConsulta?:string}, startAfter?: Date) {
+    return this.store.polling.publish(job,startAfter);
+  }
   async encolar(job: SummaryJobData, opciones: OpcionesEnvio = {}): Promise<string | null> {
     return this.cola.encolarResumen({ ...job, maxConsultas: opciones.maxConsultas ?? CONSULTAS_POR_DEFECTO, esperaMs: opciones.esperaMs ?? ESPERA_POR_DEFECTO_MS });
   }
@@ -31,6 +35,8 @@ export class SummaryDispatchService {
       const result = row.result as Record<string, string | null> | null;
       return { ...base, ticket: row.ticket, status: result?.codigo ?? null, contenido: result?.contenido ?? null, enviado: Boolean(result?.contenido), error: row.error };
     }
+    const received = (row.result as { receivedCdr?: { contenido: string; status: string | null } } | null)?.receivedCdr;
+    if (received) { await this.store.finalizar(row, received.contenido, received.status); return { ...base, enviado: true, ticket: row.ticket, status: received.status, contenido: received.contenido }; }
     if (!row.ticket && (row.transport_uncertain || ['SENDING', 'UNCERTAIN', 'REVIEW'].includes(row.state))) return { ...base, error: row.error ?? 'Intento incierto sin ticket: revisión requerida; no se reenvía a ciegas' };
     let context: Awaited<ReturnType<IssuerConfigResolver['resolve']>>;
     try {
@@ -62,7 +68,10 @@ export class SummaryDispatchService {
         return { ...base, error: d.mensaje };
       }
     }
-    const maximo = Math.max(0, opciones.maxConsultas ?? CONSULTAS_POR_DEFECTO);
+    const lease = await this.store.polling.claim(row.id, opciones.automatico ?? false, opciones.sondeoIntento, context.timeoutMs ?? 90000);
+    if (!lease.token) return { ...base, ticket, status: lease.status ?? 'SUMMARY_POLL_BUSY', error: 'Consulta diferida o ya en curso; se conserva el ticket.' };
+    try {
+    const maximo = opciones.automatico ? 0 : Math.max(0, opciones.maxConsultas ?? CONSULTAS_POR_DEFECTO);
     const espera = Math.max(0, opciones.esperaMs ?? ESPERA_POR_DEFECTO_MS);
     let status: string | null = null;
     for (let n = 0; n <= maximo; n++) {
@@ -97,6 +106,7 @@ export class SummaryDispatchService {
     }
     const error = `SUNAT sigue procesando (código ${status})`; await this.store.pendiente(row.id, error, ticket);
     return { ...base, ticket, status, consultas: maximo + 1, error };
+    } finally { await this.store.polling.release(row.id, lease.token, opciones.automatico ?? false); }
   }
 }
 export function interpretarEstadoResumen(xml: string) {

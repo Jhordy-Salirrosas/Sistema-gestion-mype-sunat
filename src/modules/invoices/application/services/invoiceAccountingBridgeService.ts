@@ -1,3 +1,4 @@
+import { BRIDGE_OMITTED, BRIDGE_RESOLVED } from './invoiceBridgeOmission';
 import { devuelveUnidades, esNota02Historica } from './notePhysicalReturnPolicy';
 /**
  * Puente facturación → Kardex + Contabilidad (TA-68, HU-12).
@@ -59,6 +60,9 @@ export interface ResultadoPuente {
 
 /** Factura mínima que necesita el puente. */
 export interface FacturaParaPuente {
+  estado?: 'ACEPTADO' | 'OBSERVADO';
+  inventarioAlCrear?: Record<string, boolean>;
+  omisionesPendientes?: string[];
   politicaDevolucionFisica02?: number;
   id: string;
   companyId: string;
@@ -175,8 +179,24 @@ export class InvoiceAccountingBridgeService {
     const fisicos: typeof pendientes[number][] = [];
     for (const movimiento of pendientes) {
       const producto = await this.prisma.inventoryProduct.findFirst({ where: { company_id: factura.companyId, sku: movimiento.sku }, select: { is_inventory: true } });
-      if (producto?.is_inventory === false && factura.tipoComprobante !== '07') servicios++;
-      else fisicos.push(movimiento);
+      if (producto?.is_inventory === false && factura.tipoComprobante !== '07') {
+        if (factura.inventarioAlCrear?.[movimiento.sku] === false) { servicios++; continue; }
+        const delivered = await this.existeMovimiento(factura.companyId, numero, movimiento.sku, movimiento.quantity, movimiento.operation_type_code);
+        if (delivered === true || delivered === 'INCONSISTENTE') { fisicos.push(movimiento); continue; }
+        const cause = factura.inventarioAlCrear?.[movimiento.sku] === true ? 'PRODUCT_CHANGED_TO_SERVICE' : 'INVENTORY_CLASSIFICATION_UNKNOWN';
+        const fragment = JSON.stringify({sku:movimiento.sku}).slice(1,-1);
+        if (!await this.prisma.transactionHistory.findFirst({ where: { invoice_id: factura.id, company_id: factura.companyId, codigo_error: BRIDGE_OMITTED, mensaje_error: { contains: fragment } } })) {
+          await this.prisma.$transaction(async tx => {
+            await tx.transactionHistory.create({ data: { invoice_id: factura.id, company_id: factura.companyId,
+              estado_anterior: factura.estado ?? 'ACEPTADO', estado_nuevo: factura.estado ?? 'ACEPTADO', codigo_error: BRIDGE_OMITTED,
+              mensaje_error: JSON.stringify({ sku: movimiento.sku, causa: cause, etapa: 'PUENTE_KARDEX', mensaje: 'Descarga omitida: producto actualmente clasificado como servicio; revisión del puente requerida.' }) } });
+            await tx.$executeRaw`UPDATE invoices SET payload_ubl = jsonb_set(COALESCE(payload_ubl, '{}'::jsonb), '{m1BridgePending}', 'true'::jsonb) WHERE id = ${factura.id} AND company_id = ${factura.companyId}`;
+          });
+        }
+        errores.push(`Kardex ${movimiento.sku}: descarga omitida por clasificación como servicio (${cause}); puente pendiente.`);
+        servicios++; continue;
+      }
+      fisicos.push(movimiento);
     }
     pendientes = fisicos;
     let requiereCosto = pendientes.length > 0;
@@ -248,12 +268,14 @@ export class InvoiceAccountingBridgeService {
 
       if (yaRegistrado) {
         omitidos += 1;
+        await this.resolverOmision(factura, sku);
         continue;
       }
 
       try {
         await this.registroMovimientos.execute(movimiento, factura.companyId);
         registrados += 1;
+        await this.resolverOmision(factura, sku);
       } catch (error) {
         // Un SKU que no existe en el inventario no invalida la factura: es un
         // producto que no se controla por almacén. Se informa y se sigue.
@@ -264,6 +286,18 @@ export class InvoiceAccountingBridgeService {
     }
 
     return { movimientosRegistrados: registrados, movimientosOmitidos: omitidos, requiereCosto };
+  }
+
+  private async resolverOmision(factura: FacturaParaPuente, sku: string) {
+    if (!factura.omisionesPendientes?.includes(sku)) return;
+    const remaining = factura.omisionesPendientes.filter(s => s !== sku);
+    await this.prisma.$transaction(async tx => {
+      await tx.transactionHistory.create({ data: { invoice_id: factura.id, company_id: factura.companyId,
+        estado_anterior: factura.estado ?? 'ACEPTADO', estado_nuevo: factura.estado ?? 'ACEPTADO', codigo_error: BRIDGE_RESOLVED,
+        mensaje_error: JSON.stringify({ sku, etapa: 'PUENTE_KARDEX', mensaje: 'Descarga verificada o completada al reprocesar el puente.' }) } });
+      await tx.$executeRaw`UPDATE invoices SET payload_ubl = jsonb_set(COALESCE(payload_ubl, '{}'::jsonb), '{m1BridgePending}', to_jsonb(${remaining.length > 0}::boolean)) WHERE id = ${factura.id} AND company_id = ${factura.companyId}`;
+    });
+    factura.omisionesPendientes = remaining;
   }
 
   /** Crea el asiento contable si esa factura no tiene uno ya. */

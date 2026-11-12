@@ -55,6 +55,20 @@ export class GenerateAccountingEntryUseCase {
       }
     }
 
+    if (dto.sourceModule === 'MANUAL' && this.accountingRepository.findAccounts) {
+      const catalogo = await this.accountingRepository.findAccounts();
+      const padres = new Set(catalogo.map((c) => c.parentCode).filter((p): p is string => Boolean(p)));
+      const inactivas = new Set(catalogo.filter((c) => c.isActive === false).map((c) => c.code));
+      dto.lines.forEach((linea, index) => {
+        if (padres.has(linea.accountCode)) {
+          throw new BadRequestException(`Línea ${index + 1}: la cuenta ${linea.accountCode} es de mayor y tiene subcuentas; use una subcuenta.`);
+        }
+        if (inactivas.has(linea.accountCode)) {
+          throw new BadRequestException(`Línea ${index + 1}: la cuenta ${linea.accountCode} está inactiva.`);
+        }
+      });
+    }
+
     dto.lines.forEach((linea, index) => {
       const debe = Number(linea.debitAmount) || 0;
       const haber = Number(linea.creditAmount) || 0;

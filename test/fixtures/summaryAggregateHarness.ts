@@ -10,7 +10,7 @@ export function aggregateHarness(kind = 'RA') {
   const row = { id: 'aggregate', company_id: 'company', kind, identifier, fingerprint: 'hash', reference_date: '2026-11-09', generation_date: '2026-11-09', state: 'POLLING', issuer_ruc: '20000000001', environment: 'BETA', xml: `<${root}>${line}</${root}>`, xml_hash: '', zip_base64: null as string | null, members: [member], ticket: 'T-FAKE', transport_uncertain: false, result: null, error: null, job_id: null, created_at: new Date(), updated_at: new Date() };
   row.xml_hash = hashSummary(row.xml);
   const delegate = { findUnique: jest.fn(async () => null as unknown), findUniqueOrThrow: jest.fn(async () => row), findFirst: jest.fn(async () => row as typeof row | null), findMany: jest.fn(async () => [] as unknown[]), create: jest.fn(async ({ data }) => ({ ...row, ...data })), update: jest.fn(async ({ data }) => ({ ...row, ...data })), updateMany: jest.fn(async () => ({ count: 1 })) };
-  const db = { invoiceAggregate: delegate, invoice: { updateMany: jest.fn(async () => ({ count: 1 })) }, $executeRaw: jest.fn(async () => 1), $transaction: jest.fn() };
+  const db = { transactionHistory: { create: jest.fn(async () => ({})) }, invoiceAggregate: delegate, invoice: { updateMany: jest.fn(async () => ({ count: 1 })) }, $executeRaw: jest.fn(async () => 1), $transaction: jest.fn() };
   db.$transaction.mockImplementation(async fn => fn(db));
   const queue = { enqueueInvoiceInTx: jest.fn(async () => 'accounting-job' as string | null) };
   const store = new SummaryAggregateStore(db as never, queue as never);

@@ -341,4 +341,17 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     const r = await service.listPayables(companyId);
     expect(r).toEqual([{ supplierDocNumber: '20100000001', supplierName: 'Proveedor', total: 218, paid: 50, balance: 168, count: 2, overdue: 68, oldestDays: expect.any(Number), aging: { d0_30: 100, d31_60: 0, d61_90: 68, d90_plus: 0 } }]);
   });
+
+  it('arma estado de cuenta por proveedor', async () => {
+    mockPrisma.nationalPurchase.findMany.mockResolvedValue([
+      { id: 'p1', purchase_number: 'COM-1', document_serial: 'F001', document_number: '1', issue_date: new Date('2026-11-01'), total_amount: 118, paid_amount: 50, status: 'PAGO_PARCIAL' },
+    ]);
+    mockPrisma.treasuryMovement.findMany.mockResolvedValue([
+      { id: 'm1', movement_date: new Date('2026-11-05'), amount: 50, payment_method: 'TRANSFERENCIA', source_reference_id: 'COM-1', concept: 'Pago' },
+    ]);
+    const r = await service.supplierStatement(companyId, '20100000001');
+    expect(r.totals).toEqual({ total: 118, paid: 50, balance: 68 });
+    expect(r.purchases[0]).toMatchObject({ number: 'COM-1', balance: 68 });
+    expect(r.payments).toHaveLength(1);
+  });
 });

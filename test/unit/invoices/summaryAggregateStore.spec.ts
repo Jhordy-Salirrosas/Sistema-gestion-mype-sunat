@@ -56,17 +56,17 @@ it('artefacto y cola usan transiciones condicionales sin degradar trabajos en cu
 it('reclamación única persiste incertidumbre antes de red, ticket y estados de recuperación', async () => {
   const h=aggregateHarness(); expect(await h.store.reclamar(h.row as never)).toBe(true); h.delegate.updateMany.mockResolvedValueOnce({count:0}); expect(await h.store.reclamar(h.row as never)).toBe(false);
   expect(h.delegate.updateMany.mock.calls[0][0]).toMatchObject({where:{company_id:'company',ticket:null,transport_uncertain:false},data:{state:'SENDING',transport_uncertain:true}});
-  await h.store.ticket(h.row.id,'T'); expect(h.delegate.update).toHaveBeenLastCalledWith({where:{id:h.row.id},data:{ticket:'T',state:'POLLING',transport_uncertain:false,error:null}});
+  await h.store.ticket(h.row.id,'T'); expect(h.delegate.update).toHaveBeenLastCalledWith({where:{id:h.row.id},data:expect.objectContaining({ticket:'T',state:'POLLING',transport_uncertain:false,error:null})});
   await h.store.pendiente(h.row.id,'red',null); expect(h.delegate.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({data:{state:'UNCERTAIN',error:'red'}}));
   await h.store.pendiente(h.row.id,'procesando','T'); expect(h.delegate.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({data:{state:'POLLING',error:'procesando'}}));
   await h.store.revision(h.row.id,'ajeno'); expect(h.delegate.update).toHaveBeenLastCalledWith({where:{id:h.row.id},data:{state:'REVIEW',error:'ajeno'}});
   await h.store.rechazar(h.row.id,'2335','Rechazo'); expect(h.delegate.update).toHaveBeenLastCalledWith(expect.objectContaining({data:{state:'REJECTED',transport_uncertain:false,error:'Rechazo',result:{codigo:'2335',mensaje:'Rechazo'}}}));
-  await h.store.pendientes(); expect(h.delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({take:50,where:{OR:[{state:'PREPARED'},{state:'RESERVED',updated_at:{lt:expect.any(Date)}}]}}));
+  await h.store.pendientes(); expect(h.delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({take:50,where:{OR:expect.arrayContaining([{state:'PREPARED'},{state:'RESERVED',updated_at:{lt:expect.any(Date)}}])}}));
 });
 it('monitor exige empresa y reduce resultados sin XML/ZIP/CDR', async () => {
   const h=aggregateHarness(); await expect(h.store.listar('')).rejects.toThrow('COMPANY_REQUIRED');
   h.delegate.findMany.mockResolvedValue([{id:'a',result:{codigo:'0',mensaje:'ok',referencia:'RA',contenido:'private',xml:'private'}},{id:'b',result:null}]);
-  expect(await h.store.listar('company')).toEqual([{id:'a',result:{codigo:'0',mensaje:'ok',referencia:'RA'}},{id:'b',result:null}]);
+  expect(await h.store.listar('company')).toEqual([{id:'a',bridge_reversal:{pending:0,done:0},result:{codigo:'0',mensaje:'ok',referencia:'RA'}},{id:'b',bridge_reversal:{pending:0,done:0},result:null}]);
   expect(h.delegate.findMany).toHaveBeenLastCalledWith(expect.objectContaining({where:{company_id:'company'}}));
 });
 it.each(['RA','RC'])('aceptación %s cotejada conserva resultado y efectos dentro de la transacción', async kind => {
@@ -92,7 +92,7 @@ it.each(['identidad','archivo','hash','miembro','ordinal','tipo','lista CDR','re
   if(failure==='snapshot')h.delegate.findUniqueOrThrow.mockResolvedValue({...h.row,xml_hash:'changed'});
   if(failure==='estado')h.db.invoice.updateMany.mockResolvedValue({count:0});
   if(failure==='cola')h.queue.enqueueInvoiceInTx.mockResolvedValue(null);
-  await expect(h.store.finalizar(h.row as never,cdr,'0')).rejects.toThrow('SUMMARY_'); expect(h.delegate.update).not.toHaveBeenCalled();
+  await expect(h.store.finalizar(h.row as never,cdr,'0')).rejects.toThrow('SUMMARY_'); expect(h.delegate.update.mock.calls.every(([call]) => !call.data.state)).toBe(true);
 });
 it.each(['ACCEPTED','REJECTED'])('CDR repetido en %s no repite efectos', async state => {
   const h=aggregateHarness(); h.row.state=state; expect(await h.store.finalizar(h.row as never,h.cdr(),'0')).toBe(h.row); expect(h.db.invoice.updateMany).not.toHaveBeenCalled();

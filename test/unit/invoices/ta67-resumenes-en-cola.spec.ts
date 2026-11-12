@@ -278,7 +278,7 @@ describe('TA-67 - resumenes diarios y bajas en cola', () => {
       const registerSummaryWorker = jest.fn();
       const consumidor = new SummaryJobConsumer(
         { registerSummaryWorker, encolarResumen: jest.fn(async () => 'poll-job') } as never,
-        { procesar } as never,
+        { procesar, programarSondeo: jest.fn(async () => 'poll-job') } as never,
         {} as never,
       );
       return { consumidor, procesar, registerSummaryWorker };

@@ -1,3 +1,4 @@
+import { RaBridgeReversalService } from './application/services/raBridgeReversalService';
 import { InvoiceForcedResendService } from './application/services/invoiceForcedResendService';
 import { InvoiceForcedResendController } from './infrastructure/controllers/invoiceForcedResendController';
 import { InvoiceBridgeCoordinatorService } from './application/services/invoiceBridgeCoordinatorService';
@@ -93,6 +94,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    RaBridgeReversalService,
     InvoiceForcedResendService,
     InvoiceBridgeCoordinatorService,
     AtomicInvoiceCreationService,
