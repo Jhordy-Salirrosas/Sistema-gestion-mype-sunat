@@ -434,6 +434,8 @@ export class InvoiceDownloadService {
       total,
       montoEnLetras:
         String(payload['montoEnLetras'] ?? '') || importeEnLetras(total),
+      cuotas: Array.isArray(payload.cuotas) ? payload.cuotas as DatosPdfComprobante['cuotas'] : [],
+      cuentaBancoNacion: typeof payload.cuentaBancoNacion === 'string' ? payload.cuentaBancoNacion : undefined,
       qrBase64,
     };
   }
