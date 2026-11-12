@@ -11,9 +11,8 @@ import {
   Length,
   MaxLength,
   Min,
-  ValidateIf,
 } from 'class-validator';
-import { IsRucValid } from '../../../invoices/application/validators/isRucValidDecorator';
+import { IsPartnerDocument } from '../validators/partnerInputValidation';
 
 export class UpsertCurrencyDto {
   @IsString()
@@ -168,8 +167,7 @@ export class CreatePartnerDto extends BasePartnerOptionalFieldsDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  @ValidateIf((o: { docType?: string }) => o.docType === '6')
-  @IsRucValid({ message: 'El RUC del tercero no supera la validación módulo 11.' })
+  @IsPartnerDocument()
   docNumber!: string;
 
   @IsString()

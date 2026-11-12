@@ -181,7 +181,7 @@ describe('MasterDataService', () => {
       await expect(
         service.createPartner(companyId, {
           docType: '6',
-          docNumber: '20601234567',
+          docNumber: '20100070970',
           legalName: 'Empresa Duplicada',
         }),
       ).rejects.toThrow(ConflictException);
@@ -191,7 +191,7 @@ describe('MasterDataService', () => {
 
       const created = await service.createPartner(companyId, {
         docType: '6',
-        docNumber: '20601234567',
+        docNumber: '20100070970',
         legalName: 'Empresa Nueva',
         roles: ['supplier'],
       });

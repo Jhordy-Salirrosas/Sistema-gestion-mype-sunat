@@ -3219,3 +3219,7 @@ La pantalla valida las series según el tipo documental, incluidos FC/BC/FD/BD, 
 ### Grupo 4 — Depósitos de detracción
 
 El editor monetario admite importes positivos con dos decimales como máximo y hasta la detracción del comprobante; muestra el error junto al monto y bloquea Guardar. El servicio rechaza subcéntimos con 400 antes de escribir, sin redondearlos, y reutiliza la validación ISO estricta de cuotas. Se mantienen las reglas de constancia y fechas anteriores/futuras. Verificación focal: 17 pruebas del back y 10 del front aprobadas.
+
+### Grupo 5 — Maestro compartido de clientes y proveedores
+
+La validación documental ya no queda anulada para tipos distintos de RUC: DNI exige ocho dígitos, RUC once y módulo 11, CE/TAX ID conservan documentos alfanuméricos no vacíos. La guarda aditiva del servicio cubre también llamadas sin ValidationPipe; las actualizaciones parciales validan solo campos aportados. Razón social y nombre comercial aportado no pueden estar vacíos ni superar 200 caracteres; país tiene dos caracteres y email formato válido. Nombre comercial y email siguen siendo opcionales. La pantalla reutiliza el mismo validador de email que el back y bloquea guardar valores inválidos. No se amplía el contrato ni se reescriben datos históricos. Se sustituye un RUC ficticio inválido en la prueba previa de duplicados por uno válido, conservando sus aserciones. Verificación focal: 34 pruebas del back y 16 del front aprobadas.
