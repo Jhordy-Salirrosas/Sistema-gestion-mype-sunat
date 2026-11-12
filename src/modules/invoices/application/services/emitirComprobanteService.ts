@@ -579,6 +579,8 @@ export class EmitirComprobanteService {
       descripcion: item.descripcion,
       cantidad: item.cantidad,
       unidad: item.unidad,
+      precioUnitario: item.precioUnitario,
+      valorUnitario: item.valorUnitario,
       // La guarda común ya cotejó la afectación de la nota con su origen.
       afectacion: dto.tipo_comprobante === '08' ? null : item.afectacion ?? null,
     }));
