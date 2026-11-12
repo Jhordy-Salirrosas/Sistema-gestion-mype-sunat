@@ -33,6 +33,7 @@
     "smoke:readonly": "node scripts/smoke-readonly.js",
     "smoke:deploy": "node scripts/smoke-deploy.js",
     "e2e:readonly": "node scripts/e2e-readonly.js",
+    "e2e:write": "node scripts/e2e-write.js",
     "prestart": "prisma generate",
     "prestart:dev": "prisma generate",
     "prebuild": "prisma generate",
