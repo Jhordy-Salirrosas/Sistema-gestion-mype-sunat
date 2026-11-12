@@ -3116,3 +3116,82 @@ Build back `npx nest build` y build front `npm run build` aprobados. Lint back s
 - `test/unit/modules/invoices/invoiceItemsLayout.test.tsx`
 
 D2, D3 y D4 no modifican archivos del producto front. FERRY.md añade únicamente el manifiesto e instrucciones de traslado y los SHA-256 finales de los cinco archivos front.
+
+## Parte 8E — presentación
+
+Base back `76e043eb4d0b9dd1cbf20af34d898e35c81cc440`; front `1f03cbd73026f79f53c303162f5299996b369d9e`. Orden de construcción E1, E2, E3 y E4. Los cambios de producto front se entregan por ferry. Sin emisiones reales, PRs ni migraciones.
+
+### E1 — corrección fronteriza autorizada en Inventario
+
+Se autoriza expresamente el ajuste aditivo y compatible de Inventario por su efecto directo sobre M1. Las vistas de Kardex y movimientos usan un formateador de representación que conserva un número completo y añade la serie cuando recibe un correlativo suelto. Se conservan los fallbacks de cada vista y las referencias manuales completas. Los exportadores separan el prefijo únicamente cuando coincide con la serie declarada; los PLE 12.1/13.1 reciben el número sin la serie duplicada. No se modifica document_number guardado, el contrato persistido de M1, la lógica de movimientos, el costo ni el saldo. La composición se reutiliza en las vistas relacionadas y en los CSV/PLE front. Diez regresiones back prueban ambos PLE y la ausencia de mutación de sus inputs; siete front cubren formatos, fallbacks y el render real del Kardex.
+
+### E2 — glosa de reversión de venta
+
+El asiento nuevo de una NC tipo 07 usa «Reverso de venta según…». Las ventas de otros tipos, el cliente por defecto, el máximo de 200 caracteres y la elipsis conservan su comportamiento. No cambian importes, cuentas, claves de idempotencia ni la glosa de reversión de costo. El asiento 63 histórico conserva su glosa: no se renombra ningún asiento guardado. Siete regresiones ejercitan la generación del asiento y el reconocimiento de un asiento ya existente.
+
+### E3 — edición coherente del valor unitario
+
+El campo muestra y rotula valor unitario sin IGV; en gratuitas muestra el valor referencial. Al editar esa base, actualizarItem deriva el precio con la afectación de la línea: gravada onerosa × 1.18, exonerada/inafecta igual a la base; gratuita conserva precio cobrado cero. Se mantiene la conversión inversa de un cambio explícito de precio y la precisión unitaria existente. Catálogo y precargas de notas actualizan total y payload de forma coherente. La grilla gratuita de 8D mantiene referencia editable e ICBPER independiente. No se relajan las guardas comerciales del servidor. Las expectativas anteriores de etiqueta/precio mostrado se adaptan al contrato de base sin IGV, conservando la intención de los controles.
+
+### E4 — invalidación conjunta de identidad confirmada
+
+Al editar documento o razón social de un cliente previamente seleccionado, el formulario conserva lo que se escribe y limpia el dato complementario de esa selección y su identidad/condiciones comerciales. Página y modal reutilizan la misma función de transición; el modal también retira tipo documental y dirección de la identidad anterior. La entrada manual sin selección previa conserva sus dos campos y no se transforma en una selección implícita. No cambia la identidad histórica de una nota vinculada deshabilitada. El componente CustomerLookupField, el debounce, la coincidencia campo/texto y el descarte de respuestas antiguas permanecen sin modificaciones.
+
+Siete regresiones nuevas recorren ambos formularios, solicitudes pendientes, edición de documento/nombre, entrada manual y respuestas invertidas. La batería focal conjunta de clientes pasa veinte casos. Se corrige la incoherencia reproducida de nombre nuevo con RUC anterior; no se presenta como reproducido ni corregido un flash de sugerencias antiguas distinto de ese caso.
+
+### Verificación y archivos de la Parte 8E
+
+Corridas completas finales: **back 314 suites / 2931 pruebas / 12 snapshots aprobados**, con 4 suites / 38 pruebas omitidas; **front 134 suites / 967 pruebas aprobadas**. Bases: back 312 suites / 2914 pruebas / 12 snapshots y front 131 suites / 947 pruebas. PostgreSQL local desechable habilitado para las integraciones; no se habilitó SUNAT real.
+
+Build back `npx nest build` y build front `npm run build` aprobados. Lint back sin errores, con las dos advertencias anteriores de 8C. En los archivos front incluidos, lint mantiene seis errores y cuatro advertencias que ya tenía la base; se compararon por archivo, regla y severidad, sin diagnósticos nuevos. Se conserva esa deuda previa de efectos React y tipos any de pantallas existentes, sin correcciones incidentales ni supresiones.
+
+Un commit back por frente; E3/E4 son documentales porque su producto cambia únicamente en el front. Ferry con un commit de producto por cada frente que lo requiere (E1/E3/E4), incorporando FERRY.md al cierre E4. Los dieciocho archivos front del manifiesto son idénticos al árbol probado. Sin datos históricos renombrados ni modificaciones de la lógica de movimientos; sin emisiones reales, PRs, migraciones o columnas nuevas.
+
+#### E1 — archivos back
+
+- `src/modules/inventory/infrastructure/adapters/ple12_1FlatFileWriterAdapter.ts`
+- `src/modules/inventory/infrastructure/adapters/ple13_1FlatFileWriterAdapter.ts`
+- `src/modules/inventory/presentation/documentReference.ts`
+- `test/unit/inventory/8e-document-reference.spec.ts`
+
+#### E2 — archivos back
+
+- `src/modules/invoices/application/services/invoiceAccountingBridgeService.ts`
+- `test/unit/invoices/8e-sale-reversal-description.spec.ts`
+
+#### E3 — archivos back
+
+- `docs/m1/auditoria-solucion.md`
+
+#### E4 — archivos back
+
+- `docs/m1/auditoria-solucion.md` (cierre de auditoría y verificación).
+
+#### E1 — archivos front (ferry)
+
+- `src/modules/inventory/components/MovementDetailModal.tsx`
+- `src/modules/inventory/components/PleExportModal.tsx`
+- `src/modules/inventory/lib/documentReference.ts`
+- `src/modules/inventory/pages/ElectronicBooksPage.tsx`
+- `src/modules/inventory/pages/InventoryConfigPage.tsx`
+- `src/modules/inventory/pages/InventoryKardexPage.tsx`
+- `src/modules/inventory/pages/InventoryMovementsPage.tsx`
+- `src/modules/inventory/pages/ProductKardexPage.tsx`
+- `test/unit/modules/inventory/inventory8eDocumentReference.test.tsx`
+
+#### E3 — archivos front (ferry)
+
+- `src/modules/invoices/components/InvoiceItemsGrid.tsx`
+- `src/modules/invoices/lib/invoiceItems.ts`
+- `test/unit/modules/invoices/invoice8eUnitValue.test.tsx`
+- `test/unit/modules/invoices/invoiceItemsLayout.test.tsx`
+- `test/unit/modules/invoices/invoiceNotasLineasOrigen.test.tsx`
+
+#### E4 — archivos front (ferry)
+
+- `src/modules/invoices/components/InvoiceEmitCampos.tsx`
+- `src/modules/invoices/lib/invoiceCustomerIdentity.ts`
+- `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
+- `test/unit/modules/invoices/invoice8eCustomerIdentity.test.tsx`
+
+E2 no necesita archivos front. E3 y E4 son correcciones de producto exclusivamente front; sus commits back son documentales. FERRY.md contiene el manifiesto completo de los dieciocho archivos front y sus SHA-256, y se añade al cierre E4 del ferry.
