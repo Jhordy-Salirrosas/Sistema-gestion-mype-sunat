@@ -529,7 +529,7 @@ describe('TA-68 · servicio puente', () => {
     const { puente, prisma, movimientoCreado } = dobles();
     prisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'servicio', is_inventory: false } as never);
     const factura = facturaPrueba();
-    const resultado = await puente.registrar({ ...factura, tipoComprobante, motivoNota: '01', documentoAfectadoId: 'original', items: factura.items.map(l => ({ ...l, afectacion: '11' })) });
+    const resultado = await puente.registrar({ ...factura, inventarioAlCrear: Object.fromEntries(factura.items.map(l => [l.itemCode!, false])), tipoComprobante, motivoNota: '01', documentoAfectadoId: 'original', items: factura.items.map(l => ({ ...l, afectacion: '11' })) });
     expect(resultado.completo).toBe(true);
     expect(resultado.movimientosRegistrados).toBe(0);
     expect(movimientoCreado).not.toHaveBeenCalled();

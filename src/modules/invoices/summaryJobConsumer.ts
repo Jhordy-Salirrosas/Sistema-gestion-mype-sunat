@@ -9,8 +9,8 @@ export interface SummaryPollingJob extends SummaryJobData {
   sondeoIntento?: number;
   ticketConsulta?: string;
 }
-export const MAX_SUMMARY_POLL_ATTEMPTS = 24;
-export const summaryPollDelay = (attempt: number) => ([5, 15, 30][attempt - 1] ?? 60) * 60_000;
+import { MAX_SUMMARY_POLL_ATTEMPTS, summaryPollDelay } from './application/services/summaryPollingCoordinator';
+export { MAX_SUMMARY_POLL_ATTEMPTS, summaryPollDelay } from './application/services/summaryPollingCoordinator';
 
 @Injectable()
 export class SummaryJobConsumer implements OnModuleInit {
@@ -35,7 +35,8 @@ export class SummaryJobConsumer implements OnModuleInit {
     const attempt = job.sondeoIntento ?? 1;
     if (!Number.isInteger(attempt) || attempt < 1 || attempt > MAX_SUMMARY_POLL_ATTEMPTS) throw new Error('SUMMARY_POLL_ATTEMPT_INVALID');
     if (attempt > 1 && !job.ticketConsulta) throw new Error('SUMMARY_POLL_TICKET_REQUIRED');
-    const resultado = await this.despachador.procesar(job, { maxConsultas: 0, ticketEsperado: job.ticketConsulta });
+    const resultado = await this.despachador.procesar(job, { maxConsultas: 0, ticketEsperado: job.ticketConsulta, automatico: true, sondeoIntento: attempt });
+    if (resultado.status?.startsWith('SUMMARY_POLL_')) return resultado;
     if (resultado.enviado) {
       this.logger.log(`[TA-67] ${job.identificador}: CDR obtenido con estado ${resultado.status ?? 'desconocido'}`);
       return resultado;
@@ -51,7 +52,7 @@ export class SummaryJobConsumer implements OnModuleInit {
       }
       const next: SummaryPollingJob = { ...job, sondeoIntento: attempt + 1, ticketConsulta: resultado.ticket, maxConsultas: 0 };
       const startAfter = new Date(Date.now() + summaryPollDelay(attempt));
-      const id = await this.queue.encolarResumen(next, startAfter);
+      const id = await this.despachador.programarSondeo(next, startAfter);
       if (!id) throw new Error('SUMMARY_POLL_ENQUEUE_FAILED: ticket conservado; publicación pendiente');
       this.logger.log(`[${job.identificador}] sondeo ${attempt + 1}/${MAX_SUMMARY_POLL_ATTEMPTS} programado para ${startAfter.toISOString()}`);
       return resultado;

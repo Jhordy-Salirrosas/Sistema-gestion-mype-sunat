@@ -30,7 +30,7 @@ import {
 } from './invoiceQueryMapper';
 
 /** Estados en los que tiene sentido reencolar el comprobante. */
-const ESTADOS_REINTENTABLES = ['ERROR_RED', 'ENVIADO', 'RECHAZADO'];
+const ESTADOS_REINTENTABLES = ['ERROR_RED', 'ENVIADO'];
 
 /** Proyección del listado: solo lo que la grilla necesita. */
 const SELECT_LISTADO = {
@@ -316,6 +316,12 @@ export class InvoiceQueryService {
         message: 'El comprobante no existe o no pertenece a la empresa',
       });
     }
+
+    if (fila.estado === 'RECHAZADO') return {
+      id: fila.id, estado: fila.estado, encolado: false, codigo: 'INVOICE_REJECTED_FINAL',
+      resultadoCola: 'ESTADO_NO_PERMITIDO',
+      mensaje: 'El comprobante está RECHAZADO y tiene estado fiscal final. No se reencola ni se reabre desde Reintentar CDR.',
+    };
 
     if (fila.estado === 'EN_COLA' || fila.estado === 'PENDIENTE') {
       // Un rescate histórico sin marcador no demuestra que nunca se abrió red.

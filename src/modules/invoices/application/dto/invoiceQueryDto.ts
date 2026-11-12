@@ -166,6 +166,7 @@ export interface CuotaEnviadaDto {
 
 /** Respuesta del reintento de CDR. */
 export interface ReintentoCdrDto {
+  codigo?: string;
   id: string;
   estado: EstadoComprobante;
   encolado: boolean;
@@ -175,6 +176,7 @@ export interface ReintentoCdrDto {
 
 /** Filtros aceptados por el listado. */
 export interface FiltrosComprobantes {
+  puente_pendiente?: string;
   estado?: string;
   tipo?: string;
   serie?: string;

@@ -2909,3 +2909,125 @@ Regresiones: 40 casos en la suite de guardas, incluidos ambos contratos con nota
 Front: los diez archivos de producción/pruebas se enumeran con sus rutas exactas y hashes SHA-256 en FERRY.md de `ferry/m1-8b-ter-cantidades-totales`. P3 es exclusivamente back; no requiere otro cambio de front.
 
 Cierre final de la adenda: **back 303 suites / 2781 pruebas y 12 snapshots aprobados**, 4 suites / 38 pruebas omitidas; corrida completa sin fallos. **Front 128 suites / 938 pruebas aprobadas**, sin cambios posteriores de front por P3. TypeScript/lint back aprobados; build front aprobado, con el diagnóstico de lint heredado del modal ya descrito. P1, P2 y P3 quedan separados en tres commits de la rama `fix/m1-8b-ter-cantidades-totales`; ferry de P2 y actualización documental de P3 en `ferry/m1-8b-ter-cantidades-totales`. Sin migraciones, emisiones reales, PRs, merges ni despliegues durante el encargo.
+
+
+## Parte 8C — transporte, puente y resúmenes RA/RC
+
+Construcción sobre back `311b02aaf709383aff899a1171ece060b612e788` y front `c146b716d1cbab7b3456e8186625c6f1021cee6a`. Orden de commits: C1, C4, C5, C2 y C3. Sin migraciones ni cambios de código fuente en Inventario, Contabilidad o la cola compartida; sin emisiones reales, PRs ni despliegues.
+
+### C1 — evidencia de transporte y resolución de incertidumbre
+
+El clasificador separa la evidencia de envío de la incertidumbre pendiente. Un bloqueo local posterior no borra ninguna de ellas. Solo una respuesta concluyente resuelve la incertidumbre; `M1_TRANSPORT_UNCERTAIN` impide concluir que no hubo envío, pero por sí mismo no acredita un envío. Se conserva la prioridad de transporte sobre causas de preparación antiguas en la presentación.
+
+### C4 — RA aceptada y reversión durable del puente
+
+El CDR recibido se conserva antes de materializar la aceptación local. La aceptación de la RA registra trabajo específico `REVERSE_RA_BRIDGE` por miembro en el JSON existente del agregado y el evento documental `M1_RA_REVERSAL_PENDING`. No depende del job ordinario del comprobante, que considera ANULADO un estado final.
+
+El servicio de reversión de M1 procesa cada documento en su propia transacción y comparte la exclusión del puente. Revierte únicamente movimientos y asientos realmente registrados: contramovimientos con referencia estable y costo histórico acreditado, y contraasientos referenciados con debe/haber invertidos. Las claves estables evitan duplicados. Un fallo contable revierte también los movimientos de esa transacción; los miembros completados permanecen completados. El intento y la próxima fecha quedan durables, con recuperación interna. La aceptación fiscal y el CDR se conservan aunque falle la reversión local. Detalle y Monitor de agregados muestran la reversión pendiente; al completarse se registra `M1_RA_REVERSAL_DONE`.
+
+Regresiones PostgreSQL: cuatro casos cubren movimientos/capas/contraasientos reales e idempotencia, efectos ausentes, rollback ante fallo y aislamiento entre miembros. La lógica de recuperación conserva el CDR para continuar la materialización sin otra llamada de envío.
+
+### C5 — recuperación de POLLING y exclusión de consultas
+
+La recuperación incorpora agregados POLLING con ticket. El JSON existente persiste intentos, próxima fecha, agotamiento y una exclusión con vencimiento compartida por consulta manual, worker y recuperación. Se mantienen los intervalos de 5/15/30 minutos y luego una hora, con máximo de 24 consultas automáticas. El intento se consume antes de consultar; la recuperación no reinicia el presupuesto ni rearma un agregado agotado. Las publicaciones pendientes se deduplican y un ticket existente impide repetir `sendSummary`.
+
+Para trabajos anteriores se adopta la evidencia disponible en la cola. Si el historial fue eliminado y no permite conocer el presupuesto, se expone esa incertidumbre sin inventar un contador nuevo; continúa disponible la consulta manual. La consulta manual tampoco reinicia el presupuesto automático. El Monitor muestra intentos, próxima fecha y agotamiento. Siete pruebas PostgreSQL verifican concurrencia, vencimiento, presupuesto, recuperación y deduplicación.
+
+### C2 — reintento de rechazo final
+
+`retry-cdr` responde `encolado: false` y código `INVOICE_REJECTED_FINAL` para RECHAZADO, con un mensaje explícito de estado fiscal final. No publica trabajo ni reabre el comprobante. Los caminos de ERROR_RED e incertidumbre conservan su comportamiento. El front ya presenta el mensaje del servidor; no requiere cambios por este frente. Tres regresiones verifican rechazo final y caminos conservados.
+
+### C3 — omisión durable de descarga por clasificación como servicio
+
+Ambas rutas de creación atómica guardan en el payload una instantánea de clasificación de inventario por SKU obtenida del servidor. Un servicio acreditado desde la creación conserva su omisión normal. Si era inventariable y ahora es servicio, el puente registra `M1_BRIDGE_INVENTORY_OMITTED` con causa `PRODUCT_CHANGED_TO_SERVICE`. Si falta la instantánea histórica, la causa es `INVENTORY_CLASSIFICATION_UNKNOWN`: no se afirma que hubo un cambio. Un movimiento ya registrado se reconoce y no se convierte en una omisión nueva.
+
+El evento y la marca de pendiente del payload se escriben juntos. El resultado del puente permanece incompleto; el worker conserva su contrato de trabajo pendiente. El detalle conserva el resultado fiscal y muestra la condición local. El Monitor consulta el filtro `puente_pendiente=true`, muestra el pendiente y permite usar la acción existente `reprocesar-puente`. Al verificar o completar la descarga, el reproceso registra `M1_BRIDGE_INVENTORY_RESOLVED` y retira la marca cuando no quedan SKU pendientes. No se duplica la descarga ni el evento al repetir el trabajo. No se fabrica una regularización histórica ni se cambia el estado fiscal.
+
+Cuatro regresiones PostgreSQL verifican el cambio acreditado, el servicio original, la ausencia de evidencia histórica y la descarga ya realizada; incluyen consulta del filtro real, reprocesos repetidos y resolución durable. Las pruebas de interfaz verifican detalle, causa visible y acción del Monitor.
+
+Propuesta para el equipo de Inventario, exclusivamente documentada: bloquear el cambio producto→servicio cuando existan descargas del puente pendientes, con una comprobación transaccional y una disciplina de concurrencia compartida que impida una carrera con la aceptación/reproceso. Antes de habilitar el cambio debe definirse la resolución explícita y auditada de los pendientes históricos. No se implementa esta restricción ni se modifica el controlador o los servicios de Inventario en la Parte 8C.
+
+### Verificación y archivos de la Parte 8C
+
+Corridas completas finales: **back 307 suites / 2803 pruebas / 12 snapshots aprobados**, con 4 suites / 38 pruebas omitidas como en la base; **front 130 suites / 943 pruebas aprobadas**. PostgreSQL local desechable habilitado para las integraciones; SUNAT real no habilitado. Builds `npx nest build` y `npm run build` del front aprobados; TypeScript back aprobado. Lint back sin errores, con cuatro advertencias menores (dos variables/importaciones sin uso en la prueba C4 y dos respaldos vacíos de spread en C5); lint de los archivos front cambiados sin errores, con la advertencia de exportación para Fast Refresh ya existente en el Monitor.
+
+Bases verificadas de fase 0: back 303 suites / 2781 pruebas / 12 snapshots aprobados y front 128 suites / 938 pruebas aprobadas. La entrega conserva un commit back por frente. Los archivos front se trasladan mediante `ferry/m1-8c-puente-resumenes`, con manifiesto y SHA-256; aplicar después del back. El código fuente de producción modificado permanece dentro de `src/modules/invoices`.
+
+
+#### C1 — archivos back
+
+- `src/modules/invoices/application/services/invoiceTransportEvidence.ts`
+- `test/unit/invoices/m1-incertidumbre-transporte.spec.ts`
+
+#### C4 — archivos back
+
+- `src/modules/invoices/application/services/invoiceResultPresentation.ts`
+- `src/modules/invoices/application/services/raBridgeReversalService.ts`
+- `src/modules/invoices/application/services/summaryAggregateStore.ts`
+- `src/modules/invoices/application/services/summaryEnvioService.ts`
+- `src/modules/invoices/invoicesModule.ts`
+- `test/fixtures/summaryAggregateHarness.ts`
+- `test/integration/invoices/8c-ra-reversal.integration.spec.ts`
+- `test/unit/invoices/summaryAggregateStore.spec.ts`
+
+#### C5 — archivos back
+
+- `src/modules/invoices/application/services/summaryAggregateStore.ts`
+- `src/modules/invoices/application/services/summaryDispatchService.ts`
+- `src/modules/invoices/application/services/summaryEnvioService.ts`
+- `src/modules/invoices/application/services/summaryPollingCoordinator.ts`
+- `src/modules/invoices/summaryJobConsumer.ts`
+- `test/fixtures/summaryDispatchHarness.ts`
+- `test/integration/invoices/8c-summary-polling.integration.spec.ts`
+- `test/unit/invoices/summaryAggregateStore.spec.ts`
+- `test/unit/invoices/ta67-resumenes-en-cola.spec.ts`
+
+#### C2 — archivos back
+
+- `src/modules/invoices/application/dto/invoiceQueryDto.ts`
+- `src/modules/invoices/application/services/invoiceQueryService.ts`
+- `test/unit/invoices/8c-retry-final.spec.ts`
+
+#### C3 — archivos back
+
+- `docs/m1/auditoria-solucion.md`
+- `src/modules/invoices/application/dto/invoiceQueryDto.ts`
+- `src/modules/invoices/application/services/atomicInvoiceCreationService.ts`
+- `src/modules/invoices/application/services/emitirComprobanteService.ts`
+- `src/modules/invoices/application/services/invoiceAccountingBridgeService.ts`
+- `src/modules/invoices/application/services/invoiceBridgeCoordinatorService.ts`
+- `src/modules/invoices/application/services/invoiceBridgeOmission.ts`
+- `src/modules/invoices/application/services/invoiceQueryFilters.ts`
+- `src/modules/invoices/application/services/invoiceResultPresentation.ts`
+- `src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts`
+- `src/modules/invoices/invoicePayload.ts`
+- `test/integration/invoices/8c-bridge-omission.integration.spec.ts`
+- `test/unit/invoices/ta68-puente-kardex-contabilidad.spec.ts`
+
+#### C4 — archivos front (ferry)
+
+- `src/modules/invoices/components/InvoiceAggregateMonitor.tsx`
+- `src/modules/invoices/components/InvoiceAuditTrail.tsx`
+- `src/modules/invoices/components/InvoiceCdrModal.tsx`
+- `src/modules/invoices/components/InvoiceStatusBadge.tsx`
+- `src/modules/invoices/lib/invoiceResultPresentation.ts`
+- `src/modules/invoices/types/invoiceAggregate.types.ts`
+- `test/unit/modules/invoices/invoicePulidoPresentacion.test.tsx`
+
+#### C5 — archivos front (ferry)
+
+- `src/modules/invoices/components/InvoiceAggregateMonitor.tsx`
+- `src/modules/invoices/types/invoiceAggregate.types.ts`
+- `test/unit/modules/invoices/invoice8cAggregateMonitor.test.tsx`
+
+#### C3 — archivos front (ferry)
+
+- `src/modules/invoices/components/InvoiceAuditTrail.tsx`
+- `src/modules/invoices/components/InvoiceCdrModal.tsx`
+- `src/modules/invoices/components/InvoiceStatusBadge.tsx`
+- `src/modules/invoices/lib/invoiceResultPresentation.ts`
+- `src/modules/invoices/pages/InvoiceMonitorPage.tsx`
+- `src/modules/invoices/services/invoicesApi.ts`
+- `test/unit/modules/invoices/invoice8cBridgePending.test.tsx`
+
+C1 y C2 no requieren archivos front. El manifiesto FERRY.md añade las instrucciones de traslado y los SHA-256 finales de todos los archivos front.

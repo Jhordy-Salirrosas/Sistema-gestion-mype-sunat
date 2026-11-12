@@ -1,3 +1,4 @@
+import { omisionesPendientes, BRIDGE_OMITTED, BRIDGE_RESOLVED } from './invoiceBridgeOmission';
 import {
   BadRequestException,
   ForbiddenException,
@@ -167,7 +168,7 @@ export class InvoiceBridgeCoordinatorService {
 
   private async cargarParaPuente(
     invoiceId: string,
-    _estado: InvoiceStatus,
+    estado: InvoiceStatus,
   ): Promise<FacturaParaPuente | null> {
     const fila = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
@@ -182,6 +183,7 @@ export class InvoiceBridgeCoordinatorService {
         referenced_invoice_id: true,
         referenced_series_correlative: true,
         credit_debit_reason_code: true,
+        history: { where: { codigo_error: { in: [BRIDGE_OMITTED, BRIDGE_RESOLVED] } }, select: { codigo_error: true, mensaje_error: true } },
         items: {
           orderBy: { item_order: 'asc' },
           select: {
@@ -204,6 +206,9 @@ export class InvoiceBridgeCoordinatorService {
 
     return {
       id: fila.id,
+      estado: estado as 'ACEPTADO' | 'OBSERVADO',
+      inventarioAlCrear: payload.m1InventorySnapshot,
+      omisionesPendientes: omisionesPendientes(fila.history ?? []),
       companyId: fila.company_id,
       tipoComprobante: fila.tipo_comprobante,
       serie: fila.serie,

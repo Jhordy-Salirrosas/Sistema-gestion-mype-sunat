@@ -10,6 +10,7 @@ export function summaryDispatchForTest(queue: unknown, client: unknown, resolver
     reclamar: async () => true, ticket: async () => undefined, pendiente: async () => undefined,
     finalizar: async () => undefined, revision: async () => undefined, rechazar: async () => undefined,
   };
+  Object.assign(store, { polling: { claim: async () => ({token:'protocol'}), release: async () => undefined, publish: async (job: unknown, date: Date) => (queue as any).encolarResumen(job,date) } });
   return new SummaryDispatchService(queue as never, client as never, (resolver ?? { resolve: async () => ({ ruc: '20123456786', environment: 'MOCK', endpoint: 'http://127.0.0.1/billService' }) }) as never, store as never, { validar: async () => undefined } as never);
 }
 /** Observable protocol boundaries for failure/recovery unit tests. */
@@ -22,6 +23,7 @@ export function summaryDispatchHarness() {
   const client={sendSummary:jest.fn(async()=>({ticket:'T-FAKE'})),getStatus:jest.fn(async()=>({statusCode:'0' as string|null,enProceso:false,contenido:'cdr' as string|null}))};
   const context={companyId:'company',ruc,timeoutMs:90000,environment:'BETA',endpoint:'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',sol:{username:'FAKE',password:'fake'} as {username:string;password:string}|null};
   const resolver={resolve:jest.fn(async()=>context)}; const gate={validar:jest.fn(async()=>undefined)};
+  Object.assign(store, { polling: { claim: async () => ({token:'protocol'}), release: async () => undefined, publish: async (job: unknown, date: Date) => queue.encolarResumen(job as never,date as never) } });
   const service=new SummaryDispatchService(queue as never,client as never,resolver as never,store as never,gate as never);
   const job={companyId:'company',identificador:identifier,tipo:'RESUMEN_DIARIO' as const,zipBase64:'untrusted',fileName:'untrusted'};
   return {row,store,queue,client,context,resolver,gate,service,job};
