@@ -3211,3 +3211,7 @@ Bases sincronizadas: back `d5115adc109e311a29f84b86203028887f8f0118`; front `73a
 ### Grupo 1 — Contenido de emisión
 
 Página y modal comparten las validaciones de identidad del cliente, descripción (500), razón social (1500), cantidad positiva con hasta tres decimales y valor oneroso positivo. Se conserva la excepción explícita de notas y documentos íntegramente gratuitos. Un descuento global que deja un documento oneroso en cero bloquea el envío con error visible. No se modifica el back ni el circuito ICBPER. Verificación focal: 46 pruebas aprobadas y typecheck del front.
+
+### Grupo 3 — Series y configuración
+
+La pantalla valida las series según el tipo documental, incluidos FC/BC/FD/BD, y limita el correlativo inicial a 99999999; la vista previa no ofrece un noveno dígito. El writer y el formulario del emisor comparten máximos de domicilio 200 y departamento/provincia/distrito 30; ubigeo y local anexo se conservan como texto de seis y cuatro dígitos. No hay cambios de esquema ni de numeración atómica. Verificación focal: 51 pruebas del back y 20 del front aprobadas.

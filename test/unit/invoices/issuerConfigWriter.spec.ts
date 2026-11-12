@@ -326,3 +326,10 @@ describe('M1 perfil comercial persistido y resuelto', () => {
     expect(h.db.company.update).not.toHaveBeenCalled();
   });
 });
+
+describe('límites fiscales compartidos con emisión', () => {
+  it.each([['domicilio_fiscal', 200], ['departamento_fiscal', 30], ['provincia_fiscal', 30], ['distrito_fiscal', 30]] as const)('valida %s antes de escribir', (campo, maximo) => {
+    expect(() => validateIssuerInput({ [campo]: 'a'.repeat(maximo) })).not.toThrow();
+    expect(() => validateIssuerInput({ [campo]: 'a'.repeat(maximo + 1) })).toThrow(BadRequestException);
+  });
+});
