@@ -189,6 +189,25 @@ describe('SireReadOnlyPeriodsController', () => {
     expect(httpCode).toBe(HttpStatus.ACCEPTED);
   });
 
+  it('answers the controlled 202 when the queue does not respond in time', async () => {
+    jest.useFakeTimers();
+    (queue.enqueueSirePeriods as jest.Mock).mockReturnValueOnce(
+      new Promise(() => undefined),
+    );
+
+    const pending = controller.getPeriods(dto, user);
+    await jest.advanceTimersByTimeAsync(20_000);
+    const response = await pending;
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'QUEUE_ENQUEUE_FAILED',
+      message: 'El servicio de colas no está disponible, por favor reintenta.',
+    });
+    expect(response.messageId).toEqual(expect.any(String));
+    jest.useRealTimers();
+  });
+
   it('keeps the controlled answer when the failed state cannot be persisted', async () => {
     (queue.enqueueSirePeriods as jest.Mock).mockRejectedValueOnce(
       new Error('pg-boss caído'),
