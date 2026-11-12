@@ -15,7 +15,8 @@ const url = process.env.TEST_DATABASE_URL;
  let db: PrismaService, company: string;
  let atomic: AtomicInvoiceCreationService, coordinator: InvoiceBridgeCoordinatorService;
  const old = process.env.DATABASE_URL;
- const accounts = ['121210','401110','701210','691110','201110'];
+ // Catálogo global: códigos exclusivos de esta suite para no borrarlos en otro worker.
+ const accounts = ['121299','401199','701299','691199','201199'];
  const createdAccounts: string[] = [];
  const queue = { enqueueInvoiceInTx: jest.fn(async () => 'job-simulado') };
  beforeAll(async () => {

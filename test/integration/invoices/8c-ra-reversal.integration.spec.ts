@@ -6,10 +6,8 @@ import { aggregateHarness } from '../../fixtures/summaryAggregateHarness';
 import { hashSummary } from '../../../src/modules/invoices/application/services/summaryGate';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../src/database/prismaService';
-import { AtomicInvoiceCreationService } from '../../../src/modules/invoices/application/services/atomicInvoiceCreationService';
 import { InvoiceAccountingBridgeService } from '../../../src/modules/invoices/application/services/invoiceAccountingBridgeService';
 import { InvoiceBridgeCoordinatorService } from '../../../src/modules/invoices/application/services/invoiceBridgeCoordinatorService';
-import { ControlSaldoNotas } from '../../../src/modules/invoices/application/services/creditNoteBalanceGuard';
 import { RegisterManualMovementUseCase } from '../../../src/modules/inventory/application/use-cases/registerManualMovementUseCase';
 import { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
 import { PrismaAccountingRepository } from '../../../src/modules/accounting/infrastructure/prismaAccountingRepository';
@@ -17,18 +15,12 @@ import { fakeFiscalAddress } from '../../fixtures/fakeFiscalAddress';
 const url = process.env.TEST_DATABASE_URL;
 (url ? describe : describe.skip)('8C C4: reversión RA durable y transaccional', () => {
  let db: PrismaService, company: string, origin: string;
- let atomic: AtomicInvoiceCreationService, coordinator: InvoiceBridgeCoordinatorService;
+ let coordinator: InvoiceBridgeCoordinatorService;
  const old = process.env.DATABASE_URL;
- const accounts = ['121210','401110','701210','691110','201110'];
+ // Catálogo global: códigos exclusivos de esta suite para no borrarlos en otro worker.
+ const accounts = ['121298','401198','701298','691198','201198'];
  const createdAccounts: string[] = [];
  const queue = { enqueueInvoiceInTx: jest.fn(async () => 'job-simulado') };
- const dto = (motivo: string, cantidad = 10, precioUnitario = 11.8) => ({
-  tipo_comprobante: '07', serie: 'FC01', fecha_emision: '2026-11-11', forma_pago: 'Contado',
-  customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente',
-  documento_afectado: 'F001-00000069', codigo_motivo_nota: motivo,
-  items: [{ codigo: 'MAT', descripcion: 'Producto', cantidad, precioUnitario }],
- });
- const issue = (motivo: string, cantidad = 10, precio = 11.8, key = randomUUID()) => atomic.emitir(dto(motivo, cantidad, precio) as never, company, key);
  beforeAll(async () => {
   if (!url || !['localhost','127.0.0.1'].includes(new URL(url).hostname)) throw new Error('Solo PostgreSQL local desechable');
   process.env.DATABASE_URL = url; db = new PrismaService(); await db.$connect();
@@ -52,7 +44,6 @@ const url = process.env.TEST_DATABASE_URL;
   await manual.execute({ warehouse_code: warehouse.warehouse_code, sku: 'MAT', direction: 'SALIDA', quantity: 10, operation_type_code: '01', source_reference_id: 'F001-00000069' }, company);
   const bridge = new InvoiceAccountingBridgeService(db, manual, new GenerateAccountingEntryUseCase(new PrismaAccountingRepository(db)));
   coordinator = new InvoiceBridgeCoordinatorService(db, bridge);
-  atomic = new AtomicInvoiceCreationService(db, queue as never);
  });
  afterEach(async () => {
   await db.accountingLine.deleteMany({ where: { entry: { company_id: company } } });
