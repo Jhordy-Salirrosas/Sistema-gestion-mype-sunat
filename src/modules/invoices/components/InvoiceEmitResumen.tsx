@@ -35,14 +35,14 @@ export const InvoiceEmitResumen = ({ borrador }: InvoiceEmitResumenProps) => {
   const porcentaje = codigo ? (buscarDetraccion(codigo)?.porcentaje ?? 0) : 0;
 
   const liquidacion = liquidarComprobante(borradorALiquidar(borrador), {
-    // El ICBPER de la grilla ya vive en su propia línea; `bolsasPlasticas`
-    // solo cubre el campo suelto, que no debe contarse dos veces.
+    // El ICBPER ya se deriva de cantidadBolsas en cada línea registrada.
+    // La cabecera no tiene una segunda fuente de cantidades.
     bolsasPlasticas: 0,
     detraccionPorcentaje: porcentaje,
   });
 
   // El ICBPER de las líneas se suma al total: no pasa por `liquidarComprobante`
-  // porque cada bolsa trae su propio importe en la grilla.
+  // porque cada producto declara las bolsas entregadas con él.
   const icbperLineas = borrador.items.reduce(
     (acc, item) => acc + (Number.isFinite(item.icbper) ? item.icbper : 0),
     0,

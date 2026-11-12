@@ -1,3 +1,4 @@
+import { cantidadBolsasDe } from './invoiceBags';
 /**
  * Traducción del borrador del modal al contrato de `POST /invoices/emitir`.
  *
@@ -96,7 +97,8 @@ export const borradorAPayloadEmision = (
       afectacion: (item.codigoAfectacion ?? CODIGO_AFECTACION[item.afectacion]) as AfectacionGrilla,
       // Igual con la detracción: "eso lo manda el producto, no la factura".
       codigoDetraccion: item.codigoDetraccion || undefined,
-      // El ICBPER solo viaja cuando la línea es una bolsa plástica.
+      // Cantidad e impuesto pertenecen a la misma línea registrada.
+      cantidadBolsas: cantidadBolsasDe(item) > 0 ? cantidadBolsasDe(item) : undefined,
       icbper: item.icbper > 0 ? item.icbper : undefined,
     })),
   };

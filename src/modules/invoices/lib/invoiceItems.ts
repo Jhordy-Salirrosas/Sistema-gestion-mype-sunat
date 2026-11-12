@@ -1,3 +1,4 @@
+import { errorBolsas, impuestoBolsas } from './invoiceBags';
 /**
  * Ítems del detalle de un comprobante: modelo, cálculos y validación (TA-64).
  *
@@ -77,6 +78,8 @@ export interface ItemBorrador {
   descuento?: { codigo: '00' | '01'; monto: number } | null;
   /** Importe del ICBPER de la línea; > 0 la marca como bolsa plástica. */
   icbper: number;
+  /** Cantidad de bolsas entregadas con este producto, independiente de su cantidad. */
+  cantidadBolsas?: number;
   /**
    * Código del Catálogo 54 si el BIEN o SERVICIO de esta línea está sujeto a
    * detracción.
@@ -253,6 +256,8 @@ export const validarItems = (
     if (item.descuento && (!Number.isFinite(item.descuento.monto) || item.descuento.monto <= 0 || round2(item.descuento.monto) !== item.descuento.monto || item.descuento.monto > item.cantidad * item.valorUnitario || item.afectacion === 'GRATUITA')) {
       motivos.push('El descuento debe ser positivo, no exceder el valor de la línea y no aplicarse a una línea gratuita.');
     }
+    const problemaBolsas = errorBolsas(item);
+    if (problemaBolsas) motivos.push(problemaBolsas);
     // Una línea gratuita con valor cero no informa nada; una onerosa en cero
     // pasa, porque puede ser un bien de cortesía declarado como exonerado.
     if (
@@ -368,6 +373,10 @@ export const esLineaBolsa = (item: ItemBorrador): boolean =>
  * catálogo, pero no se le pisa un valor escrito a mano).
  */
 export const sincronizarIcbper = (item: ItemBorrador): ItemBorrador => {
+  if (item.cantidadBolsas !== undefined) {
+    return Number.isSafeInteger(item.cantidadBolsas) && item.cantidadBolsas >= 0
+      ? { ...item, icbper: impuestoBolsas(item.cantidadBolsas) } : item;
+  }
   if (!esLineaBolsa(item)) return item;
 
   const cantidad = Number.isFinite(item.cantidad) ? Math.max(0, item.cantidad) : 0;

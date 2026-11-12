@@ -1,3 +1,4 @@
+import { cantidadBolsasDe } from '../lib/invoiceBags';
 import { editarIdentidadCliente } from '../lib/invoiceCustomerIdentity';
 import { InvoiceNextNumber } from '../components/InvoiceNextNumber';
 import { pagoSegunDeposito } from '../lib/invoicePagoPresentacion';
@@ -77,7 +78,6 @@ import {
   actualizarItem,
   calcularItem,
   validarItems,
-  itemBolsa,
   itemDesdeProducto,
   itemVacio,
   type ItemBorrador,
@@ -727,15 +727,7 @@ export default function InvoiceEmissionPage() {
                 onCambiar={cambiarItem}
                 onEliminar={eliminarItem}
                 onAgregar={agregarItem}
-                onAgregarBolsa={() =>
-                  // El ICBPER se calcula en `itemBolsa` (cantidad × 0,50).
-                  // Aquí estaba escrito a mano `icbper: 0.5` con cantidad 1, así
-                  // que añadir dos bolsas dejaba 0,50 en lugar de 1,00.
-                  setItems((prev) => [
-                    ...prev,
-                    itemBolsa(String(Date.now()), 1),
-                  ])
-                }
+                onAgregarBolsa={indice => setItems(prev => actualizarItem(prev, indice, {cantidadBolsas: cantidadBolsasDe(prev[indice]) + 1}))}
                 productos={productos}
                 onAgregarConProducto={agregarConProducto}
                 admiteDescuento={clienteSeleccionado?.admiteDescuento === true}

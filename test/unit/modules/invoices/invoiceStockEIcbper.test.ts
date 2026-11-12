@@ -63,19 +63,15 @@ describe('stock · la validación necesita el catálogo', () => {
     expect(revision.bloquea).toBe(true);
   });
 
-  it('la bolsa plástica NO genera aviso de stock', () => {
-    // El ICBPER no es un producto del almacén: su importe sale de la cantidad.
-    // Avisar "no está en el inventario" era cierto e inútil, y tapaba los
-    // avisos que sí importan.
+  it('un SKU sintético no registrado ya no oculta el aviso de catálogo', () => {
     const revision = revisarGrilla([itemBolsa('b', 2)], [producto]);
-
-    expect(revision.avisos).toBe(0);
+    expect(revision.avisos).toBe(1);
     expect(revision.errores).toBe(0);
-    expect(revision.lineas[0].mensaje).toBe('');
+    expect(revision.lineas[0].mensaje).toContain('ICBPER');
   });
 
   it('un código desconocido que NO es bolsa sigue avisando', () => {
-    // El silencio es solo para el ICBPER; un SKU inventado sí debe avisar.
+    // Todo SKU desconocido debe avisar, incluido el antiguo sintético.
     const revision = revisarGrilla(
       [{ ...itemVacio('k'), codigo: 'NO-EXISTE', cantidad: 1 }],
       [producto],

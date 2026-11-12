@@ -79,20 +79,7 @@ export const InvoiceEmitCamposTributarios = ({
         )}
       </PageField>
 
-      <PageField label="Bolsas plásticas ICBPER" htmlFor="bolsas">
-        <input
-          id="bolsas"
-          type="number"
-          min="0"
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-          value={b.bolsas}
-          onChange={(e) => actualizar({ bolsas: Number(e.target.value) || 0 })}
-        />
-        <PageText variant="caption">
-          S/ 0.50 por bolsa. Añádalas con «+ Bolsa plástica» para que viajen como
-          línea propia (regla 3306).
-        </PageText>
-      </PageField>
+
     </>
   );
 };

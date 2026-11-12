@@ -19,7 +19,6 @@
  * almacén). Mezclarla con el JSX haría que solo se probara de rebote.
  */
 import type { ItemBorrador } from './invoiceItems';
-import { esLineaBolsa } from './invoiceItems';
 import type { ProductoBuscado } from './invoiceSearch';
 
 /** Tolerancia por redondeo de cantidades decimales (0.001 unidades). */
@@ -146,19 +145,6 @@ export const revisarGrilla = (
     }
 
     if (!producto) {
-      /**
-       * LA BOLSA PLÁSTICA NO ES UN PRODUCTO DEL ALMACÉN.
-       *
-       * El ICBPER se declara como línea propia con código `ICBPER` (regla 3306)
-       * y su importe sale de la cantidad, no de un stock. Avisar "no está en el
-       * inventario" era cierto y a la vez inútil: el usuario no puede hacer nada
-       * con ese mensaje, y ocupaba el sitio de los avisos que sí importan.
-       */
-      if (esLineaBolsa(item)) {
-        lineas.push({ indice, gravedad: 'ok', mensaje: '' });
-        return;
-      }
-
       // Sin código es un servicio; con código desconocido, un producto no
       // registrado. Se distingue porque el consejo que hay que dar es distinto.
       if (item.codigo?.trim()) {

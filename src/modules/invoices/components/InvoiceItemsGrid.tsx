@@ -1,3 +1,4 @@
+import { cantidadBolsasDe, errorBolsas } from '../lib/invoiceBags';
 import { NOMBRES_AFECTACION } from '../lib/invoiceTributosXml';
 import { normalizarAfectacionProducto } from '../lib/invoiceItems';
 /**
@@ -18,13 +19,12 @@ import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
   UNIDADES_MEDIDA,
   calcularItem,
-  esLineaBolsa,
   type ItemBorrador,
 } from '../lib/invoiceItems';
 import { CODIGOS_DETRACCION } from '../lib/invoiceDetraccion';
 import { revisarGrilla } from '../lib/invoiceStockLinea';
 import type { ProductoBuscado } from '../lib/invoiceSearch';
-import { ICBPER_POR_UNIDAD, type AfectacionIgv } from '../lib/invoiceTaxes';
+import { type AfectacionIgv } from '../lib/invoiceTaxes';
 
 const OPCIONES_GRATUITAS = Object.entries(NOMBRES_AFECTACION).filter(([codigo]) => { try { return normalizarAfectacionProducto(codigo) === 'GRATUITA'; } catch { return false; } });
 
@@ -43,7 +43,7 @@ interface InvoiceItemsGridProps {
   onCambiar: (indice: number, parcial: Partial<ItemBorrador>) => void;
   onEliminar: (indice: number) => void;
   onAgregar: () => void;
-  onAgregarBolsa: () => void;
+  onAgregarBolsa: (indice: number) => void;
   /**
    * TA-61: productos del almacén para el buscador.
    *
@@ -73,6 +73,9 @@ export const InvoiceItemsGrid = ({
   cantidadesMaximas,
   esNota = false, catalogoEstado = 'listo',
 }: InvoiceItemsGridProps) => {
+  const [productoBolsas, setProductoBolsas] = useState('');
+  const destinoBolsas = items.findIndex(item => item.clave === productoBolsas && item.codigo.trim());
+  const indiceBolsas = destinoBolsas >= 0 ? destinoBolsas : items.findIndex(item => item.codigo.trim());
   const [avisoMinimo, setAvisoMinimo] = useState(false);
   /**
    * Revisión contra el stock del almacén.
@@ -244,14 +247,16 @@ export const InvoiceItemsGrid = ({
                       aria-label={`ICBPER de la línea ${i + 1}`}
                       type="number"
                       min="0"
-                      step={esLineaBolsa(item) ? '0.5' : '1'}
+                      step="1"
+                      aria-invalid={Boolean(errorBolsas(item))}
                       className={`${CLASE_CELDA} text-right`}
-                      value={esLineaBolsa(item) ? item.icbper : item.icbper / ICBPER_POR_UNIDAD}
+                      value={cantidadBolsasDe(item)}
                       onChange={(e) =>
-                        onCambiar(i, { icbper: esLineaBolsa(item) ? Number(e.target.value) : Math.max(0, Math.floor(Number(e.target.value))) * ICBPER_POR_UNIDAD })
+                        onCambiar(i, { cantidadBolsas: e.target.value === '' ? NaN : Number(e.target.value) })
                       }
                     />
-                    {!esLineaBolsa(item) && <span className="text-[10px]">Cantidad de bolsas · S/ 0.50 c/u</span>}
+                    <span className="text-[10px]">Cantidad de bolsas · S/ 0.50 c/u</span>
+                    {errorBolsas(item) && <p role="alert" className="text-xs text-destructive">{errorBolsas(item)}</p>}
                   </td>
                   <td className="px-1 py-1">
                     {!esNota && <label className="block"><input type="checkbox" aria-label={`Gratuita de la línea ${i + 1}`} checked={item.afectacion === 'GRATUITA'} disabled={item.afectacion === 'GRATUITA' && !item.origenOneroso} onChange={e => {
@@ -317,7 +322,11 @@ export const InvoiceItemsGrid = ({
         <Button type="button" variant="outline" size="sm" onClick={onAgregar}>
           + Añadir ítem
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onAgregarBolsa}>
+        <label className="text-xs">Producto para bolsas<select aria-label="Producto para bolsas" value={items[indiceBolsas]?.clave ?? ''} onChange={e => setProductoBolsas(e.target.value)}>
+          {indiceBolsas < 0 && <option value="">Seleccione un producto en la grilla</option>}
+          {items.filter(item => item.codigo.trim()).map(item => <option key={item.clave} value={item.clave}>{item.codigo} · {item.descripcion}</option>)}
+        </select></label>
+        <Button type="button" variant="outline" size="sm" disabled={indiceBolsas < 0 || Boolean(errorBolsas(items[indiceBolsas]))} onClick={() => onAgregarBolsa(indiceBolsas)}>
           + Bolsa plástica (ICBPER)
         </Button>
       </div>
