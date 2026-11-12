@@ -1,14 +1,14 @@
-# Deuda técnica: estructura del XML de resumen diario (RC) y comunicación de baja (RA)
+# Evolución de la estructura XML de resumen diario (RC) y comunicación de baja (RA)
 
-**Estado:** abierto. **Última revisión:** 1 nov 2026.
-**Tarea asociada:** TA-67 · **HU-11.**
+**Estado:** la deuda estructural descrita originalmente fue trabajada en la Parte 2; no corresponde mantenerla como bloqueo general vigente antes de obtener ticket. Las Partes 8C y 8D añadieron recuperación de POLLING, reversión durable de RA aceptada y regresiones de gratuitas/ICBPER. Las secciones de error y secuencia antigua se conservan como histórico. La disponibilidad del getStatus de SUNAT beta y la certificación de casos pendientes son dependencias distintas; no se declaran resueltas por una prueba local ni por esta actualización documental.
 
-## Resumen en una línea
+## Resumen actual
 
-El resumen diario y la comunicación de baja **llegan a SUNAT y SUNAT los procesa**, pero el XML
-todavía no cumple la secuencia de nodos que exige el esquema. El envío falla en la validación del
-`billService` antes de obtener ticket, y la pantalla de Bajas lo dice tal cual (no promete un envío
-que no se completa).
+M1 dispone de generación, firma, publicación, ticket y consulta de RC/RA con recuperación durable. La deuda histórica de estructura debe consultarse junto con la solución de Parte 2 y sus regresiones posteriores; cualquier deuda residual requiere un caso y una regla concretos, no la afirmación general de que los agregados actuales no obtienen ticket.
+
+## Diagnóstico histórico (1 de noviembre de 2026; TA-67 / HU-11)
+
+Las secciones siguientes describen la situación anterior a la solución de Parte 2.
 
 ## Lo que SÍ está resuelto
 

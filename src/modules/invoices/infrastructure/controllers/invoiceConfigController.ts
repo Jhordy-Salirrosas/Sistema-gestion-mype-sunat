@@ -1,3 +1,4 @@
+import { validarSerieNoAgotada } from '../../application/services/invoiceSeriesService';
 import { Roles } from '../../../../common/decorators';
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 /**
@@ -40,12 +41,7 @@ import {
   serieCorrespondeATipo,
 } from '../../domain/rules/serieRules';
 
-/** Cuerpo de POST /api/v1/invoices/series. */
-interface AltaSerieBody {
-  document_type?: string;
-  series?: string;
-  correlativo_inicial?: number;
-}
+import { AltaSerieDto } from '../../application/dto/altaSerieDto';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -89,7 +85,7 @@ export class InvoiceConfigController {
   @HttpCode(HttpStatus.CREATED)
   async crearSerie(
     @CurrentCompany() companyId: string,
-    @Body() body: AltaSerieBody,
+    @Body() body: AltaSerieDto,
   ) {
     const tipo = (body.document_type ?? '').trim();
     const serie = (body.series ?? '').trim();
@@ -161,6 +157,7 @@ export class InvoiceConfigController {
       );
     }
 
+    validarSerieNoAgotada(encontrada.current_correlative);
     return {
       serie: encontrada.series,
       document_type: encontrada.document_type,

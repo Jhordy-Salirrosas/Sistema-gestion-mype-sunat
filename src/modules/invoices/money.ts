@@ -13,3 +13,7 @@ export const formatoUnitario = (n: number): string =>
   new Prisma.Decimal(n).toFixed(10, Prisma.Decimal.ROUND_HALF_UP).replace(/(\.\d{2}.*?)0+$/, '$1');
 export const formatoMoneda = (n: number): string =>
   new Prisma.Decimal(n).toFixed(2, Prisma.Decimal.ROUND_HALF_UP);
+
+/** Precio alternativo calculado: hasta cinco decimales, conservando exactos a dos. */
+export const dividirPrecioAlternativo = (importe: number, cantidad: number): number =>
+  new Prisma.Decimal(importe).div(cantidad).toDecimalPlaces(5, Prisma.Decimal.ROUND_HALF_UP).toNumber();

@@ -128,8 +128,8 @@ export async function decidirEnvio(
   persistence: CdrPersistenceService,
 ): Promise<DecisionCompuerta> {
   const localMock = esMockLocal(params.context);
-  if (bypassDemoActivo() && !localMock) {
-    throw new ErrorValidacionBloqueada('El bypass XSL solo se permite contra un mock local explícito', 'BYPASS_NO_PERMITIDO');
+  if (bypassDemoActivo() && (!localMock || !['development', 'test'].includes(process.env.NODE_ENV ?? ''))) {
+    throw new ErrorValidacionBloqueada('El bypass XSL requiere desarrollo o pruebas explícitos y un mock local', 'BYPASS_NO_PERMITIDO');
   }
   if (bypassDemoActivo()) {
     await registrarOmisionDemo(params, persistence);
@@ -199,28 +199,22 @@ export async function decidirEnvio(
 /**
  * Deja constancia de que la compuerta se omitió.
  *
- * Nunca propaga el error: si la auditoría falla, el envío ya está autorizado
- * por la bandera y detenerlo aquí dejaría el comprobante en un estado peor
- * (en cola, sin motivo visible) que enviarlo con el aviso solo en consola.
+ * Sin registro durable la omisión no está autorizada: el error se propaga.
  */
 async function registrarOmisionDemo(
   params: SendInvoiceParams,
   persistence: CdrPersistenceService,
 ): Promise<void> {
-  try {
-    await persistence.persistFailure({
-      invoiceId: params.invoiceId,
-      // El estado NO cambia: la omisión no es un rechazo ni un envío.
-      estadoNuevo: params.estadoActual ?? InvoiceStatus.EN_COLA,
-      estadoAnterior: params.estadoActual ?? null,
-      intento: params.intento ?? 1,
-      codigoError: null,
-      mensajeError: AVISO_DEMO,
-      tiempoRespuestaMs: null,
-    });
-  } catch {
-    // Silencio deliberado: ver el comentario de la función.
-  }
+  await persistence.persistFailure({
+    invoiceId: params.invoiceId,
+    // El estado NO cambia: la omisión no es un rechazo ni un envío.
+    estadoNuevo: params.estadoActual ?? InvoiceStatus.EN_COLA,
+    estadoAnterior: params.estadoActual ?? null,
+    intento: params.intento ?? 1,
+    codigoError: null,
+    mensajeError: AVISO_DEMO,
+    tiempoRespuestaMs: null,
+  });
 }
 
 export function esMockLocal(context?: { environment: string | null; endpoint: string }): boolean {

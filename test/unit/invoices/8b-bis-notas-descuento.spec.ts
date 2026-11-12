@@ -18,7 +18,7 @@ it.each([['07',1],['08',1],['07',3],['08',3]] as const)('certificación candidat
  expect(line).not.toContain('AllowanceCharge');
  expect(line).toContain(`<cac:Price>\n      <cbc:PriceAmount currencyID="PEN">${cantidad === 1 ? '31.50' : '33.8333333333'}</cbc:PriceAmount>`);
  expect(line).toContain(`<cbc:LineExtensionAmount currencyID="PEN">${cantidad === 1 ? '31.50' : '101.50'}</cbc:LineExtensionAmount>`);
- expect(line).toContain(`<cbc:PriceAmount currencyID="PEN">${cantidad === 1 ? '37.17' : '39.92'}</cbc:PriceAmount>\n        <cbc:PriceTypeCode>01</cbc:PriceTypeCode>`);
+ expect(line).toContain(`<cbc:PriceAmount currencyID="PEN">${cantidad === 1 ? '37.17' : '39.92333'}</cbc:PriceAmount>\n        <cbc:PriceTypeCode>01</cbc:PriceTypeCode>`);
  expect(xml).toContain(`<cbc:PayableAmount currencyID="PEN">${cantidad === 1 ? '37.17' : '119.77'}</cbc:PayableAmount>`);
  expect(JSON.stringify(p)).toBe(before);
  expect(p.lineas?.[0]).toMatchObject({ valorUnitario: 35, precioUnitario: 41.3, descuentos: [{ codigo: '00', monto: 3.5 }] });

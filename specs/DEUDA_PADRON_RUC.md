@@ -1,8 +1,8 @@
 # Deuda pendiente: validación de padrón RUC (ACTIVO / HABIDO)
 
-**Estado:** integración técnica implementada; pendiente configurar proveedor.
-**Origen:** requisito de la tarea TA-34 (Eje 6) del documento
-de auditoría del M1. **Última revisión:** 31 oct 2026.
+**Estado:** abierta. Existen validación de formato/Módulo 11, endpoint protegido, caché con TTL y adaptador HTTP configurable. Falta acreditar un proveedor autorizado operativo y cerrar la integración obligatoria ACTIVO/HABIDO en la creación fiscal cuando corresponda. Tener el endpoint no garantiza esa comprobación antes de emitir. Sin proveedor configurado se mantiene el 503 explícito, sin inventar estados tributarios. La configuración efectiva de producción no se ha verificado en esta auditoría de código.
+
+Este padrón de estado RUC no es el padrón de agentes de retención. La deuda de procedencia/vigencia de esos agentes se documenta por separado en la Parte 8F-F11.
 
 ## Estado actual
 

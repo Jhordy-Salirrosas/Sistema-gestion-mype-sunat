@@ -4,8 +4,6 @@ import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobCons
 import { UblGeneratorService } from '../../../src/modules/invoices/ublGeneratorService';
 import { XsdValidatorService } from '../../../src/modules/invoices/xsdValidatorService';
 import { SunatXslValidatorService } from '../../../src/modules/invoices/application/services/sunatXslValidatorService';
-import { Xslt } from 'xslt-processor';
-import { join } from 'node:path';
 
 const xml = new UblGeneratorService().generateInvoiceXml({
   rucEmisor: '20601012341', razonSocialEmisor: 'Empresa de prueba',
@@ -104,35 +102,27 @@ describe('compuerta de despacho con XSL no concluyente', () => {
   });
 });
 
-describe('detección de dependencia XSL en la hoja oficial', () => {
-  const anterior = process.env.SUNAT_XSL_DIR;
-  beforeEach(() => { process.env.SUNAT_XSL_DIR = join(process.cwd(), 'assets', 'sunat-xsl'); });
-  afterEach(() => {
-    if (anterior === undefined) delete process.env.SUNAT_XSL_DIR;
-    else process.env.SUNAT_XSL_DIR = anterior;
-    jest.restoreAllMocks();
-  });
-  it('declara la causa y no ejecuta el transformador en llamadas repetidas', async () => {
-    const ejecutar = jest.spyOn(Xslt.prototype, 'xsltProcess');
+describe('motor oficial SFS como única validación real', () => {
+  afterEach(() => jest.restoreAllMocks());
+  it('revalida en llamadas repetidas sin aprobar una firma vacía', async () => {
     const servicio = new SunatXslValidatorService();
     for (let i = 0; i < 2; i++) {
       const resultado = await servicio.validar(xml, '01');
-      expect(resultado).toMatchObject({ valido: false, bloqueado: false,
-        validadoDeVerdad: false, causaNoConcluyente: 'DEPENDENCIA_VALIDATE_UTILS_AUSENTE' });
+      expect(resultado).toMatchObject({ valido: false, bloqueado: false, validadoDeVerdad: true });
+      expect(resultado.errores).toEqual(expect.arrayContaining([expect.objectContaining({ codigo: 'XSD' })]));
     }
-    expect(ejecutar).not.toHaveBeenCalled();
   });
-  it('el consumidor despacha usando el resultado real de la hoja oficial incompleta', async () => {
+  it('el consumidor no despacha el XML que el SFS oficial rechaza', async () => {
     const d = escenario(xml, inconcluso, new SunatXslValidatorService());
     await d.consumidor.procesar({ invoice_id: 'inv-1' });
-    expect(d.comprobar).toHaveBeenCalledWith(xml);
-    expect(d.auditar).toHaveBeenCalledTimes(1);
-    expect(d.enviar).toHaveBeenCalledTimes(1);
+    expect(d.comprobar).not.toHaveBeenCalled();
+    expect(d.enviar).not.toHaveBeenCalled();
+    expect(d.auditar).toHaveBeenCalledWith(expect.objectContaining({ estadoNuevo: InvoiceStatus.RECHAZADO }));
   });
-  it('un XML mal formado sigue bloqueado aunque falte la dependencia', async () => {
+  it('un XML mal formado se rechaza con diagnóstico del SFS', async () => {
     const resultado = await new SunatXslValidatorService().validar(xml.replace('</Invoice>', '</Incorrecto>'), '01');
-    expect(resultado.bloqueado).toBe(true);
-    expect(resultado.motivoBloqueo).toMatch(/mal formado/i);
+    expect(resultado.valido).toBe(false);
+    expect(resultado.errores).toEqual(expect.arrayContaining([expect.objectContaining({ codigo: 'XSD' })]));
     expect(resultado.causaNoConcluyente).toBeUndefined();
   });
 });

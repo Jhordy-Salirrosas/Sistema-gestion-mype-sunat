@@ -1,3 +1,5 @@
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
+import { Roles } from '../../../../common/decorators';
 import {
   Controller,
   Post,
@@ -46,6 +48,8 @@ export class InvoicesController {
    * Devuelve 202 porque el comprobante queda en la cola: el estado real del CDR
    * se consulta después. Es deliberado no responder "aceptado" aquí.
    */
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(RolesGuard)
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   async create(
@@ -73,6 +77,8 @@ export class InvoicesController {
    * Debe declararse ANTES de cualquier `GET /:id` para no quedar capturada por
    * la ruta paramétrica (el orden de las rutas en Nest importa).
    */
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(RolesGuard)
   @Post('emitir')
   @HttpCode(HttpStatus.CREATED)
   async emitir(

@@ -10,6 +10,13 @@ import { BadRequestException } from '@nestjs/common';
 import type { InvoiceStatus } from '../../../../generated/client/enums';
 import type { FiltrosComprobantes } from '../dto/invoiceQueryDto';
 
+/** Los parámetros HTTP repetidos u objetos no son escalares válidos. */
+function validarEscalar(nombre: string, valor: unknown): void {
+  if (valor !== undefined && typeof valor !== 'string') {
+    throw new BadRequestException(`El parámetro ${nombre} debe ser una cadena única`);
+  }
+}
+
 /** Estados válidos, para rechazar un filtro con un error claro. */
 const ESTADOS_VALIDOS: readonly string[] = [
   'PENDIENTE',
@@ -80,6 +87,8 @@ function instanteValido(iso: string): Date {
 export function construirRangoFechas(
   filtros: FiltrosComprobantes,
 ): RangoFechas | undefined {
+  validarEscalar('desde', filtros.desde);
+  validarEscalar('hasta', filtros.hasta);
   if (!filtros.desde && !filtros.hasta) return undefined;
 
   const rango: RangoFechas = {};
@@ -117,6 +126,7 @@ export function construirWhere(
   companyId: string,
   filtros: FiltrosComprobantes,
 ): WhereComprobantes {
+  for (const [nombre, valor] of Object.entries(filtros)) validarEscalar(nombre, valor);
   const where: WhereComprobantes = { company_id: companyId };
   if (filtros.puente_pendiente !== undefined && !['true','false'].includes(filtros.puente_pendiente)) throw new BadRequestException('Filtro de puente pendiente inválido');
   if (filtros.puente_pendiente === 'true') {
@@ -157,6 +167,8 @@ export const PAGE_SIZE_POR_DEFECTO = 20;
 export const PAGE_SIZE_MAXIMO = 100;
 
 export function normalizarPaginacion(page?: string, pageSize?: string) {
+  validarEscalar('page', page);
+  validarEscalar('page_size', pageSize);
   const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1);
   const tamanoPedido =
     Number.parseInt(pageSize ?? String(PAGE_SIZE_POR_DEFECTO), 10) ||

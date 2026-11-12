@@ -34,16 +34,6 @@ import {
   type GetStatusCdrParams,
   type StatusCdrResult,
 } from './sunatStatusCdrOperation';
-// TA-28 usa su propia forma de la operacion (nombres rucComprobante/
-// serieComprobante/numeroComprobante). Se importa con alias para que ambos
-// flujos convivan en el mismo cliente sin pisarse.
-import {
-  buildGetStatusCdrEnvelope as buildStatusCdrEnvelopeTA28,
-  parseGetStatusCdrResponse as parseStatusCdrResponseTA28,
-  type GetStatusCdrParams as GetStatusCdrParamsTA28,
-  type StatusCdrResult as StatusCdrResultTA28,
-} from './sunatStatusCdr.operation';
-
 /** Fallo de transporte: la peticion no obtuvo una respuesta valida. */
 export class SunatTransportError extends Error {
   /** true: el comprobante no fue informado, reintentar es seguro. */
@@ -210,95 +200,6 @@ export class SunatSoapClient {
 
     return {
       applicationResponse,
-      tiempoRespuestaMs,
-      httpStatus: response.status,
-      rawResponse,
-    };
-  }
-
-  /**
-   * Ejecuta getStatusCdr y recupera el CDR de un comprobante ya enviado.
-   *
-   * Variante de TA-28, que identifica el comprobante con los nombres
-   * `rucComprobante`/`serieComprobante`/`numeroComprobante`. El servicio de
-   * consulta de TA-30 usa `getStatusCdr` (sin sufijo), que es la variante con
-   * `rucEmisor`/`serie`/`correlativo`. Ambos existen para no romper ninguno de
-   * los dos flujos.
-   *
-   * Se usa cuando sendBill quedo en estado incierto (timeout o corte de red
-   * tras transmitir el sobre). En ese caso reenviar el XML produce rechazos por
-   * duplicidad 1032/1033, asi que primero se pregunta por el estado.
-   *
-   * Si SUNAT responde 0127 el comprobante no llego: el llamador puede
-   * reintentar sendBill con seguridad.
-   */
-  async getStatusCdrLegacy(
-    params: GetStatusCdrParamsTA28,
-  ): Promise<StatusCdrResultTA28> {
-    const envelope = buildStatusCdrEnvelopeTA28(params);
-    const startedAt = Date.now();
-
-    let response: Response;
-    let rawResponse: string;
-
-    try {
-      response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          SOAPAction: `"${GET_STATUS_CDR_SOAP_ACTION}"`,
-          'Content-Length': String(Buffer.byteLength(envelope, 'utf8')),
-        },
-        body: envelope,
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-      rawResponse = await response.text();
-    } catch (error) {
-      const nombre = getErrorName(error);
-      const mensaje = getErrorMessage(error);
-
-      if (nombre === 'TimeoutError' || nombre === 'AbortError') {
-        throw new SunatTransportError(
-          `Timeout de ${this.timeoutMs} ms esperando la consulta de estado del comprobante`,
-          { cause: error },
-        );
-      }
-
-      throw new SunatTransportError(
-        `Error de red contra el billConsultService: ${mensaje}`,
-        { cause: error },
-      );
-    }
-
-    const tiempoRespuestaMs = Date.now() - startedAt;
-    const parsed = parseStatusCdrResponseTA28(rawResponse);
-
-    if (parsed.faultCode || parsed.faultString) {
-      throw new SunatSoapFaultError({
-        faultCode: parsed.faultCode,
-        faultString: parsed.faultString,
-      });
-    }
-
-    if (!response.ok) {
-      throw new SunatTransportError(
-        `El billConsultService respondio HTTP ${response.status} sin SOAP Fault parseable`,
-        { httpStatus: response.status },
-      );
-    }
-
-    const statusCode = parsed.statusCode;
-    const noEncontrado = statusCode === SUNAT_CODE_NO_ENCONTRADO;
-    const encontrado =
-      !!parsed.applicationResponse ||
-      (statusCode !== null && statusCode !== SUNAT_CODE_NO_ENCONTRADO);
-
-    return {
-      statusCode,
-      statusMessage: parsed.statusMessage,
-      applicationResponse: parsed.applicationResponse,
-      encontrado,
-      noEncontrado,
       tiempoRespuestaMs,
       httpStatus: response.status,
       rawResponse,

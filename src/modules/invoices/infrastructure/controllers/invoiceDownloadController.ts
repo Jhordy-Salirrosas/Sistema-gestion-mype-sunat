@@ -14,6 +14,7 @@ import {
   Param,
   Query,
   Res,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -38,8 +39,11 @@ export class InvoiceDownloadController {
     @CurrentCompany() companyId: string,
     @Param('id') id: string,
     @Res() res: Response,
+    @Req() req?: { user?: { role?: string } },
   ): Promise<void> {
-    const archivo = await this.descargas.descargar(companyId, id, 'xml');
+    const archivo = req?.user?.role === 'AUDITOR'
+      ? await this.descargas.descargar(companyId, id, 'xml', undefined, false)
+      : await this.descargas.descargar(companyId, id, 'xml');
     this.entregar(res, archivo);
   }
 

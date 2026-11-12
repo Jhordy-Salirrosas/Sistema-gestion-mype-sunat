@@ -1,3 +1,5 @@
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
+import { Roles } from '../../../../common/decorators';
 import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
@@ -14,6 +16,8 @@ export class InvoiceDetractionController {
     return this.detractions.list(companyId, period);
   }
 
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(RolesGuard)
   @Post(':id')
   @HttpCode(HttpStatus.OK)
   deposit(@Param('id') id: string, @Body() dto: { amount?: number; date?: string; constancia?: string }, @CurrentCompany() companyId?: string) {
