@@ -158,6 +158,7 @@ export class UblGeneratorService {
             payload.documentoAfectado,
             payload.codigoMotivoNota!,
             payload.descripcionMotivoNota!,
+            payload.referenced_document_type,
           )}`
         : '';
     const observaciones = payload.observaciones

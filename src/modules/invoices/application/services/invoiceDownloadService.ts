@@ -168,7 +168,7 @@ export class InvoiceDownloadService {
       );
     }
 
-    const sinFirma = this.ublGenerator.generateInvoiceXml(payload);
+    const sinFirma = this.ublGenerator.generateInvoiceXml({ ...payload, referenced_document_type: fila.referenced_document_type ?? payload.referenced_document_type });
 
     this.logger.warn(
       `Comprobante ${fila.serie}-${fila.correlativo} sin XML guardado: ` +
@@ -208,6 +208,7 @@ export class InvoiceDownloadService {
         monto_total: true,
         customer_identity_type: true,
         payload_ubl: true,
+        referenced_document_type: true,
         xml_storage_url: true,
         cdr_storage_url: true,
         cdr_sunat: true,
