@@ -9,10 +9,22 @@ import {
   type SirePeriodsJobData,
 } from '../../../resilience/infrastructure/queue/queue.service';
 import {
-  RetryableSireSunatError,
-  SireTransportError,
-  SireReadOnlyPeriodsClient,
-} from '../sunat/sireReadOnlyPeriodsClient';
+  SIRE_PERIOD_ERROR_CODES,
+  type SirePeriodErrorCode,
+} from '../../domain/rules/sirePeriodFailureMessages';
+import {
+  describeErrorSafely,
+  redactSensitiveText,
+} from '../../domain/rules/sireRedactionUtils';
+import { classifySireSunatFailure } from '../sunat/sunatFailureClassifier';
+import { SireTransportError } from '../sunat/sunatErrors';
+/**
+ * Import de VALOR (no `import type`): Nest lee el tipo de este parámetro en
+ * los metadatos `design:paramtypes` para resolver la inyección. Con un
+ * import de solo tipo el tipo se borra al compilar y el contenedor no
+ * encuentra al cliente.
+ */
+import { SireReadOnlyPeriodsClient } from '../sunat/sireReadOnlyPeriodsClient';
 
 interface SolCredentials {
   solUser: string;
@@ -55,74 +67,34 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
       include: { company: { select: { ruc: true, is_active: true } } },
     });
 
-    if (
-      !request ||
-      request.company_id !== job.companyId ||
-      request.book_code !== job.bookCode ||
-      request.company.ruc !== job.ruc ||
-      !request.company.is_active
-    ) {
-      await this.markFailed(job.messageId, 'REQUEST_CONTEXT_INVALID');
+    if (!this.matchesRequestContext(request, job)) {
+      await this.markFailed(
+        job.messageId,
+        SIRE_PERIOD_ERROR_CODES.REQUEST_CONTEXT_INVALID,
+      );
       return;
     }
 
-    let credentials: SolCredentials;
-    try {
-      credentials = JSON.parse(
-        this.credentialCipher.decrypt(job.encryptedSolCredentials),
-      ) as SolCredentials;
-    } catch {
-      await this.markFailed(job.messageId, 'CREDENTIALS_UNAVAILABLE');
+    const credentials = this.readCredentials(job);
+    if (!credentials) {
+      await this.markFailed(
+        job.messageId,
+        SIRE_PERIOD_ERROR_CODES.CREDENTIALS_UNAVAILABLE,
+      );
       return;
     }
-    if (!isSolCredentials(credentials)) {
-      await this.markFailed(job.messageId, 'CREDENTIALS_UNAVAILABLE');
-      return;
-    }
-    credentials = {
-      solUser: credentials.solUser.trim(),
-      solPassword: credentials.solPassword,
-    };
-    if (!credentials.solUser) {
-      await this.markFailed(job.messageId, 'CREDENTIALS_UNAVAILABLE');
-      return;
-    }
-
-    const username = `${job.ruc.trim()}${credentials.solUser}`;
-    const usernamePrefix = username.match(/^\d{1,4}/)?.[0] ?? 'N/A';
-    this.logger.log(
-      `Diagnóstico autenticación SIRE: companyId=${job.companyId}, username inicia con=${usernamePrefix}..., username chars=${username.length}, password chars=${credentials.solPassword.length}`,
-    );
 
     await this.prisma.sirePeriodQuery.update({
       where: { id: job.messageId },
       data: { status: 'PROCESSING', error_code: null },
     });
 
-    let periods: unknown;
-    try {
-      periods = await this.sireClient.getPeriods(
-        job.ruc,
-        credentials.solUser,
-        credentials.solPassword,
-        job.bookCode,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Falló la consulta SUNAT de períodos (messageId=${job.messageId}, libro=${job.bookCode}): ${this.describeSunatError(error, credentials)}`,
-      );
-      if (error instanceof RetryableSireSunatError) {
-        await this.prisma.sirePeriodQuery.update({
-          where: { id: job.messageId },
-          data: {
-            status: 'PENDING',
-            error_code: `SUNAT_HTTP_${error.sunatStatus}`,
-          },
-        });
-        throw error;
-      }
+    this.logger.log(
+      `Iniciando consulta de períodos SIRE (messageId=${job.messageId}, libro=${job.bookCode})`,
+    );
 
-      await this.markFailed(job.messageId, 'SUNAT_REQUEST_FAILED');
+    const periods = await this.queryPeriods(job, credentials);
+    if (periods === undefined) {
       return;
     }
 
@@ -135,15 +107,114 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
         completed_at: new Date(),
       },
     });
+
+    this.logger.log(
+      `Consulta de períodos SIRE completada con éxito (messageId=${job.messageId}, libro=${job.bookCode})`,
+    );
+  }
+
+  /**
+   * El trabajo solo se procesa si pertenece a la misma empresa, libro y RUC
+   * que se registraron: cualquier diferencia es un trabajo que no debe
+   * ejecutarse.
+   */
+  private matchesRequestContext(
+    request: {
+      company_id: string;
+      book_code: string;
+      company: { ruc: string; is_active: boolean };
+    } | null,
+    job: SirePeriodsJobData,
+  ): boolean {
+    if (!request) return false;
+    if (request.company_id !== job.companyId) return false;
+    if (request.book_code !== job.bookCode) return false;
+    if (request.company.ruc !== job.ruc) return false;
+    return request.company.is_active;
+  }
+
+  /**
+   * Descifra las credenciales SOL dentro del worker.
+   *
+   * Devuelve `undefined` cuando no se pueden recuperar: el caso se marca como
+   * fallido y no se intenta llamar a SUNAT.
+   */
+  private readCredentials(
+    job: SirePeriodsJobData,
+  ): SolCredentials | undefined {
+    let decrypted: string;
+    try {
+      decrypted = this.credentialCipher.decrypt(job.encryptedSolCredentials);
+    } catch {
+      return undefined;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(decrypted) as unknown;
+    } catch {
+      return undefined;
+    }
+
+    if (!isSolCredentials(parsed)) {
+      return undefined;
+    }
+
+    const solUser = parsed.solUser.trim();
+    if (!solUser) {
+      return undefined;
+    }
+
+    return { solUser, solPassword: parsed.solPassword };
+  }
+
+  /**
+   * Consulta los períodos a SUNAT.
+   *
+   * Devuelve `undefined` cuando la consulta falla: el fallo ya quedó
+   * persistido y, si es reintentable, la excepción se relanza para que PgBoss
+   * reprograme el trabajo.
+   */
+  private async queryPeriods(
+    job: SirePeriodsJobData,
+    credentials: SolCredentials,
+  ): Promise<unknown> {
+    try {
+      return await this.sireClient.getPeriods(
+        job.ruc.trim(),
+        credentials.solUser,
+        credentials.solPassword,
+        job.bookCode,
+      );
+    } catch (error) {
+      const failure = classifySireSunatFailure(error);
+      this.logger.error(
+        `Error controlado al consultar períodos SIRE (messageId=${job.messageId}, libro=${job.bookCode}, causa=${failure.errorCode}): ${this.describeSunatError(error, credentials)}`,
+      );
+      /**
+       * La solicitud queda FAILED desde el primer fallo para que el frontend
+       * muestre un mensaje estable, y los fallos transitorios (500/502/red)
+       * vuelven a la cola de PgBoss con backoff: un intento posterior puede
+       * completarla y dejarla en COMPLETED.
+       */
+      await this.markFailed(job.messageId, failure.errorCode);
+      if (failure.retryable) {
+        throw error;
+      }
+      return undefined;
+    }
   }
 
   private async markRetriesExhausted(job: SirePeriodsJobData): Promise<void> {
-    await this.markFailed(job.messageId, 'SUNAT_RETRIES_EXHAUSTED');
+    await this.markFailed(
+      job.messageId,
+      SIRE_PERIOD_ERROR_CODES.SUNAT_RETRIES_EXHAUSTED,
+    );
   }
 
   private async markFailed(
     messageId: string,
-    errorCode: string,
+    errorCode: SirePeriodErrorCode,
   ): Promise<void> {
     await this.prisma.sirePeriodQuery.updateMany({
       where: { id: messageId, status: { not: 'COMPLETED' } },
@@ -155,34 +226,22 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
     });
   }
 
+  /**
+   * Resumen del fallo para el log del servidor.
+   *
+   * Nunca incluye la clave SOL ni el usuario SOL: se redactan con la misma
+   * utilidad que usa el cliente HTTP.
+   */
   private describeSunatError(
     error: unknown,
     credentials: SolCredentials,
   ): string {
+    const secrets = [credentials.solUser, credentials.solPassword];
+
     if (error instanceof SireTransportError) {
-      return error.diagnostic;
+      return redactSensitiveText(error.diagnostic, secrets);
     }
 
-    if (!(error instanceof Error)) {
-      return 'Error desconocido';
-    }
-
-    let message = error.message;
-    for (const secret of [credentials.solUser, credentials.solPassword]) {
-      if (secret) message = message.split(secret).join('[REDACTED]');
-    }
-    message = message
-      .replace(/bearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
-      .replace(
-        /\b(password|client_secret|access_token|authorization)\s*[:=]\s*([^\s,;&]+)/gi,
-        '$1=[REDACTED]',
-      );
-
-    const metadata = error as Error & { code?: unknown; status?: unknown };
-    const code =
-      typeof metadata.code === 'string' ? ` code=${metadata.code}` : '';
-    const status =
-      typeof metadata.status === 'number' ? ` status=${metadata.status}` : '';
-    return `${error.name}${status}${code}: ${message.slice(0, 500)}`;
+    return describeErrorSafely(error, secrets);
   }
 }

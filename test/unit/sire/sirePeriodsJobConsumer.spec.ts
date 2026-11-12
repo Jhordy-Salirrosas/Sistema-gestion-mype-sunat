@@ -1,10 +1,19 @@
-import { Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import type { PrismaService } from '../../../src/database/prismaService';
 import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
 import type { QueueService } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 import { SirePeriodsJobConsumer } from '../../../src/modules/sire/infrastructure/queue/sirePeriodsJobConsumer';
 import {
   RetryableSireSunatError,
+  SireConfigurationError,
+  SireTransportError,
   type SireReadOnlyPeriodsClient,
 } from '../../../src/modules/sire/infrastructure/sunat/sireReadOnlyPeriodsClient';
 
@@ -80,6 +89,26 @@ describe('SirePeriodsJobConsumer', () => {
     expect(queue.registerSirePeriodsDlqWorker).toHaveBeenCalledTimes(1);
   });
 
+  it('processes the job delivered by the registered worker', async () => {
+    await consumer.onModuleInit();
+    const workerHandler = (queue.registerSirePeriodsWorker as jest.Mock)
+      .mock.calls[0][0] as (payload: typeof job) => Promise<void>;
+
+    await workerHandler(job);
+
+    expect(sireClient.getPeriods).toHaveBeenCalledWith(
+      job.ruc,
+      'FAKEUSER',
+      'fake-sol-password',
+      job.bookCode,
+    );
+    expect(prisma.sirePeriodQuery.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      }),
+    );
+  });
+
   it('decrypts credentials only inside the worker and persists the successful result', async () => {
     await consumer.process(job);
 
@@ -121,7 +150,7 @@ describe('SirePeriodsJobConsumer', () => {
     );
   });
 
-  it('logs only authentication metadata needed to diagnose tenant credentials', async () => {
+  it('never logs credentials, token material or diagnostic fragments', async () => {
     (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
       JSON.stringify({
         solUser: '  SIREAPII  ',
@@ -131,15 +160,22 @@ describe('SirePeriodsJobConsumer', () => {
 
     await consumer.process(job);
 
-    expect(logInfo).toHaveBeenCalledWith(
-      'Diagnóstico autenticación SIRE: companyId=company-id, username inicia con=2010..., username chars=19, password chars=17',
-    );
-    const loggedMessages = logInfo.mock.calls.flat().join(' ');
-    expect(loggedMessages).not.toContain('20100070970SIREAPII');
+    const loggedMessages = [
+      ...logInfo.mock.calls.flat(),
+      ...logError.mock.calls.flat(),
+    ].join(' ');
+
+    expect(loggedMessages).toContain('Iniciando consulta de períodos SIRE');
+    expect(loggedMessages).toContain('completada con éxito');
     expect(loggedMessages).not.toContain('fake-sol-password');
+    expect(loggedMessages).not.toContain('SIREAPII');
+    expect(loggedMessages).not.toContain('20100070970SIREAPII');
+    expect(loggedMessages).not.toMatch(/chars=/);
+    expect(loggedMessages).not.toMatch(/inicia con=/);
+    expect(loggedMessages).not.toMatch(/password chars/);
   });
 
-  it('throws only retryable SUNAT 500/502 failures back to PgBoss', async () => {
+  it('marks the request failed and retries when SUNAT answers HTTP 500 or 502', async () => {
     (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
       new RetryableSireSunatError(502),
     );
@@ -147,9 +183,60 @@ describe('SirePeriodsJobConsumer', () => {
     await expect(consumer.process(job)).rejects.toBeInstanceOf(
       RetryableSireSunatError,
     );
-    expect(prisma.sirePeriodQuery.update).toHaveBeenLastCalledWith({
-      where: { id: job.messageId },
-      data: { status: 'PENDING', error_code: 'SUNAT_HTTP_502' },
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith({
+      where: { id: job.messageId, status: { not: 'COMPLETED' } },
+      data: {
+        status: 'FAILED',
+        error_code: 'SUNAT_HTTP_502',
+        completed_at: expect.any(Date),
+      },
+    });
+  });
+
+  it('marks the request failed without retrying when SUNAT rejects the request', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new BadRequestException('SUNAT rechazó la solicitud.'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith({
+      where: { id: job.messageId, status: { not: 'COMPLETED' } },
+      data: expect.objectContaining({
+        status: 'FAILED',
+        error_code: 'SUNAT_HTTP_400',
+      }),
+    });
+  });
+
+  it('marks the request failed and retries when the SUNAT call times out', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new SireTransportError('TimeoutError: The operation was aborted'),
+    );
+
+    await expect(consumer.process(job)).rejects.toBeInstanceOf(
+      SireTransportError,
+    );
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith({
+      where: { id: job.messageId, status: { not: 'COMPLETED' } },
+      data: expect.objectContaining({
+        status: 'FAILED',
+        error_code: 'SUNAT_TIMEOUT',
+      }),
+    });
+  });
+
+  it('marks the request failed without retrying when the integration is not configured', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new SireConfigurationError('La integración API SIRE no está configurada.'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith({
+      where: { id: job.messageId, status: { not: 'COMPLETED' } },
+      data: expect.objectContaining({
+        status: 'FAILED',
+        error_code: 'SIRE_NOT_CONFIGURED',
+      }),
     });
   });
 
@@ -163,7 +250,7 @@ describe('SirePeriodsJobConsumer', () => {
       where: { id: job.messageId, status: { not: 'COMPLETED' } },
       data: {
         status: 'FAILED',
-        error_code: 'SUNAT_REQUEST_FAILED',
+        error_code: 'SUNAT_UNAVAILABLE',
         completed_at: expect.any(Date),
       },
     });
@@ -207,5 +294,239 @@ describe('SirePeriodsJobConsumer', () => {
         }),
       }),
     );
+  });
+
+  it('marks the request failed when the credentials cannot be decrypted', async () => {
+    (credentialCipher.decrypt as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('clave de cifrado inválida');
+    });
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed when the decrypted content is not JSON', async () => {
+    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce('no es json');
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed when the decrypted content is null', async () => {
+    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce('null');
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed when the decrypted content has no SOL user', async () => {
+    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
+      JSON.stringify({ solPassword: 'fake-sol-password' }),
+    );
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed when the SOL user is only whitespace', async () => {
+    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
+      JSON.stringify({ solUser: '   ', solPassword: 'fake-sol-password' }),
+    );
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a job whose book code does not match the stored request', async () => {
+    (prisma.sirePeriodQuery.findUnique as jest.Mock).mockResolvedValueOnce({
+      ...request,
+      book_code: '080000',
+    });
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'REQUEST_CONTEXT_INVALID',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a job whose RUC does not match the stored request', async () => {
+    (prisma.sirePeriodQuery.findUnique as jest.Mock).mockResolvedValueOnce({
+      ...request,
+      company: { ruc: '20123456789', is_active: true },
+    });
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'REQUEST_CONTEXT_INVALID',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a job of an inactive company', async () => {
+    (prisma.sirePeriodQuery.findUnique as jest.Mock).mockResolvedValueOnce({
+      ...request,
+      company: { ruc: job.ruc, is_active: false },
+    });
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'REQUEST_CONTEXT_INVALID',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a job whose request no longer exists', async () => {
+    (prisma.sirePeriodQuery.findUnique as jest.Mock).mockResolvedValueOnce(
+      null,
+    );
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'REQUEST_CONTEXT_INVALID',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed without retrying when SUNAT rejects the credentials', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new UnauthorizedException('SUNAT rechazó la autenticación SOL'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'SUNAT_AUTH_FAILED',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed without retrying when SUNAT reports a validation error', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new UnprocessableEntityException('SUNAT reportó errores de validación'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'SUNAT_HTTP_422',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed without retrying when SUNAT answers something unexpected', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new BadGatewayException('SUNAT devolvió una respuesta inesperada'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'SUNAT_BAD_RESPONSE',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed without retrying when the failure is unknown', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new Error('fallo sin clasificar'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'SUNAT_REQUEST_FAILED',
+        }),
+      }),
+    );
+  });
+
+  it('logs a transport failure that is not a timeout', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new SireTransportError('fetch failed: connect ECONNREFUSED 127.0.0.1:5432'),
+    );
+
+    await expect(consumer.process(job)).rejects.toBeInstanceOf(
+      SireTransportError,
+    );
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          error_code: 'SUNAT_TRANSPORT_ERROR',
+        }),
+      }),
+    );
+    expect(logError.mock.calls.flat().join(' ')).toContain('ECONNREFUSED');
   });
 });

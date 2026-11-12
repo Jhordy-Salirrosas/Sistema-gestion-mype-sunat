@@ -12,6 +12,7 @@ import {
   SIRE_PERIODS_QUEUE,
   QueueService,
 } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
+import { ServiceUnavailableException } from '@nestjs/common';
 
 interface BossMock {
   send: jest.Mock;
@@ -77,6 +78,174 @@ describe('HU-04 · QueueService (DLQ)', () => {
       { batchSize: 1 },
       expect.any(Function),
     );
+  });
+
+  it('entrega el trabajo de SIRE al manejador registrado', async () => {
+    const { service, boss } = crearServicio();
+    const handler = jest.fn().mockResolvedValue(undefined);
+    const job = {
+      messageId: 'message-1',
+      companyId: 'company-a',
+      ruc: '20100070970',
+      bookCode: '140000' as const,
+      encryptedSolCredentials: 'cifrado',
+    };
+
+    await service.registerSirePeriodsWorker(handler);
+    const worker = (boss.work as jest.Mock).mock.calls.at(-1)?.[2] as (
+      jobs: Array<{ data: typeof job }>,
+    ) => Promise<void>;
+    await worker([{ data: job }]);
+
+    expect(handler).toHaveBeenCalledWith(job);
+  });
+
+  it('entrega el trabajo de la DLQ de SIRE al manejador registrado', async () => {
+    const { service, boss } = crearServicio();
+    const handler = jest.fn().mockResolvedValue(undefined);
+    const job = {
+      messageId: 'message-1',
+      companyId: 'company-a',
+      ruc: '20100070970',
+      bookCode: '140000' as const,
+      encryptedSolCredentials: 'cifrado',
+    };
+
+    await service.registerSirePeriodsDlqWorker(handler);
+    const worker = (boss.work as jest.Mock).mock.calls.at(-1)?.[2] as (
+      jobs: Array<{ data: typeof job }>,
+    ) => Promise<void>;
+    await worker([{ data: job }]);
+
+    expect(handler).toHaveBeenCalledWith(job);
+  });
+
+  it('encola la consulta SIRE con el identificador del mensaje', async () => {
+    const { service, boss } = crearServicio();
+    boss.send.mockResolvedValue('sire-job-1');
+    const job = {
+      messageId: 'message-1',
+      companyId: 'company-a',
+      ruc: '20100070970',
+      bookCode: '140000' as const,
+      encryptedSolCredentials: 'cifrado',
+    };
+
+    await expect(service.enqueueSirePeriods(job)).resolves.toBe('sire-job-1');
+
+    expect(boss.send).toHaveBeenCalledWith(SIRE_PERIODS_QUEUE, job, {
+      id: 'message-1',
+    });
+  });
+
+  it('no filtra el error de pg-boss al encolar una consulta SIRE', async () => {
+    const { service, boss } = crearServicio();
+    boss.send.mockRejectedValue(
+      new Error('password authentication failed for user postgres'),
+    );
+
+    const failure = await service
+      .enqueueSirePeriods({
+        messageId: 'message-1',
+        companyId: 'company-a',
+        ruc: '20100070970',
+        bookCode: '140000',
+        encryptedSolCredentials: 'cifrado',
+      })
+      .then(() => null)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+    const serialized = JSON.stringify(
+      (failure as ServiceUnavailableException).getResponse(),
+    );
+    expect(serialized).not.toContain('postgres');
+    expect(serialized).not.toContain('password authentication failed');
+  });
+
+  it('informa la indisponibilidad de la cola SIRE cuando PgBoss está en bypass', async () => {
+    const { service, boss } = crearServicio();
+    (service as unknown as { bypass: boolean }).bypass = true;
+
+    const failure = await service
+      .enqueueSirePeriods({
+        messageId: 'message-1',
+        companyId: 'company-a',
+        ruc: '20100070970',
+        bookCode: '140000',
+        encryptedSolCredentials: 'cifrado',
+      })
+      .then(() => null)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+    expect(boss.send).not.toHaveBeenCalled();
+  });
+
+  it('informa la indisponibilidad de la cola SIRE cuando PgBoss no devuelve id', async () => {
+    const { service, boss } = crearServicio();
+    boss.send.mockResolvedValueOnce(null);
+
+    const failure = await service
+      .enqueueSirePeriods({
+        messageId: 'message-1',
+        companyId: 'company-a',
+        ruc: '20100070970',
+        bookCode: '140000',
+        encryptedSolCredentials: 'cifrado',
+      })
+      .then(() => null)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('no registra el worker de SIRE cuando PgBoss está en bypass', async () => {
+    const { service, boss } = crearServicio();
+    (service as unknown as { bypass: boolean }).bypass = true;
+
+    await expect(
+      service.registerSirePeriodsWorker(jest.fn()),
+    ).resolves.toBe('');
+    await expect(
+      service.registerSirePeriodsDlqWorker(jest.fn()),
+    ).resolves.toBe('');
+    expect(boss.work).not.toHaveBeenCalled();
+  });
+
+  it('lista solo los trabajos de resumen de la DLQ de la empresa', async () => {
+    const { service, boss } = crearServicio();
+    boss.findJobs.mockResolvedValueOnce([
+      {
+        id: 'job-1',
+        retryCount: 3,
+        data: {
+          tipo: 'RESUMEN_DIARIO',
+          identificador: 'RC-20261101-001',
+          companyId: 'company-a',
+        },
+      },
+      {
+        id: 'job-2',
+        retryCount: 1,
+        data: {
+          tipo: 'RESUMEN_DIARIO',
+          identificador: 'RC-20261101-002',
+          companyId: 'otra-empresa',
+        },
+      },
+    ]);
+
+    const resumenes = await service.listSummaryDlq('company-a');
+
+    expect(resumenes).toEqual([
+      {
+        id: 'job-1',
+        identificador: 'RC-20261101-001',
+        tipo: 'RESUMEN_DIARIO',
+        intentosFallidos: 3,
+      },
+    ]);
   });
 
   it('envía un job a la DLQ con el detalle y sin reintentos automáticos', async () => {

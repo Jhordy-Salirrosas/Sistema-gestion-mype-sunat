@@ -487,17 +487,45 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /**
+   * Encola la consulta de períodos SIRE.
+   *
+   * La cola es infraestructura: si falla, el error original (que puede
+   * traer la cadena de conexión o el mensaje del driver) se registra solo en
+   * el log del servidor y lo que sale hacia el controlador es siempre un
+   * `ServiceUnavailableException` con un texto fijo. Así ningún detalle de
+   * PgBoss puede llegar al cliente por accidente.
+   */
   async enqueueSirePeriods(job: SirePeriodsJobData): Promise<string> {
     if (this.bypass) {
+      this.logger.error(
+        `No se puede encolar la consulta SIRE ${job.messageId}: PgBoss está en modo bypass.`,
+      );
       throw new ServiceUnavailableException(
         'La cola de consultas SIRE no está disponible.',
       );
     }
 
-    const jobId = await this.boss.send(SIRE_PERIODS_QUEUE, job, {
-      id: job.messageId,
-    });
+    let jobId: string | null = null;
+    try {
+      jobId = await this.boss.send(SIRE_PERIODS_QUEUE, job, {
+        id: job.messageId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `No se pudo encolar la consulta SIRE ${job.messageId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo registrar la consulta SIRE en la cola.',
+      );
+    }
+
     if (!jobId) {
+      this.logger.error(
+        `PgBoss no devolvió id para la consulta SIRE ${job.messageId}.`,
+      );
       throw new ServiceUnavailableException(
         'No se pudo registrar la consulta SIRE en la cola.',
       );
