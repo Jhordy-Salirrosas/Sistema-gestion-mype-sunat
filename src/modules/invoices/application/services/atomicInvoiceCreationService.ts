@@ -56,7 +56,9 @@ export class AtomicInvoiceCreationService {
     );
     const emisor = await service.datosDelEmisor(companyId);
     validarContenidoFiscal(traducirEmision(validated, emisor, 0).dto.payload_ubl as never);
-    return service.emitir(validated, companyId);
+    const products = await tx.inventoryProduct.findMany({ where: { company_id: companyId, sku: { in: validated.items.map(l => l.codigo!) } }, select: { sku: true, is_inventory: true } });
+    const inventorySnapshot = Object.fromEntries(products.filter(p => typeof p.is_inventory === 'boolean').map(p => [p.sku, p.is_inventory]));
+    return service.emitir(validated, companyId, inventorySnapshot);
   }
 
   private async execute<T>(route: string, dto: unknown, companyId: string, key: string | undefined,

@@ -98,6 +98,8 @@ export function construirRangoFechas(
 
 /** Objeto `where` de Prisma para el listado. */
 export interface WhereComprobantes {
+  AND?: { estado: { in: InvoiceStatus[] } }[];
+  payload_ubl?: { path: string[]; equals: boolean };
   company_id: string;
   estado?: InvoiceStatus;
   tipo_comprobante?: string;
@@ -116,6 +118,11 @@ export function construirWhere(
   filtros: FiltrosComprobantes,
 ): WhereComprobantes {
   const where: WhereComprobantes = { company_id: companyId };
+  if (filtros.puente_pendiente !== undefined && !['true','false'].includes(filtros.puente_pendiente)) throw new BadRequestException('Filtro de puente pendiente inválido');
+  if (filtros.puente_pendiente === 'true') {
+    where.payload_ubl = { path: ['m1BridgePending'], equals: true };
+    where.AND = [{ estado: { in: ['ACEPTADO','OBSERVADO'] } }];
+  }
 
   if (filtros.estado) {
     const estado = filtros.estado.toUpperCase();

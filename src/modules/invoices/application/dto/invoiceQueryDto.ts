@@ -176,6 +176,7 @@ export interface ReintentoCdrDto {
 
 /** Filtros aceptados por el listado. */
 export interface FiltrosComprobantes {
+  puente_pendiente?: string;
   estado?: string;
   tipo?: string;
   serie?: string;

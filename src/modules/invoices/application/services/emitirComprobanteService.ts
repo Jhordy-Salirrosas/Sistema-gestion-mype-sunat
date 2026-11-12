@@ -112,6 +112,7 @@ export class EmitirComprobanteService {
   async emitir(
     dto: EmitirComprobanteDto,
     companyId: string,
+    inventorySnapshot?: Record<string, boolean>,
   ): Promise<ResultadoEmision> {
     if (!companyId) {
       throw new ForbiddenException(
@@ -184,7 +185,7 @@ export class EmitirComprobanteService {
 
     const traducido = traducirEmision(dtoConCuenta, emisor, correlativo);
 
-    const persistido = await this.persistir(traducido.dto, companyId, traducido.importes, determinacion?.mensaje);
+    const persistido = await this.persistir(traducido.dto, companyId, traducido.importes, determinacion?.mensaje, inventorySnapshot);
     const numero = `${traducido.dto.serie}-${String(correlativo).padStart(8, '0')}`;
     this.logger.log(
       `[M1] Emitido ${numero} por S/ ${traducido.importes.total.toFixed(2)} ` +
@@ -605,6 +606,7 @@ export class EmitirComprobanteService {
     companyId: string,
     importes?: ComprobanteTraducido['importes'],
     auditoriaRetencion?: string,
+    inventorySnapshot?: Record<string, boolean>,
   ): Promise<InvoicePersistenceResult> {
     const entidad = new InvoiceEntity({
       auditoria_retencion: auditoriaRetencion,
@@ -615,7 +617,7 @@ export class EmitirComprobanteService {
       tipo_comprobante: dto.tipo_comprobante,
       monto_total: dto.monto_total,
       fecha_emision: new Date(dto.fecha_emision),
-      payload_ubl: dto.payload_ubl,
+      payload_ubl: inventorySnapshot ? { ...dto.payload_ubl, m1InventorySnapshot: inventorySnapshot } : dto.payload_ubl,
       // La bandeja y el PDF leen el cliente de las columnas propias de la
       // tabla, no del payload: si no se copian aquí la fila sale sin cliente.
       customer_identity_type: dto.customer_identity_type,

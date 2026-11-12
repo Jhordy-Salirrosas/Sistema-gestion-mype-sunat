@@ -1,7 +1,8 @@
+import { omisionesPendientes, BRIDGE_OMITTED } from './invoiceBridgeOmission';
 import { classifyResponseCode } from '../../../sunat/soap/cdr-classifier';
 
 export interface ResultadoPresentacion {
-  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO' | 'PREPARACION_LOCAL' | 'RA_REVERSAL_PENDING' | 'RA_REVERSAL_DONE';
+  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO' | 'PREPARACION_LOCAL' | 'RA_REVERSAL_PENDING' | 'RA_REVERSAL_DONE' | 'BRIDGE_PENDING';
   categoria?: string;
   etapa?: string;
   recuperable?: boolean;
@@ -23,6 +24,7 @@ export function presentarResultado(estado: string, cdr: { codigo: string | null;
     return { origen: 'TRANSPORTE_INCIERTO', codigo: 'M1_TRANSPORT_UNCERTAIN',
       motivo: ultima?.mensaje_error ?? 'Incertidumbre de transporte: no hay resultado concluyente; consultar antes de reenviar.' };
   }
+  if (['ACEPTADO','OBSERVADO'].includes(estado) && omisionesPendientes(history).length) return { origen: 'BRIDGE_PENDING', codigo: BRIDGE_OMITTED, motivo: `${estado} con puente pendiente: descarga omitida por clasificación como servicio. SKU: ${omisionesPendientes(history).join(', ')}.` };
   if (estado === 'ANULADO' && history.some(e => e.codigo_error === 'M1_RA_REVERSAL_DONE')) return { origen: 'RA_REVERSAL_DONE', codigo: 'M1_RA_REVERSAL_DONE', motivo: 'ANULADO con reversión local completada.' };
   if (estado === 'ANULADO' && history.some(e => e.codigo_error === 'M1_RA_REVERSAL_PENDING') && !history.some(e => e.codigo_error === 'M1_RA_REVERSAL_DONE')) return { origen: 'RA_REVERSAL_PENDING', codigo: 'M1_RA_REVERSAL_PENDING', motivo: 'ANULADO con reversión pendiente. La RA fue aceptada; faltan efectos locales del puente.' };
   if (estado === 'ERROR_RED') {
