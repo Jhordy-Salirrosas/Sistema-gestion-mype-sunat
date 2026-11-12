@@ -1,3 +1,5 @@
+import { Prisma } from '../../../../generated/client/client';
+import { fechaIso } from './paymentTermsAndSpotValidator';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { importesPersistidos } from './invoiceQueryMapper';
@@ -32,9 +34,9 @@ export class InvoiceDetractionService {
     if (factura.estado === 'ANULADO') throw new BadRequestException('El comprobante está anulado.');
     const { monto_detraccion } = importesPersistidos(factura.payload_ubl);
     if (!monto_detraccion || monto_detraccion <= 0) throw new BadRequestException('El comprobante no tiene detracción.');
-    const monto = Math.round(Number(dto.amount ?? monto_detraccion) * 100) / 100;
-    if (!(monto > 0) || monto > monto_detraccion + 0.005) throw new BadRequestException(`El depósito debe estar entre 0.01 y ${monto_detraccion.toFixed(2)}.`);
-    const fecha = dto.date ? new Date(`${dto.date}T00:00:00Z`) : new Date();
+    const monto = Number(dto.amount ?? monto_detraccion);
+    if (!Number.isFinite(monto) || !(monto > 0) || new Prisma.Decimal(monto).decimalPlaces() > 2 || monto > monto_detraccion) throw new BadRequestException(`El depósito debe tener como máximo 2 decimales y estar entre 0.01 y ${monto_detraccion.toFixed(2)}.`);
+    const fecha = dto.date !== undefined ? new Date(fechaIso(dto.date, 'depósito')) : new Date();
     if (Number.isNaN(fecha.getTime())) throw new BadRequestException('Fecha de depósito inválida.');
     return this.prisma.invoice.update({
       where: { id }, data: { detraccion_deposited_at: fecha, detraccion_deposited_amount: monto, detraccion_constancia: dto.constancia?.trim() || null },
