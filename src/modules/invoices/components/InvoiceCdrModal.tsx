@@ -26,7 +26,7 @@ import {
 import { Download, FileCode2 } from 'lucide-react';
 import type { ComprobanteDemo } from '../data/invoiceDemoTypes';
 import { generarTramaQrSunat } from '../lib/invoiceCreditAndRules';
-import { identidadEmisora } from '../lib/invoiceExportConstants';
+import { useIdentidadEmisora } from '../lib/invoiceExportConstants';
 import {
   descargarDesdeBackend,
   extraerDigestValue,
@@ -54,6 +54,7 @@ export const InvoiceCdrModal = ({
   modoInicial = 'cdr',
   onCerrar,
 }: InvoiceCdrModalProps) => {
+  const emisor = useIdentidadEmisora();
   const [modo, setModo] = useState<'cdr' | 'xml'>(modoInicial);
   const [descargando, setDescargando] = useState<FormatoDescarga | null>(null);
   const [errorDescarga, setErrorDescarga] = useState<string | null>(null);
@@ -166,9 +167,9 @@ export const InvoiceCdrModal = ({
    */
   const digest = extraerDigestValue(xmlReal ?? null);
 
-  const trama = digest
+  const trama = digest && emisor
     ? generarTramaQrSunat({
-        rucEmisor: identidadEmisora().ruc,
+        rucEmisor: emisor.ruc,
         tipo: c.tipo,
         serie: c.serie,
         correlativo: c.correlativo,

@@ -9,7 +9,7 @@ import qrcode from 'qrcode-generator';
 import { extraerDigestValue, obtenerXmlDesdeBackend } from './invoiceDescarga';
 import type { ComprobanteDemo } from '../data/invoiceDemoTypes';
 import { montoEnLetrasSunat, generarTramaQrSunat } from './invoiceCreditAndRules';
-import { identidadEmisora } from './invoiceExportConstants';
+import { identidadEmisora, cargarIdentidadEmisora, type IdentidadEmisora } from './invoiceExportConstants';
 
 /** Escapa paréntesis y barras para el literal de texto de PostScript. */
 const ps = (texto: string): string =>
@@ -23,8 +23,7 @@ const monto = (valor: number): string =>
   });
 
 /** La misma trama alimenta el texto y los módulos del QR de todos los tipos. */
-export const tramaQrDelComprobante = (c: ComprobanteDemo): string => {
-  const emisor = identidadEmisora();
+export const tramaQrDelComprobante = (c: ComprobanteDemo, emisor: IdentidadEmisora = identidadEmisora()): string => {
   return generarTramaQrSunat({
     rucEmisor: emisor.ruc,
     tipo: c.tipo,
@@ -57,12 +56,10 @@ export const comandosQrPdf = (trama: string): string => {
 };
 
 /** Líneas de texto que componen el recuadro del comprobante. */
-const lineasContenido = (c: ComprobanteDemo): string[] => {
+const lineasContenido = (c: ComprobanteDemo, emisor: IdentidadEmisora): string[] => {
   const numeroSerie = `${c.serie}-${String(c.correlativo).padStart(4, '0')}`;
-  // El RUC y la razón social salen de la empresa activa, no de un literal: el
-  // QR impreso debe llevar el mismo RUC con el que el backend firmó el XML.
-  const emisor = identidadEmisora();
-  const trama = tramaQrDelComprobante(c);
+  // El membrete y la trama reciben la misma identidad efectiva resuelta.
+  const trama = tramaQrDelComprobante(c, emisor);
 
   return [
     'EMPRESA EMISORA',
@@ -100,15 +97,15 @@ const lineasContenido = (c: ComprobanteDemo): string[] => {
 };
 
 /** Construye el contenido del stream de texto del PDF. */
-const streamContenido = (c: ComprobanteDemo): string => {
-  const lineas = lineasContenido(c);
+const streamContenido = (c: ComprobanteDemo, emisor: IdentidadEmisora): string => {
+  const lineas = lineasContenido(c, emisor);
   const comandos = ['BT', '/F1 9 Tf', '14 TL', '40 800 Td'];
 
   lineas.forEach((linea) => {
     comandos.push(`(${ps(linea)}) Tj T*`);
   });
   comandos.push('ET');
-  if (c.hashCpe) comandos.push(comandosQrPdf(tramaQrDelComprobante(c)));
+  if (c.hashCpe) comandos.push(comandosQrPdf(tramaQrDelComprobante(c, emisor)));
 
   return comandos.join('\n');
 };
@@ -118,8 +115,8 @@ const streamContenido = (c: ComprobanteDemo): string => {
  *
  * Los offsets de la tabla `xref` se calculan sobre el flujo ya serializado.
  */
-export const construirPdfBinarioSunat = (c: ComprobanteDemo): string => {
-  const contenido = streamContenido(c);
+export const construirPdfBinarioSunat = (c: ComprobanteDemo, emisor: IdentidadEmisora = identidadEmisora()): string => {
+  const contenido = streamContenido(c, emisor);
 
   const objetos = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -156,10 +153,11 @@ export const nombreArchivoPdf = (c: ComprobanteDemo): string =>
 
 /** Descarga el PDF homologado con MIME application/pdf. */
 export const descargarPdfComprobante = async (c: ComprobanteDemo): Promise<void> => {
-  const digest = extraerDigestValue(await obtenerXmlDesdeBackend(c.id));
+  const [xml, emisor] = await Promise.all([obtenerXmlDesdeBackend(c.id), cargarIdentidadEmisora()]);
+  const digest = extraerDigestValue(xml);
   if (!digest) throw new Error('El XML firmado aún no está disponible para generar el PDF con QR.');
   const firmado = { ...c, hashCpe: digest };
-  const blob = new Blob([construirPdfBinarioSunat(firmado)], {
+  const blob = new Blob([construirPdfBinarioSunat(firmado, emisor)], {
     type: 'application/pdf',
   });
   const url = URL.createObjectURL(blob);
