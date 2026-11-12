@@ -55,3 +55,14 @@ it.each(['ACEPTADO','OBSERVADO'])('7I razón visible y selección obsoleta no ha
  expect(v.lineas[0]).toMatchObject({ incluido: false, motivoExclusion: 'Tiene notas asociadas.' });
  expect(v.xml).toBeNull();
 });
+
+it.each(['RA', 'RC'])('cabecera %s usa el pin y excluye históricos de otro RUC', async kind => {
+  const h = harness();
+  h.db.company.findUnique.mockResolvedValue({ ruc: '20614142503', issuer_ruc: '20601234567', legal_name: 'Emisor M1' } as never);
+  h.rows.splice(0, 1, { ...invoice('invoice', kind === 'RC' ? 'PENDIENTE' : 'ACEPTADO', kind === 'RC' ? '03' : '01'), ruc_emisor: '20601234567' },
+    { ...invoice('historico', kind === 'RC' ? 'PENDIENTE' : 'ACEPTADO', kind === 'RC' ? '03' : '01'), ruc_emisor: '20614142503', correlativo: 2 });
+  const vista = kind === 'RC' ? await h.view.vistaResumenDiario('company', date) : await h.view.vistaComunicacionBaja('company', date);
+  expect(vista.xml).toContain('<cbc:CustomerAssignedAccountID>20601234567</cbc:CustomerAssignedAccountID>');
+  expect(vista.lineas.find(l => l.id === 'invoice')?.incluido).toBe(true);
+  expect(vista.lineas.find(l => l.id === 'historico')).toMatchObject({ incluido: false, motivoExclusion: 'RUC histórico distinto al emisor efectivo.' });
+});

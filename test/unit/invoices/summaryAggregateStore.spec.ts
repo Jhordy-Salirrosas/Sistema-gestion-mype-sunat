@@ -208,3 +208,11 @@ it.each([
     result: { codigo: '0', mensaje: 'Aceptado', referencia: 'RA-1' },
   }]);
 });
+
+it.each(['RA', 'RC'])('snapshot %s conserva la identidad efectiva fijada al reservar', async kind => {
+  const h = aggregateHarness(kind);
+  h.context.ruc = '20601234567';
+  const { row } = await h.reserve();
+  expect(row.issuer_ruc).toBe('20601234567');
+  expect(h.delegate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ company_id: 'company', issuer_ruc: '20601234567' }) }));
+});

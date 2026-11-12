@@ -3297,3 +3297,15 @@ npm run build
 ```
 
 FERRY.md contiene los veinte SHA-256 finales del front. No se abren PRs, no se despliega y no se ejecutan emisiones reales.
+
+## RUC propio del emisor M1
+
+Sobre back main `40b77ce9f15bd72207f1e085087610ab5ddadc8e` y front main `ee5086b592761632ed4d2ebbdbb12fb5e497544f`, M1 permite fijar `companies.issuer_ruc` sin cambiar `companies.ruc`, compartido con SIRE. Sin pin se conserva el RUC de empresa. La identidad efectiva se reutiliza en contexto/SOL, emisión/UBL/persistencia, guarda API y cabeceras/snapshots RA/RC; el writer valida el certificado contra esa identidad. GET informa `ruc`, `origen_ruc` y el origen en el checklist, sin redefinir el origen de SOL o certificado.
+
+El pin acepta exclusivamente once dígitos numéricos, sin módulo 11: omitido conserva, null retira, vacío se rechaza y reset de credenciales conserva el pin. `CreateInvoiceDto.ruc_emisor` sustituye `IsRucValid` por el patrón `^[0-9]{11}$`; la guarda de identidad efectiva sigue rechazando RUC ajenos antes de numerar. No se cambia el validador compartido ni el RUC de clientes. El PDF y QR del back conservan el RUC histórico de cada comprobante.
+
+El front modifica únicamente tres consumidores de producción de M1: identidad de exportación, PDF local y QR del modal. Consulta `/invoices/config`, usa `config.ruc` y recurre a la sesión si la configuración no responde; descarta respuestas de otra sesión. El formulario sigue de solo lectura para el RUC. La entrega se transporta por `ferry/m1-ruc-emisor-propio` en el repositorio back, con hashes en FERRY.md.
+
+Migración aditiva pendiente de aplicación compartida: `prisma/migrations/20261112190000_m1_issuer_ruc/migration.sql`. SQL exacto: `ALTER TABLE "companies" ADD COLUMN "issuer_ruc" VARCHAR(11);`. SHA-256: `7fc7787c92bea3da0decee43d928f82cd6e2c5c43d5c4c6c86757f43eebad5c4`. No contiene default, relleno ni UPDATE. Solo se probó en PostgreSQL local aislado; no se aplicó a la base compartida. Ante la deriva informada, aplicar el SQL revisado y registrar la migración/checksum antes de desplegar el nuevo cliente Prisma; no ejecutar reset ni promover migraciones pendientes ajenas.
+
+Línea base: back 326 suites aprobadas, 4 omitidas; 3155 pruebas aprobadas, 38 omitidas; 12 snapshots. Front 150 archivos y 1091 pruebas aprobadas. Final: back 327 suites aprobadas, 4 omitidas; 3191 pruebas aprobadas, 38 omitidas; 12 snapshots. Front 151 archivos y 1105 pruebas aprobadas. Regresiones nuevas: 36 back y 14 front, incluyendo certificado/firma ficticios, writer/HTTP, ambas rutas de creación, RA/RC, históricos y respaldo/cambio de sesión del front. Cobertura local del código nuevo del back: 100% de 24 líneas ejecutables y 39 ramas. Builds Nest/Vite y typecheck aprobados; lint back sin errores (dos avisos previos) y lint focal front sin errores. Sin archivos de SIRE modificados, PRs, despliegues ni emisiones reales.

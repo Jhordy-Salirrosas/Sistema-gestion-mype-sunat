@@ -15,6 +15,7 @@ export type PerfilComercial = 'MAYORISTA' | 'MINORISTA';
 
 export interface IssuerConfigInput {
   action?: 'save' | 'reset';
+  issuer_ruc?: string | null;
   cuenta_banco_nacion?: string | null;
   local_anexo?: string | null;
   domicilio_fiscal?: string | null;
@@ -37,6 +38,7 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     throw new BadRequestException('CONFIG_INPUT_INVALID');
   const limits: Record<string, number> = {
     action: 5,
+    issuer_ruc: 11,
     cuenta_banco_nacion: 11,
     local_anexo: 4,
     domicilio_fiscal: 200,
@@ -53,7 +55,7 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
     cert_password: 256,
   };
   for (const [key, value] of Object.entries(body)) {
-    if (['cuenta_banco_nacion', 'perfil_comercial', 'local_anexo', 'domicilio_fiscal', 'ubigeo_fiscal', 'departamento_fiscal', 'provincia_fiscal', 'distrito_fiscal'].includes(key) && value === null) continue;
+    if (['issuer_ruc', 'cuenta_banco_nacion', 'perfil_comercial', 'local_anexo', 'domicilio_fiscal', 'ubigeo_fiscal', 'departamento_fiscal', 'provincia_fiscal', 'distrito_fiscal'].includes(key) && value === null) continue;
     if (
       !Object.hasOwn(limits, key) ||
       typeof value !== 'string' ||
@@ -62,6 +64,8 @@ export function validateIssuerInput(body: unknown): IssuerConfigInput {
       throw new BadRequestException('CONFIG_INPUT_INVALID');
   }
   const input = body as IssuerConfigInput;
+  if (input.issuer_ruc !== undefined && input.issuer_ruc !== null && !/^[0-9]{11}$/.test(input.issuer_ruc))
+    throw new BadRequestException('ISSUER_RUC_INVALID');
   if (input.action && !['save', 'reset'].includes(input.action))
     throw new BadRequestException('CONFIG_ACTION_INVALID');
   if (input.entorno && !['MOCK', 'BETA', 'PRODUCCION'].includes(input.entorno))
@@ -118,6 +122,7 @@ export class IssuerConfigWriter {
         const active = Boolean(company.issuer_config_activated_at);
         // Preserve omitted fields, but only explicitly configured groups are eligible for resolution.
         const data = {
+          issuer_ruc: input.issuer_ruc === undefined ? company.issuer_ruc : input.issuer_ruc,
           detraction_account: input.cuenta_banco_nacion === undefined ? company.detraction_account : input.cuenta_banco_nacion?.trim() || null,
           local_anexo: input.local_anexo === undefined ? company.local_anexo : input.local_anexo?.trim() || null,
           domicilio_fiscal: input.domicilio_fiscal === undefined ? company.domicilio_fiscal : input.domicilio_fiscal?.trim() || null,
@@ -200,13 +205,13 @@ export class IssuerConfigWriter {
         );
         if (
           context.certificate &&
-          (supplied(input.cert_base64) || supplied(input.cert_password))
+          (input.issuer_ruc !== undefined || supplied(input.cert_base64) || supplied(input.cert_password))
         ) {
           try {
             this.certificates.validarYCargarCertificado(
               context.certificate.base64,
               context.certificate.password,
-              company.ruc,
+              context.ruc,
             );
           } catch {
             throw new BadRequestException('CONFIG_CERT_INVALID');

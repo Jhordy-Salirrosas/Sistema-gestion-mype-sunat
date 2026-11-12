@@ -1,3 +1,4 @@
+import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 import { validarCuentaSpot } from './spotMinimo';
 import { multiplicarMoneda } from '../../money';
 import { verificarOrigenAceptado } from './creditNoteBalanceGuard';
@@ -219,6 +220,7 @@ export class EmitirComprobanteService {
       where: { id: companyId },
       select: {
         ruc: true,
+        issuer_ruc: true,
         legal_name: true,
         trade_name: true,
         local_anexo: true,
@@ -248,7 +250,7 @@ export class EmitirComprobanteService {
       departamento: empresa.departamento_fiscal!,
       provincia: empresa.provincia_fiscal!,
       distrito: empresa.distrito_fiscal!,
-      ruc: empresa.ruc,
+      ruc: resolveIssuerIdentity(empresa).ruc,
       razonSocial: empresa.legal_name,
       nombreComercial: empresa.trade_name ?? undefined,
     };

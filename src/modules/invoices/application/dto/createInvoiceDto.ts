@@ -1,6 +1,7 @@
 import { esDocumentoIntegramenteGratuito } from '../../freeInvoicePolicy';
 import {
   IsString,
+  Matches,
   IsInt,
   IsNumber,
   IsDateString,
@@ -13,13 +14,12 @@ import {
   IsPositive,
   ValidateIf,
 } from 'class-validator';
-import { IsRucValid } from '../validators/isRucValidDecorator';
 import { IsSerieValid } from '../validators/isSerieValidDecorator';
 
 export class CreateInvoiceDto {
   @IsNotEmpty()
   @IsString()
-  @IsRucValid()
+  @Matches(/^[0-9]{11}$/, { message: 'El RUC emisor debe tener 11 dígitos numéricos' })
   ruc_emisor: string;
 
   @IsNotEmpty()

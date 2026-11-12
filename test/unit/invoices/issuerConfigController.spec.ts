@@ -205,3 +205,28 @@ describe('D1 Config controller adjacent series validation branches', () => {
     ).rejects.toThrow('no está configurada');
   });
 });
+
+describe('RUC propio del emisor en HTTP', () => {
+  let app: INestApplication;
+  const h = issuerConfigHarness();
+  const jwt = new NativeJwtAdapter(new ConfigService({ JWT_SECRET: 'obviously-fake-pin-http-key' }));
+  const auth = (role = 'ADMIN') => `Bearer ${jwt.signToken({ sub: 'fake-user', companyId: h.company.id, role })}`;
+  beforeAll(async () => {
+    h.company.ruc = '20614142503';
+    const config = new InvoiceConfigService({ listar: async () => [] } as never, h.certificates as never, h.resolver, h.writer);
+    const module = await Test.createTestingModule({ controllers: [InvoiceConfigController], providers: [
+      { provide: InvoiceConfigService, useValue: config },
+      { provide: InvoiceSeriesService, useValue: {} },
+      { provide: TOKEN_SERVICE_PORT, useValue: jwt },
+    ] }).compile();
+    app = module.createNestApplication(); await app.init();
+  });
+  afterAll(async () => { await app.close(); });
+  it('solo ADMIN guarda el pin; GET devuelve RUC y origen sin modificar el RUC compartido', async () => {
+    await request(app.getHttpServer()).put('/api/v1/invoices/config').set('Authorization', auth('CONTADOR')).send({ issuer_ruc: '20601234567' }).expect(403);
+    await request(app.getHttpServer()).put('/api/v1/invoices/config').set('Authorization', auth()).send({ issuer_ruc: '20601234567' }).expect(200);
+    const response = await request(app.getHttpServer()).get('/api/v1/invoices/config').set('Authorization', auth()).expect(200);
+    expect(response.body).toMatchObject({ ruc: '20601234567', origen_ruc: 'issuer_config' });
+    expect(h.company.ruc).toBe('20614142503');
+  });
+});

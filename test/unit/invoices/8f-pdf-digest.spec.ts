@@ -7,3 +7,19 @@ it.each([['hash-distinto',xml,'DIGEST-XML=='],['distinto','<Invoice><DigestValue
  const result=await service.datosPdf(fila);
  if(esperado){expect(generarPng).toHaveBeenCalledWith(expect.objectContaining({hashCpe:esperado}));expect(result.qrBase64).toBe('PNG');}else{expect(generarPng).not.toHaveBeenCalled();expect(result.qrBase64).toBe('');}
 });
+
+it('PDF y QR históricos conservan el RUC guardado aunque la configuración actual tenga otro pin', async () => {
+  const generarPng = jest.fn(async () => 'PNG');
+  const service = Object.create(InvoiceDownloadService.prototype);
+  service.qr = { generarPng };
+  service.issuerConfig = { resolve: jest.fn(async () => ({ ruc: '20601234567' })) };
+  const fila = { items: [], payload_ubl: {}, xml_storage_url: xml, fecha_emision: new Date('2026-11-12'),
+    customer_identity_type: '6', customer_identity_number: '20100070970', ruc_emisor: '20614142503',
+    tipo_comprobante: '01', serie: 'F001', correlativo: 1, monto_total: 118 };
+  const before = JSON.stringify(fila);
+  const result = await service.datosPdf(fila);
+  expect(result.rucEmisor).toBe('20614142503');
+  expect(generarPng).toHaveBeenCalledWith(expect.objectContaining({ rucEmisor: '20614142503' }));
+  expect(service.issuerConfig.resolve).not.toHaveBeenCalled();
+  expect(JSON.stringify(fila)).toBe(before);
+});
