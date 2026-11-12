@@ -40,12 +40,7 @@ import {
   serieCorrespondeATipo,
 } from '../../domain/rules/serieRules';
 
-/** Cuerpo de POST /api/v1/invoices/series. */
-interface AltaSerieBody {
-  document_type?: string;
-  series?: string;
-  correlativo_inicial?: number;
-}
+import { AltaSerieDto } from '../../application/dto/altaSerieDto';
 
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
@@ -89,7 +84,7 @@ export class InvoiceConfigController {
   @HttpCode(HttpStatus.CREATED)
   async crearSerie(
     @CurrentCompany() companyId: string,
-    @Body() body: AltaSerieBody,
+    @Body() body: AltaSerieDto,
   ) {
     const tipo = (body.document_type ?? '').trim();
     const serie = (body.series ?? '').trim();
