@@ -106,7 +106,7 @@ export const bloqueImpuestos = (
   }
 
   const totalTributos =
-    t.igv;
+    redondearMoneda(t.igv + t.icbper);
 
   const partes: string[] = [
     `  <cac:TaxTotal>
@@ -135,8 +135,7 @@ ${subtotales
   ];
 
   if (t.icbper > 0) {
-    partes.push(`  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="${moneda}">${dinero(t.icbper)}</cbc:TaxAmount>
+    partes[0] = partes[0].replace(/\n  <\/cac:TaxTotal>$/, `
     <cac:TaxSubtotal>
       <cbc:TaxAmount currencyID="${moneda}">${dinero(t.icbper)}</cbc:TaxAmount>
       <cac:TaxCategory>

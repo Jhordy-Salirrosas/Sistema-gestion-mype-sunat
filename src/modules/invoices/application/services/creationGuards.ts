@@ -1,3 +1,4 @@
+import { esDocumentoIntegramenteGratuito } from '../../freeInvoicePolicy';
 import { descripcionCanonicaNota } from './noteDescription';
 import { validarMotivoNota, validarImporteNota } from './noteReasonGuard';
 import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
@@ -99,24 +100,26 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   for (const l of dto.items) {
     const producto = productos.find((p) => p.sku === l.codigo!.trim());
     if (!producto) throw new BadRequestException(`Producto o servicio no registrado: ${l.codigo}`);
-    if (!esNota && (!Number.isFinite(Number(producto.sale_price)) || !(Number(producto.sale_price) > 0))) throw new BadRequestException(`Producto ${l.codigo} sin precio de venta configurado`);
     const candidatas = historicas.filter(h => h.item_code === l.codigo!.trim());
     const historica = candidatas.find(h => (!l.afectacion || l.afectacion === h.igv_affectation_type) && (!l.unidad || l.unidad === h.unit_code));
     if (esNota && !candidatas.length) throw new BadRequestException('La nota contiene un producto ajeno al comprobante origen');
     if ((candidatas.length && !historica) || (producto.is_active === false && !historica)) throw new BadRequestException('La línea inactiva o histórica debe corresponder al comprobante origen');
-    const afectacion = (historica ? historica.igv_affectation_type : producto.tax_affectation)?.trim();
+    const gratuitaDeclarada = !esNota && typeof l.afectacion === 'string' && esAfectacionGratuita(l.afectacion);
+    const afectacion = (historica ? historica.igv_affectation_type : gratuitaDeclarada ? l.afectacion : producto.tax_affectation)?.trim();
     const unidad = historica ? historica.unit_code : producto.sunat_unit_code;
     if (!unidad?.trim()) throw new BadRequestException('La línea no tiene unidad fiscal registrada');
     if (!afectacion || !(AFECTACIONES_GRILLA as readonly string[]).includes(afectacion)) {
       throw new BadRequestException(`Producto ${l.codigo} sin afectación tributaria válida`);
     }
+    if (!esNota && !esAfectacionGratuita(afectacion) && (!Number.isFinite(Number(producto.sale_price)) || !(Number(producto.sale_price) > 0))) throw new BadRequestException(`Producto ${l.codigo} sin precio de venta configurado`);
     if (esNota && !esAfectacionGratuita(afectacion) && !(l.precioUnitario! > 0)) throw new BadRequestException({ code: 'NOTA_PRECIO_INVALIDO', message: 'El precio de una línea onerosa de la nota debe ser mayor que cero.' });
     if (l.afectacion && l.afectacion !== afectacion) throw new BadRequestException('No puede alterar la afectación del producto');
     if (l.unidad && l.unidad !== unidad) throw new BadRequestException('No puede alterar la unidad del producto');
     if (!Number.isFinite(l.precioUnitario)) {
       throw new BadRequestException('Indique precio unitario con IGV y cantidad válidos');
     }
-    if (!esNota && !new Prisma.Decimal(producto.sale_price!).equals(l.precioUnitario!)) {
+    if (esAfectacionGratuita(afectacion) && (l.precioUnitario !== 0 || !Number.isFinite(l.valorUnitario) || !(l.valorUnitario > 0))) throw new BadRequestException('La línea gratuita exige precio cobrado cero y valor referencial positivo');
+    if (!esNota && !esAfectacionGratuita(afectacion) && !new Prisma.Decimal(producto.sale_price!).equals(l.precioUnitario!)) {
       throw new BadRequestException(`El precio de venta de ${l.codigo} cambió o no coincide con el configurado; actualice el catálogo`);
     }
     l.afectacion = afectacion;
@@ -182,6 +185,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   validarClasificacionSpot(dto);
   const liquidado = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0);
   if (esNota) validarImporteNota(liquidado.importes.total);
+  if (!esNota && !(liquidado.importes.total > 0) && !esDocumentoIntegramenteGratuito(dto.tipo_comprobante, liquidado.dto.payload_ubl.lineas)) throw new BadRequestException('El total cero solo se admite en documentos íntegramente gratuitos con referencias positivas');
   if (liquidado.importes.detraccion > 0) {
     const empresa = await tx.company.findUnique({ where: { id: companyId }, select: { detraction_account: true } });
     dto.cuenta_banco_nacion = validarCuentaSpot(dto, liquidado.importes.detraccion, empresa?.detraction_account) ?? undefined;

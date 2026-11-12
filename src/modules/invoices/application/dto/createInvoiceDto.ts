@@ -1,3 +1,4 @@
+import { esDocumentoIntegramenteGratuito } from '../../freeInvoicePolicy';
 import {
   IsString,
   IsInt,
@@ -10,6 +11,7 @@ import {
   Length,
   IsNotEmpty,
   IsPositive,
+  ValidateIf,
 } from 'class-validator';
 import { IsRucValid } from '../validators/isRucValidDecorator';
 import { IsSerieValid } from '../validators/isSerieValidDecorator';
@@ -40,6 +42,7 @@ export class CreateInvoiceDto {
 
   @IsNotEmpty()
   @IsNumber({ maxDecimalPlaces: 2 })
+  @ValidateIf(o => o.monto_total !== 0 || !esDocumentoIntegramenteGratuito(o.tipo_comprobante, o.payload_ubl?.lineas))
   @IsPositive()
   monto_total: number;
 

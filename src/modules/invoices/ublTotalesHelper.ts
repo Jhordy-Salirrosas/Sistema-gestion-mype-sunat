@@ -1,3 +1,4 @@
+import { calcularIcbper } from './ublIcbperLine';
 import { redondearMoneda as centimos } from './money';
 /**
  * Cálculo de detracción, retención, ICBPER e importe a pagar (M1).
@@ -12,7 +13,6 @@ import { redondearMoneda as centimos } from './money';
  */
 import { aplicarDescuentoGlobal, type DescuentoGlobal } from './application/services/descuentoGlobal';
 import {
-  MONTO_ICBPER_POR_BOLSA,
   TASA_IGV,
   TASA_RETENCION_IGV,
 } from './sunatCatalogs';
@@ -128,7 +128,7 @@ function repartirBases(lineas: LineaTributaria[]): {
       exportado += base;
     }
 
-    if (!gratuita) icbper += linea.icbper ?? 0;
+    icbper += linea.icbper ?? 0;
   }
 
   return {
@@ -166,7 +166,7 @@ export const calcularTotales = (
         exportado: 0,
         igv: igvInformado,
         icbper: payload.bolsasIcBper
-          ? centimos(payload.bolsasIcBper * MONTO_ICBPER_POR_BOLSA)
+          ? calcularIcbper(payload.bolsasIcBper)
           : 0,
       };
 

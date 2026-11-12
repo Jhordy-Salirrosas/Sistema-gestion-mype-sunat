@@ -1,3 +1,5 @@
+import { calcularIcbper } from '../../ublIcbperLine';
+import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
 import { descripcionCanonicaNota } from './noteDescription';
 import { multiplicarMoneda, dividirMoneda, dividirUnitario } from '../../money';
 import { redondearMoneda as centimos } from '../../money';
@@ -78,14 +80,7 @@ export interface ComprobanteTraducido {
 /** Redondeo monetario sin arrastrar error de coma flotante. */
 
 /** ¿La afectación es gratuita? No se cobra, pero sí se informa. */
-const esGratuita = (afectacion: string): boolean => {
-  const codigo = afectacion.trim();
-  return (
-    ['11', '12', '13', '14', '15', '16'].includes(codigo) ||
-    codigo === '21' ||
-    ['31', '32', '33', '34', '35', '36', '37'].includes(codigo)
-  );
-};
+const esGratuita = esAfectacionGratuita;
 
 /** Tributo del Catálogo 05 que corresponde a cada afectación. */
 const tributoDe = (afectacion: string): string => {
@@ -182,7 +177,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   // El importe legado solo se acepta si coincide con cantidades comprobables.
   const bolsas = item.cantidadBolsas ?? ((item.icbper ?? 0) > 0 ? cantidad : 0);
   if (!Number.isSafeInteger(bolsas) || bolsas < 0) throw new BadRequestException('ICBPER requiere cantidad entera de bolsas');
-  const icbper = multiplicarMoneda(bolsas, 0.5);
+  const icbper = calcularIcbper(bolsas);
   if (item.icbper !== undefined && item.icbper !== icbper) throw new BadRequestException('ICBPER no coincide con la cantidad de bolsas');
   const linea: LineaDetalle = {
     id: indice + 1,

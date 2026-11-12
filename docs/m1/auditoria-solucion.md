@@ -3031,3 +3031,86 @@ Bases verificadas de fase 0: back 303 suites / 2781 pruebas / 12 snapshots aprob
 - `test/unit/modules/invoices/invoice8cBridgePending.test.tsx`
 
 C1 y C2 no requieren archivos front. El manifiesto FERRY.md añade las instrucciones de traslado y los SHA-256 finales de todos los archivos front.
+
+## Parte 8D — línea gratuita completa
+
+Construcción sobre back `95b6687d5843588e10f34b43b7f6d0eb850a6bca` y front `4b94d22f769b788aca001295ae1e066f92f0c4ed`, en orden D1, D2, D3 y D4, con un commit back por frente. Sin emisiones reales, PRs, migraciones ni columnas nuevas. Los cambios de producción permanecen en M1. El front se entrega mediante `ferry/m1-8d-linea-gratuita`, con sus archivos originales y SHA-256 en FERRY.md.
+
+### D1 — gratuidad explícita y contratos de creación
+
+El formulario permite declarar una línea gratuita conservando el producto, la unidad y el valor referencial, con precio cobrado cero y elección explícita del motivo fiscal. El selector de motivos no queda bloqueado por la afectación heredada; las notas conservan su clasificación histórica. Al retirar la gratuidad de una línea convertida se recuperan los datos onerosos originales. Una referencia inválida o un motivo pendiente bloquean la validación del formulario, incluso si existe ICBPER. Las pruebas anteriores de selección gratuita se actualizan para exigir precio cobrado cero, manteniendo el valor referencial y el control de edición de la grilla.
+
+Ambas rutas de creación pasan por la misma guarda. Los códigos gratuitos se reconocen mediante el helper que consulta `AFECTACIONES_GRATUITAS`; se elimina la lista duplicada del adaptador. Una gratuita exige precio cobrado cero y referencia finita positiva. La guarda conserva la unidad y las restricciones del contrato oneroso; no compara el cero cobrado con el precio oneroso del catálogo. El maestro no se modifica. Las notas siguen exigiendo coincidencia con su origen y un importe positivo conforme a sus reglas existentes.
+
+El contrato fiscal admite monto_total cero exclusivamente para factura/boleta íntegramente gratuita, con cantidad y referencia positivas y precio cobrado cero en todas las líneas. La guarda común también impide liquidar un documento oneroso en cero, por ejemplo mediante un descuento total. La excepción no se aplica a notas ni a un payload sin líneas o sin evidencia de gratuidad.
+
+Se conserva la representación UBL existente: PriceTypeCode 02, precio referencial positivo, precio cobrado cero y 9996/GRA/FRE. Los códigos 11–16 declaran tasa referencial 18%; 21 y 31–37 declaran cero. Las onerosas 20/30 conservan 9997/9998. Se añade la leyenda 1002 para la transferencia gratuita. No se cobra al cliente el valor referencial ni el IGV del retiro gratuito. El puente físico no se modifica.
+
+Validación focal D1: 45 pruebas nuevas del back, incluidas ambas rutas con una gratuita cuyo maestro no tiene precio oneroso configurado. Cuatro pruebas nuevas del front verifican selección, motivo, referencia, restauración del precio oneroso, validación y payload.
+
+### D2 — ICBPER y TaxTotal de cabecera
+
+La gratuita también aporta su ICBPER al agregado tributario: dos bolsas declaradas suman S/ 1.00, conforme al gravamen por adquisición bajo cualquier título de la Ley 30884, artículo 12. El adaptador reutiliza el calculador existente de ICBPER, y los totales XML ya no excluyen ese impuesto por la gratuidad de la línea.
+
+El comprobante con ICBPER genera un único TaxTotal de cabecera y sus subtotales, incluido 7152, eliminando el doble TaxTotal que provocaba SFS 3024. Se mantienen separados el impuesto a las bolsas y las referencias de las operaciones gratuitas. El total cobrable coincide con el adaptador. Esta corrección estructural no se aplica al RC.
+
+Validación focal: 33 pruebas, incluidas ocho comprobaciones XSD/SFS con certificado ficticio para factura/boleta y naturalezas gravada, gratuita gravada, gratuita exonerada e inafecta, además del control mixto. Los 24 hashes de XML sin ICBPER, capturados después de D1 y antes de D2, se conservan byte a byte para 01/03/07/08 y seis naturalezas no afectadas por D3. No se reescriben snapshots para cubrir diferencias. La aserción previa de m1-money se ajusta a un único TaxTotal, conservando la comprobación de suma de impuestos.
+
+### D3 — tasa cero de exonerada onerosa
+
+La categoría 9997 de la línea onerosa exonerada declara Percent 0.00, conservando categoría E y afectación 20. El cambio se limita a esa rama del helper; las demás categorías no cambian. La representación sin ICBPER de las otras seis naturalezas mantiene los controles SHA-256 anteriores. La diferencia de XML de una exonerada onerosa corresponde exclusivamente a este frente, no a D2.
+
+Ocho casos XSD/SFS verifican factura, boleta, NC y ND exoneradas puras y mixtas; ya no se reproduce el 2992 de la línea 9997.
+
+### D4 — regresiones de paridad con RC
+
+No se modifica código de producción del resumen. Quince pruebas verifican referencia e impuesto gratuito, ICBPER, total cobrable y ausencia de mutación del payload entre boleta y RC, con gratuitas gravadas, exoneradas e inafectas, puras/mixtas y con/sin bolsas. El RC conserva su BillingPayment y sus bloques por tributo. Cada pareja de XML de boleta y RC de la matriz pasa XSD/SFS local con firma ficticia; un total persistido discordante se rechaza explícitamente.
+
+### Certificación y límites
+
+Las pruebas XSD/SFS son locales y no constituyen certificación SUNAT. La certificación posterior en beta deberá conservar XML firmado, hash y CDR para factura/boleta con las tres naturalezas gratuitas, puras/mixtas, con/sin ICBPER y con exoneradas onerosas; el RC requiere su propio ticket/CDR. No se realizaron envíos en este encargo. No se cambia el catálogo de RC por analogía con la factura ni se amplía el alcance a sus cambios normativos futuros.
+
+### Verificación final y archivos por frente
+
+Corrida completa final back: **311 suites / 2907 pruebas / 12 snapshots aprobados**, con 4 suites / 38 pruebas omitidas como en la base. PostgreSQL local desechable habilitado; SUNAT real deshabilitado. Front completo: **131 suites / 947 pruebas aprobadas**. Bases de fase 0: back 307 suites / 2806 pruebas / 12 snapshots; front 130 suites / 943 pruebas. Las pruebas nuevas suman 101 casos back y cuatro front.
+
+Build back `npx nest build` y build front `npm run build` aprobados. Lint back sin errores, con las dos advertencias preexistentes de respaldos vacíos de spread en servicios de resúmenes de 8C; lint de todos los archivos front cambiados aprobado sin advertencias. El ferry contiene exactamente los cinco archivos front probados, más el manifiesto FERRY.md. El control final de alcance no muestra cambios de código fuente fuera de `src/modules/invoices`.
+
+#### D1 — archivos back
+
+- `src/modules/invoices/application/dto/createInvoiceDto.ts`
+- `src/modules/invoices/application/services/creationGuards.ts`
+- `src/modules/invoices/application/services/emitirComprobanteAdapter.ts`
+- `src/modules/invoices/freeInvoicePolicy.ts`
+- `src/modules/invoices/ublGeneratorService.ts`
+- `test/unit/invoices/8d-free-creation.spec.ts`
+
+#### D2 — archivos back
+
+- `src/modules/invoices/application/services/emitirComprobanteAdapter.ts`
+- `src/modules/invoices/ublTaxBlocks.ts`
+- `src/modules/invoices/ublTotalesHelper.ts`
+- `test/fixtures/8d-no-icbper-hashes.json`
+- `test/fixtures/8dFiscalHarness.ts`
+- `test/unit/invoices/8d-icbper.spec.ts`
+- `test/unit/invoices/m1-money.spec.ts`
+
+#### D3 — archivos back
+
+- `src/modules/invoices/xmlNodesHelper.ts`
+- `test/unit/invoices/8d-exempt-percent.spec.ts`
+
+#### D4 — archivos back
+
+- `test/unit/invoices/8d-summary-parity.spec.ts`
+- `docs/m1/auditoria-solucion.md`
+
+#### D1 — archivos front (ferry)
+
+- `src/modules/invoices/components/InvoiceItemsGrid.tsx`
+- `src/modules/invoices/lib/invoiceItems.ts`
+- `test/unit/modules/invoices/inventoryProductsApi.test.ts`
+- `test/unit/modules/invoices/invoice8dFree.test.tsx`
+- `test/unit/modules/invoices/invoiceItemsLayout.test.tsx`
+
+D2, D3 y D4 no modifican archivos del producto front. FERRY.md añade únicamente el manifiesto e instrucciones de traslado y los SHA-256 finales de los cinco archivos front.
