@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Input } from '@/components/ui';
 import { cn } from '@/lib/utils';
 
@@ -21,11 +22,14 @@ export function PeriodInput({
   id?: string;
   className?: string;
 }) {
-  const match = /^(\d{4})-(\d{1,2})$/.exec(value);
-  const year = match ? Number(match[1]) : new Date().getFullYear();
-  const month = match ? match[2].padStart(2, '0') : '01';
-  const cambiar = (nuevoAnio: number, nuevoMes: string) => {
-    onChange(`${nuevoAnio}-${nuevoMes}`);
+  const [draft, setDraft] = useState<{base: string; year: string; month: string} | null>(null);
+  const parts = /^(\d{4})-(\d{1,2})$/.exec(value);
+  const year = draft?.base === value ? draft.year : parts?.[1] ?? '';
+  const month = draft?.base === value ? draft.month : parts?.[2].padStart(2, '0') ?? '';
+  const valido = /^\d{4}$/.test(year) && MESES.includes(month);
+  const cambiar = (nuevoAnio: string, nuevoMes: string) => {
+    setDraft({base: value, year: nuevoAnio, month: nuevoMes});
+    if (/^\d{4}$/.test(nuevoAnio) && MESES.includes(nuevoMes)) onChange(`${nuevoAnio}-${nuevoMes}`);
   };
 
   return (
@@ -34,10 +38,10 @@ export function PeriodInput({
         id={id}
         aria-label="Año contable"
         type="number"
-        min={2000}
-        max={2100}
+        step={1}
+        aria-invalid={!valido}
         value={year}
-        onChange={(event) => cambiar(Number(event.target.value), month)}
+        onChange={(event) => cambiar(event.target.value, month)}
         className="w-24"
       />
       <select
@@ -50,6 +54,7 @@ export function PeriodInput({
           <option key={m} value={m}>{m}</option>
         ))}
       </select>
+      {!valido && <p role="alert" className="text-xs text-destructive">Indique un año entero de cuatro dígitos y un mes entre 1 y 12.</p>}
     </div>
   );
 }

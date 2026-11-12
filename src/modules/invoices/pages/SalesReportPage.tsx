@@ -1,3 +1,4 @@
+import { errorRangoFechas } from '../lib/invoiceDateRange';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, Input, Page, PageHeader, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui';
@@ -26,8 +27,10 @@ export default function SalesReportPage() {
   const [desde, setDesde] = useState(inicioMes);
   const [hasta, setHasta] = useState(hoy);
   const [tab, setTab] = useState<'clientes' | 'documentos' | 'dias'>('clientes');
+  const errorFechas = !desde || !hasta ? 'Indique Desde y Hasta.' : errorRangoFechas(desde, hasta);
   const { data, isLoading, error } = useQuery({
     queryKey: ['sales-report', desde, hasta],
+    enabled: !errorFechas,
     queryFn: async () => (await apiClient.get<Reporte>('/invoices/reports/sales', { params: { from: desde, to: hasta } })).data,
   });
   const filas = useMemo(() => {
@@ -39,12 +42,13 @@ export default function SalesReportPage() {
 
   return <Page>
     <PageHeader title="Reporte de ventas y margen" description="Ventas del período, costo de ventas y utilidad por cliente, comprobante y día">
-      <Button variant="outline" size="sm" disabled={!data} onClick={() => data && csv(`ventas-${data.from}-${data.to}.csv`, [['Reporte', 'Ventas', 'Costo', 'Utilidad'], ['TOTAL', data.totals.sales.toFixed(2), data.totals.cost.toFixed(2), data.totals.profit.toFixed(2)], ...filas])}>Exportar CSV</Button>
+      <Button variant="outline" size="sm" disabled={!data || Boolean(errorFechas)} onClick={() => data && csv(`ventas-${data.from}-${data.to}.csv`, [['Reporte', 'Ventas', 'Costo', 'Utilidad'], ['TOTAL', data.totals.sales.toFixed(2), data.totals.cost.toFixed(2), data.totals.profit.toFixed(2)], ...filas])}>Exportar CSV</Button>
     </PageHeader>
     <Card className="p-4 mb-4"><div className="flex flex-wrap items-end gap-3">
       <label className="text-xs">Desde<Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
       <label className="text-xs">Hasta<Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
     </div></Card>
+    {errorFechas && <p role="alert" className="text-sm text-destructive">{errorFechas}</p>}
     {error ? <Card className="p-4 mb-4 text-sm text-destructive">No se pudo cargar el reporte. Revisa el rango de fechas.</Card> : null}
     {data ? <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-4">

@@ -82,7 +82,8 @@ describe('notas separadas en la bandeja real', () => {
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-11-01' } });
     expect(seccion('Notas de crédito').getByText('1 documento')).toBeTruthy();
     expect(screen.queryByText('credito rechazado')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-31' } });
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-11-30' } });
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-11-02' } });
     expect(seccion('Notas de crédito').getByText('0 documentos')).toBeTruthy();
     expect(seccion('Notas de débito').getByText('0 documentos')).toBeTruthy();
   });

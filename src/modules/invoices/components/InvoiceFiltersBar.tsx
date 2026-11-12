@@ -1,3 +1,4 @@
+import { errorRangoFechas } from '../lib/invoiceDateRange';
 /**
  * Barra de control y acciones del módulo de Facturación (M1).
  *
@@ -63,8 +64,15 @@ export const InvoiceFiltersBar = ({
 }: InvoiceFiltersBarProps) => {
   const [menuAbierto, setMenuAbierto] = useState(false);
 
-  const set = (parcial: Partial<InvoiceFiltros>) =>
-    onFiltrosChange({ ...filtros, ...parcial });
+  const [draft, setDraft] = useState<{baseDesde: string; baseHasta: string; desde: string; hasta: string} | null>(null);
+  const fechas = draft?.baseDesde === filtros.desde && draft?.baseHasta === filtros.hasta ? draft : filtros;
+  const errorFechas = errorRangoFechas(fechas.desde, fechas.hasta);
+  const set = (parcial: Partial<InvoiceFiltros>) => onFiltrosChange({ ...filtros, ...parcial });
+  const cambiarFecha = (parcial: Partial<Pick<InvoiceFiltros, 'desde' | 'hasta'>>) => {
+    const nuevas = {desde: fechas.desde, hasta: fechas.hasta, ...parcial};
+    setDraft({baseDesde: filtros.desde, baseHasta: filtros.hasta, ...nuevas});
+    if (!errorRangoFechas(nuevas.desde, nuevas.hasta)) onFiltrosChange({...filtros, ...nuevas});
+  };
 
   const emitir = (tipo: TipoEmision) => {
     setMenuAbierto(false);
@@ -108,8 +116,8 @@ export const InvoiceFiltersBar = ({
           <Input
             id="filtro-desde"
             type="date"
-            value={filtros.desde}
-            onChange={(e) => set({ desde: e.target.value })}
+            value={fechas.desde}
+            onChange={(e) => cambiarFecha({ desde: e.target.value })}
           />
         </PageField>
       </FilterItem>
@@ -119,14 +127,15 @@ export const InvoiceFiltersBar = ({
           <Input
             id="filtro-hasta"
             type="date"
-            value={filtros.hasta}
-            onChange={(e) => set({ hasta: e.target.value })}
+            value={fechas.hasta}
+            onChange={(e) => cambiarFecha({ hasta: e.target.value })}
           />
         </PageField>
       </FilterItem>
 
+      {errorFechas && <p role="alert" className="text-xs text-destructive">{errorFechas}</p>}
       <FilterItem className="flex-none">
-        <Button variant="outline" size="sm" disabled={actualizando} onClick={onActualizar}>
+        <Button variant="outline" size="sm" disabled={actualizando || Boolean(errorFechas)} onClick={onActualizar}>
           <RefreshCw aria-hidden="true" />
           {actualizando ? 'Actualizando…' : 'Actualizar'}
         </Button>
