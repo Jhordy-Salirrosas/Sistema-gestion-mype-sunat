@@ -214,6 +214,8 @@ export class InvoiceQueryController {
   @Get('resumenes/envios')
   listarAgregados(@CurrentCompany() companyId: string) { return this.aggregates.listar(companyId); }
 
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(RolesGuard)
   @Post('resumenes/envios/:id/consultar')
   async consultarAgregado(@CurrentCompany() companyId: string, @Param('id') identifier: string) {
     const row = await this.aggregates.cargar(companyId, identifier);
@@ -305,6 +307,8 @@ export class InvoiceQueryController {
    * de emitir. Un importe que supera el saldo responde 409 y no 400: es un
    * conflicto con el estado del comprobante, no un error de formato.
    */
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(RolesGuard)
   @Post(':id/notas-credito')
   notaCredito(
     @CurrentCompany() companyId: string,
@@ -323,6 +327,8 @@ export class InvoiceQueryController {
    * Valida el motivo del Catálogo 10 y el importe. Una nota de débito aumenta
    * el importe de la operación, así que no consume el saldo del comprobante.
    */
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(RolesGuard)
   @Post(':id/notas-debito')
   notaDebito(
     @CurrentCompany() companyId: string,

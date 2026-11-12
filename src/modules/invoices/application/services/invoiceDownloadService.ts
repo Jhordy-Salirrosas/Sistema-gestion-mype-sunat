@@ -92,9 +92,13 @@ export class InvoiceDownloadService {
     invoiceId: string,
     tipo: TipoDescarga,
     formato: FormatoPdf = 'a4',
+    permitirRegeneracion = true,
   ): Promise<ArchivoDescarga> {
     const fila = await this.cargar(companyId, invoiceId);
 
+    if (tipo === 'xml' && !permitirRegeneracion && !fila.xml_storage_url?.trimStart().startsWith('<?xml')) {
+      throw new NotFoundException('XML firmado todavía no disponible: la lectura de auditor no regenera ni persiste documentos');
+    }
     if (tipo === 'xml')
       return this.xml(fila, await this.issuerConfig?.resolve(companyId));
     if (tipo === 'cdr') return this.cdr(fila);
