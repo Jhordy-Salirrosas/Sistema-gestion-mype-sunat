@@ -509,7 +509,7 @@ export default function InvoiceEmissionPage() {
     }
   };
 
-  const teclado = useInvoiceKeyboard(agregarItem, () => formRef.current?.requestSubmit(), enviando);
+  const teclado = useInvoiceKeyboard(agregarItem, () => formRef.current?.requestSubmit(), enviando, formRef);
   return (
     <Page>
       <PageHeader
