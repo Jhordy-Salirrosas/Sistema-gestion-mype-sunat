@@ -31,6 +31,7 @@
     "migrate:sol-credentials": "node -r dotenv/config scripts/migrateSolCredentials.mjs",
     "check:secrets": "node scripts/check-secrets.js",
     "smoke:readonly": "node scripts/smoke-readonly.js",
+    "smoke:deploy": "node scripts/smoke-deploy.js",
     "prestart": "prisma generate",
     "prestart:dev": "prisma generate",
     "prebuild": "prisma generate",
