@@ -1,15 +1,33 @@
 import {
   BadGatewayException,
   BadRequestException,
-  Injectable,
   Inject,
+  Injectable,
   Logger,
   Optional,
-  ServiceUnavailableException,
-  UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  redactSensitiveText,
+  redactSensitiveValue,
+} from '../../domain/rules/sireRedactionUtils';
+import {
+  SireConfigurationError,
+  SireTransportError,
+  throwForSunatStatus,
+  type SunatStatusMessages,
+} from './sunatErrors';
+
+/**
+ * Los errores de SUNAT se reexportan aquí para no romper a quien ya los
+ * importa desde el cliente.
+ */
+export {
+  RetryableSireSunatError,
+  SireConfigurationError,
+  SireTransportError,
+} from './sunatErrors';
 
 export type SirePeriodBookCode = '140000' | '080000';
 
@@ -22,28 +40,12 @@ export interface SireReadOnlyClientConfig {
   SUNAT_SIRE_READONLY_TIMEOUT_MS?: string;
 }
 
-interface ValidatedSireConfig {
+export interface ValidatedSireConfig {
   oauthBaseUrl: string;
   apiBaseUrl: string;
   clientId: string;
   clientSecret: string;
   timeoutMs: number;
-}
-
-export class RetryableSireSunatError extends ServiceUnavailableException {
-  constructor(readonly sunatStatus: 500 | 502) {
-    super(
-      `SUNAT respondió con HTTP ${sunatStatus}; la consulta es reintentable.`,
-    );
-    this.name = 'RetryableSireSunatError';
-  }
-}
-
-export class SireTransportError extends ServiceUnavailableException {
-  constructor(readonly diagnostic: string) {
-    super('No se pudo establecer una conexión segura con SUNAT.');
-    this.name = 'SireTransportError';
-  }
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -57,71 +59,79 @@ const PERIOD_PATHS: Record<SirePeriodBookCode, string> = {
     '/v1/contribuyente/migeigv/libros/rce/padron/web/omisos/080000/periodos',
 };
 
+/** Host oficial de autenticación de SUNAT. */
+const SUNAT_AUTH_HOST = 'api-seguridad.sunat.gob.pe';
+
+/** Host oficial de la API SIRE de SUNAT. */
+const SUNAT_API_HOST = 'api-sire.sunat.gob.pe';
+
+const DEFAULT_TIMEOUT_MS = 10000;
+const MIN_TIMEOUT_MS = 1000;
+const MAX_TIMEOUT_MS = 60000;
+
+/** Identificadores de aplicación que son de ejemplo y no sirven en SUNAT. */
+const PLACEHOLDER_CLIENT_ID_PATTERN =
+  /^(tu-|your-|placeholder|inyectar-)|^<.*>$|sin-espacios$/i;
+
+/** Mensajes de la consulta de períodos. */
+const PERIODS_STATUS_MESSAGES: SunatStatusMessages = {
+  unauthorized: 'SUNAT rechazó la autenticación SOL para esta consulta.',
+  unprocessable: 'SUNAT reportó errores de validación para la consulta.',
+  serviceUnavailable: 'SUNAT no pudo completar la consulta de períodos.',
+};
+
+/** Mensajes de la autenticación contra SUNAT. */
+const TOKEN_STATUS_MESSAGES: SunatStatusMessages = {
+  unauthorized: 'SUNAT rechazó la autenticación SOL para esta consulta.',
+  unprocessable: 'SUNAT reportó errores de validación al autenticar la consulta.',
+  serviceUnavailable: 'SUNAT no pudo completar la autenticación.',
+};
+
 function readJson(value: unknown): JsonRecord | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as JsonRecord)
     : null;
 }
 
+/**
+ * Describe una parte del error de `fetch` sin filtrar secretos.
+ *
+ * `fetch` envuelve el fallo real en `cause`: el primer nivel dice "fetch
+ * failed" y el segundo trae el código de red (ECONNREFUSED, ETIMEDOUT).
+ */
+function describeFetchFailure(record: JsonRecord): string {
+  const name =
+    typeof record['name'] === 'string' ? record['name'] : 'FetchError';
+  const message =
+    typeof record['message'] === 'string' ? record['message'] : '';
+  const code = typeof record['code'] === 'string' ? record['code'] : '';
+
+  return [name, code, message].filter(Boolean).join(': ').slice(0, 500);
+}
+
+/**
+ * Extrae el diagnóstico del error de `fetch` conservando el código de red.
+ *
+ * El diagnóstico viaja dentro de `SireTransportError` y se registra en el log
+ * del servidor: es la única forma de saber si fue un corte de red o un
+ * tiempo de espera. Antes de salir de aquí pasa por la redacción común.
+ */
 function getFetchErrorDiagnostic(
   error: unknown,
   secrets: readonly string[],
 ): string {
   const details: string[] = [];
   let current = error;
+
   for (let depth = 0; depth < 2 && current !== undefined; depth += 1) {
     const record = readJson(current);
     if (!record) break;
 
-    const name =
-      typeof record['name'] === 'string' ? record['name'] : 'FetchError';
-    const message =
-      typeof record['message'] === 'string' ? record['message'] : '';
-    const code = typeof record['code'] === 'string' ? record['code'] : '';
-    const safeText = [name, code, message]
-      .filter(Boolean)
-      .join(': ')
-      .slice(0, 500);
-    details.push(
-      secrets.reduce(
-        (result, secret) =>
-          secret ? result.split(secret).join('[REDACTED]') : result,
-        safeText,
-      )
-        .replace(/bearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
-        .replace(
-          /\b(password|client_secret|access_token|authorization)\s*[:=]\s*([^\s,;&]+)/gi,
-          '$1=[REDACTED]',
-        ),
-    );
+    details.push(redactSensitiveText(describeFetchFailure(record), secrets));
     current = record['cause'];
   }
 
   return details.join(' <- ') || 'Error de transporte sin detalles';
-}
-
-function redactSecrets(value: unknown, secrets: readonly string[]): unknown {
-  if (typeof value === 'string') {
-    return secrets.reduce(
-      (result, secret) =>
-        secret ? result.split(secret).join('[REDACTED]') : result,
-      value,
-    );
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSecrets(item, secrets));
-  }
-  const record = readJson(value);
-  if (!record) return value;
-
-  return Object.fromEntries(
-    Object.entries(record).map(([key, item]) => [
-      key,
-      /password|secret|token/i.test(key)
-        ? '[REDACTED]'
-        : redactSecrets(item, secrets),
-    ]),
-  );
 }
 
 @Injectable()
@@ -152,9 +162,6 @@ export class SireReadOnlyPeriodsClient {
     }
 
     const username = `${normalizedRuc}${normalizedSolUser}`;
-    this.logger.log(
-      `Username enviado a SUNAT: [REDACTED] (RUC chars=${normalizedRuc.length}, usuario SOL chars=${normalizedSolUser.length}, total chars=${username.length}, espacios exteriores eliminados=${normalizedRuc !== ruc || normalizedSolUser !== solUser})`,
-    );
     const secrets = [
       username,
       `${ruc}${solUser}`,
@@ -163,29 +170,66 @@ export class SireReadOnlyPeriodsClient {
       config.clientSecret,
       config.clientId,
     ];
-    let accessToken = await this.requestAccessToken(
+    this.logger.log(`Iniciando consulta de períodos SIRE (libro=${bookCode})`);
+
+    const response = await this.requestPeriodsWithTokenRefresh(
+      config,
+      username,
+      solPassword,
+      bookCode,
+      secrets,
+    );
+
+    await this.assertPeriodsResponse(response);
+
+    return redactSensitiveValue(await this.parseJson(response), secrets);
+  }
+
+  assertConfigured(): void {
+    this.getValidatedConfig();
+  }
+
+  /**
+   * Pide un token y consulta los períodos. Si SUNAT responde 401, renueva el
+   * token una sola vez: el token puede haber caducado entre la autenticación
+   * y la lectura.
+   */
+  private async requestPeriodsWithTokenRefresh(
+    config: ValidatedSireConfig,
+    username: string,
+    solPassword: string,
+    bookCode: SirePeriodBookCode,
+    secrets: string[],
+  ): Promise<Response> {
+    const accessToken = await this.requestAccessToken(
       config,
       username,
       solPassword,
     );
     secrets.push(accessToken);
-    let response = await this.requestPeriods(config, bookCode, accessToken);
 
-    if (response.status === 401) {
-      accessToken = await this.requestAccessToken(
-        config,
-        username,
-        solPassword,
-      );
-      secrets.push(accessToken);
-      response = await this.requestPeriods(config, bookCode, accessToken);
+    const response = await this.requestPeriods(config, bookCode, accessToken);
+    if (response.status !== 401) {
+      return response;
     }
 
-    if (response.status === 401) {
-      throw new UnauthorizedException(
-        'SUNAT rechazó la autenticación SOL para esta consulta.',
-      );
-    }
+    const refreshedToken = await this.requestAccessToken(
+      config,
+      username,
+      solPassword,
+    );
+    secrets.push(refreshedToken);
+
+    return this.requestPeriods(config, bookCode, refreshedToken);
+  }
+
+  /**
+   * Traduce la respuesta de SUNAT a una excepción.
+   *
+   * El 422 se trata aparte porque su cuerpo lleva el número de errores de
+   * validación que se muestra al usuario.
+   */
+  private async assertPeriodsResponse(response: Response): Promise<void> {
     if (response.status === 422) {
       const body = readJson(await this.parseJson(response));
       const errors = Array.isArray(body?.['errors']) ? body['errors'] : [];
@@ -194,99 +238,117 @@ export class SireReadOnlyPeriodsClient {
         errorCount: errors.length,
       });
     }
-    if (response.status === 500 || response.status === 502) {
-      throw new RetryableSireSunatError(response.status);
-    }
-    if (response.status >= 500) {
-      throw new ServiceUnavailableException(
-        'SUNAT no pudo completar la consulta de períodos.',
-      );
-    }
-    if (!response.ok) {
-      throw new BadGatewayException(
-        `SUNAT respondió con un estado HTTP no esperado (${response.status}).`,
-      );
-    }
 
-    return redactSecrets(await this.parseJson(response), secrets);
-  }
-
-  assertConfigured(): void {
-    this.getValidatedConfig();
+    throwForSunatStatus(response, PERIODS_STATUS_MESSAGES);
   }
 
   private getValidatedConfig(): ValidatedSireConfig {
+    this.assertIntegrationEnabled();
+
+    const clientId = this.readClientId();
+    const clientSecret = this.configService.get<string>('SUNAT_CLIENT_SECRET');
+    if (!clientSecret) {
+      throw new SireConfigurationError(
+        'La integración API SIRE no está configurada.',
+      );
+    }
+
+    return {
+      oauthBaseUrl: this.readSunatUrl('SIRE_AUTH_HOST', SUNAT_AUTH_HOST),
+      apiBaseUrl: this.readSunatUrl('SIRE_API_HOST', SUNAT_API_HOST),
+      clientId,
+      clientSecret,
+      timeoutMs: this.readTimeoutMs(),
+    };
+  }
+
+  private assertIntegrationEnabled(): void {
     const enabled = this.configService.get<
       SireReadOnlyClientConfig['SUNAT_SIRE_INTEGRATION_ENABLED']
     >('SUNAT_SIRE_INTEGRATION_ENABLED');
 
     if (enabled !== true && enabled !== 'true') {
-      throw new ServiceUnavailableException(
+      throw new SireConfigurationError(
         'La consulta SIRE de solo lectura está desactivada.',
       );
     }
+  }
 
-    const oauthBaseUrl = this.configService.get<string>('SIRE_AUTH_HOST');
-    const apiBaseUrl = this.configService.get<string>('SIRE_API_HOST');
-    const clientId = this.configService.get<string>('SUNAT_CLIENT_ID')?.trim();
-    const clientSecret = this.configService.get<string>('SUNAT_CLIENT_SECRET');
-    const timeoutMs = this.configService.get<string>(
-      'SUNAT_SIRE_READONLY_TIMEOUT_MS',
-    );
-    if (!oauthBaseUrl || !apiBaseUrl || !clientId || !clientSecret) {
-      throw new ServiceUnavailableException(
+  /**
+   * Identificador de aplicación de SUNAT.
+   *
+   * Un valor de ejemplo se rechaza antes de llamar a SUNAT: fallar aquí es
+   * más claro que recibir un 401 desde el exterior.
+   */
+  private readClientId(): string {
+    const clientId = this.configService
+      .get<string>('SUNAT_CLIENT_ID')
+      ?.trim();
+    if (!clientId) {
+      throw new SireConfigurationError(
         'La integración API SIRE no está configurada.',
       );
     }
-    if (
-      /^(tu-|your-|placeholder|inyectar-)|^<.*>$|sin-espacios$/i.test(clientId)
-    ) {
-      throw new ServiceUnavailableException(
+    if (PLACEHOLDER_CLIENT_ID_PATTERN.test(clientId)) {
+      throw new SireConfigurationError(
         'SUNAT_CLIENT_ID conserva un valor de ejemplo; configura el Client ID real en el entorno.',
       );
     }
+    return clientId;
+  }
 
-    const oauthUrl = this.validateSunatHost(
-      oauthBaseUrl,
-      'api-seguridad.sunat.gob.pe',
+  private readTimeoutMs(): number {
+    const configured = this.configService.get<string>(
+      'SUNAT_SIRE_READONLY_TIMEOUT_MS',
     );
-    const apiUrl = this.validateSunatHost(apiBaseUrl, 'api-sire.sunat.gob.pe');
-    const timeout = Number(timeoutMs ?? 10000);
-    if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 60000) {
-      throw new ServiceUnavailableException(
+    const timeout = Number(configured ?? DEFAULT_TIMEOUT_MS);
+
+    if (
+      !Number.isInteger(timeout) ||
+      timeout < MIN_TIMEOUT_MS ||
+      timeout > MAX_TIMEOUT_MS
+    ) {
+      throw new SireConfigurationError(
         'La configuración del timeout SIRE no es válida.',
       );
     }
-
-    return {
-      oauthBaseUrl: oauthUrl.origin,
-      apiBaseUrl: apiUrl.origin,
-      clientId,
-      clientSecret,
-      timeoutMs: timeout,
-    };
+    return timeout;
   }
 
+  /** Lee una URL del entorno y comprueba que es el host oficial de SUNAT. */
+  private readSunatUrl(variableName: string, expectedHost: string): string {
+    const value = this.configService.get<string>(variableName);
+    if (!value) {
+      throw new SireConfigurationError(
+        'La integración API SIRE no está configurada.',
+      );
+    }
+    return this.validateSunatHost(value, expectedHost).origin;
+  }
+
+  /**
+   * Solo se admite el host oficial de SUNAT: HTTPS, sin puerto, sin
+   * credenciales, sin ruta y sin parámetros.
+   */
   private validateSunatHost(value: string, expectedHost: string): URL {
     let url: URL;
     try {
       url = new URL(value);
     } catch {
-      throw new ServiceUnavailableException('La URL SIRE no es válida.');
+      throw new SireConfigurationError('La URL SIRE no es válida.');
     }
 
-    const host = url.hostname.toLowerCase();
-    if (
-      url.protocol !== 'https:' ||
-      url.port !== '' ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      (url.pathname !== '/' && url.pathname !== '') ||
-      host !== expectedHost
-    ) {
-      throw new ServiceUnavailableException(
+    const isOfficialHost =
+      url.protocol === 'https:' &&
+      url.port === '' &&
+      url.hostname.toLowerCase() === expectedHost;
+    const hasCredentials = Boolean(url.username || url.password);
+    const hasExtraParts =
+      Boolean(url.search || url.hash) ||
+      (url.pathname !== '/' && url.pathname !== '');
+
+    if (!isOfficialHost || hasCredentials || hasExtraParts) {
+      throw new SireConfigurationError(
         `La URL SIRE debe usar el host HTTPS oficial ${expectedHost}.`,
       );
     }
@@ -294,7 +356,7 @@ export class SireReadOnlyPeriodsClient {
   }
 
   private async requestAccessToken(
-    config: ReturnType<SireReadOnlyPeriodsClient['getValidatedConfig']>,
+    config: ValidatedSireConfig,
     username: string,
     solPassword: string,
   ): Promise<string> {
@@ -304,7 +366,7 @@ export class SireReadOnlyPeriodsClient {
     );
     const body = new URLSearchParams({
       grant_type: 'password',
-      scope: 'https://api-sire.sunat.gob.pe',
+      scope: `https://${SUNAT_API_HOST}`,
       client_id: config.clientId,
       client_secret: config.clientSecret,
       username,
@@ -313,10 +375,14 @@ export class SireReadOnlyPeriodsClient {
     const tokenHeaders = new Headers({
       'Content-Type': 'application/x-www-form-urlencoded',
     });
-    this.logger.log(
-      `Solicitud de token SIRE: POST ${tokenUrl.toString()} | Content-Type: ${tokenHeaders.get('content-type')} | Body keys: ${Array.from(body.keys()).join(', ')}`,
-    );
+    this.logger.log('Solicitando token de acceso a la API SIRE de SUNAT');
 
+    const requestSecrets = [
+      username,
+      solPassword,
+      config.clientSecret,
+      config.clientId,
+    ];
     const response = await this.fetchSafely(
       tokenUrl,
       {
@@ -326,43 +392,23 @@ export class SireReadOnlyPeriodsClient {
         redirect: 'error',
       },
       config.timeoutMs,
-      [username, solPassword, config.clientSecret, config.clientId],
+      requestSecrets,
     );
+
     if (response.status === 400) {
       const errorDescription = await this.readOauthErrorDescription(
         response,
-        [username, solPassword, config.clientSecret, config.clientId],
+        requestSecrets,
       );
       this.logger.error(
         `SUNAT rechazó la solicitud de token con HTTP 400. error_description: ${errorDescription}`,
       );
-      throw new BadGatewayException(
+      throw new BadRequestException(
         'SUNAT rechazó la solicitud de autenticación de la integración SIRE.',
       );
     }
-    if (response.status === 401) {
-      throw new UnauthorizedException(
-        'SUNAT rechazó la autenticación SOL para esta consulta.',
-      );
-    }
-    if (response.status === 422) {
-      throw new UnprocessableEntityException(
-        'SUNAT reportó errores de validación al autenticar la consulta.',
-      );
-    }
-    if (response.status === 500 || response.status === 502) {
-      throw new RetryableSireSunatError(response.status);
-    }
-    if (response.status >= 500) {
-      throw new ServiceUnavailableException(
-        'SUNAT no pudo completar la autenticación.',
-      );
-    }
-    if (!response.ok) {
-      throw new BadGatewayException(
-        `SUNAT respondió con un estado HTTP no esperado (${response.status}).`,
-      );
-    }
+
+    throwForSunatStatus(response, TOKEN_STATUS_MESSAGES);
 
     const payload = readJson(await this.parseJson(response));
     const token = payload?.['access_token'];
@@ -385,17 +431,14 @@ export class SireReadOnlyPeriodsClient {
         return 'SUNAT no incluyó una descripción del error.';
       }
 
-      const sanitized = redactSecrets(description, secrets);
-      return typeof sanitized === 'string'
-        ? sanitized.slice(0, 500)
-        : 'Descripción de error no disponible.';
+      return redactSensitiveText(description, secrets).slice(0, 500);
     } catch {
       return 'SUNAT devolvió un cuerpo de error no válido.';
     }
   }
 
   private requestPeriods(
-    config: ReturnType<SireReadOnlyPeriodsClient['getValidatedConfig']>,
+    config: ValidatedSireConfig,
     bookCode: SirePeriodBookCode,
     accessToken: string,
   ): Promise<Response> {
@@ -422,15 +465,6 @@ export class SireReadOnlyPeriodsClient {
     secrets: readonly string[],
   ): Promise<Response> {
     try {
-      const authorization = new Headers(init.headers).get('authorization');
-      const safeAuthorization = authorization?.match(/^Bearer\s+\S+$/i)
-        ? 'Bearer [REDACTED]'
-        : authorization
-          ? '[PRESENT, REDACTED]'
-          : '[NOT SET]';
-      this.logger.log(
-        `Solicitud SIRE: ${init.method ?? 'GET'} ${url.toString()} | Authorization: ${safeAuthorization}`,
-      );
       return await this.fetcher(url, {
         ...init,
         signal: AbortSignal.timeout(timeoutMs),

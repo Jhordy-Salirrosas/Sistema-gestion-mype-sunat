@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   Logger,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -8,6 +9,7 @@ import {
 import type { ConfigService } from '@nestjs/config';
 import {
   RetryableSireSunatError,
+  SireConfigurationError,
   SireReadOnlyPeriodsClient,
   SireTransportError,
 } from '../../../src/modules/sire/infrastructure/sunat/sireReadOnlyPeriodsClient';
@@ -100,16 +102,6 @@ describe('SireReadOnlyPeriodsClient', () => {
       'application/x-www-form-urlencoded',
     );
     expect(tokenHeaders.has('authorization')).toBe(false);
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'Body keys: grant_type, scope, client_id, client_secret, username, password',
-      ),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'POST https://api-seguridad.sunat.gob.pe/v1/clientessol/fake-client-id/oauth2/token/',
-      ),
-    );
     const tokenBody = new URLSearchParams(tokenRequest.body as URLSearchParams);
     expect(tokenBody.get('username')).toBe('20100070970FAKEUSER');
     expect(tokenBody.get('password')).toBe('fake-sol-password');
@@ -127,19 +119,42 @@ describe('SireReadOnlyPeriodsClient', () => {
     expect(new Headers(periodsRequest.headers).get('authorization')).toMatch(
       /^Bearer \S+$/,
     );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'https://api-sire.sunat.gob.pe/v1/contribuyente/migeigv/libros/rvierce/padron/web/omisos/140000/periodos',
-      ),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining('Authorization: Bearer [REDACTED]'),
-    );
     expect(log.mock.calls.flat().join(' ')).not.toContain('fake-access-token');
     log.mockRestore();
     expect(new Headers(periodsRequest.headers).get('authorization')).toBe(
       'Bearer fake-access-token',
     );
+  });
+
+  it('keeps the logs free of credentials, tokens and diagnostic fragments', async () => {
+    const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ access_token: 'fake-access-token' }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ periodos: ['202601'] }));
+    const client = createClient(config, fetcher);
+
+    await client.getPeriods(
+      '20100070970',
+      'FAKEUSER',
+      'fake-sol-password',
+      '140000',
+    );
+
+    const loggedMessages = log.mock.calls.flat().join(' ');
+    expect(loggedMessages).toContain('Iniciando consulta de períodos SIRE');
+    expect(loggedMessages).toContain('Solicitando token de acceso');
+    expect(loggedMessages).not.toContain('fake-access-token');
+    expect(loggedMessages).not.toContain('fake-sol-password');
+    expect(loggedMessages).not.toContain('fake-client-secret');
+    expect(loggedMessages).not.toContain('fake-client-id');
+    expect(loggedMessages).not.toContain('20100070970FAKEUSER');
+    expect(loggedMessages).not.toMatch(/chars=/);
+    expect(loggedMessages).not.toMatch(/Body keys/);
+    expect(loggedMessages).not.toMatch(/Authorization/);
+    log.mockRestore();
   });
 
   it('trims RUC and SOL username before composing the OAuth username', async () => {
@@ -160,11 +175,6 @@ describe('SireReadOnlyPeriodsClient', () => {
     const [, tokenRequest] = fetcher.mock.calls[0] as [URL, RequestInit];
     const tokenBody = new URLSearchParams(tokenRequest.body as URLSearchParams);
     expect(tokenBody.get('username')).toBe('20100070970SIREAPII');
-    expect(log).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'Username enviado a SUNAT: [REDACTED] (RUC chars=11, usuario SOL chars=8, total chars=19, espacios exteriores eliminados=true)',
-      ),
-    );
     expect(log.mock.calls.flat().join(' ')).not.toContain(
       '20100070970SIREAPII',
     );
@@ -329,7 +339,7 @@ describe('SireReadOnlyPeriodsClient', () => {
         'fake-sol-password',
         '140000',
       ),
-    ).rejects.toBeInstanceOf(BadGatewayException);
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(errorLog).toHaveBeenCalledWith(
       expect.stringContaining('HTTP 400'),
@@ -374,7 +384,7 @@ describe('SireReadOnlyPeriodsClient', () => {
     expect(diagnostic).not.toContain('fake-sol-password');
   });
 
-  it.each([500, 502] as const)(
+  it.each([500, 502, 503] as const)(
     'marks SUNAT HTTP %s responses as retryable',
     async (status) => {
       const fetcher = jest
@@ -416,4 +426,436 @@ describe('SireReadOnlyPeriodsClient', () => {
       ).rejects.toBeInstanceOf(RetryableSireSunatError);
     },
   );
+
+  it('requires a RUC and a SOL username', async () => {
+    const fetcher = jest.fn();
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods('  ', 'FAKEUSER', 'fake-sol-password', '140000'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      client.getPeriods('20100070970', '   ', 'fake-sol-password', '140000'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('confirms that the integration is configured without calling SUNAT', () => {
+    const fetcher = jest.fn();
+    const client = createClient(config, fetcher);
+
+    expect(() => client.assertConfigured()).not.toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('rejects a configuration without an application client id', async () => {
+    const { SUNAT_CLIENT_ID: _omitted, ...sinClientId } = config;
+    const client = createClient(sinClientId, jest.fn());
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(SireConfigurationError);
+  });
+
+  it('rejects a configuration without an application client secret', async () => {
+    const { SUNAT_CLIENT_SECRET: _omitted, ...sinSecret } = config;
+    const client = createClient(sinSecret, jest.fn());
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(SireConfigurationError);
+  });
+
+  it('rejects a configuration without the SUNAT hosts', async () => {
+    const { SIRE_AUTH_HOST: _omitted, ...sinHost } = config;
+    const client = createClient(sinHost, jest.fn());
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(SireConfigurationError);
+  });
+
+  it('rejects a URL that is not a valid URL', async () => {
+    const client = createClient(
+      { ...config, SIRE_API_HOST: 'no-es-una-url' },
+      jest.fn(),
+    );
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(SireConfigurationError);
+  });
+
+  it('rejects a URL with credentials, a path or a port', async () => {
+    const rejectedUrls = [
+      'https://usuario:clave@api-sire.sunat.gob.pe',
+      'https://api-sire.sunat.gob.pe/ruta',
+      'https://api-sire.sunat.gob.pe:8443',
+      'https://api-sire.sunat.gob.pe/?parametro=1',
+    ];
+
+    for (const url of rejectedUrls) {
+      const client = createClient({ ...config, SIRE_API_HOST: url }, jest.fn());
+      await expect(
+        client.getPeriods(
+          '20100070970',
+          'FAKEUSER',
+          'fake-sol-password',
+          '140000',
+        ),
+      ).rejects.toBeInstanceOf(SireConfigurationError);
+    }
+  });
+
+  it('rejects a timeout outside the allowed range', async () => {
+    const cliente = createClient(
+      { ...config, SUNAT_SIRE_READONLY_TIMEOUT_MS: '10' },
+      jest.fn(),
+    );
+
+    await expect(
+      cliente.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(SireConfigurationError);
+  });
+
+  it('rejects a token response without an access token', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ token_type: 'bearer' }));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('rejects a token response with an empty access token', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: '' }));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('rejects a validation error without description in the OAuth body', async () => {
+    const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'invalid_request' }, 400));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(errorLog.mock.calls.flat().join(' ')).toContain(
+      'SUNAT no incluyó una descripción del error.',
+    );
+    errorLog.mockRestore();
+  });
+
+  it('rejects an OAuth error body that is not valid JSON', async () => {
+    const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('no es json', {
+          status: 400,
+          headers: { 'Content-Type': 'text/plain' },
+        }),
+      );
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(errorLog.mock.calls.flat().join(' ')).toContain(
+      'SUNAT devolvió un cuerpo de error no válido.',
+    );
+    errorLog.mockRestore();
+  });
+
+  it('rejects a response whose body is not valid JSON', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'fake-token' }))
+      .mockResolvedValueOnce(
+        new Response('no es json', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' },
+        }),
+      );
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('reports an unexpected SUNAT status as a bad gateway', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'fake-token' }))
+      .mockResolvedValueOnce(jsonResponse({ error: 'not found' }, 404));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('reports a gateway timeout of SUNAT as unavailable', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'fake-token' }))
+      .mockResolvedValueOnce(jsonResponse({ error: 'timeout' }, 504));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('reports a validation failure of the token endpoint', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'invalid' }, 422));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('reports an unexpected status of the token endpoint as a bad gateway', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'not found' }, 404));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('reports a gateway timeout of the token endpoint as unavailable', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'timeout' }, 504));
+    const client = createClient(config, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('uses the default timeout when the environment does not set one', async () => {
+    const { SUNAT_SIRE_READONLY_TIMEOUT_MS: _omitted, ...sinTimeout } =
+      config;
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'fake-token' }))
+      .mockResolvedValueOnce(jsonResponse({ periodos: [] }));
+    const client = createClient(sinTimeout, fetcher);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).resolves.toEqual({ periodos: [] });
+  });
+
+  it('uses the global fetch when no fetcher is injected', async () => {
+    const globalFetch = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ periodos: [] }));
+    const configService = {
+      get: (name: string) => config[name as keyof typeof config],
+    } as unknown as ConfigService;
+    const client = new SireReadOnlyPeriodsClient(configService);
+
+    await expect(
+      client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      ),
+    ).rejects.toBeInstanceOf(Error);
+    expect(globalFetch).toHaveBeenCalled();
+    globalFetch.mockRestore();
+  });
+
+  it('reports a validation error without an errors array', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'fake-token' }))
+      .mockResolvedValueOnce(jsonResponse({ detalle: 'sin lista' }, 422));
+    const client = createClient(config, fetcher);
+
+    let thrown: unknown;
+    try {
+      await client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(UnprocessableEntityException);
+    expect(
+      JSON.stringify((thrown as UnprocessableEntityException).getResponse()),
+    ).toContain('"errorCount":0');
+  });
+
+  it('keeps a fetch failure whose cause is not an object', async () => {
+    const fetcher = jest
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), { cause: 'causa simple' }),
+      );
+    const client = createClient(config, fetcher);
+
+    let thrown: unknown;
+    try {
+      await client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SireTransportError);
+    expect((thrown as SireTransportError).diagnostic).toContain('fetch failed');
+  });
+
+  it('describes a fetch failure without name, message or code', async () => {
+    const fetcher = jest.fn().mockRejectedValue({});
+    const client = createClient(config, fetcher);
+
+    let thrown: unknown;
+    try {
+      await client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SireTransportError);
+    expect((thrown as SireTransportError).diagnostic).toContain('FetchError');
+  });
+
+  it('describes a fetch failure that is not an object', async () => {
+    const fetcher = jest.fn().mockRejectedValue('fallo sin forma');
+    const client = createClient(config, fetcher);
+
+    let thrown: unknown;
+    try {
+      await client.getPeriods(
+        '20100070970',
+        'FAKEUSER',
+        'fake-sol-password',
+        '140000',
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SireTransportError);
+    expect((thrown as SireTransportError).diagnostic).toBe(
+      'Error de transporte sin detalles',
+    );
+  });
 });

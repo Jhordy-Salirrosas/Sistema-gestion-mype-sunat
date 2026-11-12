@@ -1,4 +1,5 @@
 import { ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { ClientSafeHttpException } from '../../../src/common/exceptions';
 import { HttpExceptionFilter } from '../../../src/common/filters/httpExceptionFilter';
 
 describe('HttpExceptionFilter (RFC 7807 Problem Details)', () => {
@@ -109,10 +110,56 @@ describe('HttpExceptionFilter (RFC 7807 Problem Details)', () => {
       }),
     );
 
-    filter.catch(new HttpException(null, 400), mockHost);
+    filter.catch(
+      new HttpException(null as unknown as Record<string, unknown>, 400),
+      mockHost,
+    );
     expect(mockJson).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: 400 }),
     );
+  });
+
+  it('expone el mensaje redactado de un ClientSafeHttpException en un 5xx', () => {
+    const exception = new ClientSafeHttpException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'El servicio de colas no está disponible, por favor reintenta.',
+    );
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+    filter.catch(exception, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(503);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 503,
+        detail: 'El servicio de colas no está disponible, por favor reintenta.',
+        message: 'El servicio de colas no está disponible, por favor reintenta.',
+        instance: '/api/v1/invoices',
+      }),
+    );
+    const logs = JSON.stringify(loggerSpy.mock.calls);
+    expect(logs).not.toContain('El servicio de colas no está disponible');
+    loggerSpy.mockRestore();
+  });
+
+  it('mantiene genérico cualquier otro error de servidor', () => {
+    const secret = 'cadena-de-conexion-con-password';
+    const exception = new HttpException(
+      { message: secret, detail: secret },
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+    filter.catch(exception, mockHost);
+
+    const response = JSON.stringify(mockJson.mock.calls[0][0]);
+    expect(response).toContain('Ha ocurrido un error inesperado');
+    expect(response).not.toContain(secret);
+    loggerSpy.mockRestore();
   });
 
   it('oculta excepciones de tipo desconocido', () => {
@@ -125,6 +172,30 @@ describe('HttpExceptionFilter (RFC 7807 Problem Details)', () => {
     expect(loggerSpy).toHaveBeenCalledWith('Error no controlado de tipo desconocido.');
     expect(mockStatus).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(JSON.stringify(mockJson.mock.calls.at(-1)?.[0])).not.toContain('error-ficticio');
+    loggerSpy.mockRestore();
+  });
+
+  it('responde siempre con JSON aunque la excepción no se pueda inspeccionar', () => {
+    const roto = {
+      getStatus: () => {
+        throw new Error('getStatus roto');
+      },
+    } as unknown as HttpException;
+    const logger = (filter as unknown as { logger: { error: jest.Mock } })
+      .logger;
+    const loggerSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+    filter.catch(roto, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    const body = mockJson.mock.calls.at(-1)?.[0];
+    expect(body).toEqual(
+      expect.objectContaining({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        detail: 'Ha ocurrido un error inesperado en el servidor.',
+      }),
+    );
+    expect(JSON.stringify(body)).not.toContain('getStatus roto');
     loggerSpy.mockRestore();
   });
 });

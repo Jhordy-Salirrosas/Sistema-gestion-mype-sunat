@@ -1,8 +1,12 @@
 import {
+  HttpStatus,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
+import { ClientSafeHttpException } from '../../../src/common/exceptions';
 import type { PrismaService } from '../../../src/database/prismaService';
 import type { IUserRepositoryPort } from '../../../src/modules/auth/domain/ports/userRepositoryPort';
 import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
@@ -11,6 +15,8 @@ import { SireReadOnlyPeriodsController } from '../../../src/modules/sire/infrast
 import type { SireReadOnlyPeriodsClient } from '../../../src/modules/sire/infrastructure/sunat/sireReadOnlyPeriodsClient';
 
 describe('SireReadOnlyPeriodsController', () => {
+  let logError: jest.SpyInstance;
+
   const company = {
     id: 'company-id',
     ruc: '20100070970',
@@ -57,9 +63,14 @@ describe('SireReadOnlyPeriodsController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    logError = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     (users.findCompanyById as jest.Mock).mockResolvedValue(company);
     (prisma.sirePeriodQuery.create as jest.Mock).mockResolvedValue({});
     (queue.enqueueSirePeriods as jest.Mock).mockResolvedValue('job-id');
+  });
+
+  afterEach(() => {
+    logError.mockRestore();
   });
 
   it('creates a pending job using tenant RUC and encrypts SOL credentials in the payload', async () => {
@@ -107,8 +118,27 @@ describe('SireReadOnlyPeriodsController', () => {
     expect(users.findCompanyById).not.toHaveBeenCalled();
   });
 
+  it('rejects requests of a session without company', async () => {
+    await expect(
+      controller.getPeriods(dto, {
+        ...user,
+        companyId: undefined as unknown as string,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(users.findCompanyById).not.toHaveBeenCalled();
+  });
+
   it('rejects missing or inactive companies without enqueueing', async () => {
     (users.findCompanyById as jest.Mock).mockResolvedValueOnce(null);
+    await expect(controller.getPeriods(dto, user)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(queue.enqueueSirePeriods).not.toHaveBeenCalled();
+
+    (users.findCompanyById as jest.Mock).mockResolvedValueOnce({
+      ...company,
+      isActive: false,
+    });
     await expect(controller.getPeriods(dto, user)).rejects.toBeInstanceOf(
       NotFoundException,
     );
@@ -121,20 +151,26 @@ describe('SireReadOnlyPeriodsController', () => {
     });
 
     await expect(controller.getPeriods(dto, user)).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
+      ClientSafeHttpException,
     );
     expect(prisma.sirePeriodQuery.create).not.toHaveBeenCalled();
     expect(queue.enqueueSirePeriods).not.toHaveBeenCalled();
   });
 
-  it('marks the request failed if queue publication fails', async () => {
+  it('answers with a controlled JSON when the queue is unavailable', async () => {
     (queue.enqueueSirePeriods as jest.Mock).mockRejectedValueOnce(
-      new ServiceUnavailableException(),
+      new Error('connect ECONNREFUSED 127.0.0.1:5432'),
     );
 
-    await expect(controller.getPeriods(dto, user)).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    const response = await controller.getPeriods(dto, user);
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'QUEUE_ENQUEUE_FAILED',
+      message: 'El servicio de colas no está disponible, por favor reintenta.',
+      error: 'El servicio de colas no está disponible, por favor reintenta.',
+    });
+    expect(response.messageId).toEqual(expect.any(String));
     expect(prisma.sirePeriodQuery.update).toHaveBeenCalledWith({
       where: { id: expect.any(String) },
       data: expect.objectContaining({
@@ -142,6 +178,63 @@ describe('SireReadOnlyPeriodsController', () => {
         error_code: 'QUEUE_ENQUEUE_FAILED',
       }),
     });
+  });
+
+  it('keeps the 202 status when the queue is unavailable', () => {
+    const httpCode = Reflect.getMetadata(
+      HTTP_CODE_METADATA,
+      SireReadOnlyPeriodsController.prototype.getPeriods,
+    );
+
+    expect(httpCode).toBe(HttpStatus.ACCEPTED);
+  });
+
+  it('keeps the controlled answer when the failed state cannot be persisted', async () => {
+    (queue.enqueueSirePeriods as jest.Mock).mockRejectedValueOnce(
+      new Error('pg-boss caído'),
+    );
+    (prisma.sirePeriodQuery.update as jest.Mock).mockRejectedValueOnce(
+      new Error('Connection terminated unexpectedly'),
+    );
+
+    const response = await controller.getPeriods(dto, user);
+
+    expect(response.status).toBe('FAILED');
+    expect(response.message).toBe(
+      'El servicio de colas no está disponible, por favor reintenta.',
+    );
+  });
+
+  it('does not expose infrastructure details when the queue fails', async () => {
+    (queue.enqueueSirePeriods as jest.Mock).mockRejectedValueOnce(
+      new Error('password authentication failed for user postgres'),
+    );
+
+    const response = await controller.getPeriods(dto, user);
+
+    const serialized = JSON.stringify(response);
+    expect(serialized).not.toContain('password authentication failed');
+    expect(serialized).not.toContain('postgres');
+  });
+
+  it('answers with a controlled JSON when the query cannot be persisted', async () => {
+    (prisma.sirePeriodQuery.create as jest.Mock).mockRejectedValueOnce(
+      new Error('connection to server at 127.0.0.1 port 5432 failed'),
+    );
+
+    const failure = await controller
+      .getPeriods(dto, user)
+      .then(() => null)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ClientSafeHttpException);
+    const controlled = failure as ClientSafeHttpException;
+    expect(controlled.statusCode).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(controlled.clientMessage).toBe(
+      'No fue posible registrar la consulta de períodos SIRE. Inténtalo nuevamente.',
+    );
+    expect(JSON.stringify(controlled.getResponse())).not.toContain('5432');
+    expect(queue.enqueueSirePeriods).not.toHaveBeenCalled();
   });
 
   it('returns completed results only to the requesting tenant', async () => {
@@ -175,5 +268,184 @@ describe('SireReadOnlyPeriodsController', () => {
     await expect(
       controller.getStatus('c5a31a3d-460a-46e7-9a3e-9057a31d0098', user),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects a status query without an authenticated tenant', async () => {
+    await expect(
+      controller.getStatus('c5a31a3d-460a-46e7-9a3e-9057a31d0098', undefined),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.sirePeriodQuery.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('answers a generic message for a failure code that is not catalogued', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'FAILED',
+      result: null,
+      error_code: 'CODIGO_DESCONOCIDO',
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'CODIGO_DESCONOCIDO',
+      message:
+        'No se pudo completar la consulta de períodos SIRE. Inténtalo más tarde.',
+    });
+    expect(JSON.stringify(response)).not.toContain('Internal Server Error');
+  });
+
+  it('returns a friendly message when the SUNAT query failed', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'FAILED',
+      result: null,
+      error_code: 'SUNAT_HTTP_502',
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'SUNAT_HTTP_502',
+      message: 'El servicio de SUNAT no está disponible temporalmente. Inténtalo más tarde.',
+      error: 'El servicio de SUNAT no está disponible temporalmente. Inténtalo más tarde.',
+    });
+    expect(JSON.stringify(response)).not.toContain('Internal Server Error');
+  });
+
+  it('explains credential problems without exposing SUNAT internals', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'FAILED',
+      result: null,
+      error_code: 'SUNAT_AUTH_FAILED',
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'SUNAT_AUTH_FAILED',
+      message: 'SUNAT rechazó las credenciales SOL. Verifica el usuario y la clave.',
+    });
+  });
+
+  it('informs the same queue message in the status endpoint', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'FAILED',
+      result: null,
+      error_code: 'QUEUE_ENQUEUE_FAILED',
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'QUEUE_ENQUEUE_FAILED',
+      message: 'El servicio de colas no está disponible, por favor reintenta.',
+      error: 'El servicio de colas no está disponible, por favor reintenta.',
+    });
+  });
+
+  it('does not fail when the stored result cannot be parsed', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'COMPLETED',
+      result: '{periodos:',
+      error_code: null,
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({ status: 'COMPLETED' });
+    expect(response['periods']).toBeUndefined();
+  });
+
+  it('warns when a completed query has no stored result', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'COMPLETED',
+      result: null,
+      error_code: null,
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'COMPLETED',
+      message:
+        'La consulta se completó, pero no fue posible leer el resultado almacenado.',
+    });
+    expect(response['periods']).toBeUndefined();
+  });
+
+  it('answers a failed query without an error code', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'FAILED',
+      result: null,
+      error_code: null,
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: null,
+      message:
+        'No se pudo completar la consulta de períodos SIRE. Inténtalo más tarde.',
+    });
   });
 });
