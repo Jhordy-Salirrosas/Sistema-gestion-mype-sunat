@@ -109,7 +109,7 @@ export const CustomerLookupField = ({ documento, razonSocial, onElegir, onDocume
     </div>
     <div className="relative space-y-1">
       <label htmlFor="razon-cliente" className="text-xs font-medium">Razón social / nombre<span aria-hidden="true"> *</span></label>
-      <input aria-label="Razón social / nombre" aria-required={!disabled} aria-invalid={!disabled && !razonSocial.trim()} aria-describedby="razon-cliente-error" disabled={disabled} id="razon-cliente" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={razonSocial} placeholder="FERRETERÍA LOS ANDES S.A.C." autoComplete="off"
+      <input maxLength={1500} aria-label="Razón social / nombre" aria-required={!disabled} aria-invalid={!disabled && !razonSocial.trim()} aria-describedby="razon-cliente-error" disabled={disabled} id="razon-cliente" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={razonSocial} placeholder="FERRETERÍA LOS ANDES S.A.C." autoComplete="off"
         onFocus={() => { setRespuesta(null); setConsulta({ campo: 'nombre', texto: razonSocial }); }}
         onChange={(e) => { const valor = e.target.value; onRazonSocialChange?.(valor); setRespuesta(null); setConsulta({ campo: 'nombre', texto: valor }); }}
         onKeyDown={(e) => { if (e.key === 'Escape') setConsulta(null); }} />

@@ -1,3 +1,4 @@
+import { problemasContenidoEmision } from '../lib/invoiceEmissionValidation';
 import { limitesNota, precargarCantidadesNota } from '../lib/invoiceNoteQuantities';
 import { XIcon } from 'lucide-react';
 import { problemaSpotMinimo } from '../lib/invoiceDetraccion';
@@ -55,7 +56,6 @@ import {
   itemBolsa,
   itemDesdeProducto,
   itemVacio,
-  validarItems,
   type ItemBorrador,
 } from '../lib/invoiceItems';
 import type { ProductoBuscado } from '../lib/invoiceSearch';
@@ -66,7 +66,6 @@ import {
   esDetraccionDadaDeBaja,
   validarCronograma,
 } from '../lib/invoiceDetraccion';
-import { liquidarDescuentoGlobal } from '../lib/invoiceDescuentoGlobal';
 import { MedioPagoDetraccionSelect } from './MedioPagoDetraccionSelect';
 import { calcularFlujo } from '../lib/invoiceFlujoPago';
 export { calcularFlujo } from '../lib/invoiceFlujoPago';
@@ -113,9 +112,7 @@ const motivosPendientes = (
   existentes: readonly ComprobanteDemo[],
   productos: readonly ProductoBuscado[],
 ): string[] => {
-  const motivos: string[] = [];
-  const errorGlobal = liquidarDescuentoGlobal(b.items, b.descuentoGlobal).error;
-  if (errorGlobal) motivos.push(errorGlobal);
+  const motivos = problemasContenidoEmision({ tipo: b.tipo, clienteRazonSocial: b.clienteRazonSocial, items: b.items, descuentoGlobal: b.descuentoGlobal });
 
   if (b.serie.length !== 4) motivos.push('La serie debe tener 4 caracteres.');
 
@@ -125,15 +122,6 @@ const motivosPendientes = (
 
   if (!documentoValidoParaTipo(b.tipo, b.clienteDoc)) {
     motivos.push(mensajeErrorDocumento(b.tipo));
-  }
-
-  // Errores de la grilla de detalle: se nombran con el número de línea.
-  for (const error of validarItems(b.items)) {
-    const etiqueta =
-      error.indice >= 0 ? `Línea ${error.indice + 1}` : 'Detalle';
-    for (const motivo of error.motivos) {
-      motivos.push(`${etiqueta}: ${motivo}`);
-    }
   }
 
   /**

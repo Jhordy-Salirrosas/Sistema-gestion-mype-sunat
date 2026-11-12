@@ -1,3 +1,4 @@
+import { problemasContenidoEmision } from '../lib/invoiceEmissionValidation';
 import { editarIdentidadCliente } from '../lib/invoiceCustomerIdentity';
 import { InvoiceNextNumber } from '../components/InvoiceNextNumber';
 import { pagoSegunDeposito } from '../lib/invoicePagoPresentacion';
@@ -76,7 +77,6 @@ import { CreditInstallmentsEditor } from '../components/CreditInstallmentsEditor
 import {
   actualizarItem,
   calcularItem,
-  validarItems,
   itemBolsa,
   itemDesdeProducto,
   itemVacio,
@@ -361,25 +361,9 @@ export default function InvoiceEmissionPage() {
       setResultado({ ok: false, mensaje: mensajeErrorDocumento(tipo) });
       return;
     }
-    if (!clienteRazonSocial.trim()) {
-      setResultado({ ok: false, mensaje: 'Falta la razón social del cliente.' });
-      return;
-    }
-    const erroresItems = validarItems(items);
-    if (erroresItems.length > 0) {
-      setResultado({ ok: false, mensaje: `Línea ${erroresItems[0].indice + 1}: ${erroresItems[0].motivos[0]}` });
-      return;
-    }
-    if (totales.error) {
-      setResultado({ ok: false, mensaje: totales.error });
-      return;
-    }
-    const lineaSinDescripcion = items.findIndex((i) => !i.descripcion.trim());
-    if (lineaSinDescripcion >= 0) {
-      setResultado({
-        ok: false,
-        mensaje: `La línea ${lineaSinDescripcion + 1} no tiene descripción.`,
-      });
+    const problemasContenido = problemasContenidoEmision({ tipo, clienteRazonSocial, items, descuentoGlobal });
+    if (problemasContenido.length) {
+      setResultado({ ok: false, mensaje: problemasContenido[0] });
       return;
     }
 

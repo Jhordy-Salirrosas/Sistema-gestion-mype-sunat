@@ -78,6 +78,7 @@ it.each(['modal', 'pagina'])('F7 limpia un intento fallido al corregir el formul
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue({ response: { data: { message: 'RUC rechazado' } }, message: 'RUC rechazado' });
   montar(tipo === 'modal' ? modal('01') : <InvoiceEmissionPage />);
   fireEvent.change(screen.getByLabelText(tipo === 'modal' ? 'RUC / DNI del cliente' : 'RUC del cliente'), { target: { value: '20100070970' } });
+  fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
   fireEvent.change(screen.getByLabelText('Descripción de la línea 1'), { target: { value: 'Servicio' } });
   fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '100' } });
   fireEvent.click(screen.getByRole('button', { name: tipo === 'modal' ? 'Emitir Factura' : 'Emitir comprobante' }));

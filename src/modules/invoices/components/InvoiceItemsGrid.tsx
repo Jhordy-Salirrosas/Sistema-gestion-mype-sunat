@@ -18,6 +18,7 @@ import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
   UNIDADES_MEDIDA,
   calcularItem,
+  cantidadValida,
   esLineaBolsa,
   type ItemBorrador,
 } from '../lib/invoiceItems';
@@ -166,6 +167,7 @@ export const InvoiceItemsGrid = ({
                     <input
                       aria-label={`Descripción de la línea ${i + 1}`}
                       className={CLASE_CELDA}
+                      maxLength={500}
                       value={item.descripcion}
                       onChange={(e) =>
                         onCambiar(i, { descripcion: e.target.value })
@@ -206,16 +208,17 @@ export const InvoiceItemsGrid = ({
                     <input
                       aria-label={`Cantidad de la línea ${i + 1}`}
                       max={cantidadesMaximas?.[i]}
-                      aria-invalid={cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i]}
+                      aria-invalid={!cantidadValida(item.cantidad) || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
                       type="number"
-                      min="0"
-                      step="0.01"
+                      min="0.001"
+                      step="0.001"
                       className={`${CLASE_CELDA} text-right`}
                       value={item.cantidad}
                       onChange={(e) =>
                         onCambiar(i, { cantidad: Number(e.target.value) })
                       }
                     />
+                    {!cantidadValida(item.cantidad) && <p role="alert" className="text-xs text-destructive">La cantidad debe ser positiva y tener como máximo 3 decimales.</p>}
                     {cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i] && <p role="alert" className="text-xs text-destructive">Supera las unidades disponibles del origen (máximo {cantidadesMaximas[i]}).</p>}
                   </td>
                   <td className="px-1 py-1">
@@ -299,10 +302,10 @@ export const InvoiceItemsGrid = ({
                     </Button>
                   </td>
                 </tr>
-                {item.valorUnitario === 0 && item.afectacion !== 'GRATUITA' && (
+                {item.valorUnitario === 0 && !esNota && item.afectacion !== 'GRATUITA' && (
                   <tr className={conError ? 'bg-destructive/5' : ''}>
                     <td colSpan={11} className="px-2 pb-2">
-                      <p className="text-xs text-amber-700">El valor unitario es cero; revise la afectación de la línea.</p>
+                      <p className="text-xs text-amber-700">El valor unitario de una línea onerosa debe ser mayor que cero.</p>
                     </td>
                   </tr>
                 )}

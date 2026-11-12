@@ -26,7 +26,7 @@ describe('presentación del detalle de líneas', () => {
 
   it('coloca el aviso de valor cero bajo su fila y abarca todas las columnas', () => {
     render(<InvoiceItemsGrid items={[itemVacio('a'), { ...itemVacio('b'), valorUnitario: 20 }]} {...props()} />);
-    const aviso = screen.getByText(/El valor unitario es cero/);
+    const aviso = screen.getByText(/El valor unitario de una línea onerosa debe ser mayor que cero/);
     const celda = aviso.closest('td');
     expect(celda?.colSpan).toBe(11);
     expect(celda?.querySelector('input')).toBeNull();
@@ -37,7 +37,7 @@ describe('presentación del detalle de líneas', () => {
   it('conserva textos, condiciones del aviso y callbacks de edición', () => {
     const callbacks = props();
     render(<InvoiceItemsGrid items={[{ ...itemVacio('a'), afectacion: 'GRATUITA' }]} {...callbacks} />);
-    expect(screen.queryByText(/El valor unitario es cero/)).toBeNull();
+    expect(screen.queryByText(/El valor unitario de una línea onerosa debe ser mayor que cero/)).toBeNull();
     expect(screen.getByRole('option', { name: 'Sin descuento' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '21 - Exonerado - Transferencia gratuita' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '25' } });

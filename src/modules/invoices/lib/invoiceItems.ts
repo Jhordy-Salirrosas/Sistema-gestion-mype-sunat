@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 /**
  * Ítems del detalle de un comprobante: modelo, cálculos y validación (TA-64).
  *
@@ -222,6 +223,10 @@ export interface ErrorItem {
  * Se devuelven TODOS los errores y no el primero: con diez líneas, corregir de
  * una en una obliga a diez intentos de emisión.
  */
+/** Cantidad de creación: positiva y hasta tres decimales, igual al DTO fiscal. */
+export const cantidadValida = (cantidad: number): boolean =>
+  Number.isFinite(cantidad) && cantidad > 0 && new Decimal(cantidad).decimalPlaces() <= 3;
+
 export const validarItems = (
   items: readonly ItemBorrador[],
 ): readonly ErrorItem[] => {
@@ -237,6 +242,7 @@ export const validarItems = (
     if (!item.descripcion.trim()) {
       motivos.push('La descripción es obligatoria.');
     }
+    if (Array.from(item.descripcion).length > 500) motivos.push('La descripción admite como máximo 500 caracteres.');
     if (!unidadValida(item.unidad)) {
       motivos.push(
         `La unidad '${item.unidad}' no pertenece al Catálogo 03 ` +
@@ -245,6 +251,8 @@ export const validarItems = (
     }
     if (!Number.isFinite(item.cantidad) || item.cantidad <= 0) {
       motivos.push('La cantidad debe ser mayor que cero.');
+    } else if (!cantidadValida(item.cantidad)) {
+      motivos.push('La cantidad admite como máximo 3 decimales.');
     }
     if (!Number.isFinite(item.valorUnitario) || item.valorUnitario < 0) {
       motivos.push('El valor unitario no puede ser negativo.');
