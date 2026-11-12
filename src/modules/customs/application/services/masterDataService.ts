@@ -1,3 +1,4 @@
+import { validarDatosTercero } from '../validators/partnerInputValidation';
 import { Prisma, type BusinessPartner } from '../../../../generated/client/client';
 import {
   ConflictException,
@@ -206,6 +207,7 @@ export class MasterDataService {
   }
 
   async createPartner(companyId: string, dto: CreatePartnerDto) {
+    validarDatosTercero(dto, true);
     const existing = await this.prisma.businessPartner.findFirst({
       where: {
         company_id: companyId,
@@ -330,6 +332,7 @@ export class MasterDataService {
   }
 
   async updatePartner(companyId: string, id: string, dto: UpdatePartnerDto) {
+    validarDatosTercero(dto, false);
     const existing = await this.getPartner(companyId, id);
 
     const data: Record<string, unknown> = {};

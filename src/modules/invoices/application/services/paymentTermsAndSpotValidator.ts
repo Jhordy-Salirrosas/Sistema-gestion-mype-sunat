@@ -252,7 +252,7 @@ export function montoDetraccion(
 }
 
 /** Convierte una fecha a un número comparable; lanza si no es válida. */
-function fechaIso(valor: string, contexto: string): number {
+export function fechaIso(valor: string, contexto: string): number {
   const fecha = new Date(`${valor}T00:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(valor) || Number.isNaN(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== valor) {
     throw new BadRequestException(
