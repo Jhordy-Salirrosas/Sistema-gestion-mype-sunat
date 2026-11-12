@@ -107,10 +107,10 @@ const bloqueDescuentoLinea = (
 const categoriaLinea = (afectacion: string, tributo: string): string => {
   const nombre = NOMBRE_TRIBUTO[tributo] ?? NOMBRE_TRIBUTO['1000'];
 
-  // El Percent solo tiene sentido en los gravados; en exonerado/inafecto
-  // SUNAT lo omite y declararlo con 18.00 se lee como un IGV mal calculado.
+  // La exonerada onerosa declara tasa cero (SFS 2992); conserva su categoría.
+  // Las demás categorías mantienen su representación existente.
   const porcentaje =
-    tributo === '1000' || (tributo === '9996' && afectacion.startsWith('1')) ? '\n          <cbc:Percent>18.00</cbc:Percent>' : tributo === '9996' ? '\n          <cbc:Percent>0.00</cbc:Percent>' : '';
+    tributo === '1000' || (tributo === '9996' && afectacion.startsWith('1')) ? '\n          <cbc:Percent>18.00</cbc:Percent>' : ['9996', '9997'].includes(tributo) ? '\n          <cbc:Percent>0.00</cbc:Percent>' : '';
 
   // La razón de exoneración es el código del Catálogo 07. En las gratuitas
   // además se declara PriceTypeCode en el PricingReference, no aquí.

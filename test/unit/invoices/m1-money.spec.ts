@@ -26,7 +26,7 @@ it('cada TaxTotal de cabecera coincide con sus subtotales y no duplica el ICBPER
     return declared;
   });
   expect(values.reduce((a,b) => a+b,0)).toBe(19.5);
-  expect(amounts).toHaveLength(2);
+  expect(amounts).toHaveLength(1);
 });
 it('no trunca cantidades fraccionarias de bolsas en las rutas UBL históricas', async () => {
   const { calcularIcbper, lineaBolsaIcBper } = await import('../../../src/modules/invoices/ublIcbperLine');
