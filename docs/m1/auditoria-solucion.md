@@ -3203,3 +3203,13 @@ Bases de construcción: back main `7faef9767949c91666d9267561694f14acd2c58f`; fr
 Corrida completa back con PostgreSQL local y conexión beta real deshabilitada: **321 suites aprobadas / 4 omitidas (325 totales); 2998 pruebas aprobadas / 38 omitidas (3036 totales); 12 snapshots aprobados**. Front completo: **135 archivos / 970 pruebas aprobadas**. Build Nest del back, typecheck `tsc -b` y build Vite del front aprobados. Lint del back sin errores; conserva dos avisos previos en el coordinador/almacén de resúmenes, fuera de los archivos modificados.
 
 La corrida completa final del back se ejecutó con heap Node de 6 GB y sin la carga simultánea del front: el primer intento agotó el heap de 2 GB y había reportado un fallo de latencia del outbox. La corrida final conserva el umbral de esa prueba y pasa sin cambios en ella. Los cambios se distribuyen en un commit por frente; el ferry solo contiene la presentación de agotamiento de F7, su regresión y el manifiesto de archivos con SHA-256.
+
+## Pantalla de emisión y acceso desde agregados
+
+Bases sincronizadas: back `d5115adc109e311a29f84b86203028887f8f0118`; front `73af439c48d1e8937133b52f8b525bbecfe7540f`. La promoción de formularios aún no está en estos main: esta construcción parte de main y no incorpora aquel tren.
+
+### B1 — Bolsas sobre líneas registradas
+
+La cantidad de bolsas y su ICBPER se declaran sobre la línea del producto, sin fabricar SKU ni precio. El botón suma una bolsa al producto seleccionado en la grilla; se retira el auxiliar de cabecera que no viajaba por sí solo. Cantidad entera no negativa, impuesto derivado y coincidencia validada antes del envío; no se truncan fracciones. La cantidad de productos sigue siendo independiente de las bolsas entregadas. Se retira la excepción de catálogo que presentaba el SKU sintético desconocido como conforme. El contrato API certificado y las guardas del back no cambian. Verificación focal: 21 pruebas del front aprobadas, incluidas ambas vías de emisión con producto elegido del catálogo y payload cantidadBolsas=2/icbper=1.
+
+El contraste de la auditoría antigua conserva deudas fuera de B1–B3: selector Crédito para boleta aunque el XML no declara PaymentTerms; PDF local de fila con numeración a cuatro dígitos y detalle vacío (ya usa DigestValue del XML firmado, no el hash hexadecimal alegado); etiqueta CDR sobre exportación CSV RVIE; y adición de segunda fila en modal frente a reemplazo de vacío en página. El toggle gratuito, su catálogo y la excepción de stock quedaron resueltos por 8D y su corrección; no se relajan guardas ni se cambia la afectación heredada onerosa.
