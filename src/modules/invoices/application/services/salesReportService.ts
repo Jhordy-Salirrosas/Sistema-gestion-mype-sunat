@@ -30,8 +30,9 @@ export class SalesReportService {
     });
 
     const ids = facturas.map((f) => f.id);
+    const referenciasCosto = ids.map((id) => `${id}:COSTO`);
     const asientos = ids.length === 0 ? [] : await this.prisma.accountingEntry.findMany({
-      where: { company_id: companyId, source_module: 'M1_INVOICES', source_reference_id: { in: ids } },
+      where: { company_id: companyId, source_module: 'M1_INVOICES', source_reference_id: { in: referenciasCosto } },
       include: { lines: true },
     });
     const costoPorFactura = new Map<string, number>();
@@ -39,7 +40,8 @@ export class SalesReportService {
       const costo = asiento.lines
         .filter((l) => l.account_code.startsWith('69'))
         .reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0);
-      if (costo > 0) costoPorFactura.set(String(asiento.source_reference_id), r2(costo));
+      const facturaId = String(asiento.source_reference_id).replace(/:COSTO$/, '');
+      if (costo > 0) costoPorFactura.set(facturaId, r2(costo));
     }
 
     const porCliente = new Map<string, { document: string; customer: string; sales: number; cost: number; profit: number; documents: number }>();
