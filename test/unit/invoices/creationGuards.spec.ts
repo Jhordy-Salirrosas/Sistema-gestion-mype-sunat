@@ -123,9 +123,9 @@ it('exige precio final aun cuando llegue una base unitaria válida y rechaza nom
  await expect(h.run(dto)).rejects.toThrow('precio unitario con IGV');
  await expect(h.run({ ...base(), customer_legal_name: '  ' })).rejects.toMatchObject({ status: 400 });
 });
-it('una nota sin forma de pago conserva ausencia y controla el adquirente aunque no tenga identidad', async () => {
+it('una nota sin forma de pago se normaliza a Contado y controla el adquirente aunque no tenga identidad', async () => {
  const h = harness();
- await expect(h.run({ ...note(), forma_pago: undefined })).resolves.toMatchObject({ forma_pago: undefined });
+ await expect(h.run({ ...note(), forma_pago: undefined })).resolves.toMatchObject({ forma_pago: 'Contado' });
  h.origin.customer_identity_number = null as any; h.origin.customer_identity_type = null as any;
  await expect(h.run({ ...note(), customer_identity_number: undefined, customer_identity_type: undefined })).resolves.toMatchObject({ referenced_invoice_id: 'origin' });
 });

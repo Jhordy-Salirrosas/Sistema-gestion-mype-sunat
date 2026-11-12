@@ -19,10 +19,15 @@ import { validarClasificacionSpot, validarCuentaSpot } from './spotMinimo';
 import { resolverRetencionMaestro } from './retencionMaestro';
 import type { PrismaService } from '../../../../database/prismaService';
 
+/** Solo el motivo 13 conserva las condiciones de pago de una nota. */
+export const notaSinCronograma = (tipo: string, motivo: string | undefined): boolean =>
+  (tipo === '07' || tipo === '08') && motivo !== '13';
+
 /** Datos fiscales de la integración convertidos al mismo contrato de negocio. */
 export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
-  const p = dto.payload_ubl as any;
-  if (!p || typeof p !== 'object' || Array.isArray(p)) throw new BadRequestException('Payload fiscal inválido');
+  const raw = dto.payload_ubl as any;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new BadRequestException('Payload fiscal inválido');
+  const p = notaSinCronograma(dto.tipo_comprobante, raw.codigoMotivoNota) ? { ...raw, formaPago: 'Contado', cuotas: [] } : raw;
   if (p.tipoComprobante !== dto.tipo_comprobante || p.serie !== dto.serie ||
     p.fechaEmision !== dto.fecha_emision.slice(0, 10) || p.rucEmisor !== dto.ruc_emisor) {
     throw new BadRequestException('La cabecera y el payload fiscal no coinciden');
@@ -64,10 +69,11 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
 
 export async function prepareCreation(tx: Prisma.TransactionClient, input: EmitirComprobanteDto,
   companyId: string): Promise<EmitirComprobanteDto> {
-  const validable = plainToInstance(EmitirComprobanteDto, input);
+  const dto = structuredClone(input);
+  if (notaSinCronograma(dto.tipo_comprobante, dto.codigo_motivo_nota)) { dto.forma_pago = 'Contado'; dto.cuotas = []; }
+  const validable = plainToInstance(EmitirComprobanteDto, dto);
   const errors = validateSync(validable, { whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true, validationError: { target: false, value: false } });
   if (errors.length) throw new BadRequestException({ code: 'EMISSION_INPUT_INVALID', message: 'Datos de emisión inválidos', campos: errors.map((e) => e.property) });
-  const dto = structuredClone(input);
   if (!['Contado', 'Credito'].includes(dto.forma_pago as string) && ['01', '03'].includes(dto.tipo_comprobante)) {
     throw new BadRequestException('Indique la forma de pago; no se presume Contado');
   }
