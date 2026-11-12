@@ -1,5 +1,5 @@
 export interface ResultadoPresentacion {
-  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO' | 'PREPARACION_LOCAL' | 'RA_REVERSAL_PENDING' | 'RA_REVERSAL_DONE';
+  origen: 'VALIDACION_LOCAL' | 'SUNAT' | 'NO_DETERMINADO' | 'TRANSPORTE_INCIERTO' | 'PREPARACION_LOCAL' | 'RA_REVERSAL_PENDING' | 'RA_REVERSAL_DONE' | 'BRIDGE_PENDING';
   categoria?: string;
   etapa?: string;
   recuperable?: boolean;
@@ -8,6 +8,7 @@ export interface ResultadoPresentacion {
 }
 /** Lectura visual separada del estado fiscal persistido. */
 export function lecturaRechazo(resultado?: ResultadoPresentacion) {
+  if (resultado?.origen === 'BRIDGE_PENDING') return { etiqueta: 'Puente local pendiente', lectura: 'El resultado fiscal se conserva; la descarga local requiere revisión.', sinCdr: 'Consulte el resultado fiscal del comprobante', codigo: resultado.codigo ?? 'Puente pendiente', motivo: resultado.motivo ?? 'Descarga omitida por clasificación como servicio.' };
   if (resultado?.origen === 'RA_REVERSAL_PENDING' || resultado?.origen === 'RA_REVERSAL_DONE') return {
     etiqueta: resultado.origen === 'RA_REVERSAL_PENDING' ? 'ANULADO con reversión pendiente' : 'Anulado · reversión completada',
     lectura: 'La RA fue aceptada por SUNAT; la reversión del puente es un efecto local separado.',

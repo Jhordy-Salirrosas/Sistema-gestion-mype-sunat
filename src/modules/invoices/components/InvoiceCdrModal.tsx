@@ -100,7 +100,7 @@ export const InvoiceCdrModal = ({
 
   const ficha = historialCargado?.id === comprobante.id && !historialCargado.error ? historialCargado : null;
   const c = { ...comprobante, resultadoPresentacion: ficha?.resultado ?? comprobante.resultadoPresentacion, ultimoErrorCodigo: ficha?.ultimoErrorCodigo ?? comprobante.ultimoErrorCodigo, ultimoErrorMensaje: ficha?.ultimoErrorMensaje ?? comprobante.ultimoErrorMensaje };
-  const rechazo = (c.estado === 'RECHAZADO' || ['PREPARACION_LOCAL', 'RA_REVERSAL_PENDING', 'RA_REVERSAL_DONE'].includes(c.resultadoPresentacion?.origen ?? '')) ? lecturaRechazo(c.resultadoPresentacion) : null;
+  const rechazo = (c.estado === 'RECHAZADO' || ['PREPARACION_LOCAL', 'RA_REVERSAL_PENDING', 'RA_REVERSAL_DONE', 'BRIDGE_PENDING'].includes(c.resultadoPresentacion?.origen ?? '')) ? lecturaRechazo(c.resultadoPresentacion) : null;
 
   /**
    * Pide el documento al backend y lo guarda.
