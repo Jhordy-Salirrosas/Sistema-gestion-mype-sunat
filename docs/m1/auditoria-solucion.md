@@ -3223,3 +3223,15 @@ El editor monetario admite importes positivos con dos decimales como máximo y h
 ### Grupo 5 — Maestro compartido de clientes y proveedores
 
 La validación documental ya no queda anulada para tipos distintos de RUC: DNI exige ocho dígitos, RUC once y módulo 11, CE/TAX ID conservan documentos alfanuméricos no vacíos. La guarda aditiva del servicio cubre también llamadas sin ValidationPipe; las actualizaciones parciales validan solo campos aportados. Razón social y nombre comercial aportado no pueden estar vacíos ni superar 200 caracteres; país tiene dos caracteres y email formato válido. Nombre comercial y email siguen siendo opcionales. La pantalla reutiliza el mismo validador de email que el back y bloquea guardar valores inválidos. No se amplía el contrato ni se reescriben datos históricos. Se sustituye un RUC ficticio inválido en la prueba previa de duplicados por uno válido, conservando sus aserciones. Verificación focal: 34 pruebas del back y 16 del front aprobadas.
+
+### Grupo 6 — Período y filtros
+
+PeriodInput conserva un borrador de edición inválido sin propagarlo: año entero de cuatro dígitos y mes 1–12, sin el antiguo rango arbitrario 2000–2100. Bandeja y reporte de ventas muestran el error de Desde/Hasta y no consultan un rango invertido; se permiten rangos amplios sin imponer un máximo de días. Las guardas del back se conservan como autoridad. La prueba anterior de separación de notas usa ahora un rango válido que excluye sus documentos, manteniendo las aserciones de ambas secciones. Verificación focal: ocho pruebas aprobadas.
+
+El grupo 2 (bolsas e ICBPER) permanece fuera de construcción. La auditoría adicional identifica una línea sintética con SKU ICBPER que el contrato comercial rechaza si no existe en el catálogo; su solución requiere confirmación conjunta con ese grupo. No se crean productos, no se omiten líneas ni se relajan guardas. Tampoco se construyen cambios en el hook de atajos o navegación desde resúmenes; el paso nativo de cantidad sí se corrige como parte del grupo 1 autorizado.
+
+### Validación final de formularios
+
+Back completo con PostgreSQL local y conexión beta real deshabilitada: **322 suites aprobadas y 4 omitidas (326 totales); 3034 pruebas aprobadas y 38 omitidas (3072 totales); 12 snapshots aprobados**. Front completo: **141 archivos y 1030 pruebas aprobadas**. Builds Nest y Vite, y typecheck del front `tsc -b`, aprobados. Lint del back y lint focal del front sin errores; conservan avisos previos fuera de la lógica añadida. Sin migraciones, emisiones reales ni PRs.
+
+El ferry `ferry/m1-formularios-validacion` parte de `73af439c48d1e8937133b52f8b525bbecfe7540f`; FERRY.md contiene los archivos por grupo y sus 29 SHA-256 verificados. La rama de construcción del back es `fix/m1-formularios-validacion`. La promoción y batería en vivo quedan fuera de esta ejecución.
