@@ -62,13 +62,41 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
   }
 
   async process(job: SirePeriodsJobData): Promise<void> {
+    try {
+      await this.runJob(job);
+    } catch (error) {
+      /**
+       * AÚ NO SE TRAGA NADA.
+       *
+       * El único error que llega aquí es un fallo reintentable de SUNAT (que
+       * `queryPeriods` relanza a propósito) o un fallo de base de datos. Los
+       * dos deben volver a la cola: PgBoss los captura en su propio
+       * `try/catch` —nunca se convierten en un rechazo no gestionado— y
+       * reprograma el trabajo con backoff. Agotados los reintentos, el trabajo
+       * llega a la DLQ y ahí se marca como FAILED.
+       */
+      this.logger.error(
+        `No se pudo completar el trabajo de períodos SIRE (messageId=${job.messageId}): ${describeErrorSafely(error)}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Cuerpo del trabajo.
+   *
+   * Va separado de `process` para que el clasificador de errores solo vea los
+   * fallos de SUNAT y los de base de datos, nunca los de persistencia del
+   * estado (que se aíslan en `markFailedSafely`).
+   */
+  private async runJob(job: SirePeriodsJobData): Promise<void> {
     const request = await this.prisma.sirePeriodQuery.findUnique({
       where: { id: job.messageId },
       include: { company: { select: { ruc: true, is_active: true } } },
     });
 
     if (!this.matchesRequestContext(request, job)) {
-      await this.markFailed(
+      await this.markFailedSafely(
         job.messageId,
         SIRE_PERIOD_ERROR_CODES.REQUEST_CONTEXT_INVALID,
       );
@@ -77,7 +105,7 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
 
     const credentials = this.readCredentials(job);
     if (!credentials) {
-      await this.markFailed(
+      await this.markFailedSafely(
         job.messageId,
         SIRE_PERIOD_ERROR_CODES.CREDENTIALS_UNAVAILABLE,
       );
@@ -197,7 +225,7 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
        * vuelven a la cola de PgBoss con backoff: un intento posterior puede
        * completarla y dejarla en COMPLETED.
        */
-      await this.markFailed(job.messageId, failure.errorCode);
+      await this.markFailedSafely(job.messageId, failure.errorCode);
       if (failure.retryable) {
         throw error;
       }
@@ -206,10 +234,35 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
   }
 
   private async markRetriesExhausted(job: SirePeriodsJobData): Promise<void> {
-    await this.markFailed(
+    await this.markFailedSafely(
       job.messageId,
       SIRE_PERIOD_ERROR_CODES.SUNAT_RETRIES_EXHAUSTED,
     );
+  }
+
+  /**
+   * Persiste el estado FAILED sin dejar que un fallo de base de datos tape el
+   * error que se estaba explicando.
+   *
+   * ANTES DE ESTE CAMBIO
+   *
+   * `markFailed` se llamaba sin protección desde el `catch` de SUNAT. Si la
+   * base de datos caía justo ahí, su error sustituía al de SUNAT: el trabajo
+   * se relanzaba con el error equivocado (y el `throw` de reintento no se
+   * llegaba a ejecutar), el estado se quedaba en PROCESSING para siempre y el
+   * frontend terminaba en timeout sin saber por qué.
+   */
+  private async markFailedSafely(
+    messageId: string,
+    errorCode: SirePeriodErrorCode,
+  ): Promise<void> {
+    try {
+      await this.markFailed(messageId, errorCode);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo marcar la consulta de períodos SIRE ${messageId} como ${errorCode}: ${describeErrorSafely(error)}`,
+      );
+    }
   }
 
   private async markFailed(

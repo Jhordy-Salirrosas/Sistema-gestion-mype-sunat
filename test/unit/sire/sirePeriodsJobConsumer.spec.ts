@@ -208,6 +208,36 @@ describe('SirePeriodsJobConsumer', () => {
     });
   });
 
+  it('keeps the retry when the failed state cannot be persisted', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new RetryableSireSunatError(502),
+    );
+    // La base de datos se cae justo al persistir el estado FAILED.
+    (prisma.sirePeriodQuery.updateMany as jest.Mock).mockRejectedValueOnce(
+      new Error('Connection terminated unexpectedly'),
+    );
+
+    // El error de SUNAT sigue siendo el que sale: el de la base de datos no lo
+    // tapa y el trabajo vuelve a la cola como corresponde.
+    await expect(consumer.process(job)).rejects.toBeInstanceOf(
+      RetryableSireSunatError,
+    );
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('No se pudo marcar la consulta de períodos SIRE'),
+    );
+  });
+
+  it('does not leave the job rejected when the failed state cannot be persisted', async () => {
+    (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
+      new BadRequestException('SUNAT rechazó la solicitud.'),
+    );
+    (prisma.sirePeriodQuery.updateMany as jest.Mock).mockRejectedValueOnce(
+      new Error('Connection terminated unexpectedly'),
+    );
+
+    await expect(consumer.process(job)).resolves.toBeUndefined();
+  });
+
   it('marks the request failed and retries when the SUNAT call times out', async () => {
     (sireClient.getPeriods as jest.Mock).mockRejectedValueOnce(
       new SireTransportError('TimeoutError: The operation was aborted'),

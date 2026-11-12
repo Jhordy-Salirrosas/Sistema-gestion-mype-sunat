@@ -27,7 +27,7 @@ import {
 } from '../../../auth/domain/ports/solCredentialCipherPort';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
+import { QueueService, type SirePeriodsJobData } from '../../../resilience/infrastructure/queue/queue.service';
 import { SirePeriodsRequestDto } from '../../application/dto/sirePeriodsRequestDto';
 import {
   friendlySireFailureMessage,
@@ -68,6 +68,12 @@ export interface SirePeriodsRequestResponse {
   /** Se conserva con el mismo valor que `message` por compatibilidad. */
   error?: string;
 }
+
+/**
+ * Tope de espera del encolado. Es generoso a propósito: encolar es insertar
+ * una fila, no hacer un trabajo lento.
+ */
+const SIRE_ENQUEUE_TIMEOUT_MS = 15_000;
 
 /** Empresa de la sesión con los datos que la consulta necesita. */
 interface RequestCompany {
@@ -269,7 +275,7 @@ export class SireReadOnlyPeriodsController {
     encryptedSolCredentials: string,
   ): Promise<SirePeriodsRequestResponse> {
     try {
-      await this.queue.enqueueSirePeriods({
+      await this.enqueueWithTimeout({
         messageId,
         companyId: company.id,
         ruc: company.ruc,
@@ -292,6 +298,33 @@ export class SireReadOnlyPeriodsController {
     }
 
     return { messageId, status: 'PENDING' };
+  }
+
+  /**
+   * Encola el trabajo con un tope de espera.
+   *
+   * POR QUÉ EL TOPE
+   *
+   * `boss.send` inserta una fila en PgBoss: si la base de datos está lenta o
+   * bloqueada, la promesa puede quedarse pendiente indefinidamente y el
+   * cliente se quedaría esperando un 202 que no llega nunca. Con el tope, la
+   * respuesta 202 sale siempre (con el estado controlado `FAILED`), que es lo
+   * que el frontend sabe manejar.
+   */
+  private async enqueueWithTimeout(payload: SirePeriodsJobData): Promise<string> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        this.queue.enqueueSirePeriods(payload),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error('La cola no respondió a tiempo.'));
+          }, SIRE_ENQUEUE_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /**
