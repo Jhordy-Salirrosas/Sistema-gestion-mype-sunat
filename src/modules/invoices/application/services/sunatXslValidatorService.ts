@@ -1,22 +1,6 @@
-/**
- * TA-70: validador local del juego completo del Facturador SUNAT.
- * Por defecto ejecuta Python+lxml en un proceso cancelable: XSD 2.1 antes
- * de XSL, adaptaciones solo en copia temporal y rechazo fail-fast del SFS.
- * Los fallos de infraestructura/motor son NO concluyentes, nunca aprobaciones.
- * SUNAT_XSL_DIR conserva la ruta heredada y su diagnóstico conservador;
- * xslt-processor no puede acreditar validación con las hojas incompletas.
- */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+/** Validador único del juego oficial SFS; los fallos del motor bloquean el envío. */
 import { Injectable, Logger } from '@nestjs/common';
-import { XmlParser, Xslt } from 'xslt-processor';
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import {
-  CATALOGO_REGLAS_SUNAT,
-  type ReglaSunat,
-  reglaPorCodigo,
-} from './sunatValidationCatalog';
-import { nombreArchivoDesdeXml, normalizarHojaSunat, validaDeVerdad } from './sunatXslAdapter';
+import { CATALOGO_REGLAS_SUNAT, type ReglaSunat, reglaPorCodigo } from './sunatValidationCatalog';
 import { ejecutarSfs } from './sunatSfsRunner';
 
 /** Resultado de ejecutar la hoja oficial sobre un XML. */
@@ -63,263 +47,25 @@ export const XSL_POR_TIPO: Record<string, string> = {
   '08': 'Nota de Debito 2.0.1.xsl',
 };
 
-/**
- * Hoja que se usa para saber si un directorio contiene el juego completo.
- *
- * Es la de facturas porque es la que existe siempre que estén las hojas
- * versionadas: si falta esta, el directorio no sirve.
- */
-const HOJA_DE_REFERENCIA = XSL_POR_TIPO['01'];
-
-/** Tiempo máximo que se acepta para validar un comprobante (criterio 4). */
-export const LIMITE_VALIDACION_MS = 2000;
-
 @Injectable()
 export class SunatXslValidatorService {
   private readonly logger = new Logger(SunatXslValidatorService.name);
-  private readonly parser = new XmlParser();
-  private readonly hojas = new Map<string, string>();
-  private readonly dependenciasAusentes = new Set<string>();
 
-  /**
-   * Valida el XML firmado con la hoja oficial de su tipo.
-   *
-   * @param xml XML firmado, tal como se va a enviar.
-   * @param tipoComprobante Código SUNAT: 01, 03, 07 u 08.
-   */
-  async validar(
-    xml: string,
-    tipoComprobante: string,
-  ): Promise<ResultadoValidacionXsl> {
-    const archivo = XSL_POR_TIPO[tipoComprobante];
-    if (!archivo) {
-      return this.bloqueo(
-        `No hay hoja XSL mapeada para el tipo de comprobante '${tipoComprobante}'`,
-      );
-    }
-
-    // Las rutas explícitas antiguas conservan su diagnóstico no concluyente.
-    // El motor productivo por defecto utiliza el juego completo del SFS.
-    if (!process.env.SUNAT_XSL_DIR) {
-      try {
-        const resultado = await ejecutarSfs(xml, tipoComprobante);
-        const errores = resultado.errores.map(error => ({ ...error, regla: reglaPorCodigo(error.codigo) }));
-        return {
-          valido: validaDeVerdad(resultado) && errores.length === 0, errores,
-          codigosDesconocidos: errores.filter(e => !e.regla).map(e => e.codigo),
-          bloqueado: false, motivoBloqueo: null, validadoDeVerdad: validaDeVerdad(resultado),
-        };
-      } catch (error) {
-        return this.bloqueo(error instanceof Error ? error.message : 'Ejecutor SFS no disponible');
-      }
-    }
-
-    const hoja = this.cargarHoja(archivo);
-    if (hoja === null) {
-      return this.bloqueo(
-        `No se pudo cargar la hoja oficial '${archivo}' desde ${this.directorio()}. ` +
-          'El envío se bloquea: no se valida a ciegas un comprobante tributario',
-      );
-    }
-
-    // La excepción no debe ocultar XML mal formado, incluso al evitar XSLT.
-    const xmlBienFormado = XMLValidator.validate(xml);
-    if (xmlBienFormado !== true) {
-      return this.bloqueo(`XML mal formado: ${xmlBienFormado.err.msg}`);
-    }
-    if (this.dependenciasAusentes.has(join(this.directorio(), archivo))) {
-      return {
-        valido: false, errores: [], codigosDesconocidos: [], bloqueado: false,
-        motivoBloqueo: 'Validación XSL no concluyente: falta commons/error/validate_utils.xsl', validadoDeVerdad: false,
-        causaNoConcluyente: 'DEPENDENCIA_VALIDATE_UTILS_AUSENTE',
-      };
-    }
-
-    const inicio = Date.now();
-    let salida: string;
+  async validar(xml: string, tipoComprobante: string): Promise<ResultadoValidacionXsl> {
+    if (!XSL_POR_TIPO[tipoComprobante]) return this.bloqueo(
+      `No hay hoja XSL mapeada para el tipo de comprobante '${tipoComprobante}'`,
+    );
     try {
-      // Los parámetros XSLT se pasan al CONSTRUCTOR de `Xslt`, no a
-      // `xsltProcess`. La hoja oficial los lee para reconstruir el nombre del
-      // archivo enviado (`$nombreArchivoEnviado`).
-      const procesador = new Xslt({
-        parameters: [
-          { name: 'nombreArchivoEnviado', value: nombreArchivoDesdeXml(xml) },
-        ],
-      });
-      salida = await procesador.xsltProcess(
-        this.parser.xmlParse(xml),
-        this.parser.xmlParse(hoja),
-      );
-    } catch (error) {
-      // Una hoja oficial no debería fallar sobre un XML bien formado. Si pasa,
-      // no se puede afirmar que el comprobante sea válido: se bloquea igual.
-      return this.bloqueo(
-        `La hoja XSL oficial falló al procesar el XML: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
-      );
-    }
-
-    const duracion = Date.now() - inicio;
-    if (duracion > LIMITE_VALIDACION_MS) {
-      this.logger.warn(
-        `La validación XSL de ${tipoComprobante} tardó ${duracion} ms (límite ${LIMITE_VALIDACION_MS} ms)`,
-      );
-    }
-
-    return this.interpretar(salida);
-  }
-
-  /**
-   * Directorio de las hojas oficiales.
-   *
-   * Por defecto las versionadas en `assets/sunat-xsl/`, para que un clon recién
-   * hecho valide sin configurar nada. Se lee en cada llamada y no en el
-   * constructor para que las pruebas puedan apuntar a un directorio temporal
-   * sin volver a instanciar el servicio.
-   *
-   * POR QUÉ NO BASTA CON `cwd` (defecto encontrado el 31-10)
-   *
-   * `nest build` copia `assets/` a `dist/assets/`, y la app compilada se arranca
-   * con `node dist/main.js` DESDE LA RAÍZ del repo. Con `join(cwd, 'assets')` se
-   * buscaba en `<repo>/assets/sunat-xsl`, que no existe: las hojas están en
-   * `<repo>/dist/assets/sunat-xsl`. Resultado: la compuerta XSL bloqueaba TODOS
-   * los envíos con "No existe la hoja XSL oficial", el comprobante se quedaba
-   * PENDIENTE para siempre y nunca se generaba el Kardex. Se detectó emitiendo
-   * de verdad; los tests no lo veían porque apuntan a un directorio temporal.
-   *
-   * Ahora se prueban las ubicaciones reales en orden y se usa la primera que
-   * tenga las hojas, en lugar de asumir una sola.
-   */
-  private directorio(): string {
-    if (process.env.SUNAT_XSL_DIR) return process.env.SUNAT_XSL_DIR;
-
-    const candidatos = [
-      // Ejecución normal: `node dist/main.js` desde la raíz del repo. Las hojas
-      // se versionan en `assets/sunat-xsl/` y `nest build` NO las copia a dist,
-      // así que se leen del árbol de fuentes. (Comprobado: dist/ no tiene
-      // carpeta assets.)
-      join(process.cwd(), 'assets', 'sunat-xsl'),
-      // Si algún día se configura el build para copiarlas junto al JS.
-      join(__dirname, '..', '..', '..', '..', 'assets', 'sunat-xsl'),
-      join(process.cwd(), 'dist', 'assets', 'sunat-xsl'),
-    ];
-
-    for (const candidato of candidatos) {
-      if (existsSync(join(candidato, HOJA_DE_REFERENCIA))) return candidato;
-    }
-
-    // Ninguna sirve: se devuelve la primera para que el mensaje de error del
-    // llamador muestre una ruta concreta y ubicable.
-    return candidatos[0];
-  }
-
-  /** Lee, normaliza y cachea la hoja; `null` si el archivo no está. */
-  private cargarHoja(archivo: string): string | null {
-    const ruta = join(this.directorio(), archivo);
-    const cacheada = this.hojas.get(ruta);
-    if (cacheada !== undefined) return cacheada;
-
-    if (!existsSync(ruta)) {
-      this.logger.error(`No existe la hoja XSL oficial en ${ruta}`);
-      return null;
-    }
-
-    try {
-      const original = readFileSync(ruta, 'utf8');
-      const hojaBienFormada = XMLValidator.validate(original);
-      if (hojaBienFormada !== true) {
-        this.logger.error(`Hoja XSL mal formada en ${ruta}: ${hojaBienFormada.err.msg}`);
-        return null;
-      }
-      const documento = new XMLParser({ ignoreAttributes: false }).parse(original) as {
-        'xsl:stylesheet'?: { 'xsl:include'?: { '@_href'?: string } | { '@_href'?: string }[] };
-      };
-      const declaracion = documento['xsl:stylesheet']?.['xsl:include'];
-      const includes = declaracion ? (Array.isArray(declaracion) ? declaracion : [declaracion]) : [];
-      const requiereUtils = includes.some((item) =>
-        typeof item['@_href'] === 'string' &&
-        item['@_href'].toLowerCase().endsWith('commons/error/validate_utils.xsl'),
-      );
-      if (requiereUtils && !existsSync(join(this.directorio(), 'commons', 'error', 'validate_utils.xsl'))) {
-        this.dependenciasAusentes.add(ruta);
-      }
-      const contenido = normalizarHojaSunat(original);
-      this.hojas.set(ruta, contenido);
-      return contenido;
-    } catch (error) {
-      this.logger.error(
-        `No se pudo leer ${ruta}: ${
-          error instanceof Error ? error.message : 'error desconocido'
-        }`,
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Extrae los códigos de error de la salida de la hoja.
-   *
-   * La hoja oficial escribe líneas con la forma
-   * `... <cbc:ResponseCode>2xxx</cbc:ResponseCode>` o texto plano `2xxx texto`.
-   * Se buscan ambos formatos porque SUNAT ha cambiado el envoltorio entre
-   * versiones y lo que importa es el código de 3 o 4 dígitos.
-   */
-  private interpretar(salida: string): ResultadoValidacionXsl {
-    // TA-62: si la hoja no puede validar, la salida NO contiene códigos de
-    // error; busca lo que busca, cualquier secuencia de 3-4 dígitos que
-    // encuentre (el RUC del emisor, la base imponible, el total) sería un
-    // falso positivo. En vez de inventar errores, se responde con la verdad:
-    // no se pudo validar.
-    if (!validaDeVerdad()) {
+      const resultado = await ejecutarSfs(xml, tipoComprobante);
+      const errores = resultado.errores.map(error => ({ ...error, regla: reglaPorCodigo(error.codigo) }));
       return {
-        valido: false,
-        errores: [],
-        codigosDesconocidos: [],
-        bloqueado: true,
-        motivoBloqueo: 'El motor XSL no puede acreditar la validación; no se identificó la ausencia de commons/error/validate_utils.xsl como causa',
-        validadoDeVerdad: false,
+        valido: errores.length === 0, errores,
+        codigosDesconocidos: errores.filter(e => !e.regla).map(e => e.codigo),
+        bloqueado: false, motivoBloqueo: null, validadoDeVerdad: true,
       };
+    } catch (error) {
+      return this.bloqueo(error instanceof Error ? error.message : 'Ejecutor SFS no disponible');
     }
-
-    const codigos = new Set<string>();
-
-    for (const coincidencia of salida.matchAll(/(\d{3,4})/g)) {
-      codigos.add(coincidencia[1].padStart(4, '0'));
-    }
-
-    // Un cero aislado no es un error: es la ausencia de códigos.
-    codigos.delete('0000');
-
-    const errores: ErrorValidacionXsl[] = [];
-    const codigosDesconocidos: string[] = [];
-
-    for (const codigo of codigos) {
-      const regla = reglaPorCodigo(codigo);
-      if (regla) {
-        errores.push({ codigo, mensaje: regla.mensaje, regla });
-      } else {
-        codigosDesconocidos.push(codigo);
-      }
-    }
-
-    // Un código desconocido también es un error: la hoja oficial lo reportó.
-    for (const codigo of codigosDesconocidos) {
-      errores.push({
-        codigo,
-        mensaje: `El XML no cumple la regla ${codigo} de SUNAT (fuera del catálogo local)`,
-        regla: null,
-      });
-    }
-
-    return {
-      valido: errores.length === 0,
-      errores,
-      codigosDesconocidos,
-      bloqueado: false,
-      motivoBloqueo: null,
-      validadoDeVerdad: true,
-    };
   }
 
   private bloqueo(motivo: string): ResultadoValidacionXsl {

@@ -5,7 +5,7 @@ import { sfsTimeoutMs } from './sunatSfsRuntime';
 export interface DiagnosticoSfs {
   disponible: boolean;
   causa: string | null;
-  motor: 'SFS' | 'HEREDADO';
+  motor: 'SFS';
 }
 
 const TTL_MS = 60_000;
@@ -15,7 +15,7 @@ let pending: { key: string; promise: Promise<DiagnosticoSfs> } | undefined;
 /** Cache por proceso de éxitos y fallos; no acredita documentos ni abre la compuerta. */
 export function diagnosticarSfs(): Promise<DiagnosticoSfs> {
   const timeout = sfsTimeoutMs();
-  const key = JSON.stringify([process.env.SUNAT_SFS_PYTHON, process.env.SUNAT_XSL_DIR, timeout]);
+  const key = JSON.stringify([process.env.SUNAT_SFS_PYTHON, timeout]);
   if (cache?.key === key && Date.now() < cache.expires) return Promise.resolve({ ...cache.value });
   if (pending?.key === key) return pending.promise;
   const promise = ejecutarDiagnostico(timeout).then(value => {
@@ -27,7 +27,6 @@ export function diagnosticarSfs(): Promise<DiagnosticoSfs> {
 }
 
 function ejecutarDiagnostico(timeout: number): Promise<DiagnosticoSfs> {
-  if (process.env.SUNAT_XSL_DIR) return Promise.resolve({ disponible: false, causa: 'MOTOR_HEREDADO_SELECCIONADO', motor: 'HEREDADO' });
   return new Promise(resolve => {
     execFile(process.env.SUNAT_SFS_PYTHON ?? 'python3', [join(process.cwd(), 'scripts/m1/diagnose_sfs.py')],
       { timeout, maxBuffer: 4096, env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } }, (error, stdout) => {

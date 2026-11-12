@@ -6,7 +6,7 @@ import { redondearMoneda as centimos } from '../../money';
  * generar el XML. Los bloques XML viven en `xmlNodesHelper`.
  *
  * Reglas de SUNAT que se aplican, verificadas en la hoja oficial
- * `Factura 2.0.1.xsl` versionada en `assets/sunat-xsl/`:
+ * `ValidaExprRegFactura-2.0.1.xsl` del juego `assets/sunat-sfs/`:
  *
  *  - **3267**: cada cuota debe tener `PaymentDueDate` POSTERIOR a la fecha de
  *    emisión. Una cuota con vencimiento el mismo día o anterior es rechazada.
