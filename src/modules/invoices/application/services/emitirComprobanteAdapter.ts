@@ -1,3 +1,4 @@
+import { calcularIcbper } from '../../ublIcbperLine';
 import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
 import { descripcionCanonicaNota } from './noteDescription';
 import { multiplicarMoneda, dividirMoneda, dividirUnitario } from '../../money';
@@ -176,7 +177,7 @@ const liquidarLinea = (item: LineaEmisionDto, indice: number): LineaLiquidada =>
   // El importe legado solo se acepta si coincide con cantidades comprobables.
   const bolsas = item.cantidadBolsas ?? ((item.icbper ?? 0) > 0 ? cantidad : 0);
   if (!Number.isSafeInteger(bolsas) || bolsas < 0) throw new BadRequestException('ICBPER requiere cantidad entera de bolsas');
-  const icbper = multiplicarMoneda(bolsas, 0.5);
+  const icbper = calcularIcbper(bolsas);
   if (item.icbper !== undefined && item.icbper !== icbper) throw new BadRequestException('ICBPER no coincide con la cantidad de bolsas');
   const linea: LineaDetalle = {
     id: indice + 1,
