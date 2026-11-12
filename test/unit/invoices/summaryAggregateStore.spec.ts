@@ -118,3 +118,93 @@ it.each(['00000000','00000001','1'])('normaliza correlativo RC %s sin alterar el
   const h=aggregateHarness();h.delegate.findMany.mockResolvedValue([{id:'a',members:{id:'inválido'},result:null}]);
   const rows=await h.store.listar('company');expect(rows[0].members).toEqual([]);
  });
+
+it('listado vacío no consulta comprobantes', async () => {
+  const h = aggregateHarness();
+  const findMany = jest.fn();
+  Object.assign(h.db.invoice, { findMany });
+  h.delegate.findMany.mockResolvedValue([]);
+
+  expect(await h.store.listar('company')).toEqual([]);
+  expect(findMany).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['ausentes', undefined],
+  ['nulos', null],
+  ['lista vacía', []],
+])('miembros %s producen una lista vacía sin consultar comprobantes', async (_label, members) => {
+  const h = aggregateHarness();
+  const findMany = jest.fn();
+  Object.assign(h.db.invoice, { findMany });
+  h.delegate.findMany.mockResolvedValue([{ id: 'a', members, result: null }]);
+
+  expect(await h.store.listar('company')).toEqual([
+    { id: 'a', members: [], bridge_reversal: { pending: 0, done: 0 }, result: null },
+  ]);
+  expect(findMany).not.toHaveBeenCalled();
+});
+
+it('descarta miembros sin id válido antes de consultar comprobantes', async () => {
+  const h = aggregateHarness();
+  const findMany = jest.fn();
+  Object.assign(h.db.invoice, { findMany });
+  h.delegate.findMany.mockResolvedValue([{
+    id: 'a', result: null,
+    members: [null, false, 0, 'invoice', [], {}, { numero: 'F001-1' },
+      { id: null }, { id: 5 }, { id: '' }, { id: ' \t\n' }],
+  }]);
+
+  expect((await h.store.listar('company'))[0].members).toEqual([]);
+  expect(findMany).not.toHaveBeenCalled();
+});
+
+it.each(['RA', 'RC'])('mapea los cinco campos actuales en orden del snapshot %s', async kind => {
+  const h = aggregateHarness(kind);
+  h.delegate.findMany.mockResolvedValue([{
+    id: 'a', kind, result: null,
+    members: [{ id: 'primero', numero: 'obsoleto', monto: 999, estado: 'obsoleto' },
+      { id: 'inexistente' }, { id: 'segundo' }],
+  }]);
+  const findMany = jest.fn().mockResolvedValue([
+    { id: 'segundo', serie: 'B002', correlativo: 12345678, tipo_comprobante: '03', monto_total: 0, estado: 'RECHAZADO' },
+    { id: 'primero', serie: 'F001', correlativo: 7, tipo_comprobante: '01', monto_total: '123.45', estado: 'ANULADO' },
+  ]);
+  Object.assign(h.db.invoice, { findMany });
+
+  expect((await h.store.listar('company'))[0].members).toEqual([
+    { id: 'primero', numero: 'F001-00000007', tipo: '01', monto: 123.45, estado: 'ANULADO' },
+    { id: 'segundo', numero: 'B002-12345678', tipo: '03', monto: 0, estado: 'RECHAZADO' },
+  ]);
+  expect(findMany).toHaveBeenCalledWith({
+    where: { company_id: 'company', id: { in: ['primero', 'inexistente', 'segundo'] } },
+    select: { id: true, serie: true, correlativo: true, tipo_comprobante: true, monto_total: true, estado: true },
+  });
+});
+
+it.each([
+  { label: 'sin lease ni flags opcionales', extra: {}, exhausted: false, historyUnknown: false, inProgress: false },
+  { label: 'con lease vencido y flags explícitos', extra: { exhausted: true, historyUnknown: true, lease: { token: 'privado', until: '2000-01-01T00:00:00Z' } }, exhausted: true, historyUnknown: true, inProgress: false },
+  { label: 'con lease vigente', extra: { exhausted: false, historyUnknown: false, lease: { token: 'privado', until: '2999-01-01T00:00:00Z' } }, exhausted: false, historyUnknown: false, inProgress: true },
+])('proyección de miembros conserva sondeos y reversiones: $label', async ({ extra, exhausted, historyUnknown, inProgress }) => {
+  const h = aggregateHarness();
+  h.delegate.findMany.mockResolvedValue([{
+    id: 'a', members: [{ id: 'invoice' }],
+    result: {
+      codigo: '0', mensaje: 'Aceptado', referencia: 'RA-1', xml: 'privado',
+      polling: { attempts: 2, nextAt: null, ...extra },
+      bridgeReversals: [{ status: 'PENDING' }, { status: 'DONE' }],
+    },
+  }]);
+  Object.assign(h.db.invoice, { findMany: jest.fn().mockResolvedValue([
+    { id: 'invoice', serie: 'F001', correlativo: 1, tipo_comprobante: '01', monto_total: 118, estado: 'ANULADO' },
+  ]) });
+
+  expect(await h.store.listar('company')).toEqual([{
+    id: 'a',
+    members: [{ id: 'invoice', numero: 'F001-00000001', tipo: '01', monto: 118, estado: 'ANULADO' }],
+    polling: { attempts: 2, nextAt: null, exhausted, historyUnknown, inProgress },
+    bridge_reversal: { pending: 1, done: 1 },
+    result: { codigo: '0', mensaje: 'Aceptado', referencia: 'RA-1' },
+  }]);
+});
