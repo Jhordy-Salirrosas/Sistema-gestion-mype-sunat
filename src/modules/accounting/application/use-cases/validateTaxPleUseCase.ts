@@ -24,7 +24,8 @@ export class ValidateTaxPleUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
   async execute(companyId: string, companyRuc: string, year: number, month: number, bookCode: '080100' | '140100'): Promise<PleValidationResult> {
-    if (!/^\d{11}$/.test(companyRuc)) throw new BadRequestException('RUC inválido para PLE.');
+    const ruc = companyRuc?.replace(/[\r\n\t ]/g, '') ?? '';
+    if (!/^\d{11}$/.test(ruc)) throw new BadRequestException('RUC inválido para PLE.');
     if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new BadRequestException('Año inválido.');
     if (!Number.isInteger(month) || month < 1 || month > 12) throw new BadRequestException('Mes inválido.');
     const desde = new Date(Date.UTC(year, month - 1, 1));

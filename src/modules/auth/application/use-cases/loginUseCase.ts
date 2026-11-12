@@ -96,7 +96,7 @@ export class LoginUseCase {
         fullName: user.fullName,
         role: user.role,
         companyId: user.companyId,
-        companyRuc: company?.ruc,
+        companyRuc: company?.ruc?.replace(/[\r\n\t ]/g, ''),
         companyLegalName: company?.legalName,
       },
       companies,
