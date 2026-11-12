@@ -3203,3 +3203,11 @@ Bases de construcción: back main `7faef9767949c91666d9267561694f14acd2c58f`; fr
 Corrida completa back con PostgreSQL local y conexión beta real deshabilitada: **321 suites aprobadas / 4 omitidas (325 totales); 2998 pruebas aprobadas / 38 omitidas (3036 totales); 12 snapshots aprobados**. Front completo: **135 archivos / 970 pruebas aprobadas**. Build Nest del back, typecheck `tsc -b` y build Vite del front aprobados. Lint del back sin errores; conserva dos avisos previos en el coordinador/almacén de resúmenes, fuera de los archivos modificados.
 
 La corrida completa final del back se ejecutó con heap Node de 6 GB y sin la carga simultánea del front: el primer intento agotó el heap de 2 GB y había reportado un fallo de latencia del outbox. La corrida final conserva el umbral de esa prueba y pasa sin cambios en ella. Los cambios se distribuyen en un commit por frente; el ferry solo contiene la presentación de agotamiento de F7, su regresión y el manifiesto de archivos con SHA-256.
+
+## Formularios de M1: validaciones compartidas
+
+Bases sincronizadas: back `d5115adc109e311a29f84b86203028887f8f0118`; front `73af439c48d1e8937133b52f8b525bbecfe7540f`. Línea base completa: back 321 suites aprobadas y 4 omitidas, 2998 pruebas aprobadas y 38 omitidas, 12 snapshots; front 136 archivos y 972 pruebas aprobadas.
+
+### Grupo 1 — Contenido de emisión
+
+Página y modal comparten las validaciones de identidad del cliente, descripción (500), razón social (1500), cantidad positiva con hasta tres decimales y valor oneroso positivo. Se conserva la excepción explícita de notas y documentos íntegramente gratuitos. Un descuento global que deja un documento oneroso en cero bloquea el envío con error visible. No se modifica el back ni el circuito ICBPER. Verificación focal: 46 pruebas aprobadas y typecheck del front.
