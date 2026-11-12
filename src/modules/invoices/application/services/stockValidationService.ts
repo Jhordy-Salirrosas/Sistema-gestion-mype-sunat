@@ -1,3 +1,4 @@
+import { esLineaGratuitaValida } from '../../freeInvoicePolicy';
 /**
  * Validación de stock de los ítems del comprobante (TA-62, HU-10).
  *
@@ -31,6 +32,8 @@ export interface ItemAValidar {
   cantidad: number;
   unidad?: string;
   afectacion?: string | null;
+  precioUnitario?: number;
+  valorUnitario?: number;
 }
 
 /** Resultado de la validación de stock. */
@@ -134,7 +137,8 @@ export class StockValidationService {
       if (
         entrada.taxAffectation &&
         item.afectacion?.trim() &&
-        item.afectacion.trim() !== entrada.taxAffectation
+        item.afectacion.trim() !== entrada.taxAffectation &&
+        !esLineaGratuitaValida(item)
       ) {
         throw new BadRequestException(
           `La afectación tributaria del producto ${codigo} (${entrada.taxAffectation}) viene de su configuración y no coincide con la enviada (${item.afectacion.trim()}).`,

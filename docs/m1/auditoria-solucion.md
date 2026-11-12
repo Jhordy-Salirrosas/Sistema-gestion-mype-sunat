@@ -3034,6 +3034,8 @@ C1 y C2 no requieren archivos front. El manifiesto FERRY.md añade las instrucci
 
 ## Parte 8D — línea gratuita completa
 
+Corrección posterior: la guarda de stock reutiliza la política compartida de D1 para admitir la discrepancia de afectación de una gratuita válida, recibiendo precio cobrado y referencia; las regresiones PostgreSQL recorren ambas rutas con producto inventariable y entrada real, conservando el mensaje de discrepancia onerosa y el control de existencias.
+
 Construcción sobre back `95b6687d5843588e10f34b43b7f6d0eb850a6bca` y front `4b94d22f769b788aca001295ae1e066f92f0c4ed`, en orden D1, D2, D3 y D4, con un commit back por frente. Sin emisiones reales, PRs, migraciones ni columnas nuevas. Los cambios de producción permanecen en M1. El front se entrega mediante `ferry/m1-8d-linea-gratuita`, con sus archivos originales y SHA-256 en FERRY.md.
 
 ### D1 — gratuidad explícita y contratos de creación
