@@ -88,9 +88,9 @@ import { InventoryModule } from '../inventory/inventoryModule';
     //
     // Los controladores con rutas literales (`config`, `series`) van primero.
     InvoiceConfigController,
+    InvoiceDetractionController,
     InvoiceQueryController,
     SalesReportController,
-    InvoiceDetractionController,
     InvoiceDownloadController,
   ],
   providers: [

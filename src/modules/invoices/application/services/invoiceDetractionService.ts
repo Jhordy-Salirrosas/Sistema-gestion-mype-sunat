@@ -13,7 +13,7 @@ export class InvoiceDetractionService {
     const desde = new Date(`${period}-01T00:00:00Z`);
     const hasta = new Date(Date.UTC(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0, 23, 59, 59));
     const facturas = await this.prisma.invoice.findMany({
-      where: { company_id: companyId, fecha_emision: { gte: desde, lte: hasta }, estado: { not: 'ANULADO' } },
+      where: { company_id: companyId, fecha_emision: { gte: desde, lte: hasta }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
       orderBy: [{ fecha_emision: 'asc' }, { correlativo: 'asc' }],
     });
     return facturas.map((f) => {
