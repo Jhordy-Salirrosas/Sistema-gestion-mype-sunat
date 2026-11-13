@@ -1,3 +1,4 @@
+import { traducirEmision } from '../../../src/modules/invoices/application/services/emitirComprobanteAdapter';
 import { fakeFiscalAddress } from '../../fixtures/fakeFiscalAddress';
 import { AtomicInvoiceCreationService } from '../../../src/modules/invoices/application/services/atomicInvoiceCreationService';
 import { ConflictException } from '@nestjs/common';
@@ -179,4 +180,12 @@ it('con pin la API rechaza incluso el RUC compartido antes de reservar número o
   expect(h.tx.$queryRaw).not.toHaveBeenCalled();
   expect(h.tx.invoice.create).not.toHaveBeenCalled();
   expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
+});
+
+it.each(['pantalla','fiscal'])('B8 %s rechaza exceso de bolsas gratuitas antes de reservar o persistir',async ruta=>{
+ const h=harness();const dto={...pantalla,fecha_emision:'2026-11-12',items:[{codigo:'SERV',descripcion:'Servicio gratuito',cantidad:1,precioUnitario:0,valorUnitario:35,afectacion:'31',cantidadBolsas:2,icbper:1}]};
+ const before=JSON.stringify(dto);
+ const request=ruta==='pantalla'?h.service.emitir(dto as never,'empresa','b8-guard-request-key'):h.service.create(traducirEmision(dto as never,{ruc:'20100070970',razonSocial:'Empresa',...fakeFiscalAddress},1).dto,'empresa','b8-guard-request-key');
+ await expect(request).rejects.toMatchObject({response:{code:'BOLSAS_GRATUITAS_SUPERAN_CANTIDAD',message:'Las bolsas de una línea gratuita no pueden superar la cantidad de la línea. Ajuste las bolsas o la cantidad.'}});
+ expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();expect(JSON.stringify(dto)).toBe(before);
 });

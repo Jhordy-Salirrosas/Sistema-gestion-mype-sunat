@@ -204,3 +204,6 @@ it('la guarda de boleta reconoce ICBPER histórico sin cantidad y permite gratui
 it('una boleta onerosa con bolsas conserva el flujo actual',async()=>{
  const h=harness();await expect(h.run({...base(),tipo_comprobante:'03',serie:'B001',items:[{...base().items[0],cantidadBolsas:1,icbper:.5}]})).resolves.toBeDefined();
 });
+it.each([undefined,0,.5])('factura gratuita conserva bolsas legadas icbper=%s sin campo de cantidad',async icbper=>{
+ const h=harness();await expect(h.run({...base(),items:[{codigo:'SERV',descripcion:'Bien gratuito',cantidad:1,precioUnitario:0,valorUnitario:35,afectacion:'31',icbper}]})).resolves.toMatchObject({tipo_comprobante:'01'});
+});

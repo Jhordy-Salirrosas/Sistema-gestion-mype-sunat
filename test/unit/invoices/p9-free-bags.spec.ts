@@ -15,8 +15,10 @@ it.each(hashes)('estructura certificada $name permanece idéntica',({aff,mixed,h
 it.each([1,2])('gratuita de %s unidades con una bolsa conserva 0.50 y pasa SFS',async cantidad=>{
  const p=fiscal8d('11',1,'01').payload;p.lineas![0].cantidad=cantidad;
  const before=JSON.stringify(p);const expanded=separarBolsasGratuitas(p);
- expect(esDocumentoIntegramenteGratuito('01',expanded.lineas)).toBe(false);
- expect(expanded.lineas![0].icbperLinea).toBeUndefined();expect(expanded.lineas![1]).toMatchObject({cantidad:1,icbperLinea:.5});
+ expect(esDocumentoIntegramenteGratuito('01',expanded.lineas)).toBe(true);
+ expect(expanded.lineas![0]).toMatchObject({codigo:'MAT',cantidad:1,icbperLinea:.5});
+ expect(expanded.lineas).toHaveLength(cantidad);
+ if(cantidad===2) expect(expanded.lineas![1]).toMatchObject({cantidad:1,icbperLinea:undefined});
  const xml=generator.generateInvoiceXml(p);expect(xml).toContain('<cbc:PayableAmount currencyID="PEN">0.50</cbc:PayableAmount>');
  expect(xml.match(/<cbc:ID>7152<\/cbc:ID>/g)).toHaveLength(2);
  const cert=fakeIssuerCertificate();const signed=new SignatureService({getCertificate:()=>({certificatePem:cert.pem,privateKeyPem:cert.privateKeyPem})} as never).signXml(xml).signedXml;

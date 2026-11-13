@@ -1,0 +1,51 @@
+[
+  {
+    "name": "gravada",
+    "aff": "10",
+    "bags": 2,
+    "mixed": false,
+    "hash": "468ad6f6f3158407d6f9f4815c5917d5e788332970e51aeba3c0b3a588b29c40"
+  },
+  {
+    "name": "mixta",
+    "aff": "11",
+    "bags": 2,
+    "mixed": true,
+    "hash": "20fd31b0523d4a0645c1d177bb34da6fa3470048444c296afb6d1211932a287c"
+  },
+  {
+    "name": "exonerada",
+    "aff": "20",
+    "bags": 2,
+    "mixed": false,
+    "hash": "b79e19d336d307babb4f7b084004ee81f8ab63cdf4c1c6adb10460d1df4f1b9e"
+  },
+  {
+    "name": "inafecta",
+    "aff": "30",
+    "bags": 2,
+    "mixed": false,
+    "hash": "d547da71540e8165ce1dcb68b74daf174e63f38251fea0ae0d8b741d89d571e7"
+  },
+  {
+    "name": "gratuita-sin-bolsas",
+    "aff": "11",
+    "bags": 0,
+    "mixed": false,
+    "hash": "f593e6addab0b7a38de770183f6b4d43567bae5aa5775ed8b472eab29a329616"
+  },
+  {
+    "name": "gratuita-inafecta-sin-bolsas",
+    "aff": "31",
+    "bags": 0,
+    "mixed": false,
+    "hash": "594ddb53d55497be80bac3c5e1e9f86705bd0d678538fe5a0073fbf1f4f85e67"
+  },
+  {
+    "name": "gratuita-exonerada-sin-bolsas",
+    "aff": "21",
+    "bags": 0,
+    "mixed": false,
+    "hash": "9fc285853569dbc8286cec56bf42d678886cafb0529e5f1d4ce3a51ee74c820b"
+  }
+]
