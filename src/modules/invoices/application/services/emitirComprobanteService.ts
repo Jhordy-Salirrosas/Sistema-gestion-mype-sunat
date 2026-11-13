@@ -132,7 +132,9 @@ export class EmitirComprobanteService {
     // Valida el descuento global antes de reservar correlativo.
     const calculoPrevio = traducirEmision(dto, emisor, 0);
 
-    // 1. El documento del adquirente, antes de tocar nada.
+    const tipoOrigen = await this.verificarDocumentoOrigen(dto, companyId);
+
+    // 1. Identidad validada según el tipo real del origen, antes de numerar.
     validarAdquirente(
       dto.customer_identity_number
         ? {
@@ -141,13 +143,12 @@ export class EmitirComprobanteService {
             razonSocial: dto.customer_legal_name,
           }
         : null,
-      { tipoComprobante: dto.tipo_comprobante, importeTotal: calculoPrevio.importes.total },
+      { tipoComprobante: dto.tipo_comprobante, importeTotal: calculoPrevio.importes.total, tipoComprobanteOrigen: tipoOrigen },
     );
 
     // Los descuentos ya fueron validados por la liquidación decimal previa.
 
     // 2. La nota necesita un comprobante que exista de verdad.
-    await this.verificarDocumentoOrigen(dto, companyId);
 
     // 2b. Venta al crédito con cuotas solo para clientes con crédito en el maestro.
     await this.validarCreditoCliente(dto, companyId);
@@ -266,7 +267,7 @@ export class EmitirComprobanteService {
   private async verificarDocumentoOrigen(
     dto: EmitirComprobanteDto,
     companyId: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     if (!TIPOS_NOTA.includes(dto.tipo_comprobante as '07' | '08')) return;
 
     const referencia = dto.documento_afectado?.trim();
@@ -332,6 +333,7 @@ export class EmitirComprobanteService {
         );
       }
     }
+    return origen.tipo_comprobante;
   }
 
   /**

@@ -3432,3 +3432,7 @@ NC 04/09 acredita devolución de bolsas únicamente mediante cantidadBolsas posi
 ### ND inafecta — tasa explícita
 
 Solo DebitNote con tributo 9998 incorpora Percent 0.00, conservando categoría y afectación 30. Se valida con la hoja oficial ND con y sin bolsas, sin 2992. Facturas y boletas conservan su representación; no se asignan tasas a campos tributarios desconocidos.
+
+### Notas sobre boletas — identidad acreditada
+
+El validador admite las reglas del receptor de boleta cuando el servicio acredita tipo 03 leyendo el documento origen en la empresa. El tipo no se toma de una serie inferida por el cliente. Origen factura o no acreditado conserva RUC obligatorio. Las dos entradas atómicas conservan además la igualdad de identidad con el documento origen, antes de numerar. Las NC/ND con DNI y referencia B superan las hojas oficiales; una nota a factura sin RUC continúa rechazada. El caso de uso legado sin origen acreditado mantiene la exigencia conservadora de RUC.
