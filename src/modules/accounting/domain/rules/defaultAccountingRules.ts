@@ -15,7 +15,7 @@ export const DEFAULT_ACCOUNTING_RULES = [
   ['COMPRA', '*', 2, '40111', 'DEBE', 'IGV', 'IGV crédito fiscal'],
   ['COMPRA', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar comerciales'],
   ['COMPRA', '*', 4, '20111', 'DEBE', 'BASE', 'Ingreso a almacén'],
-  ['COMPRA', '*', 5, '61111', 'HABER', 'BASE', 'Variación de existencias'],
+  ['COMPRA', '*', 5, '611', 'HABER', 'BASE', 'Variación de existencias'],
   ['PAGO', '*', 1, '42121', 'DEBE', 'MONTO_PAGADO', 'Pago a proveedor'],
   ['PAGO', '*', 2, '1041', 'HABER', 'MONTO_PAGADO', 'Cuenta corriente'],
   ['GASTO', '*', 1, '63111', 'DEBE', 'BASE', 'Gastos de servicios'],
@@ -23,7 +23,7 @@ export const DEFAULT_ACCOUNTING_RULES = [
   ['GASTO', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar'],
   ['COBRO', '*', 1, '1041', 'DEBE', 'MONTO_PAGADO', 'Cobro en banco'],
   ['COBRO', '*', 2, '12121', 'HABER', 'MONTO_PAGADO', 'Cuentas por cobrar'],
-  ['AJUSTE', '*', 1, '65911', 'DEBE', 'COSTO', 'Pérdida por ajuste'],
+  ['AJUSTE', '*', 1, '659', 'DEBE', 'COSTO', 'Pérdida por ajuste'],
   ['AJUSTE', '*', 2, '20111', 'HABER', 'COSTO', 'Mercaderías'],
-  ['AJUSTE', '*', 3, '75911', 'HABER', 'COSTO', 'Sobrantes de inventario'],
+  ['AJUSTE', '*', 3, '759', 'HABER', 'COSTO', 'Sobrantes de inventario'],
 ] as const;
