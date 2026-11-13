@@ -398,7 +398,8 @@ export class InvoiceDownloadService {
       : typeof payload.hashCpe === 'string' ? payload.hashCpe : undefined;
 
     const fecha = fila.fecha_emision.toISOString().slice(0, 10);
-    const qrBase64 = tipoDocCliente && fila.customer_identity_number && hashCpe ? await this.qr.generarPng({
+    // La boleta puede no identificar al receptor; no se inventa identidad ni digest.
+    const qrBase64 = hashCpe && (fila.tipo_comprobante === '03' || (tipoDocCliente && fila.customer_identity_number)) ? await this.qr.generarPng({
       rucEmisor: fila.ruc_emisor,
       tipoComprobante: fila.tipo_comprobante,
       serie: fila.serie,
@@ -406,7 +407,7 @@ export class InvoiceDownloadService {
       igv,
       total,
       fechaEmision: fecha,
-      tipoDocCliente,
+      tipoDocCliente: tipoDocCliente ?? '',
       numDocCliente: fila.customer_identity_number ?? '',
       hashCpe,
     }) : '';
