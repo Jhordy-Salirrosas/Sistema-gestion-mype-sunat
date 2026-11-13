@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import { redondearMoneda as r2 } from '../../money';
 /**
  * Métricas del módulo de facturación (TA-69, HU-12).
@@ -86,11 +87,7 @@ export const rangoDelPeriodo = (
 
 /** Periodo YYYY-MM actual en hora de Perú. */
 export const periodoActual = (): string => {
-  const ahora = new Date();
-  // Lima es UTC-5 todo el año (sin horario de verano desde 1994), así que el
-  // periodo no salta de mes a las 19:00 como si se usara UTC directamente.
-  const lima = new Date(ahora.getTime() - 5 * 60 * 60 * 1000);
-  return lima.toISOString().slice(0, 7);
+  return fechaFiscalLima().slice(0, 7);
 };
 
 /**

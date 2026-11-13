@@ -1,3 +1,4 @@
+import { resolverFechaEmision } from '../../fiscalDate';
 import { esNotaDescuento, sinBolsasDevueltas } from '../../noteIcbperPolicy';
 import { calcularIcbper } from '../../ublIcbperLine';
 import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
@@ -327,7 +328,7 @@ export const traducirEmision = (
     );
   }
 
-  const fecha = (dto.fecha_emision ?? new Date().toISOString()).slice(0, 10);
+  const fecha = resolverFechaEmision(dto.fecha_emision).slice(0, 10);
 
   const payload: InvoicePayload = {
     rucEmisor: emisor.ruc,

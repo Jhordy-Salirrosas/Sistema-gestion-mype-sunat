@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 
@@ -17,7 +18,7 @@ export class SalesReportService {
   constructor(private readonly prisma: PrismaService) {}
 
   async execute(companyId: string, from?: string, to?: string): Promise<SalesReportResult> {
-    const hoy = new Date();
+    const hoy = new Date(`${fechaFiscalLima()}T00:00:00Z`);
     const inicio = from ? new Date(`${from}T00:00:00Z`) : new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1));
     const fin = to ? new Date(`${to}T23:59:59Z`) : new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1, 0, 23, 59, 59));
     if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) throw new BadRequestException('Fechas inválidas.');

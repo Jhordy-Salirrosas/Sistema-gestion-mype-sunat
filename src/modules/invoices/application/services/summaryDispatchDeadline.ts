@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import type { InvoiceAggregate } from '../../../../generated/client/client';
 import type { PrismaService } from '../../../../database/prismaService';
 import { diasDesdeEmision } from './summaryDocumentsBuilder';
@@ -8,7 +9,7 @@ export async function validarPlazoDespachoRa(db: PrismaService, row: InvoiceAggr
   const ids = [...new Set(members.map(m => m.id))];
   const docs = await db.invoice.findMany({ where: { company_id: row.company_id, id: { in: ids } }, select: { id: true, fecha_emision: true } });
   if (!ids.length || docs.length !== ids.length) throw new Error('RA_DESPACHO_MIEMBROS_INCOMPLETOS: no se acredita la fecha de todos los miembros');
-  const hoy = new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+  const hoy = fechaFiscalLima();
   for (const doc of docs) {
     const fecha = doc.fecha_emision.toISOString().slice(0, 10);
     const dias = diasDesdeEmision(fecha, hoy);

@@ -216,3 +216,14 @@ it.each(['RA', 'RC'])('snapshot %s conserva la identidad efectiva fijada al rese
   expect(row.issuer_ruc).toBe('20601234567');
   expect(h.delegate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ company_id: 'company', issuer_ruc: '20601234567' }) }));
 });
+
+it.each(['RA', 'RC'])('reserva %s nocturna alinea identificador, generación y XML sin cambiar referencia', async kind => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-11-10T04:59:00Z'));
+  try {
+    const h = aggregateHarness(kind); const { row, vista } = await h.reserve();
+    expect(row.identifier).toBe(`${kind}-20261109-001`);
+    expect(row.generation_date).toBe('2026-11-09');
+    expect(row.reference_date).toBe('2026-11-09');
+    expect(vista?.xml).toContain('<cbc:IssueDate>2026-11-09</cbc:IssueDate>');
+  } finally { jest.useRealTimers(); }
+});

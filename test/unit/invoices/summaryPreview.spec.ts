@@ -66,3 +66,14 @@ it.each(['RA', 'RC'])('cabecera %s usa el pin y excluye históricos de otro RUC'
   expect(vista.lineas.find(l => l.id === 'invoice')?.incluido).toBe(true);
   expect(vista.lineas.find(l => l.id === 'historico')).toMatchObject({ incluido: false, motivoExclusion: 'RUC histórico distinto al emisor efectivo.' });
 });
+
+it.each(['RA','RC'])('%s nocturno conserva referencia y generación en Lima', async kind => {
+  jest.setSystemTime(new Date('2026-11-10T04:59:00Z'));
+  const h = harness();
+  if (kind === 'RC') h.rows.splice(0, 1, invoice('invoice', 'PENDIENTE', '03'));
+  const v = kind === 'RA' ? await h.view.vistaComunicacionBaja('company',date) : await h.view.vistaResumenDiario('company',date);
+  expect(v.xml).toContain('<cbc:ReferenceDate>2026-11-09</cbc:ReferenceDate>');
+  expect(v.xml).toContain('<cbc:IssueDate>2026-11-09</cbc:IssueDate>');
+  expect(v.envio.identificador).toMatch(new RegExp(`^${kind}-20261109-`));
+  expect(h.rows[0].fecha_emision.toISOString()).toBe('2026-11-09T12:00:00.000Z');
+});
