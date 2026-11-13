@@ -3416,3 +3416,11 @@ Hallazgo adicional fuera de esta corrección: la ND onerosa inafecta (tributo 99
 La validación local no garantiza la aceptación del servidor SUNAT; la certificación en vivo corresponde a una reprueba posterior al despliegue. Esta construcción no realiza emisiones, envíos, despliegues ni acceso a producción.
 
 Verificación final: línea base 337 suites y 3252 pruebas aprobadas; resultado 338 suites y 3298 pruebas aprobadas, con las mismas 4 suites y 38 pruebas omitidas y 12 snapshots aprobados. Cobertura local del código nuevo: 100% (37/37 líneas ejecutables y 34/34 ramas del diff); build correcto y lint sin errores (dos advertencias previas ajenas al cambio). Los ocho casos SFS de notas incluyen también dos líneas gratuitas con bolsas y el caso sin partición cuando bolsas y cantidad coinciden.
+
+## Consolidado normativa
+
+Base: main e4c8464b19657c14d213af328c6433df78512b31. Línea base: backend 338 suites / 3298 pruebas (4 suites / 38 pruebas omitidas, 12 snapshots); frontend dev 98963cd781e2eab269497763d832898efcdcd8ac, 158 archivos / 1235 pruebas. No se incorpora Monitor real ni se cambian lista o alertas.
+
+### Punto 3b — Plazo del primer despacho RA
+
+Antes del primer sendSummary, el despacho vuelve a leer las fechas de todos los miembros persistidos, acotados a la empresa, y compara cada emisión con el día actual de Lima. Un miembro fuera de los siete días (2957), futuro o no acreditado bloquea todo el agregado firmado en REVIEW con error durable y específico; no se mutila ni se reconstruye un XML ya preparado. El error identifica el documento y las fechas. No hay publicación SOAP ni reclamación de envío. Los miembros conservan su estado fiscal y el artefacto permanece intacto. Un ticket existente se sigue consultando sin reenvío ni comprobación de plazo del primer despacho. Se verifican días 0, 7, 8, fecha futura, miembros incompletos y recuperación de ticket.

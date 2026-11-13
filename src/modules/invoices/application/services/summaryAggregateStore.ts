@@ -1,3 +1,4 @@
+import { validarPlazoDespachoRa } from './summaryDispatchDeadline';
 import { SummaryPollingCoordinator, pollingOf } from './summaryPollingCoordinator';
 import { raReversalWork, raWorks } from './raBridgeReversalService';
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
@@ -78,6 +79,7 @@ export class SummaryAggregateStore {
   async bloquear(id: string, error: string) {
     await this.prisma.invoiceAggregate.updateMany({ where: { id, state: { in: ['RESERVED', 'BLOCKED'] } }, data: { state: 'BLOCKED', error } });
   }
+  async validarPlazoDespacho(row: InvoiceAggregate) { await validarPlazoDespachoRa(this.prisma, row); }
   async reclamar(row: InvoiceAggregate): Promise<boolean> {
     return (await this.prisma.invoiceAggregate.updateMany({ where: { id: row.id, company_id: row.company_id, ticket: null, transport_uncertain: false, state: { in: ['PREPARED', 'QUEUED'] } },
       data: { transport_uncertain: true, state: 'SENDING' } })).count === 1;
