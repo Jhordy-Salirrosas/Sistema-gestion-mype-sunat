@@ -46,6 +46,7 @@ export class SummaryDispatchService {
       const entries = new AdmZip(Buffer.from(row.zip_base64, 'base64')).getEntries();
       if (entries.length !== 1 || entries[0].entryName !== `${row.issuer_ruc}-${row.identifier}.xml` || hashSummary(entries[0].getData().toString('utf8')) !== row.xml_hash) throw new Error('SUMMARY_ZIP_HASH_MISMATCH');
       await this.gate.validar(row.xml, row.kind as 'RA' | 'RC', context, row.identifier);
+      if (!row.ticket && row.kind === 'RA') await this.store.validarPlazoDespacho(row);
     } catch (error) {
       const d = detalleErrorConsulta(error);
       await this.store.revision(row.id, d.mensaje);

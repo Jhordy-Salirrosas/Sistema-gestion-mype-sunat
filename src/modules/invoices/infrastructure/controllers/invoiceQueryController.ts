@@ -253,10 +253,11 @@ export class InvoiceQueryController {
     @Query('page') page?: string,
     @Query('page_size') pageSize?: string,
     @Query('puente_pendiente') puentePendiente?: string,
+    @Query('en_dlq') enDlq?: string,
   ) {
     return this.consultas.listar(
       companyId,
-      { estado, tipo, serie, desde, hasta, ...(puentePendiente !== undefined ? { puente_pendiente: puentePendiente } : {}) },
+      { estado, tipo, serie, desde, hasta, ...(enDlq !== undefined ? { en_dlq: enDlq } : {}), ...(puentePendiente !== undefined ? { puente_pendiente: puentePendiente } : {}) },
       page,
       pageSize,
     );

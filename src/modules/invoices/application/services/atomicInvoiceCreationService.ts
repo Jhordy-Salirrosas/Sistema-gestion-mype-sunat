@@ -1,3 +1,4 @@
+import { bloquearClasificacionProductos } from '../../../../common/productClassificationLock';
 import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 import { validarContenidoFiscal } from '../../validateInvoiceContent';
 import { traducirEmision } from './emitirComprobanteAdapter';
@@ -48,6 +49,7 @@ export class AtomicInvoiceCreationService {
   }
 
   private async runEmission(tx: Prisma.TransactionClient, dto: EmitirComprobanteDto, companyId: string) {
+    await bloquearClasificacionProductos(tx, companyId, Array.isArray(dto.items) ? dto.items.flatMap(l => typeof l?.codigo === 'string' ? [l.codigo] : []) : []);
     const validated = await prepareCreation(tx, dto, companyId);
     await validarReservaVenta(tx, validated, companyId);
     const scoped = tx as unknown as PrismaService;

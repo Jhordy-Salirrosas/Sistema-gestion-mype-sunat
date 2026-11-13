@@ -199,3 +199,16 @@ it.each(['07','08'].flatMap(tipo=>['10','20','30','11','21','31'].flatMap(aff=>[
  await expect(request).rejects.toMatchObject({response:{code:'BOLSAS_NOTA_SUPERAN_CANTIDAD',message:'Las bolsas de una línea de la nota no pueden superar la cantidad de la línea. Ajuste las bolsas o la cantidad.'}});
  expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();expect(JSON.stringify(dto)).toBe(before);
 });
+
+it.each(['07','08'].flatMap(tipo=>['create','emitir'].map(route=>[tipo,route])))('nota %s sobre boleta con DNI por %s conserva identidad y numera después de validar origen',async(tipo,route)=>{
+ const h=harness();const origin={id:'origin-b',tipo_comprobante:'03',serie:'B001',correlativo:1,estado:'ACEPTADO',items:[{item_code:'SERV',quantity:1,unit_code:'NIU',igv_affectation_type:'10'}],monto_total:118,customer_identity_type:'1',customer_identity_number:'12345678'};
+ Object.assign(h.tx.invoice,{findFirst:jest.fn(async()=>origin),findMany:jest.fn(async()=>[])});
+ const dto={...pantalla,tipo_comprobante:tipo,serie:tipo==='07'?'BC01':'BD01',customer_identity_type:'1',customer_identity_number:'12345678',documento_afectado:'B001-00000001',codigo_motivo_nota:tipo==='07'?'06':'02',fecha_emision:'2026-11-13'};
+ if(route==='emitir')await h.service.emitir(dto as never,'empresa','dni-note-request-key');
+ else await h.service.create(traducirEmision(dto as never,{ruc:'20100070970',razonSocial:'Empresa',...fakeFiscalAddress},1).dto,'empresa','dni-note-request-key');
+ expect(h.tx.invoice.create.mock.calls[0][0].data.customer_identity_number).toBe('12345678');
+ expect(h.tx.invoice.findFirst.mock.invocationCallOrder[0]).toBeLessThan(h.tx.$queryRaw.mock.invocationCallOrder[0]);
+});
+it.each([undefined,null,[null],[{codigo:null}]])('entrada estructural inválida %j no falla en la exclusión ni reserva número',async items=>{
+ const h=harness();await expect(h.service.emitir({...pantalla,items} as never,'empresa','invalid-items-request-key')).rejects.toMatchObject({status:400});expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();
+});
