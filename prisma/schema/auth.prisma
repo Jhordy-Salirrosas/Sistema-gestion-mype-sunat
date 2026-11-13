@@ -101,12 +101,26 @@ model User {
   updated_at            DateTime      @updatedAt
 
   refresh_tokens        RefreshToken[]
+  warehouse_access      UserWarehouse[]
   reconciliations       SireReconciliation[]
   ple_books             PleBook[]
   audit_logs            AuditLog[]
 
   @@unique([company_id, email])
   @@map("users")
+}
+
+model UserWarehouse {
+  id           String             @id @default(uuid())
+  user_id      String
+  user         User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  warehouse_id String
+  warehouse    InventoryWarehouse @relation(fields: [warehouse_id], references: [id], onDelete: Cascade)
+  created_at   DateTime           @default(now())
+
+  @@unique([user_id, warehouse_id])
+  @@index([warehouse_id])
+  @@map("user_warehouses")
 }
 
 model RefreshToken {

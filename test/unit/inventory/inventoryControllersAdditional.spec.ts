@@ -265,12 +265,13 @@ describe('Inventory Controllers (Additional Coverage)', () => {
         { execute: jest.fn() } as any,
         {} as any,
         mockPrisma,
+        { allowedCodes: jest.fn().mockResolvedValue(['ALM-01']) } as any,
       );
     });
 
     it('lista almacenes del usuario', async () => {
       await expect(controller.listWarehouses(undefined)).rejects.toThrow(UnauthorizedException);
-      const list = await controller.listWarehouses(companyId);
+      const list = await controller.listWarehouses(companyId, { sub: 'u', companyId, role: 'ADMIN' } as any);
       expect(list.length).toBe(1);
     });
 

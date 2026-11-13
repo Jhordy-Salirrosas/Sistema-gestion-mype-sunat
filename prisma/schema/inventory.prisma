@@ -26,6 +26,7 @@ model InventoryWarehouse {
   balances                  InventoryBalance[]
   movements                 InventoryMovement[]
   cost_layers               InventoryCostLayer[]
+  user_access               UserWarehouse[]
 
   @@unique([company_id, warehouse_code])
   @@index([company_id])

@@ -18,6 +18,7 @@ import { AuthGuard } from './infrastructure/guards/authGuard';
 import { RolesGuard } from './infrastructure/guards/rolesGuard';
 import { SOL_CREDENTIAL_CIPHER } from './domain/ports/solCredentialCipherPort';
 import { SolCredentialCipher } from './infrastructure/security/solCredentialCipher';
+import { WarehouseAccessService } from './application/services/warehouseAccessService';
 
 @Module({
   imports: [PrismaModule],
@@ -49,6 +50,7 @@ import { SolCredentialCipher } from './infrastructure/security/solCredentialCiph
           process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
         ),
     },
+    WarehouseAccessService,
     AuthGuard,
     RolesGuard,
   ],
@@ -60,10 +62,12 @@ import { SolCredentialCipher } from './infrastructure/security/solCredentialCiph
     GetProfileUseCase,
     UpdateProfileUseCase,
     ChangePasswordUseCase,
+    WarehouseAccessService,
     TOKEN_SERVICE_PORT,
     HASHER_PORT,
     USER_REPOSITORY_PORT,
     SOL_CREDENTIAL_CIPHER,
+    WarehouseAccessService,
     AuthGuard,
     RolesGuard,
   ],
