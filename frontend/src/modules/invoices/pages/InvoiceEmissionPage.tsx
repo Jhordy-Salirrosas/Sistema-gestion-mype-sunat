@@ -1,3 +1,4 @@
+import { agregarItemConBusqueda, colocarProductoEnFilaVacia } from '../lib/invoiceEmptyRow';
 import { igvReferencialGratuito } from '../lib/invoiceIgvReferencial';
 import { useInvoiceWritePermission } from '../hooks/useInvoiceWritePermission';
 import { InvoiceWriteButton } from '../components/InvoiceWriteButton';
@@ -279,7 +280,7 @@ export default function InvoiceEmissionPage() {
 
 
   const agregarItem = () => {
-    setItems((prev) => [...prev, itemVacio(String(Date.now()))]);
+    agregarItemConBusqueda(setItems, () => itemVacio(String(Date.now())), formRef.current);
   };
 
   /**
@@ -320,17 +321,7 @@ export default function InvoiceEmissionPage() {
     try { relleno = itemDesdeProducto(producto, 'prod'); }
     catch (error) { setResultado({ ok: false, mensaje: error instanceof Error ? error.message : 'Producto incompatible' }); return; }
 
-    setItems((prev) => {
-      const vacia = prev.findIndex(
-        (i) => !i.descripcion.trim() && !i.codigo.trim(),
-      );
-      if (vacia >= 0) {
-        return prev.map((item, i) =>
-          i === vacia ? { ...item, ...relleno, clave: item.clave } : item,
-        );
-      }
-      return [...prev, { ...relleno, clave: String(Date.now()) }];
-    });
+    setItems(prev => colocarProductoEnFilaVacia(prev, { ...relleno, clave: String(Date.now()) }));
   };
 
   const emitir = async (evento: React.FormEvent) => {
@@ -713,7 +704,7 @@ export default function InvoiceEmissionPage() {
             </CardHeader>
             <CardContent>
               <InvoiceWarehouseSelect value={almacen} onChange={setAlmacen} />
-              <InvoiceItemsGrid tipo={tipo} catalogoEstado={catalogoEstado}
+              <InvoiceItemsGrid codigoSoloCatalogo tipo={tipo} catalogoEstado={catalogoEstado}
                 items={items}
                 onCambiar={cambiarItem}
                 onEliminar={eliminarItem}
