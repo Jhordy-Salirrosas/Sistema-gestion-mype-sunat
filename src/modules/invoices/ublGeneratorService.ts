@@ -1,3 +1,4 @@
+import { aplicarIcbperNota } from './noteIcbperPolicy';
 import { separarBolsasNota } from './noteBagXml';
 import { separarBolsasGratuitas } from './freeBagXml';
 import { validarContenidoFiscal } from './validateInvoiceContent';
@@ -73,7 +74,7 @@ export class UblGeneratorService {
   /** Genera el XML UBL 2.1 completo del comprobante. */
   public generateInvoiceXml(payload: InvoicePayload): string {
     validarContenidoFiscal(payload);
-    payload = separarBolsasNota(separarBolsasGratuitas(payload));
+    payload = separarBolsasNota(separarBolsasGratuitas(aplicarIcbperNota(payload)));
     if (!Number.isSafeInteger(payload.numero) || payload.numero <= 0) throw new BadRequestException('Correlativo fiscal ausente o inválido');
     const tipo = payload.tipoComprobante;
 

@@ -1,3 +1,4 @@
+import { esNotaDescuento, sinBolsasDevueltas } from '../../noteIcbperPolicy';
 import { calcularIcbper } from '../../ublIcbperLine';
 import { esAfectacionGratuita } from '../../sunatCatalogsQuery';
 import { descripcionCanonicaNota } from './noteDescription';
@@ -304,7 +305,7 @@ export const traducirEmision = (
 ): ComprobanteTraducido => {
   const descripcionNota = descripcionCanonicaNota(dto.tipo_comprobante, dto.codigo_motivo_nota, dto.descripcion_motivo_nota);
   const avisos: string[] = [];
-  const liquidadas = dto.items.map((item, indice) => liquidarLinea(item, indice));
+  const liquidadas = dto.items.map((item, indice) => liquidarLinea(esNotaDescuento(dto.tipo_comprobante, dto.codigo_motivo_nota) && sinBolsasDevueltas(item.cantidadBolsas) ? { ...item, icbper: undefined } : item, indice));
   const originales = repartirBases(liquidadas);
   const descuentoLineaNoAfecto = liquidadas.reduce((suma, l) => suma + l.descuentoNoAfecto, 0);
   const antesGlobal = aplicarDescuentoGlobal(originales, null, descuentoLineaNoAfecto);
