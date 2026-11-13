@@ -7,7 +7,7 @@ import { AuthGuard } from '../../../src/modules/auth/infrastructure/guards/authG
 import { RolesGuard } from '../../../src/modules/auth/infrastructure/guards/rolesGuard';
 it('GET literal y POST de detracciones funcionan con el orden real del módulo', async()=>{
  const controllers=Reflect.getMetadata('controllers',InvoicesModule);
- const tokens=[...new Set(controllers.flatMap((c:any)=>Reflect.getMetadata('design:paramtypes',c) ?? []))];
+ const tokens=[...new Set(controllers.flatMap((c:any)=>[...(Reflect.getMetadata('design:paramtypes',c) ?? []), ...(Reflect.getMetadata('self:paramtypes',c) ?? []).map((p:any)=>p.param)]))];
  const detalle=jest.fn();
  const findMany=jest.fn(async()=>[{id:'a',serie:'F001',correlativo:1,fecha_emision:new Date('2026-11-01'),monto_total:118,payload_ubl:{montoDetraccion:12},detraccion_deposited_at:null,detraccion_deposited_amount:0,customer_legal_name:null},{id:'b',serie:'F001',correlativo:2,fecha_emision:new Date('2026-11-02'),monto_total:118,payload_ubl:{},detraccion_deposited_amount:0}]);
  const service=new InvoiceDetractionService({invoice:{findMany}} as never);

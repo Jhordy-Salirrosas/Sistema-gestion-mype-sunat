@@ -1,3 +1,5 @@
+import { InvoiceBatchRetryController } from './infrastructure/controllers/invoiceBatchRetryController';
+import { InvoiceBatchRetryService } from './application/services/invoiceBatchRetryService';
 import { RaBridgeReversalService } from './application/services/raBridgeReversalService';
 import { InvoiceForcedResendService } from './application/services/invoiceForcedResendService';
 import { InvoiceForcedResendController } from './infrastructure/controllers/invoiceForcedResendController';
@@ -74,6 +76,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    InvoiceBatchRetryController,
     InvoiceForcedResendController,
     InvoiceBridgeReprocessController,
     InvoiceSunatConsultController,
@@ -94,6 +97,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    InvoiceBatchRetryService,
     RaBridgeReversalService,
     InvoiceForcedResendService,
     InvoiceBridgeCoordinatorService,
