@@ -430,11 +430,11 @@ export class PurchasesService {
   async listPayables(companyId: string) {
     const compras = await this.prisma.nationalPurchase.findMany({
       where: { company_id: companyId, status: { not: 'ANULADA' } },
-      select: { supplier_doc_number: true, supplier_name: true, total_amount: true, paid_amount: true, issue_date: true },
+      select: { supplier_doc_number: true, supplier_name: true, total_amount: true, paid_amount: true, issue_date: true, created_at: true },
     });
     const mapa = new Map<
       string,
-      { supplierDocNumber: string; supplierName: string; total: number; paid: number; balance: number; count: number; aging: { d0_30: number; d31_60: number; d61_90: number; d90_plus: number }; overdue: number; oldestDays: number }
+      { supplierDocNumber: string; supplierName: string; total: number; paid: number; balance: number; count: number; aging: { d0_30: number; d31_60: number; d61_90: number; d90_plus: number }; overdue: number; oldestDays: number; lastActivityAt: Date | null }
     >();
     for (const c of compras) {
       const actual = mapa.get(c.supplier_doc_number) ?? {
@@ -447,6 +447,7 @@ export class PurchasesService {
         aging: { d0_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 },
         overdue: 0,
         oldestDays: 0,
+        lastActivityAt: null,
       };
       const total = Number(c.total_amount);
       const paid = Number(c.paid_amount ?? 0);
@@ -454,6 +455,7 @@ export class PurchasesService {
       actual.paid += paid;
       actual.balance += total - paid;
       actual.count += 1;
+      if (c.created_at && (!actual.lastActivityAt || c.created_at > actual.lastActivityAt)) actual.lastActivityAt = c.created_at;
       const saldo = total - paid;
       const dias = c.issue_date ? Math.max(0, Math.floor((Date.now() - new Date(c.issue_date).getTime()) / 86400000)) : 0;
       if (saldo > 0.005) {

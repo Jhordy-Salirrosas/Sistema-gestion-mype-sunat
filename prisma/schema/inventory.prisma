@@ -122,9 +122,10 @@ model InventoryCostLayer {
   quantity_remaining Decimal            @db.Decimal(12, 4)
   unit_cost          Decimal            @db.Decimal(14, 4)
   source_movement_id String?
+  entry_order        BigInt             @default(autoincrement())
   created_at         DateTime           @default(now())
 
-  @@index([company_id, warehouse_id, product_id, created_at])
+  @@index([company_id, warehouse_id, product_id, entry_order])
   @@map("inventory_cost_layers")
 }
 
