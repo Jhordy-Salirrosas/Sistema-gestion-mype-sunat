@@ -14,6 +14,7 @@ import { PurchasesService } from '../../application/services/purchasesService';
 import { CreatePurchaseDto } from '../../application/dto/createPurchaseDto';
 import { PayPurchaseDto } from '../../application/dto/payPurchaseDto';
 import { CreateManualPayableDto } from '../../application/dto/createManualPayableDto';
+import { ReceivePurchaseDto } from '../../application/dto/receivePurchaseDto';
 import {
   mapPurchaseRecord,
   mapPurchasesListResponse,
@@ -73,6 +74,12 @@ export class PurchasesController {
   async listPurchases(@CurrentCompany() companyId?: string) {
     const purchases = await this.purchasesService.listPurchases(requirePurchaseCompanyId(companyId));
     return mapPurchasesListResponse(purchases, true);
+  }
+
+  @Post(':id/receive')
+  @HttpCode(HttpStatus.OK)
+  async receivePurchase(@Param('id') id: string, @Body() dto: ReceivePurchaseDto, @CurrentCompany() companyId?: string) {
+    return this.purchasesService.receivePurchase(requirePurchaseCompanyId(companyId), id, dto);
   }
 
   @Get(':id')

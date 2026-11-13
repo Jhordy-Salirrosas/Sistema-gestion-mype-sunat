@@ -94,6 +94,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       igv_amount: args.data.igv_amount,
       total_amount: args.data.total_amount,
       status: args.data.status,
+      reception_status: args.data.reception_status,
       items: args.data.items.create.map((item: any, idx: number) => ({
         id: `item-${idx + 1}`,
         ...item,
@@ -122,30 +123,11 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
     expect(result.totalAmount).toBe(1180.0);
     expect(result.itemsCount).toBe(2);
 
-    // Verificación de asientos Kardex generados
-    expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalled(); // también PROMEDIO, dentro de la misma tx
-    expect(mockPrisma.inventoryMovement.create).toHaveBeenCalledTimes(2);
-    expect(mockPrisma.inventoryCostLayer.create).toHaveBeenCalledTimes(2);
-    const mov1 = mockPrisma.inventoryMovement.create.mock.calls[0][0].data;
-    expect(mov1.operation_type_code).toBe('02'); // Operación 02 SUNAT
-    expect(mov1.direction).toBe('ENTRADA');
-    expect(mov1.source_module).toBe('PURCHASES');
-    expect(mov1.document_serial).toBe('F001');
-    expect(mov1.document_number).toBe('0001234');
-    expect(mov1.quantity).toBe(20);
-    expect(mov1.unit_cost).toBe(30.0);
-    // Stock previo 10 a 25 = 250. Entran 20 a 30 = 600. Total stock: 30. Costo promedio: 850 / 30 = 28.3333
-    expect(mov1.resulting_stock).toBe(30);
-    expect(mov1.resulting_unit_cost).toBe(28.3333);
-
-    const mov2 = mockPrisma.inventoryMovement.create.mock.calls[1][0].data;
-    expect(mov2.operation_type_code).toBe('02');
-    expect(mov2.direction).toBe('ENTRADA');
-    expect(mov2.resulting_stock).toBe(10);
-    expect(mov2.resulting_unit_cost).toBe(40.0);
-
-    // Verificación de saldos actualizados
-    expect(mockPrisma.inventoryBalance.upsert).toHaveBeenCalledTimes(2);
+    // La compra ya no mueve stock: queda pendiente de recepción.
+    expect(result.receptionStatus).toBe('PENDIENTE');
+    expect(mockPrisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(mockPrisma.inventoryCostLayer.create).not.toHaveBeenCalled();
+    expect(mockPrisma.inventoryBalance.upsert).not.toHaveBeenCalled();
   });
 
   it('debe lanzar ConflictException si la factura del proveedor ya fue registrada previamente', async () => {
@@ -244,13 +226,11 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         expect.objectContaining({ accountCode: '601', debitAmount: 100 }),
         expect.objectContaining({ accountCode: '40111', debitAmount: 18 }),
         expect.objectContaining({ accountCode: '421', creditAmount: 118 }),
-        expect.objectContaining({ accountCode: '201', debitAmount: 100 }),
-        expect.objectContaining({ accountCode: '611', creditAmount: 100 }),
       ]),
     }));
   });
 
-  it('aplica mapeador dinámico de cuentas PCGE (60111, 42121, 20111, 61111) cuando existe configuración', async () => {
+  it('aplica mapeador dinámico de cuentas PCGE (60111, 42121, 40111) cuando existe configuración', async () => {
     const accounting = { execute: jest.fn().mockResolvedValue({}) };
     mockPrisma.accountingEntry = { findFirst: jest.fn().mockResolvedValue(null) };
     mockPrisma.accountingRule.findMany.mockResolvedValue([
@@ -288,8 +268,6 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
         expect.objectContaining({ accountCode: '60111', debitAmount: 500 }),
         expect.objectContaining({ accountCode: '40111', debitAmount: 90 }),
         expect.objectContaining({ accountCode: '42121', creditAmount: 590 }),
-        expect.objectContaining({ accountCode: '20111', debitAmount: 500 }),
-        expect.objectContaining({ accountCode: '61111', creditAmount: 500 }),
       ]),
     }));
   });

@@ -10,6 +10,7 @@ import { PrismaService } from '../../../../database/prismaService';
 import { MovingWeightedAverageEngine } from '../../../inventory/domain/rules/MovingWeightedAverageEngine';
 import { CreatePurchaseDto } from '../dto/createPurchaseDto';
 import { PayPurchaseDto } from '../dto/payPurchaseDto';
+import { mapPurchaseRecord } from '../mappers/purchaseResponseMapper';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -72,17 +73,10 @@ export class PurchasesService {
     const issueDate = dto.issueDate ? new Date(dto.issueDate) : new Date();
     const currencyCode = (dto.currencyCode ?? 'PEN').trim().toUpperCase();
 
-    // Validar que no se repitan SKUs en el mismo comprobante de compra
     const skus = dto.items.map((i) => i.sku.trim().toUpperCase());
     if (new Set(skus).size !== skus.length) {
       throw new BadRequestException('No se puede repetir el mismo producto/SKU en la factura de compra.');
     }
-
-    const empresa = await (this.prisma as any).company?.findUnique?.({
-      where: { id: companyId },
-      select: { inventory_cost_method: true },
-    });
-    const _usaFifo = empresa?.inventory_cost_method === 'FIFO';
 
     if (this.accounting) {
       const reglasCompra = await this.prisma.accountingRule.findMany({
@@ -90,13 +84,12 @@ export class PurchasesService {
         orderBy: { line_order: 'asc' },
       });
       const lineas = new Set(reglasCompra.map((r) => r.line_order));
-      if (reglasCompra.length === 0 || ![1, 2, 3, 4, 5].every((n) => lineas.has(n))) {
-        throw new BadRequestException('Las reglas COMPRA están incompletas: se requieren las líneas 1 a 5.');
+      if (reglasCompra.length === 0 || ![1, 2, 3].every((n) => lineas.has(n))) {
+        throw new BadRequestException('Las reglas COMPRA están incompletas: se requieren las líneas 1 a 3.');
       }
     }
 
     const result = await this.prisma.$transaction(async (tx: any) => {
-      // 1. Validar almacén
       const warehouse = await tx.inventoryWarehouse.findFirst({
         where: { company_id: companyId, warehouse_code: warehouseCode },
       });
@@ -104,7 +97,6 @@ export class PurchasesService {
         throw new NotFoundException(`Almacén ${warehouseCode} no encontrado en la empresa.`);
       }
 
-      // 2. Validar duplicidad de comprobante de compra (Idempotencia fiscal)
       const existing = await tx.nationalPurchase.findFirst({
         where: {
           company_id: companyId,
@@ -114,153 +106,46 @@ export class PurchasesService {
           document_number: docNumber,
         },
       });
-
       if (existing) {
         throw new ConflictException(
           `La factura/comprobante ${docSerial}-${docNumber} del proveedor ${supplierDoc} ya fue registrada.`,
         );
       }
 
-      // 3. Vincular o resolver proveedor en BusinessPartner
       let supplierId = dto.supplierId;
       if (!supplierId) {
         const partner = await tx.businessPartner.findFirst({
-          where: {
-            company_id: companyId,
-            doc_number: supplierDoc,
-          },
+          where: { company_id: companyId, doc_number: supplierDoc },
         });
-        if (partner) {
-          supplierId = partner.id;
-        }
+        if (partner) supplierId = partner.id;
       }
 
       const purchaseNumber = `COM-${Date.now().toString().slice(-8)}`;
-
-      // 4. Procesar ítems, calcular costos, IGV y Kardex
       let totalNet = 0;
       let totalIgv = 0;
       let totalAmount = 0;
-
       const preparedItems: any[] = [];
-      const movementRows: any[] = [];
 
       for (const item of dto.items) {
         const sku = item.sku.trim().toUpperCase();
         const product = await tx.inventoryProduct.findFirst({
           where: { company_id: companyId, sku },
         });
-
-        if (!product) {
-          throw new NotFoundException(`Producto con SKU ${sku} no encontrado.`);
-        }
+        if (!product) throw new NotFoundException(`Producto con SKU ${sku} no encontrado.`);
         if (!product.is_inventory) {
           throw new BadRequestException(`El ítem ${sku} (${product.description}) es un servicio y no mueve inventario.`);
         }
-
-        const quantity = item.quantity;
-        const unitCostNet = item.unitCost; // Costo unitario neto sin IGV (base contable para Kardex)
+        const quantity = Number(item.quantity);
+        const unitCostNet = Number(item.unitCost);
+        if (!(quantity > 0) || !Number.isFinite(unitCostNet) || unitCostNet < 0) {
+          throw new BadRequestException(`Cantidad o costo inválido para ${sku}.`);
+        }
         const subtotal = r2(quantity * unitCostNet);
         const itemIgv = r2(subtotal * 0.18);
         const itemTotal = r2(subtotal + itemIgv);
-
         totalNet += subtotal;
         totalIgv += itemIgv;
         totalAmount += itemTotal;
-
-        // Obtener saldo previo en el almacén
-        const balance = await tx.inventoryBalance.findUnique({
-          where: {
-            company_id_warehouse_id_product_id: {
-              company_id: companyId,
-              warehouse_id: warehouse.id,
-              product_id: product.id,
-            },
-          },
-        });
-
-        const prevStock = Number(balance?.current_stock ?? 0);
-        const prevAvgCost = Number(balance?.average_unit_cost ?? 0);
-        const prevTotalVal = Number(balance?.total_inventory_value ?? 0);
-
-        // Calcular costo promedio ponderado resultante
-        const calc = MovingWeightedAverageEngine.calculate({
-          previousStock: prevStock,
-          previousAverageCost: prevAvgCost,
-          previousTotalValue: prevTotalVal,
-          movementDirection: 'ENTRADA',
-          quantity,
-          unitCost: unitCostNet,
-        });
-
-        const sourceRef = `${purchaseNumber}-${sku}`;
-
-        // Preparar movimiento Kardex (Operación 02 - Compra Nacional)
-        movementRows.push({
-          company_id: companyId,
-          warehouse_id: warehouse.id,
-          product_id: product.id,
-          movement_number: `MOV-${purchaseNumber}-${sku}`,
-          movement_date: issueDate,
-          accounting_date: issueDate,
-          operation_type_code: '02', // 02 = Compra Nacional
-          document_type_code: docTypeCode,
-          document_serial: docSerial,
-          document_number: docNumber,
-          direction: 'ENTRADA',
-          quantity: calc.movementQuantity,
-          unit_cost: r4(calc.movementUnitCost),
-          total_cost: r2(calc.movementTotalCost),
-          previous_stock: r4(prevStock),
-          previous_unit_cost: r4(prevAvgCost),
-          previous_total_value: r2(prevTotalVal),
-          resulting_stock: calc.resultingStock,
-          resulting_unit_cost: r4(calc.resultingAverageCost),
-          resulting_total_value: r2(calc.resultingTotalValue),
-          source_reference_id: sourceRef,
-          source_module: 'PURCHASES',
-          notes: dto.notes ?? `Compra nacional ${docSerial}-${docNumber} (${supplierName})`,
-        });
-
-        // Actualizar saldo del almacén
-        await tx.inventoryBalance.upsert({
-          where: {
-            company_id_warehouse_id_product_id: {
-              company_id: companyId,
-              warehouse_id: warehouse.id,
-              product_id: product.id,
-            },
-          },
-          create: {
-            company_id: companyId,
-            warehouse_id: warehouse.id,
-            product_id: product.id,
-            current_stock: calc.resultingStock,
-            average_unit_cost: r4(calc.resultingAverageCost),
-            total_inventory_value: r2(calc.resultingTotalValue),
-            last_movement_at: issueDate,
-          },
-          update: {
-            current_stock: calc.resultingStock,
-            average_unit_cost: r4(calc.resultingAverageCost),
-            total_inventory_value: r2(calc.resultingTotalValue),
-            last_movement_at: issueDate,
-          },
-        });
-
-        {
-          if (unitCostNet == null || !Number.isFinite(unitCostNet)) throw new BadRequestException(`Ingreso ${sku} sin costo neto acreditado.`);
-          await tx.inventoryCostLayer.create({
-            data: {
-              company_id: companyId,
-              warehouse_id: warehouse.id,
-              product_id: product.id,
-              quantity_remaining: quantity,
-              unit_cost: r4(unitCostNet),
-            },
-          });
-        }
-
         preparedItems.push({
           product_id: product.id,
           sku,
@@ -271,15 +156,10 @@ export class PurchasesService {
           subtotal,
           igv_amount: itemIgv,
           total_amount: itemTotal,
+          received_quantity: 0,
         });
       }
 
-      // 5. Asentar todos los movimientos de Kardex en lote
-      for (const mov of movementRows) {
-        await tx.inventoryMovement.create({ data: mov });
-      }
-
-      // 6. Crear la cabecera de la Compra Nacional con su IGV y CxP
       const purchase = await tx.nationalPurchase.create({
         data: {
           company_id: companyId,
@@ -299,47 +179,143 @@ export class PurchasesService {
           igv_amount: r2(totalIgv),
           total_amount: r2(totalAmount),
           status: 'REGISTRADA',
+          reception_status: 'PENDIENTE',
           notes: dto.notes,
           responsible: dto.responsible,
-          items: {
-            create: preparedItems,
-          },
+          items: { create: preparedItems },
         },
-        include: {
-          items: true,
-        },
+        include: { items: true },
       });
 
-      return {
-        id: purchase.id,
-        purchaseNumber: purchase.purchase_number,
-        supplierDocNumber: purchase.supplier_doc_number,
-        supplierName: purchase.supplier_name,
-        documentTypeCode: purchase.document_type_code,
-        documentSerial: purchase.document_serial,
-        documentNumber: purchase.document_number,
-        issueDate: purchase.issue_date,
-        warehouseCode: purchase.warehouse_code,
-        netAmount: Number(purchase.net_amount),
-        igvAmount: Number(purchase.igv_amount),
-        totalAmount: Number(purchase.total_amount),
-        status: purchase.status,
-        itemsCount: purchase.items.length,
-        items: purchase.items.map((i: any) => ({
-          id: i.id,
-          sku: i.sku,
-          description: i.description,
-          quantity: Number(i.quantity),
-          unitCost: Number(i.unit_cost),
-          subtotal: Number(i.subtotal),
-          igvAmount: Number(i.igv_amount),
-          totalAmount: Number(i.total_amount),
-        })),
-      };
+      return purchase;
     });
 
-    await this.registrarAsientoCompra(companyId, result, issueDate);
-    return result;
+    const mapped = mapPurchaseRecord(result, { includeExtended: true, includeItemsCount: true });
+    await this.registrarAsientoCompra(companyId, mapped, issueDate);
+    return mapped;
+  }
+
+  async receivePurchase(
+    companyId: string,
+    id: string,
+    dto: { items?: { itemId: string; quantity: number }[]; receivedAt?: string },
+  ) {
+    const existente = await this.prisma.nationalPurchase.findFirst({
+      where: { id, company_id: companyId },
+      include: { items: true },
+    });
+    if (!existente) throw new NotFoundException('Compra no encontrada.');
+    if (existente.status === 'ANULADA') throw new BadRequestException('La compra está anulada.');
+    if (existente.reception_status === 'RECIBIDA') throw new BadRequestException('La compra ya fue recibida completamente.');
+
+    const pendientes = existente.items
+      .map((i) => ({
+        item: i,
+        pendiente: Number(i.quantity) - Number(i.received_quantity ?? 0),
+      }))
+      .filter((x) => x.pendiente > 0);
+    if (pendientes.length === 0) throw new BadRequestException('La compra no tiene cantidades pendientes de recepción.');
+
+    const solicitados = dto.items?.length
+      ? dto.items
+      : pendientes.map((x) => ({ itemId: x.item.id, quantity: x.pendiente }));
+    const warehouse = await this.prisma.inventoryWarehouse.findFirst({
+      where: { company_id: companyId, warehouse_code: existente.warehouse_code },
+    });
+    if (!warehouse) throw new NotFoundException(`Almacén ${existente.warehouse_code} no encontrado.`);
+    const receivedAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date();
+    const recibidos: { item: any; quantity: number; unitCost: number }[] = [];
+
+    const result = await this.prisma.$transaction(async (tx: any) => {
+      for (const [index, solicitud] of solicitados.entries()) {
+        const fila = pendientes.find((x) => x.item.id === solicitud.itemId);
+        if (!fila) throw new BadRequestException('Ítem de compra inválido o ya recibido.');
+        const cantidad = Number(solicitud.quantity);
+        if (!(cantidad > 0) || cantidad > fila.pendiente + 0.00001) {
+          throw new BadRequestException(`Cantidad inválida para ${fila.item.sku}. Pendiente: ${fila.pendiente}.`);
+        }
+        const product = await tx.inventoryProduct.findUnique({ where: { id: fila.item.product_id } });
+        if (!product) throw new NotFoundException(`Producto ${fila.item.sku} no encontrado.`);
+        const balance = await tx.inventoryBalance.findUnique({
+          where: {
+            company_id_warehouse_id_product_id: {
+              company_id: companyId,
+              warehouse_id: warehouse.id,
+              product_id: product.id,
+            },
+          },
+        });
+        const prevStock = Number(balance?.current_stock ?? 0);
+        const prevAvgCost = Number(balance?.average_unit_cost ?? 0);
+        const prevTotalVal = Number(balance?.total_inventory_value ?? 0);
+        const calc = MovingWeightedAverageEngine.calculate({
+          previousStock: prevStock,
+          previousAverageCost: prevAvgCost,
+          previousTotalValue: prevTotalVal,
+          movementDirection: 'ENTRADA',
+          quantity: cantidad,
+          unitCost: Number(fila.item.unit_cost),
+        });
+        await tx.inventoryBalance.upsert({
+          where: {
+            company_id_warehouse_id_product_id: {
+              company_id: companyId,
+              warehouse_id: warehouse.id,
+              product_id: product.id,
+            },
+          },
+          create: {
+            company_id: companyId, warehouse_id: warehouse.id, product_id: product.id,
+            current_stock: calc.resultingStock, average_unit_cost: r4(calc.resultingAverageCost),
+            total_inventory_value: r2(calc.resultingTotalValue), last_movement_at: receivedAt,
+          },
+          update: {
+            current_stock: calc.resultingStock, average_unit_cost: r4(calc.resultingAverageCost),
+            total_inventory_value: r2(calc.resultingTotalValue), last_movement_at: receivedAt,
+          },
+        });
+        await tx.inventoryCostLayer.create({
+          data: {
+            company_id: companyId, warehouse_id: warehouse.id, product_id: product.id,
+            quantity_remaining: cantidad, unit_cost: r4(Number(fila.item.unit_cost)),
+          },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            company_id: companyId, warehouse_id: warehouse.id, product_id: product.id,
+            movement_number: `REC-${existente.purchase_number}-${fila.item.sku}-${Date.now()}-${index}`,
+            movement_date: receivedAt, accounting_date: receivedAt, operation_type_code: '02',
+            document_type_code: existente.document_type_code, document_serial: existente.document_serial,
+            document_number: existente.document_number, direction: 'ENTRADA', quantity: calc.movementQuantity,
+            unit_cost: r4(calc.movementUnitCost), total_cost: r2(calc.movementTotalCost),
+            previous_stock: r4(prevStock), previous_unit_cost: r4(prevAvgCost), previous_total_value: r2(prevTotalVal),
+            resulting_stock: calc.resultingStock, resulting_unit_cost: r4(calc.resultingAverageCost),
+            resulting_total_value: r2(calc.resultingTotalValue),
+            source_reference_id: `${existente.purchase_number}:RECEPCION:${receivedAt.getTime()}`, source_module: 'PURCHASES_RECEPTION',
+            notes: `Recepción parcial/total de compra ${existente.purchase_number}`,
+          },
+        });
+        await tx.nationalPurchaseItem.update({
+          where: { id: fila.item.id },
+          data: { received_quantity: { increment: cantidad } },
+        });
+        recibidos.push({ item: fila.item, quantity: cantidad, unitCost: Number(fila.item.unit_cost) });
+      }
+
+      const actualizada = await tx.nationalPurchase.findUnique({ where: { id }, include: { items: true } });
+      const completo = actualizada.items.every((i: any) => Number(i.received_quantity) + 0.00001 >= Number(i.quantity));
+      const algo = actualizada.items.some((i: any) => Number(i.received_quantity) > 0);
+      return tx.nationalPurchase.update({
+        where: { id },
+        data: { reception_status: completo ? 'RECIBIDA' : algo ? 'PARCIAL' : 'PENDIENTE' },
+        include: { items: true },
+      });
+    }).catch((error: unknown) => { this.logger.error(`Recepción falló: ${error instanceof Error ? error.stack : String(error)}`); throw error; });
+
+    const totalRecepcion = recibidos.reduce((sum, r) => sum + r.quantity * r.unitCost, 0);
+    const mapped = mapPurchaseRecord(result, { includeExtended: true, includeItemsCount: true });
+    await this.registrarAsientoRecepcion(companyId, mapped, totalRecepcion, receivedAt);
+    return mapped;
   }
 
   async listPayments(companyId: string, id: string) {
@@ -388,7 +364,7 @@ export class PurchasesService {
         company_id: companyId, purchase_number: numero, supplier_doc_type: '6', supplier_doc_number: dto.supplierDocNumber.trim(),
         supplier_name: dto.supplierName.trim(), document_type_code: '00', document_serial: 'MANUAL', document_number: numero,
         issue_date: fecha, accounting_date: fecha, currency_code: moneda, exchange_rate: moneda === 'USD' ? tipoCambio : null, net_amount: monto, igv_amount: 0, total_amount: monto,
-        status: 'REGISTRADA', paid_amount: 0, notes: `CxP manual: ${dto.description.trim()}${moneda === 'USD' ? ` (USD ${montoOriginal.toFixed(2)} @ ${tipoCambio})` : ''}`,
+        status: 'REGISTRADA', reception_status: 'RECIBIDA', paid_amount: 0, notes: `CxP manual: ${dto.description.trim()}${moneda === 'USD' ? ` (USD ${montoOriginal.toFixed(2)} @ ${tipoCambio})` : ''}`,
       },
     });
     if (this.accounting) {
@@ -605,15 +581,13 @@ export class PurchasesService {
       orderBy: { line_order: 'asc' },
     });
     const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
-    if (![1, 2, 3, 4, 5].every((n) => porOrden.has(n))) {
+    if (![1, 2, 3].every((n) => porOrden.has(n))) {
       this.logger.error(`Compra ${purchase.purchaseNumber} sin reglas COMPRA completas; no se genera asiento.`);
       return;
     }
     const accGastoCompra = porOrden.get(1)!;
     const accIgvCredito = porOrden.get(2)!;
     const accCxp = porOrden.get(3)!;
-    const accDestinoInv = porOrden.get(4)!;
-    const accVariacionExist = porOrden.get(5)!;
 
     const periodo = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}`;
     try {
@@ -650,28 +624,51 @@ export class PurchasesService {
             debitAmount: 0,
             creditAmount: purchase.totalAmount,
           },
-          // 4. Destino PCGE: Entrada de existencias a almacén
-          {
-            lineOrder: 4,
-            accountCode: accDestinoInv,
-            accountName: 'Mercaderías en almacén (Destino)',
-            debitAmount: purchase.netAmount,
-            creditAmount: 0,
-          },
-          // 5. Destino PCGE: Variación de existencias
-          {
-            lineOrder: 5,
-            accountCode: accVariacionExist,
-            accountName: 'Variación de mercaderías (Destino)',
-            debitAmount: 0,
-            creditAmount: purchase.netAmount,
-          },
         ],
       });
     } catch (error) {
       this.logger.error(
         `Compra ${purchase.purchaseNumber} registrada sin asiento: ${(error as Error).message}`,
       );
+    }
+
+
+  }
+
+  /** Asiento de recepción: entrada al almacén (20) contra variación de existencias (61). */
+  private async registrarAsientoRecepcion(
+    companyId: string,
+    purchase: any,
+    importe: number,
+    receivedAt: Date,
+  ): Promise<void> {
+    if (!this.accounting || !(importe > 0)) return;
+    const reglas = await this.prisma.accountingRule.findMany({
+      where: { company_id: companyId, process_code: 'RECEPCION', is_active: true },
+      orderBy: { line_order: 'asc' },
+    });
+    const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
+    if (![1, 2].every((n) => porOrden.has(n))) {
+      this.logger.error(`Recepción ${purchase.purchaseNumber} sin reglas RECEPCION completas; no se genera asiento.`);
+      return;
+    }
+    const periodo = `${receivedAt.getFullYear()}-${String(receivedAt.getMonth() + 1).padStart(2, '0')}`;
+    try {
+      await this.accounting.execute({
+        companyId,
+        period: periodo,
+        entryDate: receivedAt.toISOString(),
+        glosa: `Recepción de compra ${purchase.documentSerial}-${purchase.documentNumber} · ${purchase.supplierName}`,
+        sourceModule: 'PURCHASES_RECEPTION',
+        journalCode: 'COM',
+        sourceReferenceId: `${purchase.purchaseNumber}:RECEPCION:${receivedAt.getTime()}`,
+        lines: [
+          { lineOrder: 1, accountCode: porOrden.get(1)!, accountName: 'Mercaderías en almacén', debitAmount: importe, creditAmount: 0 },
+          { lineOrder: 2, accountCode: porOrden.get(2)!, accountName: 'Variación de existencias', debitAmount: 0, creditAmount: importe },
+        ],
+      });
+    } catch (error) {
+      this.logger.error(`Recepción ${purchase.purchaseNumber} sin asiento: ${(error as Error).message}`);
     }
   }
 }

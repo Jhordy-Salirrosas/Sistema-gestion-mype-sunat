@@ -17,7 +17,7 @@ describe('PurchasesService - reglas COMPRA', () => {
   it('rechaza compra con reglas incompletas', async () => {
     const prisma = { accountingRule: { findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '601' }]) } };
     const service = new PurchasesService(prisma as never, { execute: jest.fn() } as never);
-    await expect(service.createPurchase('c1', dto)).rejects.toThrow('líneas 1 a 5');
+    await expect(service.createPurchase('c1', dto)).rejects.toThrow('líneas 1 a 3');
   });
 
   it('no genera asiento si las reglas desaparecen al asentar', async () => {
