@@ -1,0 +1,26 @@
+[
+  {
+    "aff": "31",
+    "bags": 0,
+    "mixed": false,
+    "sha256": "94db9bd05bc397c7edb270a613106017c2b95b71f39528c8ac6177808e81a8c8"
+  },
+  {
+    "aff": "32",
+    "bags": 0,
+    "mixed": false,
+    "sha256": "66af405b9bd7ec5586a70df32fffc178e4fd20b0f220a16cfcf162adfd65d9a9"
+  },
+  {
+    "aff": "10",
+    "bags": 2,
+    "mixed": false,
+    "sha256": "20e2cf1eebba9f6aa27276192251b86afb6b6397d34ff1013a281cc9955d0d83"
+  },
+  {
+    "aff": "31",
+    "bags": 0,
+    "mixed": true,
+    "sha256": "d2ced3e8ebff14607edee6d824511088c9894d74378d8418e89a2242d92a29a7"
+  }
+]

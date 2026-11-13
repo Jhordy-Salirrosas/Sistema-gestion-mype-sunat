@@ -161,6 +161,7 @@ export const bloqueLinea = (
    */
   raiz: 'Invoice' | 'CreditNote' | 'DebitNote' = 'Invoice',
   descuentoGlobalPrecio = 0,
+  icbperEnCategoria = raiz !== 'Invoice',
 ): string => {
   const unidad = l.unidad ?? 'NIU';
   const tributo = typeof l.afectacion === 'string' ? tributoDeAfectacion(l.afectacion) : null;
@@ -206,9 +207,9 @@ export const bloqueLinea = (
       <cac:TaxSubtotal>
         <cbc:TaxAmount currencyID="${moneda}">${dinero(l.icbperLinea ?? 0)}</cbc:TaxAmount>${l.cantidadBolsas !== undefined ? `
         <cbc:BaseUnitMeasure unitCode="NIU">${l.cantidadBolsas}</cbc:BaseUnitMeasure>
-        ${raiz === 'Invoice' ? `<cbc:PerUnitAmount currencyID="${moneda}">0.50</cbc:PerUnitAmount>` : ''}` : ''}
+        ${!icbperEnCategoria ? `<cbc:PerUnitAmount currencyID="${moneda}">0.50</cbc:PerUnitAmount>` : ''}` : ''}
         <cac:TaxCategory>
-          <cbc:ID schemeID="UN/ECE 5305">S</cbc:ID>${raiz !== 'Invoice' && l.cantidadBolsas !== undefined ? `
+          <cbc:ID schemeID="UN/ECE 5305">S</cbc:ID>${icbperEnCategoria && l.cantidadBolsas !== undefined ? `
           <cbc:PerUnitAmount currencyID="${moneda}">0.50</cbc:PerUnitAmount>` : ''}
           <cac:TaxScheme>
             <cbc:ID>7152</cbc:ID>
