@@ -291,6 +291,12 @@ enum NationalPurchaseStatus {
   ANULADA
 }
 
+enum ReceptionStatus {
+  PENDIENTE
+  PARCIAL
+  RECIBIDA
+}
+
 model NationalPurchase {
   id                  String                 @id @default(uuid())
   company_id          String
@@ -315,6 +321,7 @@ model NationalPurchase {
   total_amount        Decimal                @db.Decimal(14, 2) // Total CxP proveedor
 
   status              NationalPurchaseStatus @default(REGISTRADA)
+  reception_status    ReceptionStatus        @default(PENDIENTE)
   paid_amount         Decimal                @default(0.00) @db.Decimal(14, 2)
   notes               String?
   responsible         String?
@@ -331,6 +338,7 @@ model NationalPurchase {
 
 model NationalPurchaseItem {
   id                  String           @id @default(uuid())
+  received_quantity   Decimal          @default(0) @db.Decimal(12, 4)
   purchase_id         String
   purchase            NationalPurchase @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
   product_id          String
