@@ -32,7 +32,7 @@ import {
 import { construirDocumentoUbl } from './ublDocumentTemplate';
 import { raizDe } from './ublTipoGuard';
 import { lineaBolsaIcBper } from './ublIcbperLine';
-import { esUnidadFerreteria } from './sunatCatalogsQuery';
+import { esUnidadFiscalSunat, UNIDADES_FISCALES_SUNAT } from './sunatUnits';
 import {
   esOperacionConDetraccion,
   montoNetoPendiente,
@@ -320,10 +320,10 @@ export class UblGeneratorService {
       // Una unidad fuera del Catálogo 03 hace que la hoja oficial devuelva
       // error 2xxx sobre el `unitCode`. Se rechaza antes, con un mensaje que
       // dice qué valor se acepta.
-      if (!unidad || !esUnidadFerreteria(unidad)) {
+      if (!unidad || !esUnidadFiscalSunat(unidad)) {
         throw new BadRequestException(
           `La unidad '${linea.unidad}' de la línea ${linea.id} no pertenece al ` +
-            'Catálogo 03 (se aceptan NIU, DZN, CEN, MIL, KGM, MTR, BG, BX)',
+            `Catálogo 03 (se aceptan ${UNIDADES_FISCALES_SUNAT.join(', ')})`,
         );
       }
       return { ...linea, unidad };
