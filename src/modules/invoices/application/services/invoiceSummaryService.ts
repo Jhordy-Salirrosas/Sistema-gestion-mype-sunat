@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 /**
  * Vista previa de resúmenes diarios (RC) y comunicaciones de baja (RA) — M1.
@@ -369,7 +370,7 @@ export class InvoiceSummaryService {
       razonSocialEmisor: empresa.legal_name,
       correlativo,
       fechaResumen: fechaReferencia,
-      fechaGeneracion: new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10),
+      fechaGeneracion: fechaFiscalLima(),
     };
   }
 

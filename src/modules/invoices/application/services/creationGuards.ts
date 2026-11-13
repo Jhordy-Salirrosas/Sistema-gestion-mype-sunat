@@ -1,3 +1,4 @@
+import { resolverFechaEmision } from '../../fiscalDate';
 import { validarBolsasNota } from '../../noteBagXml';
 import { validarBolsasGratuitas } from '../../freeBagXml';
 import { esDocumentoIntegramenteGratuito } from '../../freeInvoicePolicy';
@@ -72,6 +73,7 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
 export async function prepareCreation(tx: Prisma.TransactionClient, input: EmitirComprobanteDto,
   companyId: string): Promise<EmitirComprobanteDto> {
   const dto = structuredClone(input);
+  dto.fecha_emision = resolverFechaEmision(dto.fecha_emision);
   if (notaSinCronograma(dto.tipo_comprobante, dto.codigo_motivo_nota)) { dto.forma_pago = 'Contado'; dto.cuotas = []; }
   const validable = plainToInstance(EmitirComprobanteDto, dto);
   const errors = validateSync(validable, { whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true, validationError: { target: false, value: false } });
@@ -195,7 +197,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     }
   }
   if (dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03') {
-    const fecha = new Date((dto.fecha_emision ?? new Date().toISOString()).slice(0, 10) + 'T00:00:00Z');
+    const fecha = new Date(resolverFechaEmision(dto.fecha_emision).slice(0, 10) + 'T00:00:00Z');
     const retencion = await resolverRetencionMaestro(tx as unknown as PrismaService, { companyId,
       tipo: dto.customer_identity_type, numero: dto.customer_identity_number, fecha,
       enviado: dto.agente_retencion, correccion: dto.correccion_retencion });

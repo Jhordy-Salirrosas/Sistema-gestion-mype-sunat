@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import { SummaryAggregateStore } from '../../application/services/summaryAggregateStore';
 import { SummaryDispatchService } from '../../application/services/summaryDispatchService';
 import { seleccionBaja } from '../../application/services/summaryEnvioService';
@@ -229,10 +230,7 @@ export class InvoiceQueryController {
     if (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) {
       return fecha.trim();
     }
-    // Lima es UTC-5 todo el año: sin el ajuste, a partir de las 19:00 el
-    // resumen se armaría con la fecha del día siguiente.
-    const lima = new Date(Date.now() - 5 * 60 * 60 * 1000);
-    return lima.toISOString().slice(0, 10);
+    return fechaFiscalLima();
   }
 
   /**
