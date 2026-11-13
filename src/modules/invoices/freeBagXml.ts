@@ -15,7 +15,7 @@ export function validarBolsasGratuitas(cantidad: number, bolsas: number): void {
 
 /** Partición exclusiva del XML íntegramente gratuito; el payload guardado permanece intacto. */
 export function separarBolsasGratuitas(payload: InvoicePayload): InvoicePayload {
-  if (payload.tipoComprobante !== '01') return payload;
+  if (payload.tipoComprobante !== '01' && payload.tipoComprobante !== '03') return payload;
   const lineas = payload.lineas ?? (payload.linea ? [payload.linea] : []);
   if (!esDocumentoIntegramenteGratuito(payload.tipoComprobante, lineas)) return payload;
   if (!lineas.some(l => (l.icbperLinea ?? 0) > 0)) return payload;
