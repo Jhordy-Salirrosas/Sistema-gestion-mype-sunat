@@ -196,6 +196,12 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** Lectura aditiva: queued:true de PgBoss excluye active y no prueba ausencia de trabajo vivo. */
+  async hasLiveInvoiceJob(invoiceId: string): Promise<boolean> {
+    const jobs = await this.boss.findJobs(INVOICE_QUEUE, { data: { invoice_id: invoiceId } });
+    return jobs.some(job => ['created', 'retry', 'active'].includes(job.state));
+  }
+
   /**
    * Reencola un comprobante varado solo si no tiene un job vivo.
    *

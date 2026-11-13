@@ -49,7 +49,7 @@ it.each(['1','TRUE','', ['true','false'],{value:'true'}])('rechaza filtro invál
 });
 it('GET real propaga en_dlq y pagina con el orden de controladores del módulo',async()=>{
  const h=harness();const controllers=Reflect.getMetadata('controllers',InvoicesModule);
- const tokens=[...new Set(controllers.flatMap((c:any)=>Reflect.getMetadata('design:paramtypes',c)??[]))];
+ const tokens=[...new Set(controllers.flatMap((c:any)=>[...(Reflect.getMetadata('design:paramtypes',c) ?? []), ...(Reflect.getMetadata('self:paramtypes',c) ?? []).map((p:any)=>p.param)]))];
  const module=await Test.createTestingModule({controllers,providers:tokens.map(provide=>({provide,useValue:provide===InvoiceQueryService?h.service:{}}))})
  .overrideGuard(AuthGuard).useValue({canActivate:(ctx:any)=>{ctx.switchToHttp().getRequest().user={companyId:'c'};return true;}}).overrideGuard(RolesGuard).useValue({canActivate:()=>true}).compile();
  const app=module.createNestApplication();await app.init();
