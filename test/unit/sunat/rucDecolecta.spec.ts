@@ -38,4 +38,14 @@ describe('RucConsultaService - Decolecta', () => {
     await expect(service.consultar('20601030013')).resolves.toMatchObject({ cached: true, razonSocial: 'Cache' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('traduce caída de red, error HTTP y JSON inválido a 503', async () => {
+    const service = () => new RucConsultaService(prisma() as never, config({ DECOLECTA_API_TOKEN: 'tok' }) as never);
+    global.fetch = jest.fn().mockRejectedValue(new Error('sin red')) as never;
+    await expect(service().consultar('20601030013')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    global.fetch = jest.fn().mockResolvedValue(respuesta({}, 500)) as never;
+    await expect(service().consultar('20601030013')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: jest.fn().mockRejectedValue(new Error('json')) }) as never;
+    await expect(service().consultar('20601030013')).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
 });
