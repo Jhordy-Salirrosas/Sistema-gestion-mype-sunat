@@ -56,9 +56,15 @@ it.each([
  expect(totalesGratuitos(expanded)).toEqual(totalesGratuitos(original));
  expect(expanded.map(l=>l.id)).toEqual(expanded.map((_,i)=>i+1));
 });
-it.each(hashes)('$name conserva exactamente la representación previa',({aff,bags,mixed,hash})=>{
+it.each(hashes)('$name conserva representación previa salvo tasa inafecta SFS 2992',({aff,bags,mixed,hash})=>{
  const payload=fiscal8d(aff,bags,'01',mixed).payload;
- expect(createHash('sha256').update(workerXml(payload)).digest('hex')).toBe(hash);
+ let xml = workerXml(payload);
+ if (aff === '30') {
+  // Única diferencia aprobada por S: Percent cero de la afectación 9998.
+  const tasa = '\n          <cbc:Percent>0.00</cbc:Percent>';
+  expect(xml.split(tasa)).toHaveLength(2); xml = xml.replace(tasa, '');
+ }
+ expect(createHash('sha256').update(xml).digest('hex')).toBe(hash);
 });
 it.each([['11',.335,3],['21',.335,3],['31',.335,3],['21',.335,2],['11',100.03,2]] as const)('partición %s con referencia %s y cantidad %s conserva los céntimos',async(aff,valor,cantidad)=>{
  const payload=traducirEmision(entrada([cantidad],[1],aff,valor) as never,issuer8d,1).dto.payload_ubl;

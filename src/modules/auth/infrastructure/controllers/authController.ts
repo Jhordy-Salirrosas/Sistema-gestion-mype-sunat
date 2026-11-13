@@ -7,6 +7,8 @@ import {
   Post,
   Put,
   Req,
+  Param,
+  ForbiddenException,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -35,6 +37,8 @@ import {
 } from '../../application/use-cases/changePasswordUseCase';
 import { AuthGuard } from '../guards/authGuard';
 import { CurrentUser } from '../decorators/currentUserDecorator';
+import { WarehouseAccessService } from '../../application/services/warehouseAccessService';
+import { SetUserWarehousesDto } from '../../application/dto/setUserWarehousesDto';
 import type { TokenPayload } from '../../domain/ports/tokenServicePort';
 import {
   clearRefreshTokenCookie,
@@ -52,6 +56,7 @@ export class AuthController {
     private readonly getProfileUseCase: GetProfileUseCase,
     private readonly updateProfileUseCase: UpdateProfileUseCase,
     private readonly changePasswordUseCase: ChangePasswordUseCase,
+    private readonly warehouseAccess: WarehouseAccessService,
   ) {}
 
   @Post('register')
@@ -110,6 +115,26 @@ export class AuthController {
       tokenType: result.tokenType,
       expiresInSeconds: result.expiresInSeconds,
     };
+  }
+
+  @Get('warehouses')
+  @UseGuards(AuthGuard)
+  async warehouses(@CurrentUser() user: TokenPayload) {
+    return this.warehouseAccess.listAllowed(user);
+  }
+
+  @Get('users')
+  @UseGuards(AuthGuard)
+  async users(@CurrentUser() user: TokenPayload) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar usuarios.');
+    return this.warehouseAccess.listUsers(user.companyId);
+  }
+
+  @Put('users/:id/warehouses')
+  @UseGuards(AuthGuard)
+  async setUserWarehouses(@CurrentUser() user: TokenPayload, @Param('id') id: string, @Body() dto: SetUserWarehousesDto) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar almacenes.');
+    return this.warehouseAccess.setUserWarehouses(user.companyId, id, dto.warehouseCodes);
   }
 
   @Get('profile')

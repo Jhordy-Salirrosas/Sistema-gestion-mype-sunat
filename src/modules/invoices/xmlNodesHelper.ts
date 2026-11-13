@@ -104,13 +104,14 @@ const bloqueDescuentoLinea = (
  * La `TaxCategory/ID` usa el código UN/ECE 5305: `S` estándar (gravado), `E`
  * exonerado, `O` fuera del ámbito (inafecto), `G` exportación.
  */
-const categoriaLinea = (afectacion: string, tributo: string, esDebito: boolean): string => {
+const categoriaLinea = (afectacion: string, tributo: string, declararTasaInafecta: boolean): string => {
   const nombre = NOMBRE_TRIBUTO[tributo] ?? NOMBRE_TRIBUTO['1000'];
 
   // La exonerada onerosa declara tasa cero (SFS 2992); conserva su categoría.
-  // Las demás categorías mantienen su representación existente.
+  // Facturas/boletas inafectas también exigen Percent 0.00 (SFS 2992).
+  // NC conserva su representación; ND ya declara la tasa cero.
   const porcentaje =
-    tributo === '1000' || (tributo === '9996' && afectacion.startsWith('1')) ? '\n          <cbc:Percent>18.00</cbc:Percent>' : (['9996', '9997'].includes(tributo) || (esDebito && tributo === '9998')) ? '\n          <cbc:Percent>0.00</cbc:Percent>' : '';
+    tributo === '1000' || (tributo === '9996' && afectacion.startsWith('1')) ? '\n          <cbc:Percent>18.00</cbc:Percent>' : (['9996', '9997'].includes(tributo) || (declararTasaInafecta && tributo === '9998')) ? '\n          <cbc:Percent>0.00</cbc:Percent>' : '';
 
   // La razón de exoneración es el código del Catálogo 07. En las gratuitas
   // además se declara PriceTypeCode en el PricingReference, no aquí.
@@ -249,7 +250,7 @@ ${raiz === 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}    <cac:TaxTo
       <cac:TaxSubtotal>
         <cbc:TaxableAmount currencyID="${moneda}">${dinero(neto)}</cbc:TaxableAmount>
         <cbc:TaxAmount currencyID="${moneda}">${dinero(gratuita ? referencia.igv : l.igvLinea)}</cbc:TaxAmount>
-${categoriaLinea(l.afectacion, gratuita ? '9996' : tributo, raiz === 'DebitNote')}
+${categoriaLinea(l.afectacion, gratuita ? '9996' : tributo, raiz !== 'CreditNote')}
       </cac:TaxSubtotal>${icbperXml}
     </cac:TaxTotal>
 ${raiz !== 'Invoice' && descuentosXml ? `${descuentosXml}\n` : ''}${item}

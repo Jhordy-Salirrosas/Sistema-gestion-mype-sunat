@@ -18,6 +18,9 @@ import {
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { CurrentUser } from '../../../auth/infrastructure/decorators/currentUserDecorator';
+import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
+import { WarehouseAccessService } from '../../../auth/application/services/warehouseAccessService';
 import { ListWarehouseStockUseCase } from '../../application/use-cases/listWarehouseStockUseCase';
 import { GetProductKardexLedgerUseCase } from '../../application/use-cases/getProductKardexLedgerUseCase';
 import {
@@ -41,13 +44,15 @@ export class InventoryStocksController {
     @Inject(INVENTORY_PRODUCT_REPOSITORY_PORT)
     private readonly productRepository: IInventoryProductRepositoryPort,
     private readonly prisma: PrismaService,
+    private readonly warehouseAccess: WarehouseAccessService,
   ) {}
 
   @Get('warehouses')
-  async listWarehouses(@CurrentCompany() companyId?: string) {
-    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+  async listWarehouses(@CurrentCompany() companyId?: string, @CurrentUser() user?: TokenPayload) {
+    if (!companyId || !user) throw new UnauthorizedException('Identificador de empresa requerido.');
+    const codes = await this.warehouseAccess.allowedCodes(user);
     return this.prisma.inventoryWarehouse.findMany({
-      where: { company_id: companyId, is_active: true },
+      where: { company_id: companyId, is_active: true, warehouse_code: { in: codes } },
       orderBy: { warehouse_code: 'asc' },
       select: { warehouse_code: true, description: true, sunat_establishment_code: true },
     });

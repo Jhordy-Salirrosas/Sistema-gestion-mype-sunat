@@ -1,5 +1,5 @@
 import { leerIdsDlq, filtrarDlq } from './invoiceDlqProjection';
-import { esUnidadFerreteria } from '../../sunatCatalogsQuery';
+import { esUnidadFiscalSunat } from '../../sunatUnits';
 /**
  * Consulta de comprobantes (TA-29): listado, detalle y reintento de CDR.
  *
@@ -130,7 +130,7 @@ export class InvoiceQueryService {
     return { balances: productos.map(p => {
       const precio = Number(p.sale_price);
       const precioValido = Number.isFinite(precio) && precio > 0;
-      const unidadValida = Boolean(p.sunat_unit_code?.trim()) && esUnidadFerreteria(p.sunat_unit_code);
+      const unidadValida = Boolean(p.sunat_unit_code?.trim()) && esUnidadFiscalSunat(p.sunat_unit_code);
       const afectacionValida = (AFECTACIONES_GRILLA as readonly string[]).includes(p.tax_affectation?.trim() ?? '');
       const motivo = p.is_active === false ? 'producto inactivo' : !precioValido ? 'sin precio de venta configurado' : !unidadValida ? 'sin unidad SUNAT compatible configurada' : !afectacionValida ? 'sin afectación tributaria válida configurada' : null;
       const vendible = motivo === null;
@@ -142,8 +142,8 @@ export class InvoiceQueryService {
     }) };
   }
 
-  almacenes(companyId: string) {
-    return this.prisma.inventoryWarehouse.findMany({ where: { company_id: companyId, is_active: true },
+  almacenes(companyId: string, warehouseCodes?: string[]) {
+    return this.prisma.inventoryWarehouse.findMany({ where: { company_id: companyId, is_active: true, ...(warehouseCodes ? { warehouse_code: { in: warehouseCodes } } : {}) },
       select: { warehouse_code: true, description: true }, orderBy: { warehouse_code: 'asc' } });
   }
 

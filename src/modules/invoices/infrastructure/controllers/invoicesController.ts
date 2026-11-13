@@ -8,12 +8,16 @@ import {
   HttpCode,
   HttpStatus,
   Headers,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AtomicInvoiceCreationService } from '../../application/services/atomicInvoiceCreationService';
 import { CreateInvoiceDto } from '../../application/dto/createInvoiceDto';
 import { EmitirComprobanteDto } from '../../application/dto/emitirComprobanteDto';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { CurrentUser } from '../../../auth/infrastructure/decorators/currentUserDecorator';
+import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
+import { WarehouseAccessService } from '../../../auth/application/services/warehouseAccessService';
 
 /**
  * Emisión de comprobantes.
@@ -40,6 +44,7 @@ import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 export class InvoicesController {
   constructor(
     private readonly creation: AtomicInvoiceCreationService,
+    private readonly warehouseAccess: WarehouseAccessService,
   ) { }
 
   /**
@@ -84,8 +89,11 @@ export class InvoicesController {
   async emitir(
     @Body() dto: EmitirComprobanteDto,
     @CurrentCompany() companyId: string,
+    @CurrentUser() user?: TokenPayload,
     @Headers('idempotency-key') key?: string,
   ) {
+    if (!user) throw new UnauthorizedException('Usuario requerido.');
+    await this.warehouseAccess.assertWarehouse(user, (dto.almacen ?? 'ALM-01').trim().toUpperCase());
     return this.creation.emitir(dto, companyId, key);
   }
 }

@@ -6,7 +6,14 @@ import { SignatureService } from '../../../src/modules/sunat/signature.service';
 import { fakeIssuerCertificate } from '../../fixtures/fakeIssuerCertificate';
 import { ejecutarSfs } from '../../../src/modules/invoices/application/services/sunatSfsRunner';
 const gen=new UblGeneratorService();
-it.each(hashes)('D2 conserva XML sin ICBPER: $tipo/$aff',({tipo,aff,hash})=>{expect(createHash('sha256').update(gen.generateInvoiceXml(fiscal8d(aff,0,tipo).payload)).digest('hex')).toBe(hash);});
+it.each(hashes)('D2 conserva XML sin ICBPER salvo tasa inafecta SFS 2992: $tipo/$aff',({tipo,aff,hash})=>{
+ let xml=gen.generateInvoiceXml(fiscal8d(aff,0,tipo).payload);
+ if(['01','03'].includes(tipo)&&aff==='30') {
+  const tasa='\n          <cbc:Percent>0.00</cbc:Percent>';
+  expect(xml.split(tasa)).toHaveLength(2);xml=xml.replace(tasa,'');
+ }
+ expect(createHash('sha256').update(xml).digest('hex')).toBe(hash);
+});
 describe.each(['01','03'])('D2 paridad ICBPER y SFS %s',tipo=>{
  const cert=fakeIssuerCertificate();const signer=new SignatureService({getCertificate:()=>({certificatePem:cert.pem,privateKeyPem:cert.privateKeyPem})} as never);
  it.each(['10','11','21','31'])('dos bolsas en %s: un solo TaxTotal y total consistente',async aff=>{

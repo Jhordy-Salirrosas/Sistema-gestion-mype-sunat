@@ -50,7 +50,7 @@ describe('PurchasesController', () => {
       listPurchases: jest.fn().mockResolvedValue([samplePurchase]),
       getPurchaseById: jest.fn().mockResolvedValue(samplePurchase),
     };
-    controller = new PurchasesController(mockPurchasesService);
+    controller = new PurchasesController(mockPurchasesService, { assertWarehouse: jest.fn() } as never);
   });
 
   it('rechaza peticiones sin companyId autenticado', async () => {
@@ -65,7 +65,7 @@ describe('PurchasesController', () => {
   });
 
   it('delega creación, pagos, cuentas por pagar y listado/detalle extendido', async () => {
-    expect(await controller.createPurchase({} as any, companyId)).toEqual({ id: 'pur-1' });
+    expect(await controller.createPurchase({} as any, companyId, { sub: 'u', role: 'ADMIN' } as any)).toEqual({ id: 'pur-1' });
     expect(await controller.listPayments('pur-1', companyId)).toEqual([{ id: 'pay-1', amount: 500 }]);
     expect(await controller.payPurchase('pur-1', { amount: 680 }, companyId)).toEqual({
       id: 'pur-1',
@@ -73,7 +73,7 @@ describe('PurchasesController', () => {
     });
     expect(await controller.listPayables(companyId)).toEqual([{ id: 'pur-1', pendingAmount: 680 }]);
     expect(await controller.createManualPayable({ supplierName: 'Proveedor', supplierDocNumber: '20100070970', description: 'Servicio', amount: 100 }, companyId)).toEqual({ id: 'cxp-1' });
-    expect(await controller.receivePurchase('pur-1', { items: [{ itemId: 'i1', quantity: 2 }] }, companyId)).toEqual({ id: 'pur-1', receptionStatus: 'PARCIAL' });
+    expect(await controller.receivePurchase('pur-1', { items: [{ itemId: 'i1', quantity: 2 }] }, companyId, { sub: 'u', role: 'ADMIN' } as any)).toEqual({ id: 'pur-1', receptionStatus: 'PARCIAL' });
 
     const list = await controller.listPurchases(companyId);
     expect(list.total).toBe(1);
