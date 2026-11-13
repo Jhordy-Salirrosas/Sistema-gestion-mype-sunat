@@ -60,6 +60,7 @@ model Company {
   inventory_movements   InventoryMovement[]
   inventory_obligations InventoryBookObligationDecision[]
   national_purchases    NationalPurchase[]
+  sales_quotes          SalesQuote[]
   sire_proposals        SireProposal[]
   sire_report_uploads   SireReportUpload[]
   sire_periods          SirePeriod[]

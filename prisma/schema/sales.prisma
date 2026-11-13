@@ -1,0 +1,52 @@
+enum SalesQuoteStatus {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  CONVERTIDA
+  ANULADA
+}
+
+model SalesQuote {
+  id                  String           @id @default(uuid())
+  company_id          String
+  company             Company          @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  quote_number        String
+  customer_doc_type   String           @default("6")
+  customer_doc_number String?
+  customer_name       String
+  issue_date          DateTime         @default(now())
+  valid_until         DateTime?
+  currency_code       String           @default("PEN")
+  subtotal            Decimal          @default(0) @db.Decimal(14, 2)
+  igv_amount          Decimal          @default(0) @db.Decimal(14, 2)
+  total_amount        Decimal          @default(0) @db.Decimal(14, 2)
+  status              SalesQuoteStatus @default(BORRADOR)
+  notes               String?
+  created_at          DateTime         @default(now())
+  updated_at          DateTime         @updatedAt
+  items               SalesQuoteItem[]
+
+  @@unique([company_id, quote_number])
+  @@index([company_id, status, issue_date])
+  @@map("sales_quotes")
+}
+
+model SalesQuoteItem {
+  id             String     @id @default(uuid())
+  quote_id       String
+  quote          SalesQuote @relation(fields: [quote_id], references: [id], onDelete: Cascade)
+  item_order     Int        @default(1)
+  sku            String?
+  description    String
+  unit_code      String     @default("NIU")
+  quantity       Decimal    @db.Decimal(12, 4)
+  unit_price     Decimal    @db.Decimal(14, 4)
+  subtotal       Decimal    @db.Decimal(14, 2)
+  igv_amount     Decimal    @db.Decimal(14, 2)
+  total_amount   Decimal    @db.Decimal(14, 2)
+  created_at     DateTime   @default(now())
+
+  @@index([quote_id, item_order])
+  @@map("sales_quote_items")
+}
