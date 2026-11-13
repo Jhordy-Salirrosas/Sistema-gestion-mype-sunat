@@ -207,3 +207,8 @@ it('una boleta onerosa con bolsas conserva el flujo actual',async()=>{
 it.each([undefined,0,.5])('factura gratuita conserva bolsas legadas icbper=%s sin campo de cantidad',async icbper=>{
  const h=harness();await expect(h.run({...base(),items:[{codigo:'SERV',descripcion:'Bien gratuito',cantidad:1,precioUnitario:0,valorUnitario:35,afectacion:'31',icbper}]})).resolves.toMatchObject({tipo_comprobante:'01'});
 });
+
+it.each(['07','08'])('nota %s con cantidad de bolsas omitida valida el impuesto antes de numerar',async tipo=>{
+ const h=harness();
+ await expect(h.run({...note(),tipo_comprobante:tipo,serie:tipo==='07'?'FC01':'FD01',codigo_motivo_nota:tipo==='07'?'06':'02',items:[{...base().items[0],icbper:1}]})).rejects.toMatchObject({response:{code:'BOLSAS_NOTA_SUPERAN_CANTIDAD'}});
+});

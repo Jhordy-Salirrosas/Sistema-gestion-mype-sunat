@@ -1,3 +1,4 @@
+import { validarBolsasNota } from '../../noteBagXml';
 import { validarBolsasGratuitas } from '../../freeBagXml';
 import { esDocumentoIntegramenteGratuito } from '../../freeInvoicePolicy';
 import { descripcionCanonicaNota } from './noteDescription';
@@ -134,6 +135,9 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   }
   if (dto.tipo_comprobante === '03' && dto.items.every(l => esAfectacionGratuita(l.afectacion!)) && dto.items.some(l => (l.cantidadBolsas ?? 0) > 0 || (l.icbper ?? 0) > 0)) {
     throw new BadRequestException({ code: 'BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA', message: 'Una boleta íntegramente gratuita no admite bolsas plásticas. Retire las bolsas o emita una factura.' });
+  }
+  if (esNota) {
+    for (const linea of dto.items) validarBolsasNota(linea.cantidad, linea.cantidadBolsas ?? (linea.icbper ?? 0) * 2);
   }
   if (dto.tipo_comprobante === '01') {
     for (const linea of dto.items) {
