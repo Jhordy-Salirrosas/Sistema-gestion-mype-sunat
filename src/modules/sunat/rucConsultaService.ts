@@ -23,6 +23,10 @@ export interface ConsultaRucResponse {
 
 interface RucProviderPayload {
   ruc?: unknown;
+  numero_documento?: unknown;
+  estado?: unknown;
+  condicion?: unknown;
+  direccion?: unknown;
   razonSocial?: unknown;
   razon_social?: unknown;
   estadoContribuyente?: unknown;
@@ -38,6 +42,7 @@ interface RucProviderPayload {
 
 interface NormalizedRucData {
   ruc: string;
+  source: string;
   razonSocial: string;
   estadoContribuyente: string;
   condicionDomicilio: string;
@@ -74,7 +79,7 @@ export class RucConsultaService {
         ubigeo: data.ubigeo,
         direccion_fiscal: data.direccionFiscal,
         es_agente_retencion: data.esAgenteRetencion,
-        source: 'SUNAT_PROVIDER',
+        source: data.source,
         consulted_at: new Date(),
       },
       update: {
@@ -84,7 +89,7 @@ export class RucConsultaService {
         ubigeo: data.ubigeo,
         direccion_fiscal: data.direccionFiscal,
         es_agente_retencion: data.esAgenteRetencion,
-        source: 'SUNAT_PROVIDER',
+        source: data.source,
         consulted_at: new Date(),
       },
     });
@@ -102,7 +107,16 @@ export class RucConsultaService {
     return ruc;
   }
 
+  private proveedor(): 'decolecta' | 'generico' {
+    const configurado = this.config.get<string>('SUNAT_RUC_PROVIDER')?.trim().toLowerCase();
+    if (configurado === 'decolecta') return 'decolecta';
+    if (configurado === 'generico' || configurado === 'generic') return 'generico';
+    return this.config.get<string>('DECOLECTA_API_TOKEN') ? 'decolecta' : 'generico';
+  }
+
   private async consultarProveedor(ruc: string): Promise<NormalizedRucData> {
+    if (this.proveedor() === 'decolecta') return this.consultarDecolecta(ruc);
+
     const baseUrl = this.config.get<string>('SUNAT_RUC_SERVICE_URL');
     if (!baseUrl) {
       throw new ServiceUnavailableException({
@@ -110,24 +124,43 @@ export class RucConsultaService {
         message: 'El proveedor autorizado de consulta RUC no está configurado.',
       });
     }
-
     const url = baseUrl.includes('{ruc}')
       ? baseUrl.replace('{ruc}', encodeURIComponent(ruc))
       : `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(ruc)}`;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const apiKey = this.config.get<string>('SUNAT_RUC_SERVICE_API_KEY');
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    return this.normalizePayload(await this.fetchJson(url, headers), ruc, 'generico');
+  }
+
+  private async consultarDecolecta(ruc: string): Promise<NormalizedRucData> {
+    const token = this.config.get<string>('DECOLECTA_API_TOKEN')
+      ?? this.config.get<string>('SUNAT_RUC_SERVICE_API_KEY');
+    if (!token) {
+      throw new ServiceUnavailableException({
+        code: 'RUC_PROVIDER_NOT_CONFIGURED',
+        message: 'Configure DECOLECTA_API_TOKEN para consultar RUC con Decolecta.',
+      });
+    }
+    const template = this.config.get<string>('DECOLECTA_API_URL')
+      ?? 'https://api.decolecta.com/v1/sunat/ruc?numero={ruc}';
+    const url = template.includes('{ruc}')
+      ? template.replace('{ruc}', encodeURIComponent(ruc))
+      : `${template.replace(/\/$/, '')}/${encodeURIComponent(ruc)}`;
+    const headers: Record<string, string> = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+    return this.normalizePayload(await this.fetchJson(url, headers), ruc, 'decolecta');
+  }
+
+  private async fetchJson(url: string, headers: Record<string, string>): Promise<unknown> {
     try {
       const parsedUrl = new URL(url);
-      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-        throw new Error('protocolo no permitido');
-      }
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('protocolo no permitido');
     } catch {
       throw new ServiceUnavailableException({
         code: 'RUC_PROVIDER_INVALID_URL',
         message: 'La URL del proveedor de RUC no tiene un formato válido.',
       });
     }
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    const apiKey = this.config.get<string>('SUNAT_RUC_SERVICE_API_KEY');
-    if (apiKey) headers['X-API-Key'] = apiKey;
 
     let response: Response;
     try {
@@ -143,7 +176,7 @@ export class RucConsultaService {
       });
     }
     if (!response.ok) {
-      if (response.status === 404) {
+      if (response.status === 404 || response.status === 422) {
         throw new BadRequestException({
           code: 'RUC_NO_ENCONTRADO',
           message: 'El proveedor no encontró el RUC consultado.',
@@ -156,19 +189,17 @@ export class RucConsultaService {
       });
     }
 
-    let payload: unknown;
     try {
-      payload = await response.json();
+      return await response.json();
     } catch {
       throw new ServiceUnavailableException({
         code: 'RUC_PROVIDER_INVALID_RESPONSE',
         message: 'El proveedor de RUC devolvió JSON inválido.',
       });
     }
-    return this.normalizePayload(payload, ruc);
   }
 
-  private normalizePayload(payload: unknown, requestedRuc: string): NormalizedRucData {
+  private normalizePayload(payload: unknown, requestedRuc: string, source: string): NormalizedRucData {
     if (!payload || typeof payload !== 'object') {
       throw new ServiceUnavailableException({
         code: 'RUC_PROVIDER_INVALID_RESPONSE',
@@ -176,14 +207,14 @@ export class RucConsultaService {
       });
     }
     const data = payload as RucProviderPayload;
-    const ruc = this.text(data.ruc) || requestedRuc;
+    const ruc = this.text(data.ruc) || this.text(data.numero_documento) || requestedRuc;
     const razonSocial = this.requiredText(data.razonSocial ?? data.razon_social, 'razón social');
     const estadoContribuyente = this.requiredText(
-      data.estadoContribuyente ?? data.estado_contribuyente,
+      data.estadoContribuyente ?? data.estado_contribuyente ?? data.estado,
       'estado del contribuyente',
     );
     const condicionDomicilio = this.requiredText(
-      data.condicionDomicilio ?? data.condicion_domicilio,
+      data.condicionDomicilio ?? data.condicion_domicilio ?? data.condicion,
       'condición del domicilio',
     );
     if (ruc !== requestedRuc || !esRucValido(ruc)) {
@@ -194,11 +225,12 @@ export class RucConsultaService {
     }
     return {
       ruc,
+      source,
       razonSocial,
       estadoContribuyente,
       condicionDomicilio,
       ubigeo: this.optionalText(data.ubigeo),
-      direccionFiscal: this.optionalText(data.direccionFiscal ?? data.direccion_fiscal),
+      direccionFiscal: this.optionalText(data.direccionFiscal ?? data.direccion_fiscal ?? (data as any).direccion),
       esAgenteRetencion: this.optionalBoolean(
         data.esAgenteRetencion ?? data.es_agente_retencion,
       ),
