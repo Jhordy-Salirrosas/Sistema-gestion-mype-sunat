@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  UnauthorizedException,
   Get,
   HttpCode,
   HttpStatus,
@@ -9,6 +10,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
+import { CurrentUser } from '../../../auth/infrastructure/decorators/currentUserDecorator';
+import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
+import { WarehouseAccessService } from '../../../auth/application/services/warehouseAccessService';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { PurchasesService } from '../../application/services/purchasesService';
 import { CreatePurchaseDto } from '../../application/dto/createPurchaseDto';
@@ -28,14 +32,20 @@ import {
 @Controller('api/v1/purchases')
 @UseGuards(AuthGuard)
 export class PurchasesController {
-  constructor(private readonly purchasesService: PurchasesService) {}
+  constructor(
+    private readonly purchasesService: PurchasesService,
+    private readonly warehouseAccess: WarehouseAccessService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async createPurchase(
     @Body() dto: CreatePurchaseDto,
     @CurrentCompany() companyId?: string,
+    @CurrentUser() user?: TokenPayload,
   ) {
+    if (!user) throw new UnauthorizedException('Usuario requerido.');
+    await this.warehouseAccess.assertWarehouse(user, (dto.warehouseCode ?? 'ALM-01').toUpperCase());
     return this.purchasesService.createPurchase(requirePurchaseCompanyId(companyId), dto);
   }
 
@@ -78,7 +88,10 @@ export class PurchasesController {
 
   @Post(':id/receive')
   @HttpCode(HttpStatus.OK)
-  async receivePurchase(@Param('id') id: string, @Body() dto: ReceivePurchaseDto, @CurrentCompany() companyId?: string) {
+  async receivePurchase(@Param('id') id: string, @Body() dto: ReceivePurchaseDto, @CurrentCompany() companyId?: string, @CurrentUser() user?: TokenPayload) {
+    if (!user) throw new UnauthorizedException('Usuario requerido.');
+    const compra = await this.purchasesService.getPurchaseById(requirePurchaseCompanyId(companyId), id);
+    await this.warehouseAccess.assertWarehouse(user, (compra as any).warehouse_code ?? (compra as any).warehouseCode);
     return this.purchasesService.receivePurchase(requirePurchaseCompanyId(companyId), id, dto);
   }
 

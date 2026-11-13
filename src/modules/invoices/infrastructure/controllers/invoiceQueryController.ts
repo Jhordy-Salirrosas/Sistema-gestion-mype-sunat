@@ -28,6 +28,9 @@ import {
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import { CurrentCompany, Roles } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { CurrentUser } from '../../../auth/infrastructure/decorators/currentUserDecorator';
+import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
+import { WarehouseAccessService } from '../../../auth/application/services/warehouseAccessService';
 import { InvoiceQueryService } from '../../application/services/invoiceQueryService';
 import {
   InvoiceNoteService,
@@ -52,6 +55,7 @@ export class InvoiceQueryController {
     private readonly envioResumenes: SummaryEnvioService,
     private readonly aggregates: SummaryAggregateStore,
     private readonly aggregateDispatch: SummaryDispatchService,
+    private readonly warehouseAccess: WarehouseAccessService,
   ) {}
 
   /**
@@ -113,7 +117,9 @@ export class InvoiceQueryController {
    * tributaria (Catálogo 07) configurada en el producto.
    */
   @Get('warehouses')
-  almacenes(@CurrentCompany() companyId: string) { return this.consultas.almacenes(companyId); }
+  async almacenes(@CurrentCompany() companyId: string, @CurrentUser() user: TokenPayload) {
+    return this.consultas.almacenes(companyId, await this.warehouseAccess.allowedCodes(user));
+  }
 
   @Get('products')
   catalogoProductos(@CurrentCompany() companyId: string, @Query('almacen') almacen?: string, @Query('historicos') historicos?: string) {

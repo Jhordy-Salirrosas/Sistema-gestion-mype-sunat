@@ -142,8 +142,8 @@ export class InvoiceQueryService {
     }) };
   }
 
-  almacenes(companyId: string) {
-    return this.prisma.inventoryWarehouse.findMany({ where: { company_id: companyId, is_active: true },
+  almacenes(companyId: string, warehouseCodes?: string[]) {
+    return this.prisma.inventoryWarehouse.findMany({ where: { company_id: companyId, is_active: true, ...(warehouseCodes ? { warehouse_code: { in: warehouseCodes } } : {}) },
       select: { warehouse_code: true, description: true }, orderBy: { warehouse_code: 'asc' } });
   }
 

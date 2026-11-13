@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { WarehouseAccessService } from '../../../src/modules/auth/application/services/warehouseAccessService';
 import { InvoicesController } from '../../../src/modules/invoices/infrastructure/controllers/invoicesController';
 import { AtomicInvoiceCreationService } from '../../../src/modules/invoices/application/services/atomicInvoiceCreationService';
 import { TOKEN_SERVICE_PORT } from '../../../src/modules/auth/domain/ports/tokenServicePort';
@@ -36,6 +37,7 @@ describe('InvoicesController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [InvoicesController],
       providers: [
+        { provide: WarehouseAccessService, useValue: { assertWarehouse: jest.fn() } },
         {
           provide: AtomicInvoiceCreationService,
           useValue: mockUseCase,

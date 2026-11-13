@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { ForbiddenException } from '@nestjs/common';
 import { AuthController } from '../../../src/modules/auth/infrastructure/controllers/authController';
 import type { RegisterUseCase } from '../../../src/modules/auth/application/use-cases/registerUseCase';
 import type { LoginUseCase } from '../../../src/modules/auth/application/use-cases/loginUseCase';
@@ -17,6 +18,7 @@ describe('AuthController', () => {
   let mockRefreshTokenUseCase: jest.Mocked<RefreshTokenUseCase>;
   let mockGetProfileUseCase: jest.Mocked<GetProfileUseCase>;
   let mockUpdateProfileUseCase: jest.Mocked<UpdateProfileUseCase>;
+  let mockWarehouseAccess: any;
   let mockChangePasswordUseCase: jest.Mocked<ChangePasswordUseCase>;
 
   const mockUserPayload: TokenPayload = {
@@ -41,6 +43,7 @@ describe('AuthController', () => {
     mockGetProfileUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetProfileUseCase>;
     mockUpdateProfileUseCase = { execute: jest.fn() } as unknown as jest.Mocked<UpdateProfileUseCase>;
     mockChangePasswordUseCase = { execute: jest.fn() } as unknown as jest.Mocked<ChangePasswordUseCase>;
+    mockWarehouseAccess = { listAllowed: jest.fn(), listUsers: jest.fn(), setUserWarehouses: jest.fn() } as any;
 
     controller = new AuthController(
       mockRegisterUseCase,
@@ -50,6 +53,7 @@ describe('AuthController', () => {
       mockGetProfileUseCase,
       mockUpdateProfileUseCase,
       mockChangePasswordUseCase,
+      mockWarehouseAccess,
     );
   });
 
@@ -281,5 +285,18 @@ describe('AuthController', () => {
       expect.objectContaining({ newPassword: 'NewPassword123!#' }),
     );
     expect(mockRes.clearCookie).toHaveBeenCalledWith('refreshToken', expect.any(Object));
+  });
+
+  it('expone almacenes del usuario autenticado', async () => {
+    mockWarehouseAccess.listAllowed.mockResolvedValue([{ warehouse_code: 'ALM-01' }]);
+    await expect(controller.warehouses({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any)).resolves.toEqual([{ warehouse_code: 'ALM-01' }]);
+  });
+
+  it('solo ADMIN lista y asigna almacenes de usuarios', async () => {
+    mockWarehouseAccess.listUsers.mockResolvedValue([{ id: 'u1' }]);
+    await expect(controller.users({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any)).resolves.toEqual([{ id: 'u1' }]);
+    await expect(controller.setUserWarehouses({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any, 'u1', { warehouseCodes: ['ALM-01'] })).resolves.toBeUndefined();
+    await expect(controller.users({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any)).rejects.toThrow(ForbiddenException);
+    await expect(controller.setUserWarehouses({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any, 'u1', { warehouseCodes: [] })).rejects.toThrow(ForbiddenException);
   });
 });
