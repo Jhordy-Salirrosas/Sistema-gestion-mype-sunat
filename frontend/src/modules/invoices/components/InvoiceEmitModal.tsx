@@ -349,11 +349,16 @@ export const InvoiceEmitModal = ({
       items: eliminarItem(previo.items, indice),
     }));
 
-  const nuevoItem = () =>
+  const nuevoItem = () => {
+    setMostrarErrores(true);
     setB((previo) => ({
       ...previo,
       items: agregarFilaModal(previo.items, () => itemVacio(nuevaClave())),
     }));
+    const buscador = formularioRef.current?.querySelector<HTMLInputElement>('[data-invoice-product-search]');
+    buscador?.focus();
+    buscador?.scrollIntoView?.({ block: 'center' });
+  };
 
   /**
    * Agrega una línea con los datos del producto elegido en el buscador (TA-61).

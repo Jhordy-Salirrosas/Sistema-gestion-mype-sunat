@@ -176,6 +176,8 @@ export const InvoiceItemsGrid = ({
                       aria-label={`Código de la línea ${i + 1}`}
                       className={CLASE_CELDA}
                       onFocus={() => duplicado.recordarCodigo(i)} onBlur={() => duplicado.confirmarCodigo(i)}
+                      readOnly={item.codigoHeredado === true}
+                      title={item.codigoHeredado ? 'Para cambiar el SKU, quite la línea o elija otro producto del catálogo.' : undefined}
                       value={item.codigo}
                       onChange={(e) => onCambiar(i, { codigo: e.target.value })}
                       placeholder="COD-001"
