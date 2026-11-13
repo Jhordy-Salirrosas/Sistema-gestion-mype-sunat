@@ -96,6 +96,8 @@ export interface Adquirente {
 
 /** Datos del comprobante que condicionan la identificación. */
 export interface EmisionAValidar {
+  /** Tipo acreditado por el servidor al resolver el origen; ausencia conserva exigencia de RUC. */
+  tipoComprobanteOrigen?: string | null;
   tipoComprobante: string;
   /** Importe total a pagar del comprobante. */
   importeTotal: number;
@@ -133,7 +135,8 @@ export const validarAdquirente = (
 
   // Las notas (07/08) heredan la exigencia del documento que modifican: una
   // nota a factura lleva RUC; una nota a boleta puede ir sin documento.
-  const exigeRuc = tipo === '01' || tipo === '07' || tipo === '08';
+  const notaABoleta = (tipo === '07' || tipo === '08') && emision.tipoComprobanteOrigen === '03';
+  const exigeRuc = tipo === '01' || ((tipo === '07' || tipo === '08') && !notaABoleta);
 
   if (exigeRuc) {
     if (!numero) {
@@ -159,7 +162,7 @@ export const validarAdquirente = (
     return;
   }
 
-  if (tipo !== '03') return;
+  if (tipo !== '03' && !notaABoleta) return;
 
   // Boleta: sin documento solo si no pasa el umbral.
   if (!numero) {

@@ -1,3 +1,4 @@
+import { bloquearClasificacionProductos } from '../../../../common/productClassificationLock';
 import { omisionesPendientes, BRIDGE_OMITTED, BRIDGE_RESOLVED } from './invoiceBridgeOmission';
 import {
   BadRequestException,
@@ -82,10 +83,11 @@ export class InvoiceBridgeCoordinatorService {
   ): Promise<{ respuesta: ResultadoReprocesoPuente; error?: Error }> {
     return this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`m1:bridge:${invoiceId}`}, 0))`;
-      const actual = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { estado: true } });
+      const actual = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { estado: true, company_id: true, items: { select: { item_code: true } } } });
       if (!actual || ![InvoiceStatus.ACEPTADO, InvoiceStatus.OBSERVADO].includes(actual.estado as 'ACEPTADO' | 'OBSERVADO')) {
         throw new BadRequestException('Solo se puede reprocesar el puente de un comprobante ACEPTADO u OBSERVADO');
       }
+      await bloquearClasificacionProductos(tx, actual.company_id, (actual.items ?? []).flatMap(l => typeof l.item_code === 'string' ? [l.item_code] : []));
       return this.ejecutarExclusivo(invoiceId, actual.estado);
     }, { timeout: 30000 });
   }

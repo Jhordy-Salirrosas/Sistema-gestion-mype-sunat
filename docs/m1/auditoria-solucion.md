@@ -3417,6 +3417,38 @@ La validación local no garantiza la aceptación del servidor SUNAT; la certific
 
 Verificación final: línea base 337 suites y 3252 pruebas aprobadas; resultado 338 suites y 3298 pruebas aprobadas, con las mismas 4 suites y 38 pruebas omitidas y 12 snapshots aprobados. Cobertura local del código nuevo: 100% (37/37 líneas ejecutables y 34/34 ramas del diff); build correcto y lint sin errores (dos advertencias previas ajenas al cambio). Los ocho casos SFS de notas incluyen también dos líneas gratuitas con bolsas y el caso sin partición cuando bolsas y cantidad coinciden.
 
+## Consolidado normativa
+
+Base: main e4c8464b19657c14d213af328c6433df78512b31. Línea base: backend 338 suites / 3298 pruebas (4 suites / 38 pruebas omitidas, 12 snapshots); frontend dev 98963cd781e2eab269497763d832898efcdcd8ac, 158 archivos / 1235 pruebas. No se incorpora Monitor real ni se cambian lista o alertas.
+
+### Punto 3b — Plazo del primer despacho RA
+
+Antes del primer sendSummary, el despacho vuelve a leer las fechas de todos los miembros persistidos, acotados a la empresa, y compara cada emisión con el día actual de Lima. Un miembro fuera de los siete días (2957), futuro o no acreditado bloquea todo el agregado firmado en REVIEW con error durable y específico; no se mutila ni se reconstruye un XML ya preparado. El error identifica el documento y las fechas. No hay publicación SOAP ni reclamación de envío. Los miembros conservan su estado fiscal y el artefacto permanece intacto. Un ticket existente se sigue consultando sin reenvío ni comprobación de plazo del primer despacho. Se verifican días 0, 7, 8, fecha futura, miembros incompletos y recuperación de ticket.
+
+### Punto 4 — ICBPER en notas de descuento
+
+NC 04/09 acredita devolución de bolsas únicamente mediante cantidadBolsas positiva en sus propias líneas. Un importe ICBPER heredado sin esa cantidad no declara 7152 ni incrementa el total. La liquidación recalcula los importes de las altas; la defensa XML retira el tributo no acreditado y ajusta el total solo cuando el payload indica que ya lo incluía, sin mutar dicho payload. La cantidad global legada no sustituye la declaración por línea. Con devolución explícita positiva se conserva el tributo y su partición válida para 3236. El espejo de la anulación 01 queda intacto: hashes previos fijados para gravadas y gratuitas. Se validan NC 04/09 con cantidad ausente, cero y positiva contra las hojas oficiales.
+
+### ND inafecta — tasa explícita
+
+Solo DebitNote con tributo 9998 incorpora Percent 0.00, conservando categoría y afectación 30. Se valida con la hoja oficial ND con y sin bolsas, sin 2992. Facturas y boletas conservan su representación; no se asignan tasas a campos tributarios desconocidos.
+
+### Notas sobre boletas — identidad acreditada
+
+El validador admite las reglas del receptor de boleta cuando el servicio acredita tipo 03 leyendo el documento origen en la empresa. El tipo no se toma de una serie inferida por el cliente. Origen factura o no acreditado conserva RUC obligatorio. Las dos entradas atómicas conservan además la igualdad de identidad con el documento origen, antes de numerar. Las NC/ND con DNI y referencia B superan las hojas oficiales; una nota a factura sin RUC continúa rechazada. El caso de uso legado sin origen acreditado mantiene la exigencia conservadora de RUC.
+
+### Frontera Inventario — reclasificación con pendientes M1
+
+La guarda del PATCH de producto es aditiva y no importa servicios de M1 ni cambia el grafo de módulos. Lee, por empresa/SKU, omisiones durables aún no resueltas y obligaciones físicas acreditadas por el snapshot de creación, contrastadas contra el movimiento real y su cantidad. Incluye descargas de ventas y devoluciones físicas nuevas; no convierte notas económicas ni servicios originales en obligaciones de inventario. No deduce una clasificación histórica desde un snapshot ausente; las omisiones históricas atribuibles al SKU siguen bloqueadas hasta su resolución acreditada. Un pendiente produce 409 PRODUCTO_CON_PENDIENTES_M1 en ambos sentidos producto/servicio. Sin cambio de tipo, no se consulta la guarda; sin pendientes, se conserva el cambio solicitado.
+
+Alta M1, ejecución del puente y reclasificación comparten una exclusión transaccional por empresa/SKU, con orden estable para varios productos. La guarda y el cambio de clasificación se confirman en la misma transacción; una carrera con un alta no elude la lectura de pendientes. El helper común solo conoce Prisma y la clave de exclusión, sin dependencia entre módulos de negocio. No se habilita ningún bypass ni se resuelven pendientes cambiando el catálogo. Pruebas PostgreSQL aisladas verifican ambas direcciones, persistencia del tipo rechazado, resolución explícita, productos sin pendientes y concurrencia con un alta M1.
+
+### Verificación de entrega del consolidado
+
+Resultado completo backend: 344 suites / 3363 pruebas aprobadas, frente a 338 / 3298 de la base; permanecen 4 suites y 38 pruebas omitidas y 12 snapshots aprobados. Cobertura local del código nuevo: 72/72 líneas y 105/105 ramas, 100%. Resultado completo frontend: 159 archivos / 1241 pruebas aprobadas, frente a 158 / 1235; código nuevo 4/4 líneas y 5/5 ramas, 100%. Ambos builds pasan. Lint backend sin errores, con dos avisos heredados. El modal del frontend conserva un error previo react-hooks/set-state-in-effect y un aviso only-export-components; se reprodujeron sobre el archivo de la base y no se modifican por A5.
+
+A5 se entrega en ferry/m1-consolidado-normativa: el botón y su atajo reutilizan la primera fila vacía; cuando contiene código o descripción, agregan una nueva sin sobrescribir lo editado. Su FERRY.md detalla los cuatro archivos y sus SHA-256. El hash histórico de ND 08/30 sin bolsas se actualiza exclusivamente por la tasa cero requerida por 2992; los demás hashes de regresión y los tres espejos de anulación 01 se mantienen. No se incorporan cambios de Monitor real ni de lista o alertas. No hay migraciones nuevas, emisiones reales, acceso a producción, despliegues, PR ni merges; no se reutilizan correlativos quemados.
+
 ## Monitor real
 
 Bases de construcción: backend main `e4c8464b19657c14d213af328c6433df78512b31` y frontend dev `98963cd781e2eab269497763d832898efcdcd8ac`. Línea base verde: backend 338 suites / 3298 pruebas (4 suites y 38 pruebas omitidas, 12 snapshots); frontend 158 archivos / 1235 pruebas.

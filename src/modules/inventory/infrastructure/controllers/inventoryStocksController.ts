@@ -1,3 +1,5 @@
+import { bloquearClasificacionProductos } from '../../../../common/productClassificationLock';
+import { asegurarSinPendientesM1 } from '../../application/services/m1ProductClassificationGuard';
 import {
   Body,
   Controller,
@@ -262,9 +264,7 @@ export class InventoryStocksController {
     });
     if (!existing) throw new NotFoundException(`Producto con SKU "${sku}" no encontrado.`);
 
-    const updated = await this.prisma.inventoryProduct.update({
-      where: { id: existing.id },
-      data: {
+    const data = {
         description: dto.description?.trim(),
         origin_type: dto.origin_type,
         ...(dto.is_service !== undefined
@@ -295,8 +295,17 @@ export class InventoryStocksController {
         min_price: dto.min_price,
         warehouse_location: dto.warehouse_location?.trim(),
         ...(dto.attributes !== undefined && { attributes: dto.attributes }),
-      },
-    });
+      };
+    const target = dto.is_service !== undefined ? !dto.is_service : dto.is_inventory;
+    const updated = target === undefined
+      ? await this.prisma.inventoryProduct.update({ where: { id: existing.id }, data })
+      : await this.prisma.$transaction(async tx => {
+        await bloquearClasificacionProductos(tx, companyId, [existing.sku]);
+        const current = await tx.inventoryProduct.findFirst({ where: { id: existing.id, company_id: companyId } });
+        if (!current) throw new NotFoundException('Producto no encontrado en la empresa.');
+        if (current.is_inventory !== target) await asegurarSinPendientesM1(tx, companyId, current);
+        return tx.inventoryProduct.update({ where: { id: current.id }, data });
+      });
 
     // Si se enviaron variantes, actualizar
     if (dto.variants) {
