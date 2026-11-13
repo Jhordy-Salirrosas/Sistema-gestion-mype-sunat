@@ -3323,7 +3323,7 @@ Bases: back `c8de3d557d648a5477c7493813ca48c8266551e2`; front `3bc4cdb01dd60ca1a
 - **B5:** notas 07/08 con motivo distinto de 13 se normalizan a Contado y cuotas vacías antes de adaptación fiscal y guardas de crédito. Motivo 13 conserva PaymentTerms.
 - **B6:** débito usa «Cargo según…»; crédito conserva «Reverso de venta según…» y 01/03 «Venta según…».
 - **B7:** el PDF oficial recibe cuotas y cuenta Banco de la Nación del payload.
-- **B8:** solo facturas 01 íntegramente gratuitas con bolsas expanden su XML mediante una línea ICBPER separada; se retiran impuesto y cantidad de bolsas de las líneas gratuitas originales. No se modifica el payload persistido ni se crea un producto de inventario. PayableAmount conserva S/ 0.50 por bolsa. Las representaciones gravada+bolsas y mixta conservan sus huellas XML. Boletas 03 íntegramente gratuitas con bolsas se rechazan antes de numerar con código `BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA` y mensaje «Una boleta íntegramente gratuita no admite bolsas plásticas. Retire las bolsas o emita una factura.». La alternativa separada provoca 3105 en el validador 03 y la embebida puede provocar 3236 por diferencia de cantidades; las gratuitas sin bolsas y las onerosas no cambian.
+- **B8 (construcción inicial, sustituida por la corrección 3105 documentada más abajo):** solo facturas 01 íntegramente gratuitas con bolsas expanden su XML mediante una línea ICBPER separada; se retiran impuesto y cantidad de bolsas de las líneas gratuitas originales. No se modifica el payload persistido ni se crea un producto de inventario. PayableAmount conserva S/ 0.50 por bolsa. Las representaciones gravada+bolsas y mixta conservan sus huellas XML. Boletas 03 íntegramente gratuitas con bolsas se rechazan antes de numerar con código `BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA` y mensaje «Una boleta íntegramente gratuita no admite bolsas plásticas. Retire las bolsas o emita una factura.». La alternativa separada provoca 3105 en el validador 03 y la embebida puede provocar 3236 por diferencia de cantidades; las gratuitas sin bolsas y las onerosas no cambian.
 
 ### Correcciones del front
 
@@ -3348,3 +3348,53 @@ Cobertura local de código nuevo, comparada con las bases exactas (líneas ejecu
 Se ejecuta SFS local con certificado ficticio para una y dos unidades gratuitas con una bolsa, sin errores. Las huellas SHA-256 de fixtures gravado y mixto fijan compatibilidad estructural; no son reenvíos de los documentos beta F001-73/F001-74. El cálculo de utilidad esperado 2297.96 − 1636.00 = 661.96 coincide con la fórmula implementada. No se accedió al dataset compartido del periodo 2026-11-01..12: los valores de ventas 7265.01 y 41 documentos requieren contraste de lectura con ese dataset después de integrar; no se presentan como resultados obtenidos localmente.
 
 Sin migraciones ni cambios de SIRE, PRs, merges, despliegues o emisiones reales. Las pruebas usan PostgreSQL aislado, certificados ficticios y transportes locales/mocks; la integración real SUNAT beta permanece deshabilitada. Entrega del front exclusivamente mediante `ferry/m1-parte9-cierre` en el repositorio back, con archivos finales y manifiesto SHA-256 en FERRY.md.
+
+### B8 — corrección del rechazo 3105 mediante partición del producto gratuito
+
+Base de la corrección: `dev` en `88cfeabc75ea97250a690cee1e8b418be6c449cf`. La batería en vivo del 12 de noviembre de 2026 reportó F001-00000079 rechazado por SOAP Fault 3105 del billService, ticket `1794529417139`, en la línea 2 separada de ICBPER. No hubo CDR en ZIP; los campos CDR permanecieron nulos. F001-00000073, gravada con ICBPER incrustado, estaba aceptada. Los XML completos suministrados pasan ambos el SFS distribuido local, lo que confirma la diferencia frente al servidor beta. La misma batería reportó detracciones operativas y ventas de 7265.01 para 41 documentos; esos resultados proceden de la batería desplegada, no de un acceso local a la base compartida.
+
+**Predicados oficiales de contraste.** En `assets/sunat-sfs/commons/xsl/validation/2.X/ValidaExprRegFactura-2.0.1.xsl:3239`, 3105 evalúa en cada TaxTotal de línea:
+
+```xpath
+count(cac:TaxSubtotal/cac:TaxCategory/cac:TaxScheme/cbc:ID[
+  text() = '1000' or text() = '1016' or text() = '9995' or
+  text() = '9996' or text() = '7152' or text() = '9997' or text() = '9998'
+]) < 1
+```
+
+La línea rechazada satisface esa versión: contiene 1000 y 7152, aunque la base IGV sea cero. El modelo estricto utilizado como contraste procede de `ValidaExprRegBoleta-2.0.1.xsl:3817`:
+
+```xpath
+count(cac:TaxSubtotal[
+  cac:TaxCategory/cac:TaxScheme/cbc:ID[
+    text() = '1000' or text() = '1016' or text() = '9995' or
+    text() = '9996' or text() = '9997' or text() = '9998'
+  ] and cbc:TaxableAmount > 0
+]) < 1
+```
+
+Con este modelo F001-73 cumple y la línea 2 de F001-79 falla. No se afirma que este sea el código interno exacto del servidor. Para 3236, Factura:2888 compara `$CantidadBolsa != $CantProducto`, donde la primera variable es `cbc:BaseUnitMeasure` y la segunda `round($cntLineaProd)`. No se cambian los assets ni el ejecutor SFS.
+
+**Construcción elegida.** Se retira exclusivamente la línea independiente que B8 añadía a las facturas 01 íntegramente gratuitas. Cada línea gratuita con cantidad q y b bolsas conserva producto, afectación y valor referencial unitario: b=0 queda sin partición; 0<b<q produce una línea con cantidad b e ICBPER incrustado y otra con q−b sin bolsas; b=q produce una sola línea con ICBPER incrustado. Los identificadores ordinales XML se renumeran. El ICBPER conserva 7152 y su monto 0.50×b; cada línea con bolsas tiene BaseUnitMeasure igual a su cantidad. La base positiva procede del producto gratuito original (9996), no de una bolsa valorada artificialmente; no se agrega otro bien, SKU, precio ni impuesto.
+
+Las bases e IGV referenciales redondeados se conservan al céntimo: la segunda parte recibe el residuo respecto del importe original. Ese residuo es un metadato interno identificado por Symbol, exclusivamente entre la partición XML y el cálculo de referencia; no es un campo del DTO o del payload persistido y no puede introducirse mediante JSON. Se conservan las cantidades decimales, el valor unitario, TaxInclusiveAmount, PayableAmount y los totales tributarios del documento. Las representaciones gravada, exonerada, inafecta y mixta con bolsas conservan el patrón incrustado y sus hashes previos; las gratuitas sin bolsas tampoco cambian.
+
+**Guarda anterior a numerar.** En facturas, una línea gratuita con bolsas mayores que su cantidad se rechaza con `BOLSAS_GRATUITAS_SUPERAN_CANTIDAD`: «Las bolsas de una línea gratuita no pueden superar la cantidad de la línea. Ajuste las bolsas o la cantidad.». La validación se comparte con la defensa de regeneración. Las pruebas de las entradas formulario y API fiscal verifican que no se reserva correlativo, no se crea comprobante y no se encola. El rechazo de boleta íntegramente gratuita con bolsas conserva exactamente `BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA` y su mensaje anterior. No se reescriben documentos guardados.
+
+**Pruebas por el camino real.** Los datos de formulario pasan por `traducirEmision` y el payload resultante entra en `InvoiceJobConsumer.xmlDelComprobante`, con UblGeneratorService y XsdValidatorService reales. Se firma con certificado ficticio y se ejecuta el SFS local; el XML firmado coincide con la regeneración de InvoiceDownloadService, que utiliza el mismo generador. No se arma XML fiscal a mano. Además se extrae de los assets el predicado estricto de Boleta y se evalúa por línea, junto con la igualdad de 3236.
+
+| Caso | Representación esperada | SFS Factura local | Contraste 3105 estricto / 3236 |
+|---|---|---|---|
+| a: gratuita ×1 + una bolsa | Una línea con bolsa incrustada; total 0.50 | Sin errores | Cumple / cumple |
+| b: gratuita ×2 + una bolsa | Dos líneas de una unidad, solo una con bolsa; total 0.50 | Sin errores | Cumple / cumple |
+| c: dos gratuitas, q=3/b=1 y q=4/b=2 | Cuatro líneas del producto; total 1.50 | Sin errores | Cumple / cumple |
+| d: gratuita ×1 + dos bolsas | Rechazo anterior a numerar en ambas entradas | No se genera ni envía XML | Guarda de creación |
+
+Se cubren también cantidades fraccionarias, bolsas legadas sin campo de cantidad, líneas sin bolsas dentro del documento, b=q, redondeo de referencia e IGV, afectaciones gratuitas 11/21/31 y ausencia de mutación del payload. Las siete huellas de regresión se capturaron antes del cambio desde la base indicada.
+
+**Resultados locales finales.** Baseline completa: 336 suites / 3229 pruebas aprobadas. Final completo: 337 suites / 3252 pruebas aprobadas, sin fallos; cuatro suites y 38 pruebas opcionales omitidas en ambos, con 12 snapshots aprobados. Área unitaria invoices: 138 suites / 2006 pruebas → 139 suites / 2029 pruebas. Batería focal: cuatro suites / 117 pruebas aprobadas. Se añaden 23 pruebas, sin regresiones. Cobertura local de código nuevo respecto de dev `88cfeabc`: **28/28 líneas ejecutables y 26/26 ramas, 100%** (Jest/Istanbul, intersección de ubicaciones instrumentadas con líneas añadidas). Build Nest/TypeScript aprobado y lint sin errores, con dos avisos preexistentes en resúmenes.
+
+Comando de suite completa: `NODE_OPTIONS=--max-old-space-size=6144 TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/sunat_test RUN_INTEGRATION_TESTS=required RUN_SUNAT_BETA_INTEGRATION=false npm test -- --runInBand --coverage --collectCoverageFrom=src/modules/invoices/freeBagXml.ts --collectCoverageFrom=src/modules/invoices/freeOperationReference.ts --collectCoverageFrom=src/modules/invoices/application/services/creationGuards.ts`. La base de pruebas es PostgreSQL local aislado. Build y suite se ejecutan secuencialmente para no regenerar el cliente Prisma mientras Jest lo lee.
+
+
+**Límite de la validación:** el SFS local no garantiza aceptación del servidor SUNAT beta, cuya regla observada es más estricta que la hoja de Factura distribuida. La corrección también satisface el modelo estricto de contraste, pero el árbitro final será la reprueba en vivo posterior al despliegue, a cargo del equipo operador. En esta construcción no se realizan PRs, merges, despliegues, emisiones ni envíos reales. Sin cambios de front, SIRE ni esquema de base de datos.
