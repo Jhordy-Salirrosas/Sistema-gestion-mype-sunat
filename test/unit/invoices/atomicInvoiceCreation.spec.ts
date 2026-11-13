@@ -189,3 +189,13 @@ it.each(['pantalla','fiscal'])('B8 %s rechaza exceso de bolsas gratuitas antes d
  await expect(request).rejects.toMatchObject({response:{code:'BOLSAS_GRATUITAS_SUPERAN_CANTIDAD',message:'Las bolsas de una línea gratuita no pueden superar la cantidad de la línea. Ajuste las bolsas o la cantidad.'}});
  expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();expect(JSON.stringify(dto)).toBe(before);
 });
+
+it.each(['07','08'].flatMap(tipo=>['10','20','30','11','21','31'].flatMap(aff=>['pantalla','fiscal'].map(ruta=>[tipo,aff,ruta]))))('nota %s afectación %s por %s rechaza bolsas excesivas antes del correlativo',async(tipo,aff,ruta)=>{
+ const h=harness();const gratuita=['11','21','31'].includes(aff);
+ Object.assign(h.tx.invoice,{findFirst:jest.fn(async()=>({id:'origen',tipo_comprobante:'01',serie:'F001',correlativo:1,estado:'ACEPTADO',items:[{item_code:'SERV',igv_affectation_type:aff,unit_code:'NIU',quantity:1}],monto_total:118,customer_identity_type:'6',customer_identity_number:'20100070970'}))});
+ const dto={...pantalla,tipo_comprobante:tipo,serie:tipo==='07'?'FC01':'FD01',documento_afectado:'F001-00000001',codigo_motivo_nota:tipo==='07'?'06':'02',fecha_emision:'2026-11-12',items:[{codigo:'SERV',descripcion:'Servicio',cantidad:1,precioUnitario:gratuita?0:aff==='10'?118:100,valorUnitario:100,afectacion:aff,cantidadBolsas:2,icbper:1}]};
+ const before=JSON.stringify(dto);
+ const request=ruta==='pantalla'?h.service.emitir(dto as never,'empresa','nota-bolsas-request-key'):h.service.create(traducirEmision(dto as never,{ruc:'20100070970',razonSocial:'Empresa',...fakeFiscalAddress},1).dto,'empresa','nota-bolsas-request-key');
+ await expect(request).rejects.toMatchObject({response:{code:'BOLSAS_NOTA_SUPERAN_CANTIDAD',message:'Las bolsas de una línea de la nota no pueden superar la cantidad de la línea. Ajuste las bolsas o la cantidad.'}});
+ expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();expect(JSON.stringify(dto)).toBe(before);
+});

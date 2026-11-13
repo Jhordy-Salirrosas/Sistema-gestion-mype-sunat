@@ -1,0 +1,58 @@
+[
+  {
+    "type": "07",
+    "aff": "10",
+    "bags": 0,
+    "mixed": false,
+    "hash": "8384528d0dc0b7b1bbfccef0c1bdfd0196fa072cb8f478c2091f5f44a16c42de"
+  },
+  {
+    "type": "08",
+    "aff": "10",
+    "bags": 0,
+    "mixed": false,
+    "hash": "c098ad6cae3661d8efdcb2bdf77ddd1fc6d1fcae1cfac0e8738fb27f3d61fc4f"
+  },
+  {
+    "type": "07",
+    "aff": "21",
+    "bags": 0,
+    "mixed": false,
+    "hash": "dd9734c38fe665f417096a730cb4fe73f0b3c493cac02913eef1bb86db69e482"
+  },
+  {
+    "type": "08",
+    "aff": "21",
+    "bags": 0,
+    "mixed": false,
+    "hash": "77134bb459282ef9ea97165187472d72788ed9d7bd86872c2c219f471ed2008e"
+  },
+  {
+    "type": "01",
+    "aff": "10",
+    "bags": 2,
+    "mixed": false,
+    "hash": "468ad6f6f3158407d6f9f4815c5917d5e788332970e51aeba3c0b3a588b29c40"
+  },
+  {
+    "type": "01",
+    "aff": "21",
+    "bags": 1,
+    "mixed": false,
+    "hash": "eb62475bb1d1384db8d23aebb09e50f43bf4b51cab9bf3eb2d7a746b20c32ec2"
+  },
+  {
+    "type": "01",
+    "aff": "21",
+    "bags": 1,
+    "mixed": true,
+    "hash": "65c8d47c0508ec2747240b591312398a697897b538e7441e0ac577befbec0c87"
+  },
+  {
+    "type": "03",
+    "aff": "10",
+    "bags": 2,
+    "mixed": false,
+    "hash": "20e2cf1eebba9f6aa27276192251b86afb6b6397d34ff1013a281cc9955d0d83"
+  }
+]
