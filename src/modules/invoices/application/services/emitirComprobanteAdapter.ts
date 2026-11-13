@@ -412,6 +412,7 @@ export const traducirEmision = (
             (dto.tipo_comprobante === '01' ? '6' : '1'),
           numeroDocumento: dto.customer_identity_number.replace(/\D/g, ''),
           razonSocial: dto.customer_legal_name.trim(),
+          ...(dto.customer_address?.trim() ? { direccion: dto.customer_address.trim() } : {}),
         }
       : undefined,
 
