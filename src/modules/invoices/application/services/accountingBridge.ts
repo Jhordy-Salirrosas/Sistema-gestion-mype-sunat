@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import { redondearMoneda as r2 } from '../../money';
 /**
  * Asiento contable de una factura de venta, según el PCGE 2019 (TA-68).
@@ -188,5 +189,5 @@ export const balanceAsiento = (
 /** Periodo contable YYYY-MM a partir de una fecha ISO YYYY-MM-DD. */
 export const periodoDe = (fecha: string): string => {
   const iso = fecha.slice(0, 7);
-  return /^\d{4}-\d{2}$/.test(iso) ? iso : new Date().toISOString().slice(0, 7);
+  return /^\d{4}-\d{2}$/.test(iso) ? iso : fechaFiscalLima().slice(0, 7);
 };

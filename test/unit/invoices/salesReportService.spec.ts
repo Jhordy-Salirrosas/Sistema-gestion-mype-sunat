@@ -51,3 +51,16 @@ it('sin costo ni identidad del cliente informa utilidad nula y margen total cero
  expect(r.totals).toMatchObject({profit:0,margin:0,withoutCost:{count:1,sales:118}});
  expect(r.byCustomer[0]).toMatchObject({document:'',customer:'',profit:null});expect(r.byDocument[0]).toMatchObject({customer:'',profit:null});
 });
+
+it.each(['2026-12-01T00:00:00Z', '2026-12-01T04:59:00Z', '2026-12-01T05:00:00Z'])('período predeterminado usa el mes de Lima en %s', async instant => {
+  jest.useFakeTimers().setSystemTime(new Date(instant));
+  try {
+    const invoice = { findMany: jest.fn(async () => []) };
+    const service = new SalesReportService({ invoice, accountingEntry: { findMany: jest.fn(async () => []) } } as never);
+    const report = await service.execute('c');
+    expect(report.from).toBe(instant.endsWith('05:00:00Z') ? '2026-12-01' : '2026-11-01');
+    expect(report.to).toBe(instant.endsWith('05:00:00Z') ? '2026-12-31' : '2026-11-30');
+    const explicit = await service.execute('c', '2026-10-01', '2026-10-31');
+    expect(explicit).toMatchObject({ from: '2026-10-01', to: '2026-10-31' });
+  } finally { jest.useRealTimers(); }
+});

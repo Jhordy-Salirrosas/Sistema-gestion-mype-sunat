@@ -1,3 +1,4 @@
+import { resolverFechaEmision } from '../../fiscalDate';
 import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 import { validarCuentaSpot } from './spotMinimo';
 import { multiplicarMoneda } from '../../money';
@@ -121,10 +122,11 @@ export class EmitirComprobanteService {
       );
     }
 
+    dto = { ...dto, fecha_emision: resolverFechaEmision(dto.fecha_emision) };
     const emisor = await this.datosDelEmisor(companyId);
     const determinacion = dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03'
       ? await resolverRetencionMaestro(this.prisma, { companyId, tipo: dto.customer_identity_type,
-          numero: dto.customer_identity_number, fecha: new Date((dto.fecha_emision ?? new Date().toISOString()).slice(0, 10) + 'T00:00:00Z'), enviado: dto.agente_retencion,
+          numero: dto.customer_identity_number, fecha: new Date(resolverFechaEmision(dto.fecha_emision).slice(0, 10) + 'T00:00:00Z'), enviado: dto.agente_retencion,
           correccion: dto.correccion_retencion })
       : null;
     if (determinacion) dto = { ...dto, agente_retencion: determinacion.aplica };

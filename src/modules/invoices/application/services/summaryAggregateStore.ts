@@ -1,3 +1,4 @@
+import { fechaFiscalLima } from '../../fiscalDate';
 import { validarPlazoDespachoRa } from './summaryDispatchDeadline';
 import { SummaryPollingCoordinator, pollingOf } from './summaryPollingCoordinator';
 import { raReversalWork, raWorks } from './raBridgeReversalService';
@@ -17,7 +18,7 @@ export interface SeleccionBaja { id: string; motivo: string; }
 export interface AggregateMember { id: string; serie: string; correlativo: number; tipoComprobante: string; motivo?: string; }
 export const membersOf = (row: Pick<InvoiceAggregate, 'members'>): AggregateMember[] => row.members as unknown as AggregateMember[];
 export const resumenFingerprint = (kind: string, fecha: string, selection: SeleccionBaja[]) => createHash('sha256').update(JSON.stringify([kind, fecha, [...selection].sort((a, b) => a.id.localeCompare(b.id))])).digest('hex');
-export const hoyLima = () => new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+export const hoyLima = fechaFiscalLima;
 const memberIds = (value: unknown): string[] => Array.isArray(value)
   ? value.flatMap(m => m && typeof m === 'object' && typeof m.id === 'string' && m.id.trim() ? [m.id] : []) : [];
 const numberOf = (m: AggregateMember) => `${m.serie}-${Number(m.correlativo)}`;

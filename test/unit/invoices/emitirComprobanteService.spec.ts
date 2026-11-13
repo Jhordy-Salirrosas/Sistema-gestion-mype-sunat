@@ -1020,3 +1020,17 @@ describe('M1 guardas estrictas sin inferir documentos', () => {
     expect(h.series.reservarCorrelativo).not.toHaveBeenCalled();
   });
 });
+
+it('emisión conserva el día fijado si la lectura del emisor cruza medianoche de Lima', async () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-11-13T04:59:00Z'));
+  try {
+    const h = montar(); const dto = factura();
+    const company = await h.prisma.company.findUnique();
+    h.prisma.company.findUnique.mockImplementationOnce(async () => {
+      jest.setSystemTime(new Date('2026-11-13T05:00:00Z')); return company;
+    });
+    await h.servicio.emitir(dto, COMPANY_ID);
+    expect(h.creadas[0]).toMatchObject({ fecha_emision: new Date('2026-11-12T00:00:00Z'), payload_ubl: { fechaEmision: '2026-11-12' } });
+    expect(dto.fecha_emision).toBeUndefined();
+  } finally { jest.useRealTimers(); }
+});

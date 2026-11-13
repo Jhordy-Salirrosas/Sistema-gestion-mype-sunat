@@ -3466,3 +3466,15 @@ Las pruebas del backend ejercitan la ruta HTTP real con el orden de controladore
 La construcción no realiza emisiones, envíos, acceso a producción, despliegues, merges ni apertura de PR. Los cambios del frontend se entregan exclusivamente en el repositorio backend mediante `ferry/m1-monitor-real`, con archivos finales bajo `frontend/` y manifiesto SHA-256 en FERRY.md.
 
 Verificación final: backend 339 suites / 3308 pruebas aprobadas (sin cambios en las 4 suites y 38 pruebas omitidas; 12 snapshots aprobados), frente a 338 / 3298 de la base. Frontend 160 archivos / 1242 pruebas aprobadas, frente a 158 / 1235. Cobertura local del código nuevo: backend 18/18 líneas y 22/22 ramas; frontend 20/20 líneas y 21/21 ramas, 100% en ambos. Builds correctos; lint sin errores en los archivos del cambio (advertencias previas: dos en backend y cuatro en frontend). El caso paginado del frontend recorre 101 documentos, respetando páginas de 100 filas.
+
+## Fecha fiscal en Lima
+
+El valor por defecto de `fecha_emision` se obtenía de la fecha UTC del reloj. Entre las 19:00 y las 23:59 de Lima podía adelantar un día la emisión, afectar la validación de cuotas (3267) y desalinear la fecha del comprobante con los resúmenes y períodos locales.
+
+`fiscalDate.ts` centraliza el día fiscal con `America/Lima`. La emisión resuelve su fecha una vez antes de las guardas y reutiliza ese valor para retención, liquidación, payload UBL y persistencia, incluso si la operación cruza medianoche. Las fechas explícitas se conservan. RA/RC, reserva de agregados, plazo del despacho RA, métricas, mes predeterminado del reporte de ventas y fallback de período contable reutilizan la misma fuente.
+
+Los días fiscales persistidos conservan su representación existente a medianoche UTC; no se convierten como instantes ni se reescriben comprobantes históricos. Tampoco se modifican los timestamps de reintentos, certificados ni auditoría. No hay migraciones, cambios de frontend ni envíos reales.
+
+Las pruebas cubren 18:59/19:00 y 23:59/00:00 de Lima, crédito nocturno con primera cuota al día siguiente real, cuota del mismo día rechazada, cruce de medianoche durante guardas y lectura del emisor, RA/RC nocturno, vencimiento del plazo RA al cambiar el día de Lima, fechas explícitas/históricas y cambio de mes en reportes.
+
+Verificación local: línea base 345 suites / 3373 pruebas; resultado final 346 suites / 3389 pruebas aprobadas, con las mismas 4 suites / 38 pruebas omitidas y 12 snapshots aprobados. Build correcto; lint sin errores y con dos advertencias preexistentes. Código nuevo: 25/25 líneas y 5/5 ramas cubiertas (100%). La ejecución instrumentada superó todas las pruebas funcionales, pero una medición de latencia Outbox no alcanzó el umbral 9/10; la repetición completa sin instrumentación quedó verde, sin cambiar el test ni su límite.

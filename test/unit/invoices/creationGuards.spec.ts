@@ -212,3 +212,17 @@ it.each(['07','08'])('nota %s con cantidad de bolsas omitida valida el impuesto 
  const h=harness();
  await expect(h.run({...note(),tipo_comprobante:tipo,serie:tipo==='07'?'FC01':'FD01',codigo_motivo_nota:tipo==='07'?'06':'02',items:[{...base().items[0],icbper:1}]})).rejects.toMatchObject({response:{code:'BOLSAS_NOTA_SUPERAN_CANTIDAD'}});
 });
+
+it('fija emisión y retención antes de una guarda que cruza medianoche, sin mutar la petición', async () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-11-13T04:59:00Z'));
+  try {
+    const h = harness(); const dto = { ...base(), fecha_emision: undefined };
+    h.tx.inventoryWarehouse.findFirst.mockImplementationOnce(async () => {
+      jest.setSystemTime(new Date('2026-11-13T05:00:00Z')); return { id: 'warehouse' };
+    });
+    const result = await h.run(dto);
+    expect(result.fecha_emision).toBe('2026-11-12');
+    expect(dto.fecha_emision).toBeUndefined();
+    expect(h.tx.partnerTaxStatus.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ valid_from: { lte: new Date('2026-11-12T00:00:00Z') } }) }));
+  } finally { jest.useRealTimers(); }
+});
