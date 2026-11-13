@@ -3428,3 +3428,7 @@ Antes del primer sendSummary, el despacho vuelve a leer las fechas de todos los 
 ### Punto 4 — ICBPER en notas de descuento
 
 NC 04/09 acredita devolución de bolsas únicamente mediante cantidadBolsas positiva en sus propias líneas. Un importe ICBPER heredado sin esa cantidad no declara 7152 ni incrementa el total. La liquidación recalcula los importes de las altas; la defensa XML retira el tributo no acreditado y ajusta el total solo cuando el payload indica que ya lo incluía, sin mutar dicho payload. La cantidad global legada no sustituye la declaración por línea. Con devolución explícita positiva se conserva el tributo y su partición válida para 3236. El espejo de la anulación 01 queda intacto: hashes previos fijados para gravadas y gratuitas. Se validan NC 04/09 con cantidad ausente, cero y positiva contra las hojas oficiales.
+
+### ND inafecta — tasa explícita
+
+Solo DebitNote con tributo 9998 incorpora Percent 0.00, conservando categoría y afectación 30. Se valida con la hoja oficial ND con y sin bolsas, sin 2992. Facturas y boletas conservan su representación; no se asignan tasas a campos tributarios desconocidos.
