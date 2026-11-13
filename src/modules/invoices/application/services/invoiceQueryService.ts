@@ -1,3 +1,4 @@
+import { leerIdsDlq, filtrarDlq } from './invoiceDlqProjection';
 import { esUnidadFerreteria } from '../../sunatCatalogsQuery';
 /**
  * Consulta de comprobantes (TA-29): listado, detalle y reintento de CDR.
@@ -153,7 +154,9 @@ export class InvoiceQueryService {
     page?: string,
     pageSize?: string,
   ): Promise<PaginaComprobantesDto> {
-    const where = construirWhere(companyId, filtros);
+    const condiciones = construirWhere(companyId, filtros);
+    const idsDlq = await leerIdsDlq(this.queue, companyId);
+    const where = filtrarDlq(condiciones, filtros.en_dlq, idsDlq);
     const paginacion = normalizarPaginacion(page, pageSize);
 
     // Las dos consultas van en una transacción para que el total y la página
@@ -176,7 +179,7 @@ export class InvoiceQueryService {
     );
 
     return {
-      data: filasConOrigen.map(aListado),
+      data: filasConOrigen.map(fila => aListado({ ...fila, en_dlq: idsDlq?.has(fila.id) ?? null })),
       total,
       page: paginacion.page,
       page_size: paginacion.page_size,
@@ -201,7 +204,8 @@ export class InvoiceQueryService {
     const [filaConOrigen] = await this.adjuntarComprobantesOrigen(companyId, [
       fila as FilaDetalle,
     ]);
-    return aDetalle(filaConOrigen as FilaDetalle);
+    const idsDlq = await leerIdsDlq(this.queue, companyId);
+    return aDetalle({ ...filaConOrigen as FilaDetalle, en_dlq: idsDlq?.has(id) ?? null });
   }
 
   /**
