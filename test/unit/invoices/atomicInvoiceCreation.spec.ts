@@ -209,3 +209,6 @@ it.each(['07','08'].flatMap(tipo=>['create','emitir'].map(route=>[tipo,route])))
  expect(h.tx.invoice.create.mock.calls[0][0].data.customer_identity_number).toBe('12345678');
  expect(h.tx.invoice.findFirst.mock.invocationCallOrder[0]).toBeLessThan(h.tx.$queryRaw.mock.invocationCallOrder[0]);
 });
+it.each([undefined,null,[null],[{codigo:null}]])('entrada estructural inválida %j no falla en la exclusión ni reserva número',async items=>{
+ const h=harness();await expect(h.service.emitir({...pantalla,items} as never,'empresa','invalid-items-request-key')).rejects.toMatchObject({status:400});expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();
+});

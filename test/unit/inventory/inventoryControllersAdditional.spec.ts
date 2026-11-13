@@ -355,6 +355,10 @@ describe('Inventory Controllers (Additional Coverage)', () => {
 
     it('actualiza producto con variantes, presentaciones y proveedores y gestiona sub-endpoints', async () => {
       mockPrisma.inventoryProduct.findFirst.mockResolvedValue({ id: 'p-1', sku: 'SKU-1' });
+      mockPrisma.$executeRaw = jest.fn(async () => 1);
+      mockPrisma.invoice = { findMany: jest.fn(async () => []) };
+      mockPrisma.inventoryMovement = { findMany: jest.fn(async () => []) };
+      mockPrisma.$transaction = jest.fn(async (work: any) => work(mockPrisma));
 
       await controller.updateProduct(
         'SKU-1',
