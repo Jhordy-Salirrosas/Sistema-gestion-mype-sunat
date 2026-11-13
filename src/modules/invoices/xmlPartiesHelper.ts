@@ -32,6 +32,7 @@ export interface PartyEmisor {
 }
 
 export interface PartyCliente {
+  direccion?: string;
   tipoDocumento: string;
   numeroDocumento: string;
   razonSocial: string;
@@ -93,7 +94,11 @@ export const bloqueCliente = (c: PartyCliente): string => `  <cac:AccountingCust
         <cbc:ID schemeID="${esc(c.tipoDocumento)}">${esc(c.numeroDocumento)}</cbc:ID>
       </cac:PartyIdentification>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>${esc(c.razonSocial)}</cbc:RegistrationName>
+        <cbc:RegistrationName>${esc(c.razonSocial)}</cbc:RegistrationName>${c.direccion ? `
+        <cac:RegistrationAddress>
+          <cac:AddressLine><cbc:Line>${esc(c.direccion)}</cbc:Line></cac:AddressLine>
+          <cac:Country><cbc:IdentificationCode>PE</cbc:IdentificationCode></cac:Country>
+        </cac:RegistrationAddress>` : ''}
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingCustomerParty>`;

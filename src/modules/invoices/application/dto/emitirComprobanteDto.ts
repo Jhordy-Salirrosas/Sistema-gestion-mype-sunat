@@ -205,6 +205,12 @@ export class EmitirComprobanteDto {
   @Matches(/\S/, { message: 'El nombre del adquirente no puede quedar en blanco' })
   customer_legal_name: string;
 
+  /** Dirección editable del receptor; nunca modifica el domicilio del emisor. */
+  @IsOptional()
+  @IsString()
+  @Length(0, 1500)
+  customer_address?: string;
+
   @IsOptional()
   @IsDateString({ strict: true })
   fecha_emision?: string;
