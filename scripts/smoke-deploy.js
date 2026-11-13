@@ -3,7 +3,7 @@
  * Solo hace peticiones GET; no modifica datos.
  */
 const backend = process.env.SMOKE_BACKEND_URL || 'https://sistema-mype-sunat-back.onrender.com';
-const frontend = process.env.SMOKE_FRONTEND_URL || 'https://fronted-sistema-mype-sunat.vercel.app';
+const frontend = process.env.SMOKE_FRONTEND_URL || 'https://sync-sunat.pages.dev';
 
 async function check(nombre, url, esperado) {
   try {

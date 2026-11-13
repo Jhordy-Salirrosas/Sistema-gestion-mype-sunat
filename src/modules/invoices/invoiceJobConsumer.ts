@@ -81,6 +81,7 @@ interface InvoiceRow {
   correlativo: number;
   estado: InvoiceStatus;
   payload_ubl: unknown;
+  referenced_document_type?: string | null;
   xml_storage_url: string | null;
 }
 
@@ -413,6 +414,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
         correlativo: true,
         estado: true,
         payload_ubl: true,
+        referenced_document_type: true,
         xml_storage_url: true,
       },
     });
@@ -447,7 +449,7 @@ export class InvoiceJobConsumer implements OnModuleInit {
       );
     }
 
-    const xml = this.ublGenerator.generateInvoiceXml(payload);
+    const xml = this.ublGenerator.generateInvoiceXml({ ...payload, referenced_document_type: invoice.referenced_document_type ?? payload.referenced_document_type });
     const validacion = this.xsdValidator.validateInvoiceUbl21(xml);
     if (!validacion.isValid) {
       const detalle = (validacion.errors ?? []).join(' | ');

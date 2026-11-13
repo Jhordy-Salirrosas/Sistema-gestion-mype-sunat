@@ -367,9 +367,14 @@ export class PurchasesService {
     }));
   }
 
-  async createManualPayable(companyId: string, dto: { supplierName: string; supplierDocNumber: string; description: string; amount: number; issueDate?: string }) {
-    const monto = Math.round(Number(dto.amount) * 100) / 100;
-    if (!(monto > 0)) throw new BadRequestException('El monto debe ser mayor a cero.');
+  async createManualPayable(companyId: string, dto: { supplierName: string; supplierDocNumber: string; description: string; amount: number; issueDate?: string; currencyCode?: string; exchangeRate?: number }) {
+    const montoOriginal = Math.round(Number(dto.amount) * 100) / 100;
+    if (!(montoOriginal > 0)) throw new BadRequestException('El monto debe ser mayor a cero.');
+    const moneda = (dto.currencyCode ?? 'PEN').trim().toUpperCase();
+    if (!['PEN', 'USD'].includes(moneda)) throw new BadRequestException('La moneda debe ser PEN o USD.');
+    const tipoCambio = moneda === 'USD' ? Number(dto.exchangeRate) : 1;
+    if (moneda === 'USD' && !(tipoCambio > 0)) throw new BadRequestException('Indique un tipo de cambio mayor a cero.');
+    const monto = Math.round(montoOriginal * tipoCambio * 100) / 100;
     if (!dto.supplierName?.trim() || !dto.supplierDocNumber?.trim()) throw new BadRequestException('Proveedor y documento son obligatorios.');
     const reglas = await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'GASTO', is_active: true }, orderBy: { line_order: 'asc' } });
     const lineas = new Set(reglas.map((r) => r.line_order));
@@ -382,8 +387,8 @@ export class PurchasesService {
       data: {
         company_id: companyId, purchase_number: numero, supplier_doc_type: '6', supplier_doc_number: dto.supplierDocNumber.trim(),
         supplier_name: dto.supplierName.trim(), document_type_code: '00', document_serial: 'MANUAL', document_number: numero,
-        issue_date: fecha, accounting_date: fecha, net_amount: monto, igv_amount: 0, total_amount: monto,
-        status: 'REGISTRADA', paid_amount: 0, notes: `CxP manual: ${dto.description.trim()}`,
+        issue_date: fecha, accounting_date: fecha, currency_code: moneda, exchange_rate: moneda === 'USD' ? tipoCambio : null, net_amount: monto, igv_amount: 0, total_amount: monto,
+        status: 'REGISTRADA', paid_amount: 0, notes: `CxP manual: ${dto.description.trim()}${moneda === 'USD' ? ` (USD ${montoOriginal.toFixed(2)} @ ${tipoCambio})` : ''}`,
       },
     });
     if (this.accounting) {

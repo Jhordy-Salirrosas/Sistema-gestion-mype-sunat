@@ -1,0 +1,14 @@
+[
+  {
+    "name": "gravada",
+    "aff": "10",
+    "mixed": false,
+    "hash": "468ad6f6f3158407d6f9f4815c5917d5e788332970e51aeba3c0b3a588b29c40"
+  },
+  {
+    "name": "mixta",
+    "aff": "11",
+    "mixed": true,
+    "hash": "20fd31b0523d4a0645c1d177bb34da6fa3470048444c296afb6d1211932a287c"
+  }
+]
