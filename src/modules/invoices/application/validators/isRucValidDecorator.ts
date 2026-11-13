@@ -20,7 +20,12 @@ export class IsRucValidConstraint implements ValidatorConstraintInterface {
       return false;
     }
 
-    // 2. Factores de ponderación del algoritmo.
+    // 2. Prefijos válidos del RUC peruano (SUNAT).
+    if (!['10', '15', '16', '17', '20'].includes(ruc.slice(0, 2))) {
+      return false;
+    }
+
+    // 3. Factores de ponderación del algoritmo.
     const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
     let sum = 0;
 
