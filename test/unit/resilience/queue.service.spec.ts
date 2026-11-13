@@ -530,3 +530,26 @@ it('no rescata DLQ sin la compuerta explícita del llamador M1', async () => {
   await expect(service.reenqueueInvoiceIfIdle('i', 'c', undefined, { rescatarDlq: true })).resolves.toEqual({ estado: 'ESTADO_NO_PERMITIDO' });
   expect(boss.send).not.toHaveBeenCalled(); expect(boss.deleteJob).not.toHaveBeenCalled();
 });
+
+
+describe('membresía de trabajos vivos para el lote M1',()=>{
+  it.each(['created','retry','active'])('incluye estado %s sin el filtro queued:true',async state=>{
+    const {service,boss}=crearServicio();boss.findJobs.mockResolvedValue([{state}]);
+    expect(await service.hasLiveInvoiceJob('invoice-local')).toBe(true);
+    expect(boss.findJobs).toHaveBeenCalledWith(INVOICE_QUEUE,{data:{invoice_id:'invoice-local'}});
+    expect(boss.send).not.toHaveBeenCalled();
+  });
+  it.each(['completed','cancelled','failed'])('no considera vivo un trabajo %s',async state=>{
+    const {service,boss}=crearServicio();boss.findJobs.mockResolvedValue([{state}]);
+    expect(await service.hasLiveInvoiceJob('invoice-local')).toBe(false);
+  });
+  it('sin trabajos no inventa membresía',async()=>{
+    const {service,boss}=crearServicio();boss.findJobs.mockResolvedValue([]);
+    expect(await service.hasLiveInvoiceJob('invoice-local')).toBe(false);
+  });
+  it('propaga el error de lectura para que M1 no publique sin comprobar',async()=>{
+    const {service,boss}=crearServicio();boss.findJobs.mockRejectedValue(new Error('consulta no disponible'));
+    await expect(service.hasLiveInvoiceJob('invoice-local')).rejects.toThrow('consulta no disponible');
+    expect(boss.send).not.toHaveBeenCalled();
+  });
+});
