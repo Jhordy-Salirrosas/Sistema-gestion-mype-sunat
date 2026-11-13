@@ -19,4 +19,22 @@ describe('PurchasesService - CxP manual', () => {
     await expect(service.createManualPayable('c1', { supplierName: 'Proveedor', supplierDocNumber: '20100070970', description: 'Servicio', amount: 0 })).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.createManualPayable('c1', { supplierName: 'Proveedor', supplierDocNumber: '20100070970', description: 'Servicio', amount: 10 })).rejects.toThrow('reglas GASTO');
   });
+
+  it('convierte CxP en USD a soles y guarda tipo de cambio', async () => {
+    const prisma = {
+      accountingRule: { findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '63111' }, { line_order: 3, account_code: '42121' }]) },
+      nationalPurchase: { create: jest.fn().mockResolvedValue({ id: 'p2' }) },
+    };
+    const accounting = { execute: jest.fn().mockResolvedValue({}) };
+    const service = new PurchasesService(prisma as never, accounting as never);
+    await service.createManualPayable('c1', { supplierName: 'Proveedor', supplierDocNumber: '20100070970', description: 'Servicio', amount: 100, currencyCode: 'USD', exchangeRate: 3.75 });
+    expect(prisma.nationalPurchase.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ total_amount: 375, currency_code: 'USD', exchange_rate: 3.75 }) }));
+    expect(accounting.execute).toHaveBeenCalledWith(expect.objectContaining({ lines: expect.arrayContaining([expect.objectContaining({ accountCode: '42121', creditAmount: 375 })]) }));
+  });
+
+  it('exige tipo de cambio para USD', async () => {
+    const prisma = { accountingRule: { findMany: jest.fn().mockResolvedValue([{ line_order: 1, account_code: '63111' }, { line_order: 3, account_code: '42121' }]) } };
+    const service = new PurchasesService(prisma as never, { execute: jest.fn() } as never);
+    await expect(service.createManualPayable('c1', { supplierName: 'Proveedor', supplierDocNumber: '20100070970', description: 'Servicio', amount: 10, currencyCode: 'USD' })).rejects.toThrow('tipo de cambio');
+  });
 });

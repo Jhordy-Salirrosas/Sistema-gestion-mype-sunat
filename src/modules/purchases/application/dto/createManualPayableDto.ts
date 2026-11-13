@@ -8,5 +8,7 @@ export class CreateManualPayableDto {
   supplierDocNumber!: string;
   @IsString() description!: string;
   @IsNumber() @Min(0.01) amount!: number;
+  @IsOptional() @IsString() currencyCode?: string;
+  @IsOptional() @IsNumber() @Min(0.000001) exchangeRate?: number;
   @IsOptional() @IsDateString() issueDate?: string;
 }
