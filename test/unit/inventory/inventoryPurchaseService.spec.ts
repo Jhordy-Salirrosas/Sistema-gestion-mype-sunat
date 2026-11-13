@@ -339,7 +339,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       { supplier_doc_number: '20100000001', supplier_name: 'Proveedor', total_amount: 100, paid_amount: 0, issue_date: new Date('2026-11-01') },
     ]);
     const r = await service.listPayables(companyId);
-    expect(r).toEqual([{ supplierDocNumber: '20100000001', supplierName: 'Proveedor', total: 218, paid: 50, balance: 168, count: 2, overdue: 68, oldestDays: expect.any(Number), aging: { d0_30: 100, d31_60: 0, d61_90: 68, d90_plus: 0 } }]);
+    expect(r).toEqual([{ supplierDocNumber: '20100000001', supplierName: 'Proveedor', total: 218, paid: 50, balance: 168, count: 2, overdue: 68, oldestDays: expect.any(Number), lastActivityAt: null, aging: { d0_30: 100, d31_60: 0, d61_90: 68, d90_plus: 0 } }]);
   });
 
   it('arma estado de cuenta por proveedor', async () => {

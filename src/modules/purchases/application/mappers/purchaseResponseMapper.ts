@@ -31,6 +31,7 @@ export function mapPurchaseRecord(
     documentSerial: purchase.document_serial,
     documentNumber: purchase.document_number,
     issueDate: purchase.issue_date,
+    createdAt: purchase.created_at,
     warehouseCode: purchase.warehouse_code,
     ...(includeExtended
       ? {
