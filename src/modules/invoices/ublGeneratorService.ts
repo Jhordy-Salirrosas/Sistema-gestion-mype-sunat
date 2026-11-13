@@ -1,3 +1,4 @@
+import { esDocumentoIntegramenteGratuito } from './freeInvoicePolicy';
 import { aplicarIcbperNota } from './noteIcbperPolicy';
 import { separarBolsasNota } from './noteBagXml';
 import { separarBolsasGratuitas } from './freeBagXml';
@@ -334,7 +335,9 @@ export class UblGeneratorService {
     }
 
     const descuentosPrecio = descuentosGlobalesPrecio(validadas, payload.descuentoGlobal);
-    const xml = validadas.map((l, i) => bloqueLinea(l, moneda, raiz, descuentosPrecio[i]));
+    // La hoja de Boleta lee la tasa de ICBPER en TaxCategory; las facturas conservan su estructura certificada.
+    const icbperEnCategoria = raiz !== 'Invoice' || (payload.tipoComprobante === '03' && esDocumentoIntegramenteGratuito('03', validadas));
+    const xml = validadas.map((l, i) => bloqueLinea(l, moneda, raiz, descuentosPrecio[i], icbperEnCategoria));
 
     // ICBPER: se añade su línea al final si el payload declara bolsas y
     // ninguna línea del detalle ya la representa.

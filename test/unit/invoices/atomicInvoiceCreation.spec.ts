@@ -212,3 +212,11 @@ it.each(['07','08'].flatMap(tipo=>['create','emitir'].map(route=>[tipo,route])))
 it.each([undefined,null,[null],[{codigo:null}]])('entrada estructural inválida %j no falla en la exclusión ni reserva número',async items=>{
  const h=harness();await expect(h.service.emitir({...pantalla,items} as never,'empresa','invalid-items-request-key')).rejects.toMatchObject({status:400});expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();
 });
+
+it.each(['create','emitir'])('boleta gratuita con bolsas excesivas bloquea %s antes de reservar o encolar',async route=>{
+ const h=harness();h.tx.inventoryProduct.findMany.mockResolvedValue([{sale_price:118,id:'p1',sku:'SERV',description:'Bien gratuito',sunat_unit_code:'NIU',tax_affectation:'31',is_inventory:false}]);
+ const dto={...pantalla,tipo_comprobante:'03',serie:'B001',items:[{codigo:'SERV',descripcion:'Bien gratuito',cantidad:1,precioUnitario:0,valorUnitario:35,afectacion:'31',cantidadBolsas:2,icbper:1}]};
+ const fiscalDto=traducirEmision(dto as never,{ruc:'20100070970',razonSocial:'Emisor ficticio'},1).dto;
+ await expect(route==='create'?h.service.create(fiscalDto as never,'empresa','boleta-exceso-0001'):h.service.emitir(dto as never,'empresa','boleta-exceso-0002')).rejects.toMatchObject({response:{code:'BOLSAS_GRATUITAS_SUPERAN_CANTIDAD'}});
+ expect(h.tx.$queryRaw).not.toHaveBeenCalled();expect(h.tx.invoice.create).not.toHaveBeenCalled();expect(h.queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
+});
