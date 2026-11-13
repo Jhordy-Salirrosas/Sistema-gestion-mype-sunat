@@ -5,7 +5,7 @@ function harness(rows:any[]=[fila()]) {
   const actual={value:rows[0]};
   const tx={ $queryRaw:jest.fn(async()=>[{adquirido:true}]),invoice:{findFirst:jest.fn(async()=>actual.value),updateMany:jest.fn(async()=>({count:1}))},transactionHistory:{create:jest.fn(async()=>({}))} };
   const prisma={invoice:{findMany:jest.fn(async()=>rows)},$transaction:jest.fn(async(work:any)=>work(tx))};
-  const queue={reenqueueInvoiceIfIdle:jest.fn(async(_id:string,_company:string,permitido:()=>Promise<boolean>)=>({estado:await permitido()?'ENCOLADO':'ESTADO_NO_PERMITIDO'}))};
+  const queue={hasLiveInvoiceJob:jest.fn(async()=>false),reenqueueInvoiceIfIdle:jest.fn(async(_id:string,_company:string,permitido:()=>Promise<boolean>)=>({estado:await permitido()?'ENCOLADO':'ESTADO_NO_PERMITIDO'}))};
   return {actual,tx,prisma,queue,service:new InvoiceBatchRetryService(prisma as never,queue as never)};
 }
 it.each([
@@ -60,4 +60,14 @@ it('lote vacío devuelve ceros y no abre transacciones',async()=>{
 it('un lote simultáneo conserva exclusiones e informa en curso sin volver a publicar',async()=>{
  const h=harness([fila(),fila('u','EN_COLA',true)]);h.tx.$queryRaw.mockResolvedValue([{adquirido:false}]);
  const r=await h.service.ejecutar('tenant');expect(r).toMatchObject({en_curso:1,encolados:0,omitidos_incertidumbre:1});expect(h.queue.reenqueueInvoiceIfIdle).not.toHaveBeenCalled();
+});
+
+it('un trabajo vivo impide publicar aunque la fila siga siendo elegible',async()=>{
+ const h=harness();h.queue.hasLiveInvoiceJob.mockResolvedValue(true);
+ const r=await h.service.ejecutar('tenant');expect(r).toMatchObject({encolados:0,ya_en_cola:1});
+ expect(h.queue.hasLiveInvoiceJob).toHaveBeenCalledWith('a');expect(h.tx.invoice.updateMany).not.toHaveBeenCalled();expect(h.tx.transactionHistory.create).not.toHaveBeenCalled();
+});
+it('si no puede comprobar trabajos vivos, no autoriza publicación y devuelve no confirmado',async()=>{
+ const h=harness();h.queue.hasLiveInvoiceJob.mockRejectedValue(new Error('cola privada'));
+ const r=await h.service.ejecutar('tenant');expect(r).toMatchObject({encolados:0,no_confirmados:1});expect(h.tx.invoice.updateMany).not.toHaveBeenCalled();
 });

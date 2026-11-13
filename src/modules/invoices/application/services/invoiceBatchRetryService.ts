@@ -37,7 +37,7 @@ function resumir(fase: ReintentoMasivoDto['fase'], documentos: DetalleReintentoM
 }
 
 interface BatchDatabase extends Pick<PrismaService, 'invoice' | '$transaction'> {}
-interface BatchQueue extends Pick<QueueService, 'reenqueueInvoiceIfIdle'> {}
+interface BatchQueue extends Pick<QueueService, 'reenqueueInvoiceIfIdle' | 'hasLiveInvoiceJob'> {}
 
 @Injectable()
 export class InvoiceBatchRetryService {
@@ -74,6 +74,11 @@ export class InvoiceBatchRetryService {
             if (!actual) { decision={...decision,resultado:'OMITIDO_ESTADO',motivo:'El comprobante ya no está disponible.'}; return false; }
             decision=clasificarReintentoMasivo(actual);
             if (decision.resultado !== 'ELEGIBLE') return false;
+            // Incluye jobs reclamados por el worker, aunque Invoice todavía no haya cambiado.
+            if (await this.queue.hasLiveInvoiceJob(fila.id)) {
+              decision={...decision,resultado:'YA_EN_COLA',motivo:'Ya existe un trabajo pendiente o activo; no se duplicó.'};
+              return false;
+            }
             // Mismo rescate conservador que el reintento individual para registros históricos sin marcador.
             await tx.invoice.updateMany({where:{id:fila.id,company_id:companyId,transport_uncertain:null},data:{transport_uncertain:true}});
             await tx.transactionHistory.create({data:{company_id:companyId,invoice_id:fila.id,intento:1,
