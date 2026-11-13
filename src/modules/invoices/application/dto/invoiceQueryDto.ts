@@ -32,6 +32,8 @@ export interface ComprobanteOrigenNotaDto {
 
 /** Un comprobante del listado, con lo justo para la grilla. */
 export interface ComprobanteListadoDto {
+  /** Membresía operativa vigente; null si la cola no pudo consultarse. */
+  en_dlq: boolean | null;
   /** Solo lectura para acciones de la vista; nunca decide el envío. */
   transporte_acreditado?: boolean;
   monto_detraccion?: number | null;
@@ -176,6 +178,7 @@ export interface ReintentoCdrDto {
 
 /** Filtros aceptados por el listado. */
 export interface FiltrosComprobantes {
+  en_dlq?: string;
   puente_pendiente?: string;
   estado?: string;
   tipo?: string;
