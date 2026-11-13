@@ -171,7 +171,7 @@ export class InvoiceQueryController {
    * previa trae reglas incumplidas o no hay nada que informar.
    */
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
   @Post('resumenes/diario/enviar')
   @HttpCode(HttpStatus.OK)
   enviarResumen(
@@ -191,7 +191,7 @@ export class InvoiceQueryController {
    * aceptadas de la fecha.
    */
   @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
   @Post('resumenes/baja/enviar')
   @HttpCode(HttpStatus.OK)
   enviarBaja(

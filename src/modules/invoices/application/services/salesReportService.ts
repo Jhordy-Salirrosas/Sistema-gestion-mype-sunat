@@ -5,9 +5,9 @@ export interface SalesReportResult {
   from: string;
   to: string;
   totals: { sales: number; taxable: number; igv: number; cost: number; profit: number; margin: number; documents: number; withoutCost: { count: number; sales: number }; }
-  byCustomer: Array<{ document: string; customer: string; sales: number; cost: number; profit: number; documents: number }>;
-  byDocument: Array<{ id: string; number: string; date: string; customer: string; total: number; cost: number; profit: number; hasCost: boolean }>;
-  daily: Array<{ date: string; sales: number; cost: number; profit: number }>;
+  byCustomer: Array<{ document: string; customer: string; sales: number; taxable: number; igv: number; cost: number; profit: number | null; documents: number }>;
+  byDocument: Array<{ id: string; number: string; date: string; customer: string; total: number; taxable: number; igv: number; cost: number; profit: number | null; hasCost: boolean }>;
+  daily: Array<{ date: string; sales: number; taxable: number; igv: number; cost: number; profit: number | null }>;
 }
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -26,7 +26,7 @@ export class SalesReportService {
     const facturas = await this.prisma.invoice.findMany({
       where: { company_id: companyId, fecha_emision: { gte: inicio, lte: fin }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
       orderBy: [{ fecha_emision: 'asc' }, { correlativo: 'asc' }],
-      select: { id: true, serie: true, correlativo: true, fecha_emision: true, customer_identity_number: true, customer_legal_name: true, monto_total: true, taxable_operations: true, total_igv: true },
+      select: { id: true, tipo_comprobante: true, serie: true, correlativo: true, fecha_emision: true, customer_identity_number: true, customer_legal_name: true, monto_total: true, taxable_operations: true, total_igv: true },
     });
 
     const ids = facturas.map((f) => f.id);
@@ -41,35 +41,39 @@ export class SalesReportService {
         .filter((l) => l.account_code.startsWith('69'))
         .reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0);
       const facturaId = String(asiento.source_reference_id).replace(/:COSTO$/, '');
-      if (costo > 0) costoPorFactura.set(facturaId, r2(costo));
+      costoPorFactura.set(facturaId, r2((costoPorFactura.get(facturaId) ?? 0) + costo));
     }
 
-    const porCliente = new Map<string, { document: string; customer: string; sales: number; cost: number; profit: number; documents: number }>();
-    const porDia = new Map<string, { sales: number; cost: number; profit: number }>();
+    type Group = { sales: number; taxable: number; igv: number; cost: number; profit: number | null };
+    const porCliente = new Map<string, Group & { document: string; customer: string; documents: number }>();
+    const porDia = new Map<string, Group>();
     const documentos: SalesReportResult['byDocument'] = [];
-    let ventas = 0, base = 0, igv = 0, costo = 0, ventasConCosto = 0, sinCosto = 0, ventasSinCosto = 0;
+    let ventas = 0, base = 0, igv = 0, costo = 0, baseConCosto = 0, utilidadTotal = 0, sinCosto = 0, ventasSinCosto = 0;
 
     for (const f of facturas) {
-      const total = Number(f.monto_total);
+      const signo = f.tipo_comprobante === '07' ? -1 : 1;
+      const total = signo * Number(f.monto_total);
+      const baseFirmada = signo * Number(f.taxable_operations);
       const c = costoPorFactura.get(f.id) ?? 0;
       const tieneCosto = costoPorFactura.has(f.id);
-      const utilidad = r2(total - c);
-      ventas += total; base += Number(f.taxable_operations); igv += Number(f.total_igv); costo += c;
-      if (tieneCosto) ventasConCosto += total; else { sinCosto += 1; ventasSinCosto += total; }
+      const utilidad = tieneCosto ? r2(baseFirmada - c) : null;
+      ventas += total; base += baseFirmada; igv += signo * Number(f.total_igv); costo += c;
+      if (tieneCosto) { baseConCosto += baseFirmada; utilidadTotal += utilidad!; }
+      else if (f.tipo_comprobante === '01' || f.tipo_comprobante === '03') { sinCosto += 1; ventasSinCosto += total; }
       const numero = `${f.serie}-${String(f.correlativo).padStart(8, '0')}`;
-      documentos.push({ id: f.id, number: numero, date: f.fecha_emision.toISOString().slice(0, 10), customer: f.customer_legal_name ?? '', total: r2(total), cost: c, profit: utilidad, hasCost: tieneCosto });
+      documentos.push({ id: f.id, number: numero, date: f.fecha_emision.toISOString().slice(0, 10), customer: f.customer_legal_name ?? '', total: r2(total), taxable: r2(baseFirmada), igv: r2(signo * Number(f.total_igv)), cost: c, profit: utilidad, hasCost: tieneCosto });
       const key = f.customer_identity_number || f.customer_legal_name || '';
-      const actual = porCliente.get(key) ?? { document: f.customer_identity_number ?? '', customer: f.customer_legal_name ?? '', sales: 0, cost: 0, profit: 0, documents: 0 };
-      actual.sales += total; actual.cost += c; actual.profit += utilidad; actual.documents += 1;
+      const actual = porCliente.get(key) ?? { document: f.customer_identity_number ?? '', customer: f.customer_legal_name ?? '', sales: 0, taxable: 0, igv: 0, cost: 0, profit: null, documents: 0 };
+      actual.sales += total; actual.taxable += baseFirmada; actual.igv += signo * Number(f.total_igv); actual.cost += c; if (utilidad !== null) actual.profit = (actual.profit ?? 0) + utilidad; actual.documents += 1;
       porCliente.set(key, actual);
       const dia = f.fecha_emision.toISOString().slice(0, 10);
-      const d = porDia.get(dia) ?? { sales: 0, cost: 0, profit: 0 };
-      d.sales += total; d.cost += c; d.profit += utilidad;
+      const d = porDia.get(dia) ?? { sales: 0, taxable: 0, igv: 0, cost: 0, profit: null };
+      d.sales += total; d.taxable += baseFirmada; d.igv += signo * Number(f.total_igv); d.cost += c; if (utilidad !== null) d.profit = (d.profit ?? 0) + utilidad;
       porDia.set(dia, d);
     }
 
-    const redondear = <T extends { sales: number; cost: number; profit: number }>(x: T) => ({ ...x, sales: r2(x.sales), cost: r2(x.cost), profit: r2(x.profit) });
-    const totales = { sales: r2(ventas), taxable: r2(base), igv: r2(igv), cost: r2(costo), profit: r2(ventas - costo), margin: ventasConCosto > 0 ? r2(((ventasConCosto - costo) / ventasConCosto) * 100) : 0, documents: facturas.length, withoutCost: { count: sinCosto, sales: r2(ventasSinCosto) } };
+    const redondear = <T extends Group>(x: T) => ({ ...x, sales: r2(x.sales), taxable: r2(x.taxable), igv: r2(x.igv), cost: r2(x.cost), profit: x.profit === null ? null : r2(x.profit) });
+    const totales = { sales: r2(ventas), taxable: r2(base), igv: r2(igv), cost: r2(costo), profit: r2(utilidadTotal), margin: baseConCosto !== 0 ? r2(utilidadTotal / baseConCosto * 100) : 0, documents: facturas.length, withoutCost: { count: sinCosto, sales: r2(ventasSinCosto) } };
     return {
       from: inicio.toISOString().slice(0, 10), to: fin.toISOString().slice(0, 10), totals: totales,
       byCustomer: [...porCliente.values()].map(redondear).sort((a, b) => b.sales - a.sales),

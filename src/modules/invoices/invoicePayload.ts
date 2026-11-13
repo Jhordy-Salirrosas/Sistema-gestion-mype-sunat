@@ -61,6 +61,7 @@ export interface InvoicePayload extends DatosTributarios {
   lineas?: LineaDetalle[];
   /** Nota de crédito (07) o débito (08): documento que se modifica. */
   documentoAfectado?: string;
+  referenced_document_type?: string | null;
   codigoMotivoNota?: string;
   descripcionMotivoNota?: string;
 }

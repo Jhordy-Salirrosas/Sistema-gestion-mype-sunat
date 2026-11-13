@@ -375,6 +375,7 @@ export const bloqueReferenciaNota = (
   documentoAfectado: string,
   codigoMotivo: string,
   descripcionMotivo: string,
+  tipoDocumento?: string | null,
 ): string => `  <cac:DiscrepancyResponse>
     <cbc:ReferenceID>${esc(documentoAfectado)}</cbc:ReferenceID>
     <cbc:ResponseCode>${esc(codigoMotivo)}</cbc:ResponseCode>
@@ -383,6 +384,6 @@ export const bloqueReferenciaNota = (
   <cac:BillingReference>
     <cac:InvoiceDocumentReference>
       <cbc:ID>${esc(documentoAfectado)}</cbc:ID>
-      <cbc:DocumentTypeCode>01</cbc:DocumentTypeCode>
+      <cbc:DocumentTypeCode>${tipoDocumento === '01' || tipoDocumento === '03' ? tipoDocumento : documentoAfectado.trim().toUpperCase().startsWith('B') ? '03' : '01'}</cbc:DocumentTypeCode>
     </cac:InvoiceDocumentReference>
   </cac:BillingReference>`;

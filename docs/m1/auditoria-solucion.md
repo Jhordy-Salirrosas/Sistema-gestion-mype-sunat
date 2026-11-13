@@ -3309,3 +3309,42 @@ El front modifica únicamente tres consumidores de producción de M1: identidad 
 Migración aditiva pendiente de aplicación compartida: `prisma/migrations/20261112190000_m1_issuer_ruc/migration.sql`. SQL exacto: `ALTER TABLE "companies" ADD COLUMN "issuer_ruc" VARCHAR(11);`. SHA-256: `7fc7787c92bea3da0decee43d928f82cd6e2c5c43d5c4c6c86757f43eebad5c4`. No contiene default, relleno ni UPDATE. Solo se probó en PostgreSQL local aislado; no se aplicó a la base compartida. Ante la deriva informada, aplicar el SQL revisado y registrar la migración/checksum antes de desplegar el nuevo cliente Prisma; no ejecutar reset ni promover migraciones pendientes ajenas.
 
 Línea base: back 326 suites aprobadas, 4 omitidas; 3155 pruebas aprobadas, 38 omitidas; 12 snapshots. Front 150 archivos y 1091 pruebas aprobadas. Final: back 327 suites aprobadas, 4 omitidas; 3191 pruebas aprobadas, 38 omitidas; 12 snapshots. Front 151 archivos y 1105 pruebas aprobadas. Regresiones nuevas: 36 back y 14 front, incluyendo certificado/firma ficticios, writer/HTTP, ambas rutas de creación, RA/RC, históricos y respaldo/cambio de sesión del front. Cobertura local del código nuevo del back: 100% de 24 líneas ejecutables y 39 ramas. Builds Nest/Vite y typecheck aprobados; lint back sin errores (dos avisos previos) y lint focal front sin errores. Sin archivos de SIRE modificados, PRs, despliegues ni emisiones reales.
+
+## Parte 9
+
+Bases: back `c8de3d557d648a5477c7493813ca48c8266551e2`; front `3bc4cdb01dd60ca1ac3da0667add12a6fb1810b2`. El main aprobado del back contiene cambios de Compras respecto de `fbcdc67f`, sin diferencias en invoices. La línea base se volvió a ejecutar sobre c8de3d55.
+
+### Correcciones del back
+
+- **B1:** ventas, base e IGV usan signo negativo para 07 y positivo para 01/03/08, también en cada agrupación. La utilidad usa base con signo menos costo únicamente cuando existe asiento de costo; los documentos y grupos sin costo muestran null. El margen usa la base de los documentos con costo; `withoutCost` cuenta exclusivamente 01/03 sin asiento. La UI y el CSV distinguen «Sin costo» de utilidad cero.
+- **B2:** BillingReference usa `referenced_document_type` persistido cuando es 01/03, con respaldo por serie B/F. Se conserva el dato en generación del worker y regeneración de descarga.
+- **B3:** el controlador de detracciones se registra antes del controlador genérico `GET :id`. El listado limita estados a ACEPTADO/OBSERVADO y detracción positiva; no cambia el POST del depósito. Una prueba HTTP usa el orden real de controladores declarado en el módulo.
+- **B4:** ADMIN y OPERADOR_FACTURACION pueden enviar RA/RC, en coherencia con la consulta del agregado.
+- **B5:** notas 07/08 con motivo distinto de 13 se normalizan a Contado y cuotas vacías antes de adaptación fiscal y guardas de crédito. Motivo 13 conserva PaymentTerms.
+- **B6:** débito usa «Cargo según…»; crédito conserva «Reverso de venta según…» y 01/03 «Venta según…».
+- **B7:** el PDF oficial recibe cuotas y cuenta Banco de la Nación del payload.
+- **B8:** solo facturas 01 íntegramente gratuitas con bolsas expanden su XML mediante una línea ICBPER separada; se retiran impuesto y cantidad de bolsas de las líneas gratuitas originales. No se modifica el payload persistido ni se crea un producto de inventario. PayableAmount conserva S/ 0.50 por bolsa. Las representaciones gravada+bolsas y mixta conservan sus huellas XML. Boletas 03 íntegramente gratuitas con bolsas se rechazan antes de numerar con código `BOLETA_GRATUITA_CON_BOLSAS_NO_ADMITIDA` y mensaje «Una boleta íntegramente gratuita no admite bolsas plásticas. Retire las bolsas o emita una factura.». La alternativa separada provoca 3105 en el validador 03 y la embebida puede provocar 3236 por diferencia de cantidades; las gratuitas sin bolsas y las onerosas no cambian.
+
+### Correcciones del front
+
+F1/F2/F7: notas con fecha propia y cliente del origen, herencia de pago solo para NC13; boletas siempre Contado; borrador inicial vacío y primer producto reemplaza esa fila. F3: permisos compartidos en ruta y controles operativos, con bloqueo y explicación para roles sin permiso de facturación. F4: pertenencia DLQ por historial independiente del origen de presentación. F5: precios coherentes con afectación, sin cobrar IGV en exoneradas/inafectas. F6/F14: catálogo completo de detracciones vigentes y motivos alineados con `noteCatalogs.ts` del back.
+
+F8: PDF de fila usa descarga oficial del back; QR reproduce estrictamente InvoiceQrService: correlativo sin padding, fecha DD-MM-AAAA, importes con dos decimales, dos sustituciones del digest en el mismo orden y separador final. El servicio QR del back no cambia. **Deuda conservada:** contrastar la paridad normativa fina con el anexo SUNAT en una parte posterior.
+
+F9: ICBPER visible como concepto separado en el resumen; en boletas íntegramente gratuitas se bloquean botón y celda de bolsas con el mismo mensaje del back, y la validación anterior al POST impide enviar bolsas ya presentes en el borrador. F10/F11: KPI sin «Acreditado 0» en la vista sin notas y descarga del periodo rotulada «Exportar propuesta RVIE - SIRE (CSV)»; no cambia ningún código de SIRE. F12/F13: referencia gratuita y descuento global visibles; consulta SUNAT oculta para serie B y preparación local. F15: terceros validan DNI/RUC también en edición, con las mismas reglas del alta.
+
+### Verificación
+
+| Suite completa | Línea base | Final |
+|---|---|---|
+| Back Jest | 328 suites / 3194 pruebas aprobadas | 335 suites / 3225 pruebas aprobadas |
+| Front Vitest | 151 archivos / 1105 pruebas aprobadas | 155 archivos / 1153 pruebas aprobadas |
+
+El back conserva cuatro suites y 38 pruebas opcionales omitidas y 12 snapshots aprobados. Invoices unitario: 130 suites / 1973 pruebas en la base; 137 suites / 2004 pruebas finales. Se añaden 31 pruebas back y 48 front. No hay regresiones de aserciones.
+
+Cobertura local de código nuevo, comparada con las bases exactas (líneas ejecutables y ramas instrumentadas intersectadas con líneas añadidas): back **43/43 líneas y 87/87 ramas, 100%**; front **48/48 líneas y 142/142 ramas, 100%**. Informes originales: Jest/Istanbul `coverage-final.json` y Vitest/V8 `coverage-final.json`. No es una afirmación sobre la cobertura global del repositorio ni una ejecución del Quality Gate remoto.
+
+
+Se ejecuta SFS local con certificado ficticio para una y dos unidades gratuitas con una bolsa, sin errores. Las huellas SHA-256 de fixtures gravado y mixto fijan compatibilidad estructural; no son reenvíos de los documentos beta F001-73/F001-74. El cálculo de utilidad esperado 2297.96 − 1636.00 = 661.96 coincide con la fórmula implementada. No se accedió al dataset compartido del periodo 2026-11-01..12: los valores de ventas 7265.01 y 41 documentos requieren contraste de lectura con ese dataset después de integrar; no se presentan como resultados obtenidos localmente.
+
+Sin migraciones ni cambios de SIRE, PRs, merges, despliegues o emisiones reales. Las pruebas usan PostgreSQL aislado, certificados ficticios y transportes locales/mocks; la integración real SUNAT beta permanece deshabilitada. Entrega del front exclusivamente mediante `ferry/m1-parte9-cierre` en el repositorio back, con archivos finales y manifiesto SHA-256 en FERRY.md.
