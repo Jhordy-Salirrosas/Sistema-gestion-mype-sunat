@@ -23,7 +23,7 @@ export class InventoryCostLayerService {
   async capas(companyId: string, warehouseId: string, productId: string): Promise<CostLayer[]> {
     const rows = await this.prisma.inventoryCostLayer.findMany({
       where: { company_id: companyId, warehouse_id: warehouseId, product_id: productId, quantity_remaining: { gt: 0 } },
-      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      orderBy: [{ entry_order: 'asc' }],
     });
     return rows.map((r) => ({ quantity: Number(r.quantity_remaining), unitCost: Number(r.unit_cost) }));
   }
@@ -58,7 +58,7 @@ export class InventoryCostLayerService {
     await this.bloquear(companyId, warehouseId, productId);
     const capas = await this.prisma.inventoryCostLayer.findMany({
       where: { company_id: companyId, warehouse_id: warehouseId, product_id: productId, quantity_remaining: { gt: 0 } },
-      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      orderBy: [{ entry_order: 'asc' }],
     });
     let pendiente = new Prisma.Decimal(quantity);
     const disponible = capas.reduce((s, c) => s.plus(c.quantity_remaining), new Prisma.Decimal(0));
