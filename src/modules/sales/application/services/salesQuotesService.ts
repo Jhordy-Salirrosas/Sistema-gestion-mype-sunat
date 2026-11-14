@@ -27,9 +27,9 @@ const map = (q: any) => ({
 export class SalesQuotesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(companyId: string) {
+  async list(companyId: string, kind: 'COTIZACION' | 'PEDIDO' = 'COTIZACION') {
     const rows = await this.prisma.salesQuote.findMany({
-      where: { company_id: companyId },
+      where: { company_id: companyId, kind },
       include: { items: { orderBy: { item_order: 'asc' } } },
       orderBy: { created_at: 'desc' },
       take: 200,
@@ -43,7 +43,7 @@ export class SalesQuotesService {
     return map(row);
   }
 
-  async create(companyId: string, dto: { customerDocType?: string; customerDocNumber?: string; customerName: string; validUntil?: string; notes?: string; items: Array<{ sku?: string; description: string; unitCode?: string; quantity: number; unitPrice: number }> }) {
+  async create(companyId: string, dto: { kind?: 'COTIZACION' | 'PEDIDO'; customerDocType?: string; customerDocNumber?: string; customerName: string; validUntil?: string; notes?: string; items: Array<{ sku?: string; description: string; unitCode?: string; quantity: number; unitPrice: number }> }) {
     if (!dto.customerName?.trim()) throw new BadRequestException('El cliente es obligatorio.');
     if (!dto.items?.length) throw new BadRequestException('La cotización necesita al menos un ítem.');
     const items = dto.items.map((item, index) => {
@@ -61,9 +61,10 @@ export class SalesQuotesService {
     const subtotal = r2(items.reduce((sum, item) => sum + item.subtotal, 0));
     const igv = r2(items.reduce((sum, item) => sum + item.igv_amount, 0));
     const total = r2(items.reduce((sum, item) => sum + item.total_amount, 0));
+    const kind = dto.kind ?? 'COTIZACION';
     const row = await this.prisma.salesQuote.create({
       data: {
-        company_id: companyId, quote_number: `COT-${Date.now().toString().slice(-9)}`,
+        company_id: companyId, kind, quote_number: `${kind === 'PEDIDO' ? 'PED' : 'COT'}-${Date.now().toString().slice(-9)}`,
         customer_doc_type: dto.customerDocType?.trim() || '6', customer_doc_number: dto.customerDocNumber?.trim() || null,
         customer_name: dto.customerName.trim(), valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
         notes: dto.notes?.trim() || null, subtotal, igv_amount: igv, total_amount: total,
