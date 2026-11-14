@@ -234,7 +234,7 @@ describe('MasterDataService', () => {
 
       const bank = await service.addBankAccount(companyId, 'bp-1', {
         bankName: 'BCP',
-        accountNumber: '191-123456',
+        accountNumber: '191123456',
       });
       expect(bank.id).toBe('bank-1');
     });

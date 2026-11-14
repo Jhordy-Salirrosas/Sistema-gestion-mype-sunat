@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -220,6 +221,17 @@ export class MasterDataController {
     @Body() dto: AddPartnerBankAccountDto,
   ) {
     return this.masterData.addBankAccount(this.requireCompany(companyId), id, dto);
+  }
+
+  @Put('partners/:id/:kind/:recordId')
+  updatePartnerRecord(@CurrentCompany() companyId: string | undefined, @Param('id') id: string, @Param('kind') kind: string, @Param('recordId') recordId: string, @Body() dto: Record<string, unknown>) {
+    if (!dto || typeof dto !== 'object' || Array.isArray(dto)) throw new BadRequestException('Datos del registro requeridos.');
+    return this.masterData.changePartnerRecord(this.requireCompany(companyId), id, kind, recordId, dto);
+  }
+
+  @Delete('partners/:id/:kind/:recordId')
+  deletePartnerRecord(@CurrentCompany() companyId: string | undefined, @Param('id') id: string, @Param('kind') kind: string, @Param('recordId') recordId: string) {
+    return this.masterData.changePartnerRecord(this.requireCompany(companyId), id, kind, recordId);
   }
 
   // Tipos de documento

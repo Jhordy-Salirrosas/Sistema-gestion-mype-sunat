@@ -1,3 +1,4 @@
+import { datosRegistroTercero } from '../validators/partnerRecordValidation';
 import { validarDatosTercero } from '../validators/partnerInputValidation';
 import { Prisma, type BusinessPartner } from '../../../../generated/client/client';
 import {
@@ -545,6 +546,7 @@ export class MasterDataService {
 
   async addAddress(companyId: string, partnerId: string, dto: AddPartnerAddressDto) {
     await this.getPartner(companyId, partnerId);
+    datosRegistroTercero('addresses', dto as unknown as Record<string, unknown>);
     return this.prisma.partnerAddress.create({
       data: {
         partner_id: partnerId,
@@ -561,6 +563,7 @@ export class MasterDataService {
 
   async addContact(companyId: string, partnerId: string, dto: AddPartnerContactDto) {
     await this.getPartner(companyId, partnerId);
+    datosRegistroTercero('contacts', dto as unknown as Record<string, unknown>);
     return this.prisma.partnerContact.create({
       data: {
         partner_id: partnerId,
@@ -579,19 +582,47 @@ export class MasterDataService {
     dto: AddPartnerBankAccountDto,
   ) {
     await this.getPartner(companyId, partnerId);
+    datosRegistroTercero('bank-accounts', dto as unknown as Record<string, unknown>);
     return this.prisma.partnerBankAccount.create({
       data: {
         partner_id: partnerId,
         bank_name: dto.bankName,
         bank_country: (dto.bankCountry ?? 'PE').toUpperCase(),
-        account_number: dto.accountNumber,
-        cci: dto.cci ?? null,
+        account_number: dto.accountNumber.trim(),
+        cci: dto.cci?.trim() || null,
         swift: dto.swift ?? null,
         iban: dto.iban ?? null,
         beneficiary: dto.beneficiary ?? null,
         currency_code: (dto.currencyCode ?? 'PEN').toUpperCase(),
         is_default: dto.isDefault ?? false,
       },
+    });
+  }
+
+  /** Edición/eliminación local, con pertenencia y resumen en una transacción. */
+  async changePartnerRecord(companyId: string, partnerId: string, kind: string, recordId: string, dto?: Record<string, unknown>) {
+    const delegates = { addresses: 'partnerAddress', contacts: 'partnerContact', 'bank-accounts': 'partnerBankAccount' } as const;
+    if (!Object.hasOwn(delegates, kind)) throw new NotFoundException('Pestaña de tercero no encontrada.');
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM business_partners WHERE id = ${partnerId} AND company_id = ${companyId} FOR UPDATE`;
+      const partner = await tx.businessPartner.findFirst({ where: { id: partnerId, company_id: companyId } });
+      if (!partner) throw new NotFoundException('Tercero no encontrado.');
+      // Los nombres de delegado provienen exclusivamente de la lista fija anterior.
+      const delegate = tx[delegates[kind as keyof typeof delegates]] as any;
+      const row = await delegate.findFirst({ where: { id: recordId, partner_id: partnerId } });
+      if (!row) throw new NotFoundException('Registro del tercero no encontrado.');
+      let result;
+      if (dto) {
+        const values = datosRegistroTercero(kind, { ...(kind === 'bank-accounts' ? { bankCountry: row.bank_country } : {}), ...dto }, true);
+        const primary = kind === 'contacts' ? 'is_primary' : 'is_default';
+        if (values[primary] === true) await delegate.updateMany({ where: { partner_id: partnerId, id: { not: recordId } }, data: { [primary]: false } });
+        result = await delegate.update({ where: { id: recordId }, data: values });
+      } else result = await delegate.delete({ where: { id: recordId } });
+      if (kind !== 'bank-accounts') {
+        const main = await delegate.findFirst({ where: { partner_id: partnerId }, orderBy: [{ [kind === 'contacts' ? 'is_primary' : 'is_default']: 'desc' }, { created_at: 'asc' }, { id: 'asc' }] });
+        await tx.businessPartner.update({ where: { id: partnerId }, data: kind === 'contacts' ? { email: main?.email ?? null, phone: main?.phone ?? null } : { address: main?.address ?? null } });
+      }
+      return result;
     });
   }
 

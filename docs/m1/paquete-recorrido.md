@@ -39,3 +39,27 @@ La ficha agrega Activar/Inactivar tercero mediante el PUT existente con `isActiv
 ## Punto 6
 
 La excepción frontend requiere identidad original explícita y coincidencia exacta de tipo/número; no omite validaciones de nombre, correo u otros campos. Alta, identidad distinta o ausencia de original mantienen la validación completa. El formulario sigue sin enviar identidad en PUT. El servidor ya soporta este comportamiento: se añade regresión del tercero histórico de nueve dígitos y del rechazo de un alta equivalente, sin cambiar su contrato de actualización. Pruebas dirigidas verdes en ambas capas.
+
+## Punto 7
+
+Las tres pestañas permiten editar, cancelar edición y eliminar con confirmación, conservando el alta y readOnly. PUT/DELETE comprueban empresa, tercero y pertenencia del registro bajo bloqueo de la cabecera; no aceptan identificadores de otro tercero. Una edición/deleción de contacto o dirección actualiza los campos planos con el principal resultante (o null al eliminar el último), evitando datos eliminados como fallback. En edición, marcar principal desmarca los demás dentro de la transacción. Un PUT sin datos no se interpreta como eliminación.
+
+Validación de escrituras de las pestañas: celular peruano de nueve dígitos comenzando por 9, con +51/0051 y separadores habituales; email válido; cuenta peruana solo numérica y CCI opcional de 20 dígitos. La cuenta conserva ceros iniciales; bancos extranjeros siguen admitiendo identificadores alfanuméricos mediante su país. Las lecturas históricas no pasan por estas validaciones; un registro antiguo inválido se puede consultar y eliminar, y al corregirlo se validan sus valores nuevos. No se crean tablas ni migraciones.
+
+Pruebas dirigidas: back 4 suites / 34 pruebas, front 3 archivos / 9 pruebas. La validación completa detectó dobles antiguos del detalle que devolvían solo historial; se actualizan al contrato completo, manteniendo sus comprobaciones de consulta SUNAT y aislamiento de emisor. Se actualizan también las expectativas restantes del QR sin ceros/digest sin relleno. Esos tres archivos de regresión pasan 53 pruebas.
+
+
+## Cierre
+
+Los siete puntos quedan construidos; no hay puntos detenidos.
+
+| Capa | Base main | Final |
+| --- | --- | --- |
+| Back con PostgreSQL local | 401 suites / 4034 pruebas | 404 suites / 4051 pruebas |
+| Front | 182 archivos / 1404 pruebas | 188 archivos / 1421 pruebas |
+
+Suites completas verdes: +17 pruebas en cada capa. Back conserva 4 suites / 38 pruebas omitidas y 12 snapshots aprobados; la corrida completa final pasó en 221.331 segundos. Además, las siete pruebas de búsqueda con PostgreSQL pasaron habilitando su base local específica. La primera pasada del front detectó dobles parciales del detalle y expectativas del QR anterior; se corrigieron sin debilitar comprobaciones. La suite completa posterior pasó; el ajuste final de tipos del doble se verificó también mediante build y sus 53 regresiones.
+
+Builds completos backend/frontend y lint backend OK. Los warnings de lint existentes no se amplían. El build backend y la generación Prisma se ejecutaron fuera de Jest. La presentación se verificó con pruebas de componentes y compilación; no se certifica un recorrido visual de navegador.
+
+El ferry contiene 29 archivos frontend más FERRY.md, con 30 entradas SHA-256 verificadas. Se aplica sobre frontend main `8393ea1c72b865d2c4442147e2453f479e11c84b`. El backend parte de main `9f61bc553955d6e2c332bc35780c5865aeb62e6d` y solo cambia maestro de terceros; no modifica otros servicios fiscales ni el esquema. No incluye el registro de depósitos de detracción, no se crean PRs ni migraciones, no se despliega ni se realizan emisiones reales.
