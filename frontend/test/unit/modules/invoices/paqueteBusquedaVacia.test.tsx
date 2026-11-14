@@ -1,0 +1,20 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import PartnersPage from '@/modules/customs/pages/PartnersPage';
+import { apiClient } from '@/lib/axios';
+vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn() } }));
+afterEach(() => { cleanup(); vi.resetAllMocks(); });
+it('la búsqueda pendiente muestra carga y una respuesta vacía termina con estado vacío', async () => {
+  let resolver!: (value: { data: [] }) => void;
+  vi.mocked(apiClient.get).mockImplementation((_url, config) => (config?.params as { q?: string })?.q ? new Promise(resolve => { resolver = resolve; }) : Promise.resolve({ data: [] }));
+  const q = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  render(<QueryClientProvider client={q}><PartnersPage context="billing" /></QueryClientProvider>);
+  await screen.findByText('No hay terceros registrados.');
+  fireEvent.change(screen.getByPlaceholderText('Buscar por RUC, razón social o nombre comercial...'), { target: { value: 'sin coincidencias' } });
+  expect(screen.getByText('Cargando terceros...')).toBeTruthy();
+  await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/master-data/partners', { params: { role: 'CLIENTE', q: 'sin coincidencias' } }));
+  await act(async () => resolver({ data: [] }));
+  expect(await screen.findByText('No hay terceros registrados.')).toBeTruthy();
+  expect(screen.queryByText('Cargando terceros...')).toBeNull(); q.clear();
+});

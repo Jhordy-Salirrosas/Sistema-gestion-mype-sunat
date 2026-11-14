@@ -1,0 +1,10 @@
+[
+  {
+    "agente": false,
+    "sha256": "15abdc42c703d69ea8f38bb886b2e30df2585deea953600426ef38919796a53f"
+  },
+  {
+    "agente": true,
+    "sha256": "13329f3a948674a3ce5549f7566b929ad4e2b2a032e32a124f35bd6716df5e77"
+  }
+]

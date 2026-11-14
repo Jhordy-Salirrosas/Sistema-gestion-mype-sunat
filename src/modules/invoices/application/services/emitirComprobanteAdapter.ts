@@ -316,7 +316,7 @@ export const traducirEmision = (
 
   const detraccion = calcularDetraccion(liquidadas, dto, total, originales.gravado, antesGlobal.total);
   validarMedioPagoDetraccionEmision(dto.medio_pago_detraccion, detraccion > 0);
-  const retencion = dto.agente_retencion ? calcularRetencion(total) : 0;
+  const retencion = dto.agente_retencion && detraccion <= 0 ? calcularRetencion(total) : 0;
   const importePagar = centimos(total - detraccion - retencion);
 
   // Aviso honesto: sin SKU no se puede mover el Kardex. No bloquea, porque un
