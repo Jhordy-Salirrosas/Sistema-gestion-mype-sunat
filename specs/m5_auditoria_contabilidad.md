@@ -285,7 +285,10 @@ el frontend de contabilidad (1 326 en total).
 2. **Faltantes/sobrantes de inventario**: el catálogo no tiene hoja bajo `659` para faltantes
    (`6591` Donaciones, `6592` Sanciones). ¿Se agrega la cuenta que use la empresa o se mueve el
    ajuste a `69`?
-3. **Cierre anual**: ¿resultado contra `591`/`592` o contra las cuentas de cierre `88`/`89`?
+
+> **Cierre anual**: ya no bloquea. El asiento de cierre toma la subcuenta de la regla `CIERRE` si
+> está configurada y, si no, usa `59`. Para pasar a `591`/`592` (o a `88`/`89`) alcanza con crear esa
+> regla; no requiere cambio de código.
 
 ## 7. Orden de trabajo propuesto
 
