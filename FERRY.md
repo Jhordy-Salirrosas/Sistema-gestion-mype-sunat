@@ -9,9 +9,9 @@ Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e449736736
 1. Confirmado y corregido: listado y detalle seleccionan Catálogo 09 para 07 y Catálogo 10 para 08 mediante un formateador común. Pruebas de los códigos 01/02/03 en ambos tipos; las vistas comparten los mapeadores.
 2. Confirmado y corregido: el individual usa la clasificación masiva antes de la cola y en la relectura. Excluye bloqueo local, rechazo definitivo e incertidumbre. Consulta sin transmisión probada devuelve SIN_TRANSMISION sin consultar SUNAT cuando el marcador false o el bloqueo previo acreditan no envío y no existe evidencia contraria. Una consulta aislada no prueba transporte. Null histórico sin evidencia conserva la protección conservadora del worker. No cambia el reenvío forzado ni el endpoint genérico de DLQ de resiliencia.
 3. Confirmado en código y corregido: acción explícita Resolver DLQ en Monitor, POST /invoices/:id/resolver-dlq. Solo ACEPTADO y CDR código 0 de la empresa autenticada. Retira trabajos DLQ pendientes propios del documento; cero trabajos es idempotente. No escribe el documento fiscal ni publica un envío; puentes pendientes conservan su acción separada. Las alertas y filas se actualizan tras resolver. No se inspeccionaron trabajos de producción.
-4. Solo diagnóstico, sin construir: 08 Bonificación requiere definir líneas, gratuidad y efectos físicos/monetarios antes de habilitarse; 10 Otros conceptos es viable con alcance restringido al origen y regresión XML, sin asumir cobertura de sus referencias excepcionales. Las notas de boleta BC01/BD01 deben excluirse de RA y anularse por RC. Fuentes oficiales vigentes, guardas y límites en `docs/m1/auditoria-solucion.md`. No se modificaron catálogos habilitados ni RA/RC.
+4. Diagnóstico inicial (sustituido por la segunda adenda al final de este documento): 08 Bonificación requiere definir líneas, gratuidad y efectos físicos/monetarios antes de habilitarse; 10 Otros conceptos es viable con alcance restringido al origen y regresión XML, sin asumir cobertura de sus referencias excepcionales. Las notas de boleta BC01/BD01 deben excluirse de RA y anularse por RC. Fuentes oficiales vigentes, guardas y límites en `docs/m1/auditoria-solucion.md`. No se modificaron catálogos habilitados ni RA/RC.
 
-Ningún punto de implementación detenido. Los dos apartados del punto 4 quedan para decisión posterior conforme al encargo.
+Estado inicial previo a la segunda adenda: puntos 1–3 construidos y punto 4 documentado. Véase la actualización de 4a/4b al final.
 
 ## Aplicación del ferry
 
@@ -68,3 +68,7 @@ Las rutas de frontend siguientes se transportan con el prefijo `frontend/`; el r
 Back: 17 suites / 93 pruebas omitidas en ambas corridas; 12 snapshots aprobados. Incremento neto: 28 pruebas back y 10 front. Suites completas en verde. Build back (`prisma generate` + `nest build`) y front (`tsc -b` + `vite build`) OK. La corrección final de tipos en los dobles del Monitor se verificó además con sus 7 pruebas dirigidas y el build frontend completo.
 
 Las omisiones del back corresponden a suites optativas sin entorno habilitado. Los builds se ejecutan después de terminar Jest y Vitest; no se regenera Prisma mientras Jest lo lee.
+
+## Segunda adenda — 4a
+
+Base: e15caad9. La habilitación completa y conjunta de 08/10 queda detenida: falta una política de unidades bonificadas y el modelo de cálculo no representa un ajuste exclusivo del IGV conservando la base. Los códigos permanecen deshabilitados. El informe SUNAT 057-2025 y la guía UBL precisan el alcance; el documento de auditoría registra contratos, guardas, ejemplo numérico y requisitos para retomarlo. No se confunde viabilidad futura restringida con habilitación completa validada. La exclusión RA del subpunto 4b continúa de forma independiente.
