@@ -1,4 +1,4 @@
-import { agregarItemConBusqueda, colocarProductoEnFilaVacia } from '../lib/invoiceEmptyRow';
+import { enfocarBusquedaProducto, colocarProductoEnFilaVacia } from '../lib/invoiceEmptyRow';
 import { igvReferencialGratuito } from '../lib/invoiceIgvReferencial';
 import { useInvoiceWritePermission } from '../hooks/useInvoiceWritePermission';
 import { InvoiceWriteButton } from '../components/InvoiceWriteButton';
@@ -71,7 +71,7 @@ import {
   PageHeader,
   PageText,
 } from '@/components/ui';
-import { FileText, Send, Plus } from 'lucide-react';
+import { FileText, Send } from 'lucide-react';
 import { documentoValidoParaTipo, mensajeErrorDocumento } from '../lib/invoiceEmitValidation';
 import { useRucAutofill } from '../hooks/useRucAutofill';
 import { CustomerLookupField } from '../components/CustomerLookupField';
@@ -84,7 +84,6 @@ import {
   actualizarItem,
   calcularItem,
   itemDesdeProducto,
-  itemVacio,
   type ItemBorrador,
 } from '../lib/invoiceItems';
 import {
@@ -162,7 +161,7 @@ export default function InvoiceEmissionPage() {
     setClienteRazonSocial(datos.razonSocial);
     setClienteDireccion(datos.direccionFiscal ?? '');
   });
-  const [items, setItems] = useState<readonly ItemBorrador[]>([itemVacio('1')]);
+  const [items, setItems] = useState<readonly ItemBorrador[]>([]);
   const [descuentoGlobal, setDescuentoGlobal] = useState<DescuentoGlobal | null>(null);
   const [agenteRetencion, setAgenteRetencion] = useState(false);
   const [correccionRetencion, setCorreccionRetencion] = useState(false);
@@ -286,7 +285,7 @@ export default function InvoiceEmissionPage() {
 
 
   const agregarItem = () => {
-    agregarItemConBusqueda(setItems, () => itemVacio(String(Date.now())), formRef.current);
+    enfocarBusquedaProducto(formRef.current);
   };
 
   /**
@@ -306,7 +305,6 @@ export default function InvoiceEmissionPage() {
   };
 
   const eliminarItem = (indice: number) => {
-    if (items.length === 1) return;
     setItems((prev) => prev.filter((_, i) => i !== indice));
   };
 
@@ -460,7 +458,7 @@ export default function InvoiceEmissionPage() {
       });
 
       // La grilla se limpia para no reenviar la misma venta por doble clic.
-      setItems([itemVacio('1')]);
+      setItems([]);
       setMedioPagoDetraccion('');
       // Solo lectura: actualizar el dato informativo, nunca reservar numeración.
       void apiClient.get<ConfiguracionBackend>('/invoices/config').then(({ data }) => setSeriesConfiguradas(data.series ?? [])).catch(() => {});
@@ -709,14 +707,7 @@ export default function InvoiceEmissionPage() {
               <CardTitle className="text-base">
                 Detalle de bienes y servicios
               </CardTitle>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={agregarItem}
-              >
-                <Plus className="mr-1 h-4 w-4" /> Añadir ítem
-              </Button>
+
             </CardHeader>
             <CardContent>
               <InvoiceWarehouseSelect value={almacen} onChange={setAlmacen} />

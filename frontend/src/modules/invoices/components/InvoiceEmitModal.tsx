@@ -1,5 +1,5 @@
 import { erroresCamposLinea } from '../lib/invoiceLineFields';
-import { agregarItemConBusqueda, colocarProductoEnFilaVacia } from '../lib/invoiceEmptyRow';
+import { enfocarBusquedaProducto, colocarProductoEnFilaVacia } from '../lib/invoiceEmptyRow';
 import { InvoiceWriteButton } from './InvoiceWriteButton';
 import { useInvoiceWritePermission } from '../hooks/useInvoiceWritePermission';
 import { problemasContenidoEmision } from '../lib/invoiceEmissionValidation';
@@ -58,7 +58,6 @@ import {
   actualizarItem,
   eliminarItem,
   itemDesdeProducto,
-  itemVacio,
   type ItemBorrador,
 } from '../lib/invoiceItems';
 import type { ProductoBuscado } from '../lib/invoiceSearch';
@@ -331,7 +330,7 @@ export const InvoiceEmitModal = ({
         siguiente.items = previo.items.map((item) => ({ ...item, codigoDetraccion: parcial.codigoDetraccion || undefined }));
       }
       if (parcial.documentoAfectado !== undefined && parcial.documentoAfectado !== previo.documentoAfectado) {
-        siguiente.items = [itemVacio(nuevaClave())];
+        siguiente.items = [];
       }
       return siguiente;
     });
@@ -348,13 +347,7 @@ export const InvoiceEmitModal = ({
       items: eliminarItem(previo.items, indice),
     }));
 
-  const nuevoItem = () => {
-    setMostrarErrores(true);
-    agregarItemConBusqueda(
-      transformar => setB(previo => ({ ...previo, items: transformar(previo.items) })),
-      () => itemVacio(nuevaClave()), formularioRef.current,
-    );
-  };
+  const nuevoItem = () => enfocarBusquedaProducto(formularioRef.current);
 
   /**
    * Agrega una línea con los datos del producto elegido en el buscador (TA-61).

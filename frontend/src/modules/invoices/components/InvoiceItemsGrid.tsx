@@ -47,7 +47,7 @@ interface InvoiceItemsGridProps {
   items: readonly ItemBorrador[];
   onCambiar: (indice: number, parcial: Partial<ItemBorrador>) => void;
   onEliminar: (indice: number) => void;
-  onAgregar: () => void;
+  onAgregar?: () => void;
   onAgregarBolsa: (indice: number) => void;
   /**
    * TA-61: productos del almacén para el buscador.
@@ -73,7 +73,6 @@ export const InvoiceItemsGrid = ({
   codigoSoloCatalogo = false,
   onCambiar,
   onEliminar,
-  onAgregar,
   onAgregarBolsa,
   productos = [],
   onAgregarConProducto,
@@ -82,7 +81,6 @@ export const InvoiceItemsGrid = ({
   esNota = false, catalogoEstado = 'listo',
 }: InvoiceItemsGridProps) => {
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set());
-  const [revisarTodos, setRevisarTodos] = useState(false);
   const marcarCampo = (clave: string, target: EventTarget) => {
     const campo = (target as HTMLElement).dataset.lineField;
     if (campo) setEditados(previo => new Set(previo).add(`${clave}:${campo}`));
@@ -91,7 +89,6 @@ export const InvoiceItemsGrid = ({
   const [productoBolsas, setProductoBolsas] = useState('');
   const destinoBolsas = items.findIndex(item => item.clave === productoBolsas && item.codigo.trim());
   const indiceBolsas = destinoBolsas >= 0 ? destinoBolsas : items.findIndex(item => item.codigo.trim());
-  const [avisoMinimo, setAvisoMinimo] = useState(false);
   /**
    * Revisión contra el stock del almacén.
    *
@@ -106,7 +103,6 @@ export const InvoiceItemsGrid = ({
   return (
     <div className="min-w-0 space-y-2 sm:col-span-2">
       {duplicado.dialogo}
-      {avisoMinimo && items.length === 1 && <PageText role="alert" variant="error">Debe quedar al menos una línea</PageText>}
       <div className="flex items-center justify-between">
         <PageText variant="label">Detalle del comprobante</PageText>
         <PageText variant="caption">
@@ -160,7 +156,7 @@ export const InvoiceItemsGrid = ({
           <tbody className="block space-y-3">
             {items.map((item, i) => {
               const errores = erroresCamposLinea(item, esNota);
-              const visible = (campo: keyof typeof errores) => Boolean(errores[campo]) && (mostrarErrores || revisarTodos || editados.has(`${item.clave}:${campo}`));
+              const visible = (campo: keyof typeof errores) => Boolean(errores[campo]) && (mostrarErrores || editados.has(`${item.clave}:${campo}`));
               const totales = calcularItem(item);
               const revisionLinea = revision.lineas[i];
               const conError = revisionLinea?.gravedad === 'error';
@@ -322,7 +318,7 @@ export const InvoiceItemsGrid = ({
                       variant="ghost"
                       size="sm"
                       aria-label={`Eliminar la línea ${i + 1}`}
-                      onClick={() => { if (items.length === 1) setAvisoMinimo(true); else { setAvisoMinimo(false); onEliminar(i); } }}
+                      onClick={() => onEliminar(i)}
                     >
                       ✕
                     </Button>
@@ -343,9 +339,6 @@ export const InvoiceItemsGrid = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => { setRevisarTodos(true); onAgregar(); }}>
-          + Añadir ítem
-        </Button>
         <label className="text-xs">Producto para bolsas<select aria-label="Producto para bolsas" value={items[indiceBolsas]?.clave ?? ''} onChange={e => setProductoBolsas(e.target.value)}>
           {indiceBolsas < 0 && <option value="">Seleccione un producto en la grilla</option>}
           {items.filter(item => item.codigo.trim()).map(item => <option key={item.clave} value={item.clave}>{item.codigo} · {item.descripcion}</option>)}
