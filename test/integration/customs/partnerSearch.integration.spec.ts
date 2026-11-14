@@ -30,6 +30,7 @@ const databaseUrl = process.env.M1_PARTNER_TEST_DATABASE_URL;
       SELECT 'bulk-' || n, 'emp-1', ARRAY['CLIENTE'], 'AAA ' || n, n::text, NULL
       FROM generate_series(1, 205) n`);
     service = new MasterDataService({
+      partnerAddress: { findMany: async () => [] }, partnerContact: { findMany: async () => [] },
       $queryRaw: async (query: Prisma.Sql) => (await client.query(query.text, query.values)).rows,
     } as unknown as PrismaService);
   });

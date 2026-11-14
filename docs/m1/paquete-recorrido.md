@@ -27,3 +27,7 @@ El modal usa el detalle actualizado completo, incluido estado, CDR, historial e 
 ## Punto 3
 
 Trama alineada con invoiceQrService del backend: diez campos, correlativo de ocho dígitos, fecha ISO y digest Base64 íntegro (solo se retiran espacios de formato), sin barra final adicional. El detalle prefiere el RUC histórico devuelto por el servidor al de configuración actual. El generador compartido conserva coherencia con el PDF rápido frontend. Se ajustan las expectativas que fijaban el formato anterior. Pruebas dirigidas: 5 archivos / 66 pruebas verdes.
+
+## Punto 4
+
+Listado (incluida búsqueda) y detalle agregan `primary_contact` y `primary_address`, sin sobrescribir campos planos. La selección ordena por marca principal, creación e id; la lectura masiva de relaciones mantiene filtro de empresa y evita una consulta por fila. Un resolvedor frontend común alimenta contacto/dirección en lista, General y los campos iniciales del formulario. La edición de cabecera elige el mismo principal. No se reescriben datos existentes. Pruebas dirigidas: back 2 suites / 20 pruebas; front 2 archivos / 4 pruebas verdes.

@@ -8,6 +8,11 @@ El documento `docs/m1/paquete-recorrido.md` registra los siete veredictos, decis
 
 ## Inventario
 
+- `src/modules/customs/components/PartnerDetailDrawer.tsx`
+- `src/modules/customs/components/PartnerFormDialog.tsx`
+- `src/modules/customs/lib/partnerSummary.ts`
+- `src/modules/customs/pages/PartnersPage.tsx`
+- `src/modules/customs/services/masterDataApi.ts`
 - `src/modules/invoices/components/InvoiceCdrModal.tsx`
 - `src/modules/invoices/components/InvoiceForcedResend.tsx`
 - `src/modules/invoices/hooks/useInvoiceDetailRefresh.ts`
@@ -22,5 +27,6 @@ El documento `docs/m1/paquete-recorrido.md` registra los siete veredictos, decis
 - `test/unit/modules/invoices/invoiceQueueEvents.test.ts`
 - `test/unit/modules/invoices/invoiceTramaQrDigest.test.ts`
 - `test/unit/modules/invoices/p9-close.test.tsx`
+- `test/unit/modules/invoices/partnerSummary.test.tsx`
 
-14 archivos frontend y FERRY.md: 15 entradas SHA-256. No se incluye el hash del manifiesto en sí mismo.
+20 archivos frontend y FERRY.md: 21 entradas SHA-256. No se incluye el hash del manifiesto en sí mismo.

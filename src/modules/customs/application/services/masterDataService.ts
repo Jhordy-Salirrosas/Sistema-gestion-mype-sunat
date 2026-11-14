@@ -162,7 +162,7 @@ export class MasterDataService {
   // -------------------------------------------------------------------------
   // Clientes / proveedores
   // -------------------------------------------------------------------------
-  listPartners(companyId: string, role?: string, q?: string) {
+  async listPartners(companyId: string, role?: string, q?: string) {
     const term = (q ?? '').trim();
     if (term) {
       // PostgreSQL normaliza también el dato almacenado: no se reescriben
@@ -170,7 +170,7 @@ export class MasterDataService {
       const fold = (value: Prisma.Sql) => Prisma.sql`
         regexp_replace(normalize(lower(${value}), NFD), ${'[\u0300-\u036f]'}, '', 'g')`;
       const needle = fold(Prisma.sql`${term}`);
-      return this.prisma.$queryRaw<BusinessPartner[]>(Prisma.sql`
+      const rows = await this.prisma.$queryRaw<BusinessPartner[]>(Prisma.sql`
         SELECT * FROM business_partners
         WHERE company_id = ${companyId}
           ${role ? Prisma.sql`AND ${role.toUpperCase()} = ANY(roles)` : Prisma.empty}
@@ -182,8 +182,9 @@ export class MasterDataService {
         ORDER BY legal_name ASC
         LIMIT 200
       `);
+      return this.partnerSummaries(companyId, rows);
     }
-    return this.prisma.businessPartner.findMany({
+    const rows = await this.prisma.businessPartner.findMany({
       where: {
         company_id: companyId,
         ...(role ? { roles: { has: role.toUpperCase() } } : {}),
@@ -191,19 +192,30 @@ export class MasterDataService {
       orderBy: { legal_name: 'asc' },
       take: 200,
     });
+    return this.partnerSummaries(companyId, rows);
+  }
+
+  private async partnerSummaries(companyId: string, rows: BusinessPartner[]) {
+    if (!rows.length) return [];
+    const where = { partner_id: { in: rows.map(p => p.id) }, partner: { company_id: companyId } };
+    const [contacts, addresses] = await Promise.all([
+      this.prisma.partnerContact.findMany({ where, orderBy: [{ is_primary: 'desc' }, { created_at: 'asc' }, { id: 'asc' }] }),
+      this.prisma.partnerAddress.findMany({ where, orderBy: [{ is_default: 'desc' }, { created_at: 'asc' }, { id: 'asc' }] }),
+    ]);
+    return rows.map(p => ({ ...p, primary_contact: contacts.find(c => c.partner_id === p.id) ?? null, primary_address: addresses.find(a => a.partner_id === p.id) ?? null }));
   }
 
   async getPartner(companyId: string, id: string) {
     const partner = await this.prisma.businessPartner.findFirst({
       where: { id, company_id: companyId },
       include: {
-        addresses: { orderBy: { is_default: 'desc' } },
-        contacts: { orderBy: { is_primary: 'desc' } },
+        addresses: { orderBy: [{ is_default: 'desc' }, { created_at: 'asc' }, { id: 'asc' }] },
+        contacts: { orderBy: [{ is_primary: 'desc' }, { created_at: 'asc' }, { id: 'asc' }] },
         bank_accounts: { orderBy: { is_default: 'desc' } },
       },
     });
     if (!partner) throw new NotFoundException('Tercero no encontrado.');
-    return partner;
+    return { ...partner, primary_contact: partner.contacts?.[0] ?? null, primary_address: partner.addresses?.[0] ?? null };
   }
 
   async createPartner(companyId: string, dto: CreatePartnerDto) {
@@ -365,7 +377,7 @@ export class MasterDataService {
     // Actualizar o crear dirección principal con ciudad / código postal
     if (dto.city !== undefined || dto.postalCode !== undefined || dto.address !== undefined) {
       const existingAddress = await this.prisma.partnerAddress?.findFirst?.({
-        where: { partner_id: id },
+        where: { partner_id: id }, orderBy: [{ is_default: 'desc' }, { created_at: 'asc' }, { id: 'asc' }],
       });
       if (existingAddress && this.prisma.partnerAddress?.update) {
         await this.prisma.partnerAddress.update({
@@ -395,7 +407,7 @@ export class MasterDataService {
     // Actualizar o crear contacto comercial
     if (dto.contactName !== undefined || dto.email !== undefined || dto.phone !== undefined) {
       const existingContact = await this.prisma.partnerContact?.findFirst?.({
-        where: { partner_id: id },
+        where: { partner_id: id }, orderBy: [{ is_primary: 'desc' }, { created_at: 'asc' }, { id: 'asc' }],
       });
       if (existingContact && this.prisma.partnerContact?.update) {
         await this.prisma.partnerContact.update({
