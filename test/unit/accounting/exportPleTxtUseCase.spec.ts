@@ -122,4 +122,10 @@ describe('ExportPleTxtUseCase', () => {
       useCase.execute({ companyRuc: '20601234567', year: 2026, month: 3, bookCode: '050100' } as any, mockEntries),
     ).rejects.toThrow('módulo 11');
   });
+
+  it('rechaza un libro no implementado en vez de emitir una trama con otra forma', async () => {
+    await expect(
+      useCase.execute({ companyRuc: '20100070970', year: 2026, month: 3, bookCode: '060100' } as any, mockEntries),
+    ).rejects.toThrow('El libro 060100 todavía no está implementado');
+  });
 });

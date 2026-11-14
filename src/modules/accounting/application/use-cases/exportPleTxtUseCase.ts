@@ -12,12 +12,28 @@ export interface PleExportResult {
   content: string;
 }
 
+/**
+ * Libros que este exportador sabe emitir.
+ *
+ * El 6.1 (Libro Mayor) tiene estructura propia y todavía no está implementado;
+ * antes, pedirlo devolvía filas con forma de Libro Diario en un archivo
+ * rotulado 6.1, que es peor que un error porque se puede presentar sin que
+ * nadie lo note.
+ */
+const LIBROS_SOPORTADOS = new Set(['050100', '030100']);
+
 @Injectable()
 export class ExportPleTxtUseCase {
   async execute(
     dto: ExportPleDto,
     entries: AccountingEntryEntity[] = [],
   ): Promise<PleExportResult> {
+    const bookCode = String(dto.bookCode);
+    if (!LIBROS_SOPORTADOS.has(bookCode)) {
+      throw new BadRequestException(
+        `El libro ${bookCode} todavía no está implementado: hoy se exportan el 5.1 (Libro Diario) y el 3.1 (Inventarios y Balances).`,
+      );
+    }
     const ruc = (dto.companyRuc ?? '').replace(/\s/g, '');
     const problemaRuc = validarRucEmisor(ruc);
     if (problemaRuc) throw new BadRequestException(problemaRuc);
