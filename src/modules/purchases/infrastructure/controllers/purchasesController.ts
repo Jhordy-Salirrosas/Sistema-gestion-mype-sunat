@@ -106,5 +106,12 @@ export class PurchasesController {
     );
     return mapPurchaseRecord(purchase, { includeExtended: true, includeItemsCount: false });
   }
+
+  /** Reintenta el asiento de una compra que quedó sin contabilizar. */
+  @Post(':id/post-accounting')
+  @HttpCode(HttpStatus.OK)
+  async postAccounting(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    return this.purchasesService.postAccounting(requirePurchaseCompanyId(companyId), id);
+  }
 }
 

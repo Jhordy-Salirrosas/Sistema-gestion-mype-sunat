@@ -568,6 +568,41 @@ export class PurchasesService {
     };
   }
 
+  /**
+   * Reintenta el asiento de una compra que quedó sin contabilizar.
+   *
+   * Es la acción que ofrece la auditoría para el caso "compra registrada sin
+   * asiento": no crea nada nuevo, vuelve a ejecutar el mismo asiento de compra.
+   */
+  async postAccounting(companyId: string, id: string) {
+    const compra = await this.prisma.nationalPurchase.findFirst({
+      where: { id, company_id: companyId },
+      include: { items: true },
+    });
+    if (!compra) throw new NotFoundException('Compra no encontrada.');
+    if (compra.status === 'ANULADA') throw new BadRequestException('La compra está anulada.');
+
+    const existente = await this.prisma.accountingEntry.findFirst({
+      where: {
+        company_id: companyId,
+        source_module: 'PURCHASES',
+        source_reference_id: compra.purchase_number,
+      },
+      select: { id: true },
+    });
+    if (existente) {
+      return { compra: compra.purchase_number, asientoGenerado: true, yaExistia: true };
+    }
+
+    const mapped = mapPurchaseRecord(compra, { includeExtended: true, includeItemsCount: false });
+    const contabilidad = await this.registrarAsientoCompra(
+      companyId,
+      mapped,
+      new Date(compra.issue_date),
+    );
+    return { compra: compra.purchase_number, ...contabilidad, yaExistia: false };
+  }
+
   /** Asiento de compra PCGE: Naturaleza (60/40/42) y Destino al almacén (20/61). */
   private async registrarAsientoCompra(
     companyId: string,

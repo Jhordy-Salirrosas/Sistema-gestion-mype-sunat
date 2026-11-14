@@ -186,6 +186,8 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - **Trabaja en seco por defecto**: solo con `{ "dryRun": false }` escribe. Tope de 500 por lote.
 - No inventa costos ni cuentas: si el comprobante no tiene costo valorizado en el Kardex, el puente
   lo reporta como pendiente y no crea un asiento de costo.
+- La auditoría también detecta **compras registradas sin asiento** (antes solo miraba ventas) y
+  `POST /api/v1/purchases/:id/post-accounting` reintenta el asiento de compra sin duplicarlo.
 
 **Tarea 6 — estructura de los libros PLE**
 

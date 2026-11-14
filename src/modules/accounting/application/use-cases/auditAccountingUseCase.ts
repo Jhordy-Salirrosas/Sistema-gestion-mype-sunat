@@ -50,6 +50,17 @@ export interface AuditDuplicateIssue {
   detalle: string;
 }
 
+/** Compra nacional registrada sin asiento contable. */
+export interface AuditPurchaseIssue {
+  id: string;
+  numero: string;
+  documento: string;
+  proveedor: string;
+  fecha: string;
+  total: number;
+  detalle: string;
+}
+
 export interface AccountingAuditReport {
   companyId: string;
   period: string | null;
@@ -75,12 +86,18 @@ export interface AccountingAuditReport {
     sinAsiento: AuditInvoiceIssue[];
     sinCosto: AuditInvoiceIssue[];
   };
+  compras: {
+    revisadas: number;
+    truncado: boolean;
+    sinAsiento: AuditPurchaseIssue[];
+  };
   resumen: { errors: number; warnings: number };
 }
 
 /** Tope de filas por consulta: la auditoría informa el truncado, no pagina sola. */
 const MAX_ASIENTOS = 5000;
 const MAX_COMPROBANTES = 2000;
+const MAX_COMPRAS = 2000;
 
 const numeroDe = (serie: string, correlativo: number): string =>
   `${serie}-${String(correlativo).padStart(8, '0')}`;
@@ -304,11 +321,60 @@ export class AuditAccountingUseCase {
       }
     }
 
+    // Compras nacionales sin asiento. Hasta ahora la auditoría solo miraba los
+    // comprobantes de venta: una compra registrada sin asiento (reglas COMPRA
+    // incompletas) quedaba invisible y no había forma de reintentarla.
+    const compras = await this.prisma.nationalPurchase.findMany({
+      where: {
+        company_id: companyId,
+        status: { not: 'ANULADA' },
+        ...(rango ? { issue_date: rango } : {}),
+      },
+      select: {
+        id: true,
+        purchase_number: true,
+        document_serial: true,
+        document_number: true,
+        supplier_name: true,
+        total_amount: true,
+        issue_date: true,
+      },
+      orderBy: [{ issue_date: 'desc' }, { purchase_number: 'desc' }],
+      take: MAX_COMPRAS,
+    });
+
+    const numerosCompra = compras.map((c) => c.purchase_number);
+    const asientosDeCompras = numerosCompra.length
+      ? await this.prisma.accountingEntry.findMany({
+          where: {
+            company_id: companyId,
+            source_module: 'PURCHASES',
+            source_reference_id: { in: numerosCompra },
+          },
+          select: { source_reference_id: true },
+        })
+      : [];
+    const comprasConAsiento = new Set(
+      asientosDeCompras.map((a) => a.source_reference_id).filter((v): v is string => Boolean(v)),
+    );
+
+    const comprasSinAsiento: AuditPurchaseIssue[] = compras
+      .filter((c) => !comprasConAsiento.has(c.purchase_number))
+      .map((c) => ({
+        id: c.id,
+        numero: c.purchase_number,
+        documento: `${c.document_serial}-${c.document_number}`,
+        proveedor: c.supplier_name,
+        fecha: new Date(c.issue_date).toISOString().slice(0, 10),
+        total: Number(c.total_amount),
+        detalle: 'compra registrada sin asiento contable',
+      }));
+
     const erroresConfiguracion = issuesReglas.filter((i) => i.severity === 'ERROR').length;
     const avisosConfiguracion = issuesReglas.filter((i) => i.severity === 'WARN').length;
     const erroresDatos =
       descuadrados.length + sinLineas.length + duplicados.length + conCuentaInvalida.length;
-    const avisosDatos = sinAsiento.length + sinCosto.length;
+    const avisosDatos = sinAsiento.length + sinCosto.length + comprasSinAsiento.length;
     const resumen = {
       errors: erroresConfiguracion + erroresDatos,
       warnings: avisosConfiguracion + avisosDatos,
@@ -341,6 +407,11 @@ export class AuditAccountingUseCase {
         truncado: comprobantes.length === MAX_COMPROBANTES,
         sinAsiento,
         sinCosto,
+      },
+      compras: {
+        revisadas: compras.length,
+        truncado: compras.length === MAX_COMPRAS,
+        sinAsiento: comprasSinAsiento,
       },
       resumen,
     };

@@ -50,6 +50,7 @@ const crearPrisma = (over: Record<string, any> = {}) => ({
   accountingEntry: { findMany: jest.fn().mockResolvedValue([]) },
   invoice: { findMany: jest.fn().mockResolvedValue([]) },
   inventoryMovement: { findMany: jest.fn().mockResolvedValue([]) },
+  nationalPurchase: { findMany: jest.fn().mockResolvedValue([]) },
   ...over,
 });
 
@@ -221,5 +222,58 @@ describe('AuditAccountingUseCase', () => {
       new AuditAccountingUseCase(prisma as never).execute('c1', 'noviembre'),
     ).rejects.toThrow('El período debe tener formato YYYY-MM');
     expect(prisma.accountingEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  describe('compras sin asiento', () => {
+    const compra = (over: Record<string, unknown> = {}) => ({
+      id: 'p1',
+      purchase_number: 'COM-000001',
+      document_serial: 'F001',
+      document_number: '77',
+      supplier_name: 'Proveedor SAC',
+      total_amount: 236,
+      issue_date: new Date('2026-11-08T00:00:00Z'),
+      ...over,
+    });
+
+    it('lista las compras registradas sin asiento', async () => {
+      const prisma = crearPrisma();
+      prisma.accountingEntry.findMany
+        .mockResolvedValueOnce([]) // asientos del período
+        .mockResolvedValueOnce([]) // asientos de comprobantes
+        .mockResolvedValueOnce([]); // asientos de compras
+      prisma.nationalPurchase.findMany.mockResolvedValue([compra()]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1', '2026-11');
+
+      expect(reporte.compras.sinAsiento).toHaveLength(1);
+      expect(reporte.compras.sinAsiento[0]).toMatchObject({
+        numero: 'COM-000001',
+        documento: 'F001-77',
+        proveedor: 'Proveedor SAC',
+        total: 236,
+      });
+    });
+
+    it('no reporta la compra cuando su asiento ya existe', async () => {
+      const prisma = crearPrisma();
+      // Sin comprobantes de venta no se consulta su asiento: la segunda
+      // llamada es la de compras.
+      prisma.accountingEntry.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ source_reference_id: 'COM-000001' }]);
+      prisma.nationalPurchase.findMany.mockResolvedValue([compra()]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+
+      expect(reporte.compras.sinAsiento).toHaveLength(0);
+    });
+
+    it('no consulta asientos de compras cuando no hay compras', async () => {
+      const prisma = crearPrisma();
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+      expect(reporte.compras.revisadas).toBe(0);
+      expect(reporte.compras.sinAsiento).toEqual([]);
+    });
   });
 });
