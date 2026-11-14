@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UnauthorizedE
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CreateExpenseDto } from '../../application/dto/createExpenseDto';
+import { PayExpenseDto } from '../../application/dto/payExpenseDto';
 import { ExpensesService } from '../../application/services/expensesService';
 
 @Controller('api/v1/expenses')
@@ -30,7 +31,7 @@ export class ExpensesController {
 
   @Post(':id/pay')
   @HttpCode(HttpStatus.OK)
-  pay(@Param('id') id: string, @Body() dto: { amount?: number; paymentMethod?: string; bankName?: string }, @CurrentCompany() companyId?: string) {
+  pay(@Param('id') id: string, @Body() dto: PayExpenseDto, @CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
     return this.expenses.pay(companyId, id, dto);
   }

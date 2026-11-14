@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreateCollectionDto {
   @IsString() customerName!: string;
@@ -8,5 +8,11 @@ export class CreateCollectionDto {
   @IsOptional() @IsString() collectionDate?: string;
   @IsOptional() @IsString() paymentMethod?: string;
   @IsOptional() @IsString() bankName?: string;
+  /**
+   * Cuenta de tesorería (`GET /accounting/treasury-accounts`) que recibe el
+   * cobro. Si no llega, se usa la cuenta de las reglas COBRO o, en efectivo,
+   * la caja principal.
+   */
+  @IsOptional() @IsUUID() treasuryAccountId?: string;
   @IsNumber() @Min(0.01) amount!: number;
 }

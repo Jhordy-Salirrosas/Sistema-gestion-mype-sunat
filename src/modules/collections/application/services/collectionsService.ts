@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { TreasuryAccountsService } from '../../../accounting/application/services/treasuryAccountsService';
 
 @Injectable()
 export class CollectionsService {
-  constructor(private readonly prisma: PrismaService, private readonly accounting: GenerateAccountingEntryUseCase) {}
+  constructor(private readonly prisma: PrismaService, private readonly accounting: GenerateAccountingEntryUseCase, @Optional() private readonly tesoreria?: TreasuryAccountsService) {}
 
   async list(companyId: string) {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
@@ -172,7 +173,7 @@ export class CollectionsService {
 
   async create(companyId: string, dto: {
     customerName: string; customerDoc?: string; invoiceNumber?: string; description?: string;
-    collectionDate?: string; paymentMethod?: string; bankName?: string; amount: number;
+    collectionDate?: string; paymentMethod?: string; bankName?: string; amount: number; treasuryAccountId?: string;
   }) {
     if (!dto.customerName?.trim()) throw new BadRequestException('El cliente es obligatorio.');
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('El monto del cobro debe ser mayor a cero.');
@@ -215,12 +216,19 @@ export class CollectionsService {
 
     const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    const cuentaTesoreriaFallback = {
+      code: metodo === 'EFECTIVO' ? '1011' : (porOrden.get(1) ?? '1041'),
+      name: metodo === 'EFECTIVO' ? 'Caja principal' : 'Cuenta corriente',
+    };
+    const cuentaTesoreria = this.tesoreria
+      ? await this.tesoreria.cuentaParaAsiento(companyId, dto.treasuryAccountId, cuentaTesoreriaFallback)
+      : cuentaTesoreriaFallback;
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(),
       glosa: `Cobro de ${cobro.customer_name}${cobro.invoice_number ? ` · ${cobro.invoice_number}` : ''}`,
       sourceModule: 'COLLECTIONS', journalCode: 'CAJ', sourceReferenceId: cobro.id, idempotencyKey: `collection:${cobro.id}`,
       lines: [
-        { lineOrder: 1, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(1) ?? '1041'), accountName: 'Caja o banco', debitAmount: monto, creditAmount: 0 },
+        { lineOrder: 1, accountCode: cuentaTesoreria.code, accountName: cuentaTesoreria.name, debitAmount: monto, creditAmount: 0 },
         { lineOrder: 2, accountCode: porOrden.get(2) ?? '12121', accountName: 'Cuentas por cobrar', debitAmount: 0, creditAmount: monto },
       ],
     });

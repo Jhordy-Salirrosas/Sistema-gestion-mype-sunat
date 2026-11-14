@@ -165,6 +165,31 @@ model AccountingLine {
   @@map("accounting_lines")
 }
 
+/// Cuenta de tesorería de la empresa: alias operativo sobre una subcuenta PCGE.
+///
+/// El catálogo `accounting_accounts` es el PCGE oficial y es global; la empresa
+/// necesita, además, saber **cuáles** de esas subcuentas usa y con qué nombre
+/// operativo ("BCP cuenta corriente", "Caja chica taller"). Sin esta tabla el
+/// código tenía que adivinar con `'101'` o `'1041'` según el medio de pago.
+model CompanyTreasuryAccount {
+  id         String   @id @default(uuid())
+  company_id String
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  /// Subcuenta PCGE usada en el asiento (ej. 1041).
+  code       String
+  /// Nombre operativo que ve el usuario (ej. "BCP cuenta corriente").
+  name       String
+  /// CAJA | BANCO. Determina el filtro por medio de pago en tesorería.
+  kind       String   @default("BANCO")
+  currency   String   @default("PEN")
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  @@unique([company_id, code])
+  @@index([company_id, is_active])
+  @@map("company_treasury_accounts")
+}
+
 model PleBook {
   id                  String        @id @default(uuid())
   company_id          String

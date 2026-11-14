@@ -20,6 +20,7 @@ import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/applicat
 import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
 import { GetBalanceSheetUseCase } from '../../../src/modules/accounting/application/use-cases/getBalanceSheetUseCase';
 import { AuditAccountingUseCase } from '../../../src/modules/accounting/application/use-cases/auditAccountingUseCase';
+import { TreasuryAccountsService } from '../../../src/modules/accounting/application/services/treasuryAccountsService';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -44,6 +45,7 @@ describe('AccountingController', () => {
   let getIncomeStatementUseCase: jest.Mocked<GetIncomeStatementUseCase>;
   let getBalanceSheetUseCase: jest.Mocked<GetBalanceSheetUseCase>;
   let auditAccountingUseCase: jest.Mocked<AuditAccountingUseCase>;
+  let treasuryAccounts: jest.Mocked<TreasuryAccountsService>;
   let mockPrisma: any;
 
   beforeEach(() => {
@@ -71,6 +73,14 @@ describe('AccountingController', () => {
     } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
 
     closeAnnualUseCase = { execute: jest.fn() } as unknown as jest.Mocked<CloseAnnualUseCase>;
+
+    treasuryAccounts = {
+      list: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      update: jest.fn(),
+      resolve: jest.fn(),
+      cuentaParaAsiento: jest.fn(),
+    } as unknown as jest.Mocked<TreasuryAccountsService>;
 
     auditAccountingUseCase = {
       execute: jest.fn().mockResolvedValue({ ok: true }),
@@ -145,6 +155,7 @@ describe('AccountingController', () => {
       getBalanceSheetUseCase,
       mockPrisma,
       auditAccountingUseCase,
+      treasuryAccounts,
     );
   });
 
@@ -354,5 +365,28 @@ describe('AccountingController', () => {
   it('la auditoría exige empresa en el token', async () => {
     await expect(controller.audit(undefined, '2026-11')).rejects.toThrow(ForbiddenException);
     expect(auditAccountingUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it('lista las cuentas de tesorería de la empresa del token', async () => {
+    treasuryAccounts.list.mockResolvedValue([{ id: 't1', code: '1041' }] as never);
+    await expect(controller.listTreasuryAccounts('comp-1')).resolves.toEqual([{ id: 't1', code: '1041' }]);
+    expect(treasuryAccounts.list).toHaveBeenCalledWith('comp-1');
+  });
+
+  it('crea una cuenta de tesorería para la empresa del token', async () => {
+    treasuryAccounts.create.mockResolvedValue({ id: 't2', code: '1043' } as never);
+    await expect(
+      controller.createTreasuryAccount({ code: '1043', name: 'BBVA' }, 'comp-1'),
+    ).resolves.toEqual({ id: 't2', code: '1043' });
+    expect(treasuryAccounts.create).toHaveBeenCalledWith('comp-1', { code: '1043', name: 'BBVA' });
+  });
+
+  it('actualiza una cuenta de tesorería', async () => {
+    treasuryAccounts.update.mockResolvedValue({ id: 't1', isActive: false } as never);
+    await expect(controller.updateTreasuryAccount('t1', { isActive: false }, 'comp-1')).resolves.toEqual({
+      id: 't1',
+      isActive: false,
+    });
+    expect(treasuryAccounts.update).toHaveBeenCalledWith('comp-1', 't1', { isActive: false });
   });
 });

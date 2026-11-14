@@ -40,6 +40,11 @@ import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBala
 import { GetIncomeStatementUseCase } from '../../application/use-cases/getIncomeStatementUseCase';
 import { GetBalanceSheetUseCase } from '../../application/use-cases/getBalanceSheetUseCase';
 import { AuditAccountingUseCase } from '../../application/use-cases/auditAccountingUseCase';
+import { TreasuryAccountsService } from '../../application/services/treasuryAccountsService';
+import {
+  CreateTreasuryAccountDto,
+  UpdateTreasuryAccountDto,
+} from '../../application/dto/treasuryAccountDto';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
@@ -67,6 +72,7 @@ export class AccountingController {
     private readonly getBalanceSheetUseCase: GetBalanceSheetUseCase,
     private readonly prisma: PrismaService,
     private readonly auditAccountingUseCase: AuditAccountingUseCase,
+    private readonly treasuryAccounts: TreasuryAccountsService,
   ) {}
 
   /**
@@ -258,6 +264,36 @@ export class AccountingController {
 
   private periodoActual(): string {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }).slice(0, 7);
+  }
+
+  // ==========================================
+  // Cuentas de tesorería (subcuentas de caja y banco)
+  // ==========================================
+  /**
+   * Subcuentas PCGE que la empresa usa como caja o banco, con su alias.
+   * Es la fuente que alimenta el selector de tesorería de cobros y pagos.
+   */
+  @Get('treasury-accounts')
+  listTreasuryAccounts(@CurrentCompany() currentCompanyId?: string) {
+    return this.treasuryAccounts.list(this.empresaDelToken(currentCompanyId));
+  }
+
+  @Post('treasury-accounts')
+  @HttpCode(HttpStatus.CREATED)
+  createTreasuryAccount(
+    @Body() dto: CreateTreasuryAccountDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.treasuryAccounts.create(this.empresaDelToken(currentCompanyId), dto);
+  }
+
+  @Put('treasury-accounts/:id')
+  updateTreasuryAccount(
+    @Param('id') id: string,
+    @Body() dto: UpdateTreasuryAccountDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.treasuryAccounts.update(this.empresaDelToken(currentCompanyId), id, dto);
   }
 
   // ==========================================

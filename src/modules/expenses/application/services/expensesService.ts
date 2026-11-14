@@ -1,12 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { TreasuryAccountsService } from '../../../accounting/application/services/treasuryAccountsService';
 
 @Injectable()
 export class ExpensesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accounting: GenerateAccountingEntryUseCase,
+    @Optional()
+    private readonly tesoreria?: TreasuryAccountsService,
   ) {}
 
   async list(companyId: string) {
@@ -118,7 +121,7 @@ export class ExpensesService {
     return this.prisma.expense.update({ where: { id }, data: { status: 'ANULADO' } });
   }
 
-  async pay(companyId: string, id: string, dto: { amount?: number; paymentMethod?: string; bankName?: string }) {
+  async pay(companyId: string, id: string, dto: { amount?: number; paymentMethod?: string; bankName?: string; treasuryAccountId?: string }) {
     const gasto = await this.prisma.expense.findFirst({ where: { id, company_id: companyId } });
     if (!gasto) throw new BadRequestException('Gasto no encontrado.');
     if (gasto.status === 'PAGADO') throw new BadRequestException('El gasto ya está pagado.');
@@ -144,12 +147,21 @@ export class ExpensesService {
     const reglas = await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'PAGO', is_active: true }, orderBy: { line_order: 'asc' } });
     const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    // La cuenta de tesorería elegida por el usuario manda sobre el medio de pago;
+    // si no eligió ninguna se conserva el comportamiento histórico.
+    const cuentaTesoreriaFallback = {
+      code: metodo === 'EFECTIVO' ? '1011' : (porOrden.get(2) ?? '1041'),
+      name: metodo === 'EFECTIVO' ? 'Caja principal' : 'Cuenta corriente',
+    };
+    const cuentaTesoreria = this.tesoreria
+      ? await this.tesoreria.cuentaParaAsiento(companyId, dto.treasuryAccountId, cuentaTesoreriaFallback)
+      : cuentaTesoreriaFallback;
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(), glosa: `Pago gasto ${gasto.description}`,
       sourceModule: 'EXPENSES', journalCode: 'CAJ', sourceReferenceId: `PAGO-GASTO-${id}-${mov.id}`, idempotencyKey: `expense-payment:${mov.id}`,
       lines: [
         { lineOrder: 1, accountCode: porOrden.get(1) ?? '42121', accountName: 'Cuentas por pagar', debitAmount: monto, creditAmount: 0 },
-        { lineOrder: 2, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(2) ?? '1041'), accountName: 'Caja o banco', debitAmount: 0, creditAmount: monto },
+        { lineOrder: 2, accountCode: cuentaTesoreria.code, accountName: cuentaTesoreria.name, debitAmount: 0, creditAmount: monto },
       ],
     });
     return { id, status: estado, amount: monto, paidAmount: nuevoPagado, balance: Math.round((total - nuevoPagado) * 100) / 100 };

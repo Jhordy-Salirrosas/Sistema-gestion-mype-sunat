@@ -1700,4 +1700,13 @@ export const PCGE_2019_ACCOUNTS: Array<[string, string]> = [
   ["401111", "IGV - cuenta propia"],
   ["401119", "Otros tributos por pagar"],
   ["701111", "Ventas de mercaderías - terceros"],
+  // Subcuentas de caja y banco que usa el módulo de Contabilidad para que
+  // tesorería pueda elegir la cuenta del asiento. El PCGE deja la apertura de
+  // divisionarias a criterio de la empresa; estas cuatro no venían en la
+  // extracción del PDF oficial y sin ellas la validación de cuentas rechazaba
+  // toda selección de caja/banco que no fuera '101' o '1041'.
+  ["1011", "Caja principal"],
+  ["1012", "Caja chica"],
+  ["1013", "Caja secundaria"],
+  ["1043", "Cuenta corriente 3"],
 ];

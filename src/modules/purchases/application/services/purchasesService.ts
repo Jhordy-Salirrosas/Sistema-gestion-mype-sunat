@@ -12,6 +12,7 @@ import { CreatePurchaseDto } from '../dto/createPurchaseDto';
 import { PayPurchaseDto } from '../dto/payPurchaseDto';
 import { mapPurchaseRecord } from '../mappers/purchaseResponseMapper';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { TreasuryAccountsService } from '../../../accounting/application/services/treasuryAccountsService';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
@@ -34,6 +35,8 @@ export class PurchasesService {
     private readonly prisma: PrismaService,
     @Optional()
     private readonly accounting?: GenerateAccountingEntryUseCase,
+    @Optional()
+    private readonly tesoreria?: TreasuryAccountsService,
   ) {}
 
   async listPurchases(companyId: string) {
@@ -518,7 +521,14 @@ export class PurchasesService {
         throw new BadRequestException('Las reglas PAGO están incompletas: faltan las líneas 1 y 2.');
       }
       const cxp = cuentaCxp;
-      const caja = metodo === 'EFECTIVO' ? '101' : cuentaBanco!;
+      const respaldo = {
+        code: metodo === 'EFECTIVO' ? '1011' : cuentaBanco!,
+        name: metodo === 'EFECTIVO' ? 'Caja principal' : 'Cuenta corriente',
+      };
+      // La cuenta elegida en tesorería manda; si no llega, se conserva la regla.
+      const cuentaCaja = this.tesoreria
+        ? await this.tesoreria.cuentaParaAsiento(companyId, dto.treasuryAccountId, respaldo)
+        : respaldo;
       const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       await this.accounting.execute({
         companyId,
@@ -539,8 +549,8 @@ export class PurchasesService {
           },
           {
             lineOrder: 2,
-            accountCode: caja,
-            accountName: metodo === 'EFECTIVO' ? 'Caja' : 'Cuenta corriente',
+            accountCode: cuentaCaja.code,
+            accountName: cuentaCaja.name,
             debitAmount: 0,
             creditAmount: monto,
           },
