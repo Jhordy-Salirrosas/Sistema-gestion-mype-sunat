@@ -549,7 +549,7 @@ export class AuditAccountingUseCase {
         activas: catalogo.filter((c) => c.isActive !== false).length,
       },
       reglas: {
-        procesos: [...new Set(reglas.map((r) => r.process_code))].sort(),
+        procesos: [...new Set(reglas.map((r) => r.process_code))].sort((a, b) => a.localeCompare(b)),
         total: reglas.length,
         issues: issuesReglas,
       },
