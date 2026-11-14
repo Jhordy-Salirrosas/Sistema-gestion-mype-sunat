@@ -3769,3 +3769,34 @@ El individual reutiliza la selección y clasificación del masivo antes de entra
 ### Punto 3 — implementación
 
 Acción explícita `Resolver DLQ` en Monitor y `POST /invoices/:id/resolver-dlq`, autenticado y limitado a ADMIN/OPERADOR_FACTURACION. El servidor exige la empresa del token, estado ACEPTADO y CDR `responseCode=0`; limpia todos los trabajos pendientes de `sunat-invoice-dlq` del mismo documento/empresa. Repetir con cero trabajos es válido. No actualiza Invoice, no borra su historial ni CDR, no toca la cola principal y no reenvía. Un fallo de cola se propaga y mantiene la fila visible; al resolver se recargan membresía y alertas. La acción de puente pendiente permanece independiente. Los trabajos ajenos, incompletos o sin aceptación comprobable no se retiran. Verificación dirigida: back 4 suites / 83 pruebas; front 2 archivos / 19 pruebas. El endpoint genérico de resiliencia `retryDlq` sigue siendo un camino independiente hacia la cola principal; esta resolución no lo utiliza ni cambia su contrato.
+
+### Punto 4 — diagnóstico exclusivo, sin habilitación ni cambios RA/RC
+
+**4a. Catálogo 09, motivos 08 y 10.** Ambos constan en `assets/sunat-sfs/commons/cpe/catalogo/cat_09.xml`; el rechazo actual es deliberado (`MOTIVO_NO_HABILITADO`), no una ausencia en el catálogo oficial. La viabilidad es aditiva y condicionada a un alcance definido; no basta añadir dos opciones al selector.
+
+- Estructura actual: `creationGuards.ts` exige un origen real de la empresa y del mismo receptor, SKU del origen, cantidades positivas sin exceder las originales, unidad/afectación histórica y saldo monetario disponible. `noteReasonGuard.ts` exige importe total mayor que cero; `invoiceNotaOrigen.ts` también rechaza importe cero en el front. La política de devolución física solo incluye 01/02/06/07; habilitar 08/10 no debe convertirlos implícitamente en devoluciones de stock ni alterar los motivos actuales.
+- **08 Bonificación:** hay infraestructura para gratuitas (afectaciones 15/31, valor referencial, precio cero, PriceTypeCode 02, base de línea cero y leyenda 1002), pero el alta de notas conserva afectación/unidad del origen y no admite indiscriminadamente productos nuevos; tampoco admite una nota con total cero. Debe definirse si la bonificación ajusta el valor de bienes del origen o representa una entrega gratuita, con sus efectos de cantidad/stock, saldo e impuestos. Para el segundo supuesto se necesitan guardas específicas, no relajar globalmente las existentes. Se requiere verificar el XML CreditNoteLine/CreditedQuantity, PricingReference, TaxTotal y total monetario contra XSD y XSL con fixtures propios. **Veredicto:** viable como desarrollo acotado posterior; no se certifica habilitable con un cambio de catálogo.
+- **10 Otros conceptos:** el generador ya produce CreditNote, DiscrepancyResponse/ResponseCode y BillingReference por tipo. Un primer alcance vinculado al origen, con líneas existentes, importe positivo y saldo suficiente podría conservar las guardas actuales. El XSL incluido (`assets/sunat-sfs/commons/xsl/validation/2.X/ValidaExprRegNC-2.0.1.xsl`, bloques 2524, 2116/2399 y referencias 99) contiene excepciones específicas para el código 10: no se debe inferir que ese alcance cubre notas sin origen u otros documentos. Ampliar esas referencias exigiría DTO, selector, validaciones y XML adicionales. **Veredicto:** viable aditivamente para el alcance restringido, pendiente de fixtures XSD/XSL, definición funcional y regresión de todos los motivos habilitados.
+
+Para ambos: alinear catálogos back/front y descripción canónica; probar referencias factura/boleta, receptor, monedas, saldos, cantidades, afectaciones y puentes contables/inventario, además del XML firmado con dobles. No se propone migración. En este paquete no se habilita ningún código ni se cambia una guarda.
+
+**4b. Notas de boleta en RA.** `summaryDocumentsBuilder.ts:vaEnBaja` admite 07/08 por tipo, sin filtrar serie ni documento afectado; por ello una nota BC01/BD01 vinculada a boleta puede resultar elegible. El diagnóstico normativo es **excluirlas de RA y comunicar su anulación mediante RC**, verificando tanto serie como vínculo real al origen. No basta aceptar 07/08 sin distinguir factura/boleta. El canal de notas a factura sigue siendo RA. Esta conclusión queda para decisión posterior; el paquete no cambia selección, XML, ventanas ni envío de RA/RC.
+
+Fuentes oficiales consultadas el 2026-11-14:
+
+1. [SUNAT, Nota de Crédito Electrónica, sección Desde los Sistemas del Contribuyente / Comunicación de baja](https://cpe.sunat.gob.pe/tipos_de_comprobantes/nota_de_credito): la baja de boletas y notas vinculadas se comunica en el resumen diario, con estado anulado.
+2. [R.S. 000048-2026/SUNAT, anexos, Anexo XII / Anexo 10, página 21, campos 4 y 5](https://www.sunat.gob.pe/legislacion/superin/2026/anexo-000048-2026.pdf): el canal para la baja de boletas y sus notas es exclusivamente el resumen diario (Anexo 5-A); la serie RA se inicia en F, C o S según corresponda, no B.
+3. [R.S. 000048-2026/SUNAT, artículo 15.2 y primera disposición final, página 38](https://www.sunat.gob.pe/legislacion/superin/2026/000048-2026.pdf): modificación de anexos de la R.S. 097-2012; vigencia general desde el 1 de agosto de 2026. Las excepciones de vigencia no afectan este anexo.
+
+No se realizaron emisiones ni se alteraron comprobantes para contrastar estos veredictos.
+
+### Cierre — arreglos de auditorías M1
+
+| Capa | Base del paquete de pulidos | Cierre |
+| --- | --- | --- |
+| Back | 349 suites / 3510 pruebas | 351 suites / 3538 pruebas |
+| Front | 179 archivos / 1367 pruebas | 179 archivos / 1377 pruebas |
+
+Suites completas aprobadas. Back conserva 17 suites / 93 pruebas omitidas por configuración, y 12 snapshots aprobados. Builds back y front OK, ejecutados después de las suites; ninguna regeneración Prisma concurrente con Jest. La prueba de rescate manual verifica que el marcador se persiste después de releer elegibilidad y antes de publicar, y que un fallo de persistencia impide publicar. El build front comprueba también los tipos de las pruebas; tras precisar los dobles del Monitor se repitieron sus 7 pruebas y el build completo, ambos aprobados.
+
+Puntos 1, 2 y 3 construidos. Punto 4a/4b exclusivamente documentado para decisión posterior; ninguno se habilita o cambia en este paquete. Sin puntos detenidos por premisa falsa. FERRY.md detalla archivos por punto y aplicación; SHA256SUMS inventaría 42 archivos frontend más FERRY.md, conservando íntegro el ferry anterior de pulidos. Sin PR, migraciones ni emisiones reales.

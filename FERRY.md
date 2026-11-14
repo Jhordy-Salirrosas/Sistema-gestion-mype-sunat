@@ -1,79 +1,70 @@
-# Pulidos M1 — A, B y C
+# Arreglos de auditorías M1
 
-Rama única `fix/m1-pulidos`, desde backend main `c663ea3ee0d3a5c34c97af9993d284a14892da3f`. Base frontend main: `3e4497367363c70d7c774c1d9dc0b65b221a120f`, CarlosSoles/Fronted-sistema-mype-sunat. Un commit de fase 0 y uno por punto. Sin PR, despliegue, emisiones reales ni migraciones.
+Rama única `fix/m1-arreglos-auditorias`, desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`. Sin PR, despliegue, migraciones ni emisiones reales. Pruebas con dobles.
 
-## Veredictos y comportamiento
+Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 42 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
 
-- **A, confirmado y construido:** GET /invoices/alertas añade `antiguedad`: estado de evaluación, gravedad, mensaje y documentos con número, tipo, estado, fecha de emisión, fecha límite y días restantes. Solo facturas 01 (3 días) y boletas 03 (7 días) de la empresa autenticada en PENDIENTE, EN_COLA, PROCESANDO, ENVIADO o ERROR_RED. Se excluyen los estados finales ACEPTADO, OBSERVADO, RECHAZADO y ANULADO; un rechazado histórico no mantiene una alerta vencida. Vencidos primero; hoy/mañana/vencido crítico, resto pendiente aviso. El día persistido no se desplaza por zona horaria y hoy se calcula en Lima. El Monitor muestra diez más urgentes y el total; el endpoint devuelve todos. El resumen de facturación incorpora el motivo nuevo. No hay escrituras, reenvíos ni interpretación de recuperabilidad. No se asignan ventanas a notas/agregados. Fallo de lectura es SIN_DATOS, no una lista vacía evaluada.
-- **B, confirmado y construido:** la consulta RUC existente distingue 404/422 (no encontrado) de una respuesta 200 válida con estado inactivo. Solo tras confirmar la emisión se consulta el RUC del receptor, fuera de la transacción y de la respuesta fiscal almacenada por idempotencia, con espera máxima de dos segundos. Estado distinto de ACTIVO y/o NO HABIDO añade avisos sin sustituir los anteriores. Fallo, timeout, no encontrado o datos inválidos devuelven la respuesta confirmada sin aviso nuevo. DNI o tipo extranjero no consultan. Una consulta tardía puede completar la caché existente, pero no modifica la respuesta ya devuelta. La repetición idempotente consulta el aviso nuevamente sin repetir emisión. No se cambian proveedor, variables ni credenciales; las pruebas solo usan dobles.
-- **C, premisa precisada y construido:** el guardado de otros campos ya era real. Faltaba RUC editable y envío de `issuer_ruc`. El formulario admite 11 dígitos exactos o vacío (PUT con null para limpiar), muestra RUC efectivo y origen y recarga tras guardar. Mantiene errores de formato/servidor, permisos y coherencia SOL/certificado del backend existente. No cambia el RUC compartido de la empresa ni la sesión. Cuando el origen es company, el campo de pin permanece vacío y el RUC efectivo se presenta aparte. No hay cambio backend para C.
+## Veredictos
 
-Ningún punto detenido. Las ventanas y etiquetas 2108/2957 son las ya aplicadas por el sistema; este paquete no reinterpreta el catálogo de bajas. La auditoría previa se conserva íntegra y las decisiones se añaden al final de docs/m1/auditoria-solucion.md.
+1. Confirmado y corregido: listado y detalle seleccionan Catálogo 09 para 07 y Catálogo 10 para 08 mediante un formateador común. Pruebas de los códigos 01/02/03 en ambos tipos; las vistas comparten los mapeadores.
+2. Confirmado y corregido: el individual usa la clasificación masiva antes de la cola y en la relectura. Excluye bloqueo local, rechazo definitivo e incertidumbre. Consulta sin transmisión probada devuelve SIN_TRANSMISION sin consultar SUNAT cuando el marcador false o el bloqueo previo acreditan no envío y no existe evidencia contraria. Una consulta aislada no prueba transporte. Null histórico sin evidencia conserva la protección conservadora del worker. No cambia el reenvío forzado ni el endpoint genérico de DLQ de resiliencia.
+3. Confirmado en código y corregido: acción explícita Resolver DLQ en Monitor, POST /invoices/:id/resolver-dlq. Solo ACEPTADO y CDR código 0 de la empresa autenticada. Retira trabajos DLQ pendientes propios del documento; cero trabajos es idempotente. No escribe el documento fiscal ni publica un envío; puentes pendientes conservan su acción separada. Las alertas y filas se actualizan tras resolver. No se inspeccionaron trabajos de producción.
+4. Solo diagnóstico, sin construir: 08 Bonificación requiere definir líneas, gratuidad y efectos físicos/monetarios antes de habilitarse; 10 Otros conceptos es viable con alcance restringido al origen y regresión XML, sin asumir cobertura de sus referencias excepcionales. Las notas de boleta BC01/BD01 deben excluirse de RA y anularse por RC. Fuentes oficiales vigentes, guardas y límites en `docs/m1/auditoria-solucion.md`. No se modificaron catálogos habilitados ni RA/RC.
 
-## Archivos por punto
-
-Todas las rutas front siguientes tienen prefijo `frontend/` en esta rama y conservan su ruta relativa en destino.
-
-**A — backend:**
-
-- src/modules/invoices/application/services/invoiceAlertService.ts
-- src/modules/invoices/application/services/invoiceSendAge.ts
-- test/unit/invoices/pulidosAntiguedad.spec.ts
-
-**A — front:**
-
-- src/modules/invoices/lib/invoiceAlertas.ts
-- src/modules/invoices/components/InvoiceSendAgeAlert.tsx
-- src/modules/invoices/pages/InvoiceMonitorPage.tsx
-- src/modules/invoices/pages/InvoicesDashboardPage.tsx
-- test/unit/modules/invoices/pulidosAntiguedad.test.tsx
-
-**B — backend:**
-
-- src/modules/invoices/application/services/atomicInvoiceCreationService.ts
-- src/modules/invoices/application/services/receiverRucWarning.ts
-- test/unit/invoices/pulidosPadronReceptor.spec.ts
-
-El front ya muestra `avisos` de emisión; B no requiere archivos frontend.
-
-**C — front:**
-
-- src/modules/invoices/components/InvoiceIssuerConfigForm.tsx
-- src/modules/invoices/hooks/useInvoiceConfig.ts
-- src/modules/invoices/lib/invoiceConfigError.ts
-- src/modules/invoices/pages/InvoiceSettingsPage.tsx
-- test/unit/modules/invoices/invoiceD1Config.test.tsx
-- test/unit/modules/invoices/pulidosRucEmisor.test.tsx
-
-Además: docs/m1/auditoria-solucion.md, FERRY.md y SHA256SUMS. El ajuste de invoiceD1Config sustituye la expectativa de solo lectura por la edición expresamente solicitada, conservando los controles de secretos y guardado parcial.
-
-## Validación
-
-| Verificación | Base | Final |
-|---|---:|---:|
-| Back: suites aprobadas | 347 | 349 (+2) |
-| Back: pruebas aprobadas | 3489 | 3510 (+21) |
-| Back: optativas omitidas | 17 suites / 93 pruebas | 17 suites / 93 pruebas |
-| Back: snapshots | 12 | 12 |
-| Front: archivos aprobados | 177 | 179 (+2) |
-| Front: pruebas aprobadas | 1357 | 1367 (+10) |
-
-Las dos suites completas finales terminan sin fallos; el front no tiene omisiones. Builds backend y frontend correctos, ejecutados secuencialmente después de terminar Jest. Lint backend sin errores y tres advertencias heredadas; ESLint de los ocho archivos productivos front tocados sin errores y dos advertencias preexistentes de Fast Refresh del Monitor. No se declara el lint global frontend como verde.
-
-Pruebas dirigidas A: siete nuevas backend y tres front. B: catorce nuevas backend con fetch y persistencia dobles. C: siete nuevas front y actualización de una expectativa existente de solo lectura. Se conserva el resto de las regresiones y snapshots.
-
-### Corrección de elegibilidad de antigüedad
-
-Se retira únicamente RECHAZADO del listado anterior de A. invoiceJobConsumer.ts y cdr-persistence.service.ts consideran finales ACEPTADO, OBSERVADO, RECHAZADO y ANULADO; de los seis estados antes elegibles, solo RECHAZADO era final. Los otros cinco se conservan íntegros. La misma lista controla la consulta a la base y el filtro del cálculo. Las pruebas existentes fijan ahora el rechazo histórico fuera de la alerta, gravedad OK si solo hay terminales y AVISO ante un pendiente vigente aunque existan rechazados históricos, además de la permanencia de los cinco estados elegibles.
-
-No se modifican archivos ni pruebas frontend: sus casos de A ya usan ERROR_RED. Se mantienen siete pruebas específicas de antigüedad y los conteos del cierre: backend 349 suites / 3510 pruebas; front 179 archivos / 1367 pruebas. Suite completa backend repetida sin fallos: 349 suites / 3510 pruebas, mismas 17 suites / 93 pruebas omitidas y 12 snapshots; build backend correcto después de Jest. Frontend sin cambios: conserva la verificación anterior de 179 archivos / 1367 pruebas y no se volvió a ejecutar. Se actualiza el hash de FERRY.md; los 35 hashes frontend permanecen idénticos.
+Ningún punto de implementación detenido. Los dos apartados del punto 4 quedan para decisión posterior conforme al encargo.
 
 ## Aplicación del ferry
 
-1. Revisar el diff contra el SHA backend base y ejecutar `sha256sum -c SHA256SUMS` desde la raíz.
-2. El directorio frontend/ conserva archivos heredados de los paquetes anteriores. Para este encargo sobre el main front base indicado, aplicar solamente las once rutas front A/C enumeradas, retirando el prefijo frontend/. Ante cambios posteriores, comparar e integrar; se transportan archivos completos.
-3. Los 35 archivos presentes bajo frontend/ coinciden con el checkout final probado. El manifiesto contiene hashes de todos ellos, incluidos heredados, y de este documento; no incluye su propio hash.
-4. Ejecutar en back `NODE_OPTIONS=--max-old-space-size=6144 npm test -- --runInBand` y en front `npm test`. Después, `npm run build` en cada repositorio sin solapar build y Jest. No habilitar pruebas SUNAT beta ni configurar credenciales reales para las pruebas.
-5. Revisar y promover por el tren habitual. Este trabajo no crea PR ni despliega.
+`frontend/` conserva todos los archivos heredados de pulidos y superpone los de este paquete. Cada ruta es relativa a la raíz del repo frontend; no crear una segunda carpeta frontend en destino. Verificar primero `sha256sum -c SHA256SUMS` en el repo backend y copiar `frontend/.` sobre el checkout frontend. Conservar los demás archivos del destino. Revisar cualquier avance posterior que toque esas rutas antes de aplicar.
 
-No hay dependencias nuevas ni modificaciones de esquema. Para retirar el paquete, revertir sus commits y la aplicación de las once rutas front, sin revertir los paquetes anteriores. No se reescriben documentos históricos ni se reparan datos de producción.
+`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 42 archivos frontend y por este FERRY.md (43 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
+
+## Archivos de este paquete por punto
+
+Las rutas de frontend siguientes se transportan con el prefijo `frontend/`; el resto vive directamente en el backend. El documento de auditoría y el manifiesto se actualizan de forma transversal.
+
+### 1 — Motivo de nota
+
+- frontend/src/modules/invoices/lib/invoiceMapper.ts
+- frontend/src/modules/invoices/lib/invoiceNoteReason.ts
+- frontend/test/unit/modules/invoices/invoiceMapper.test.ts
+
+### 2 — Reintento y consulta
+
+- frontend/src/modules/invoices/components/InvoiceSunatConsulta.tsx
+- frontend/src/modules/invoices/services/invoicesApi.ts
+- frontend/test/unit/modules/invoices/invoiceConsultaSunat.test.tsx
+- src/modules/invoices/application/services/invoiceBatchRetryService.ts
+- src/modules/invoices/application/services/invoiceQueryService.ts
+- src/modules/invoices/application/services/invoiceTransportEvidence.ts
+- src/modules/invoices/infrastructure/controllers/invoiceSunatConsultController.ts
+- test/unit/invoices/invoiceIndividualRetryPolicy.spec.ts
+- test/unit/invoices/m1-incertidumbre-transporte.spec.ts
+- test/unit/invoices/m1-rescate-manual.spec.ts
+
+### 3 — Resolución DLQ
+
+- frontend/src/modules/invoices/pages/InvoiceMonitorPage.tsx
+- frontend/src/modules/invoices/services/invoicesApi.ts
+- frontend/test/unit/modules/invoices/invoiceMonitorReal.test.tsx
+- src/modules/invoices/application/services/invoiceQueryService.ts
+- src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts
+- src/modules/resilience/infrastructure/queue/queue.service.ts
+- test/unit/invoices/invoiceAcceptedDlq.spec.ts
+
+### 4 — Diagnóstico y cierre
+
+- docs/m1/auditoria-solucion.md
+- FERRY.md
+- SHA256SUMS
+
+## Validación completa
+
+| Capa | Base pulidos | Resultado final |
+| --- | --- | --- |
+| Back | 349 suites / 3510 pruebas | 351 suites / 3538 pruebas |
+| Front | 179 archivos / 1367 pruebas | 179 archivos / 1377 pruebas |
+
+Back: 17 suites / 93 pruebas omitidas en ambas corridas; 12 snapshots aprobados. Incremento neto: 28 pruebas back y 10 front. Suites completas en verde. Build back (`prisma generate` + `nest build`) y front (`tsc -b` + `vite build`) OK. La corrección final de tipos en los dobles del Monitor se verificó además con sus 7 pruebas dirigidas y el build frontend completo.
+
+Las omisiones del back corresponden a suites optativas sin entorno habilitado. Los builds se ejecutan después de terminar Jest y Vitest; no se regenera Prisma mientras Jest lo lee.
