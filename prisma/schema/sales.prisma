@@ -12,6 +12,29 @@ enum SalesQuoteStatus {
   ANULADA
 }
 
+model CashClosure {
+  id                String   @id @default(uuid())
+  company_id        String
+  company           Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  closure_date      DateTime @db.Date
+  sales_total       Decimal  @default(0) @db.Decimal(14, 2)
+  collections_total Decimal  @default(0) @db.Decimal(14, 2)
+  cash_collections  Decimal  @default(0) @db.Decimal(14, 2)
+  cash_expenses     Decimal  @default(0) @db.Decimal(14, 2)
+  expected_cash     Decimal  @default(0) @db.Decimal(14, 2)
+  counted_cash      Decimal  @default(0) @db.Decimal(14, 2)
+  difference        Decimal  @default(0) @db.Decimal(14, 2)
+  details           Json?
+  notes             String?
+  status            String   @default("CERRADA")
+  created_by        String?
+  created_at        DateTime @default(now())
+
+  @@unique([company_id, closure_date])
+  @@index([company_id, closure_date])
+  @@map("cash_closures")
+}
+
 model SalesQuote {
   id                  String           @id @default(uuid())
   company_id          String
