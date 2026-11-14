@@ -66,6 +66,8 @@ export interface AuditPurchaseIssue {
 /** Cobro registrado sobre un comprobante que ya está anulado. */
 export interface AuditCollectionIssue {
   id: string;
+  /** Comprobante anulado al que pertenece el cobro, para poder revertirlos en lote. */
+  invoiceId: string;
   comprobante: string;
   cliente: string;
   fecha: string;
@@ -465,6 +467,7 @@ export class AuditAccountingUseCase {
     );
     const cobrosHuerfanos: AuditCollectionIssue[] = cobrosDeAnuladas.map((c) => ({
       id: c.id,
+      invoiceId: c.invoice_id ?? '',
       comprobante: numeroPorComprobante.get(c.invoice_id ?? '') ?? c.invoice_number ?? '',
       cliente: c.customer_name,
       fecha: new Date(c.collection_date).toISOString().slice(0, 10),

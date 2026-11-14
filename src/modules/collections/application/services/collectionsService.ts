@@ -281,6 +281,53 @@ export class CollectionsService {
     return cobro;
   }
 
+  /**
+   * Anula todos los cobros vivos de un comprobante anulado.
+   *
+   * Es el reverso del cobro que pide la observación: cuando la venta se anula
+   * antes de declarar, el dinero no puede quedar registrado como cobrado. Se
+   * exige que el comprobante esté ANULADO y se reutiliza `annul` cobro por
+   * cobro, así cada uno genera su asiento de reversión y su movimiento de
+   * tesorería inverso.
+   */
+  async annulByInvoice(companyId: string, invoiceId: string) {
+    const comprobante = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, company_id: companyId },
+      select: { id: true, serie: true, correlativo: true, estado: true },
+    });
+    if (!comprobante) throw new BadRequestException('Comprobante no encontrado.');
+    if (comprobante.estado !== 'ANULADO') {
+      throw new BadRequestException(
+        'Solo se pueden revertir los cobros de un comprobante ANULADO. Anule primero la venta (comunicación de baja o nota de crédito).',
+      );
+    }
+
+    const cobros = await this.prisma.collection.findMany({
+      where: { company_id: companyId, invoice_id: invoiceId, status: { not: 'ANULADO' } },
+      select: { id: true },
+    });
+    const anulados: string[] = [];
+    const fallidos: Array<{ id: string; motivo: string }> = [];
+    for (const cobro of cobros) {
+      try {
+        await this.annul(companyId, cobro.id);
+        anulados.push(cobro.id);
+      } catch (error) {
+        // Un cobro sin asiento no debe frenar la reversión de los demás.
+        fallidos.push({ id: cobro.id, motivo: (error as Error).message });
+      }
+    }
+
+    return {
+      invoiceId,
+      comprobante: `${comprobante.serie}-${String(comprobante.correlativo).padStart(8, '0')}`,
+      cobros: cobros.length,
+      anulados: anulados.length,
+      ids: anulados,
+      fallidos,
+    };
+  }
+
   /** Distribución vigente del cobro (vacía si no se repartió). */
   async distributions(companyId: string, id: string) {
     const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId }, select: { id: true } });

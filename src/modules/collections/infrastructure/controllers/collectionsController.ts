@@ -34,6 +34,14 @@ export class CollectionsController {
     return this.collections.annul(companyId, id);
   }
 
+  /** Revierte todos los cobros vivos de un comprobante anulado. */
+  @Post('invoice/:id/annul')
+  @HttpCode(HttpStatus.OK)
+  annulByInvoice(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.annulByInvoice(companyId, id);
+  }
+
   @Get('reconciliation')
   reconciliation(@CurrentCompany() companyId?: string) {
     if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
