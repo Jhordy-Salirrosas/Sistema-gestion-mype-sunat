@@ -39,6 +39,7 @@ import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../application/use-cases/getIncomeStatementUseCase';
 import { GetBalanceSheetUseCase } from '../../application/use-cases/getBalanceSheetUseCase';
+import { AuditAccountingUseCase } from '../../application/use-cases/auditAccountingUseCase';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
@@ -65,6 +66,7 @@ export class AccountingController {
     private readonly getIncomeStatementUseCase: GetIncomeStatementUseCase,
     private readonly getBalanceSheetUseCase: GetBalanceSheetUseCase,
     private readonly prisma: PrismaService,
+    private readonly auditAccountingUseCase: AuditAccountingUseCase,
   ) {}
 
   /**
@@ -256,6 +258,28 @@ export class AccountingController {
 
   private periodoActual(): string {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }).slice(0, 7);
+  }
+
+  // ==========================================
+  // GET: Auditoría contable (solo lectura)
+  // ==========================================
+  /**
+   * Diagnóstico del módulo: reglas inválidas o incompletas, asientos
+   * descuadrados/duplicados y comprobantes aceptados sin asiento o sin costo.
+   *
+   * No corrige nada; el contador decide. `period` acota asientos y
+   * comprobantes a un mes `YYYY-MM`; sin período se revisa todo el histórico
+   * (con los topes de filas que informa la respuesta).
+   */
+  @Get('audit')
+  async audit(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+  ) {
+    return this.auditAccountingUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+    );
   }
 
   // ==========================================

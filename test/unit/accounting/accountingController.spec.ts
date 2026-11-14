@@ -19,6 +19,7 @@ import { GetLedgerUseCase } from '../../../src/modules/accounting/application/us
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
 import { GetBalanceSheetUseCase } from '../../../src/modules/accounting/application/use-cases/getBalanceSheetUseCase';
+import { AuditAccountingUseCase } from '../../../src/modules/accounting/application/use-cases/auditAccountingUseCase';
 import { AccountingEntryEntity } from '../../../src/modules/accounting/domain/entities/accountingEntryEntity';
 
 describe('AccountingController', () => {
@@ -42,6 +43,7 @@ describe('AccountingController', () => {
   let getTrialBalanceUseCase: jest.Mocked<GetTrialBalanceUseCase>;
   let getIncomeStatementUseCase: jest.Mocked<GetIncomeStatementUseCase>;
   let getBalanceSheetUseCase: jest.Mocked<GetBalanceSheetUseCase>;
+  let auditAccountingUseCase: jest.Mocked<AuditAccountingUseCase>;
   let mockPrisma: any;
 
   beforeEach(() => {
@@ -69,6 +71,10 @@ describe('AccountingController', () => {
     } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
 
     closeAnnualUseCase = { execute: jest.fn() } as unknown as jest.Mocked<CloseAnnualUseCase>;
+
+    auditAccountingUseCase = {
+      execute: jest.fn().mockResolvedValue({ ok: true }),
+    } as unknown as jest.Mocked<AuditAccountingUseCase>;
 
     getEntriesUseCase = {
       execute: jest.fn().mockResolvedValue([]),
@@ -138,6 +144,7 @@ describe('AccountingController', () => {
       getIncomeStatementUseCase,
       getBalanceSheetUseCase,
       mockPrisma,
+      auditAccountingUseCase,
     );
   });
 
@@ -336,5 +343,16 @@ describe('AccountingController', () => {
     closeAnnualUseCase.execute.mockResolvedValue({ closingEntryCreated: true } as never);
     await expect(controller.closeAnnual('2026', 'comp-1')).resolves.toEqual({ closingEntryCreated: true });
     expect(closeAnnualUseCase.execute).toHaveBeenCalledWith('comp-1', 2026);
+  });
+
+  it('delega la auditoría contable con la empresa del token', async () => {
+    auditAccountingUseCase.execute.mockResolvedValue({ ok: true } as never);
+    await expect(controller.audit('comp-1', '2026-11')).resolves.toEqual({ ok: true });
+    expect(auditAccountingUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
+  });
+
+  it('la auditoría exige empresa en el token', async () => {
+    await expect(controller.audit(undefined, '2026-11')).rejects.toThrow(ForbiddenException);
+    expect(auditAccountingUseCase.execute).not.toHaveBeenCalled();
   });
 });
