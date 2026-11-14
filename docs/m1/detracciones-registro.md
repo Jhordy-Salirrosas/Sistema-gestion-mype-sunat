@@ -19,3 +19,7 @@ Se entrega esquema, SQL y script manual con checksum. El SQL preserva los regist
 No se ejecutará la cola oficial de migraciones ni se aplicará el cambio a una base compartida. Las pruebas del esquema nuevo usarán SQL explícito y una base PostgreSQL exclusivamente local y aislada. El despliegue del backend que utiliza la tabla requiere la aplicación manual previa.
 
 El ferry de este encargo se compone sobre el main frontend indicado; reemplaza el inventario histórico heredado de otros encargos y transporta solo los archivos de este registro.
+
+## Punto 1 — constancia numérica
+
+Back y formulario admiten vacío o dígitos ASCII, conservando ceros iniciales; recortan espacios exteriores. Texto no numérico se rechaza con «La constancia debe contener solo dígitos o quedar vacía.». Las lecturas no se modifican. Pruebas dirigidas: back 22 pruebas, front 18 pruebas. El ferry contiene únicamente los archivos de este encargo, sobre el main frontend confirmado.

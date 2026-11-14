@@ -29,6 +29,9 @@ export class InvoiceDetractionService {
   }
 
   async registerDeposit(companyId: string, id: string, dto: { amount?: number; date?: string; constancia?: string }) {
+    if (dto.constancia != null && typeof dto.constancia !== 'string') throw new BadRequestException('La constancia debe contener solo dígitos o quedar vacía.');
+    const constancia = dto.constancia?.trim() || null;
+    if (constancia && !/^[0-9]+$/.test(constancia)) throw new BadRequestException('La constancia debe contener solo dígitos o quedar vacía.');
     const factura = await this.prisma.invoice.findFirst({ where: { id, company_id: companyId } });
     if (!factura) throw new NotFoundException('Comprobante no encontrado.');
     if (factura.estado === 'ANULADO') throw new BadRequestException('El comprobante está anulado.');
@@ -39,7 +42,7 @@ export class InvoiceDetractionService {
     const fecha = dto.date !== undefined ? new Date(fechaIso(dto.date, 'depósito')) : new Date();
     if (Number.isNaN(fecha.getTime())) throw new BadRequestException('Fecha de depósito inválida.');
     return this.prisma.invoice.update({
-      where: { id }, data: { detraccion_deposited_at: fecha, detraccion_deposited_amount: monto, detraccion_constancia: dto.constancia?.trim() || null },
+      where: { id }, data: { detraccion_deposited_at: fecha, detraccion_deposited_amount: monto, detraccion_constancia: constancia },
     });
   }
 }

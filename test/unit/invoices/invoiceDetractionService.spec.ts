@@ -34,7 +34,16 @@ describe('depósitos: precisión y fecha estrictas', () => {
     expect(update).not.toHaveBeenCalled();
   });
   it.each(['2024-02-29', '2020-01-01', '2099-12-31'])('admite fecha válida sin nueva restricción temporal %s', async date => {
-    await service.registerDeposit('c1', 'i1', { amount: 1.23, date, constancia: ' ABC ' });
-    expect(update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { detraccion_deposited_at: new Date(`${date}T00:00:00Z`), detraccion_deposited_amount: 1.23, detraccion_constancia: 'ABC' } });
+    await service.registerDeposit('c1', 'i1', { amount: 1.23, date, constancia: ' 001 ' });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { detraccion_deposited_at: new Date(`${date}T00:00:00Z`), detraccion_deposited_amount: 1.23, detraccion_constancia: '001' } });
   });
 });
+
+ describe('constancia de nuevos guardados', () => {
+  it.each(['ABC', '12-3', '1 2', '１２', 123])('rechaza %s sin escritura', async constancia => {
+   const update = jest.fn();
+   const service = new InvoiceDetractionService({ invoice: { update } } as never);
+   await expect(service.registerDeposit('c', 'i', { constancia } as never)).rejects.toThrow('La constancia debe contener solo dígitos o quedar vacía.');
+   expect(update).not.toHaveBeenCalled();
+  });
+ });
