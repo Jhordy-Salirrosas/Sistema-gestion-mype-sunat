@@ -59,11 +59,22 @@ La primera inserta las subcuentas 1011, 1012, 1013 y 1043 en `accounting_account
 
 ## Pruebas
 
-- Backend: `nest build` ✅, `oxlint` 0 errores, 221 pruebas de contabilidad + 24 de compras ✅.
+- Backend: `nest build` ✅, `oxlint` 0 errores, 223 pruebas de contabilidad + 24 de compras ✅.
 - Frontend: `tsc -b` ✅, `vite build` ✅, 1 326 pruebas ✅.
 
 > En este entorno Windows 37 suites de `invoices` fallan por `spawn EPERM` al lanzar `python3` para el
-> validador SFS de SUNAT (bloqueo del sandbox, no del código).
+> validador SFS de SUNAT (bloqueo del sandbox, no del código). El CI instala
+> `scripts/m1/requirements.txt`, así que allí corren.
+
+## Verificación previa al despliegue
+
+- `prisma validate` sobre `prisma/schema` ✅ (esquema coherente tras los dos modelos nuevos).
+- Las migraciones **no se pudieron ejecutar en local** (no hay PostgreSQL en este entorno). Siguen la
+  convención de nombres de Prisma (índices `_key` / `_idx`, FK `_fkey`) y el CI las aplica con
+  `prisma migrate deploy` contra PostgreSQL 16.
+- Si el entorno usa `node scripts/apply-all-migrations.js` en lugar de `migrate deploy`, no hay que
+  tocar nada: ese script recorre las carpetas en orden alfabético y las dos nuevas ya quedan al final.
+- `gen_random_uuid()` (usado en la primera migración) es nativo desde PostgreSQL 13.
 
 ## Riesgos
 

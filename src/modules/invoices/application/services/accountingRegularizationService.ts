@@ -68,7 +68,9 @@ export class AccountingRegularizationService {
     const comprobantes = await this.prisma.invoice.findMany({
       where: {
         company_id: companyId,
-        estado: 'ACEPTADO',
+        // Mismo criterio que el puente: lo observado por SUNAT sigue siendo un
+        // comprobante válido y necesita asiento.
+        estado: { in: ['ACEPTADO', 'OBSERVADO'] },
         tipo_comprobante: { in: ['01', '03'] },
         ...(opciones.ids?.length ? { id: { in: opciones.ids } } : {}),
       },

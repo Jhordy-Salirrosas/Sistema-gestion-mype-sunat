@@ -269,7 +269,9 @@ export class AuditAccountingUseCase {
     const comprobantes = await this.prisma.invoice.findMany({
       where: {
         company_id: companyId,
-        estado: 'ACEPTADO',
+        // El puente contable procesa ACEPTADO y OBSERVADO: un comprobante
+        // observado también debe tener asiento, y si falta es un pendiente real.
+        estado: { in: ['ACEPTADO', 'OBSERVADO'] },
         tipo_comprobante: { in: ['01', '03', '07'] },
         ...(rango ? { fecha_emision: rango } : {}),
       },

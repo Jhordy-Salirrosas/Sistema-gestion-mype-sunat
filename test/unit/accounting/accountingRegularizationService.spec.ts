@@ -121,12 +121,12 @@ describe('AccountingRegularizationService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('acota la consulta a la empresa y a los comprobantes aceptados', async () => {
+  it('acota la consulta a la empresa y a los comprobantes aceptados u observados', async () => {
     const prisma = crearPrisma([]);
     await new AccountingRegularizationService(prisma as never, { reprocesar: jest.fn() } as never).execute('c1');
     expect(prisma.invoice.findMany.mock.calls[0][0].where).toMatchObject({
       company_id: 'c1',
-      estado: 'ACEPTADO',
+      estado: { in: ['ACEPTADO', 'OBSERVADO'] },
       tipo_comprobante: { in: ['01', '03'] },
     });
   });
