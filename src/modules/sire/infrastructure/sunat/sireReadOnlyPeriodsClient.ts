@@ -31,6 +31,17 @@ export {
 
 export type SirePeriodBookCode = '140000' | '080000';
 
+/**
+ * Credenciales de API propias de una empresa.
+ *
+ * Si vienen informadas tienen prioridad sobre las variables de entorno: cada
+ * contribuyente tiene su propio Client ID/Secret en la API SIRE de SUNAT.
+ */
+export interface SireClientCredentials {
+  clientId?: string;
+  clientSecret?: string;
+}
+
 export interface SireReadOnlyClientConfig {
   SIRE_AUTH_HOST?: string;
   SIRE_API_HOST?: string;
@@ -151,8 +162,9 @@ export class SireReadOnlyPeriodsClient {
     solUser: string,
     solPassword: string,
     bookCode: SirePeriodBookCode,
+    credentials?: SireClientCredentials,
   ): Promise<unknown> {
-    const config = this.getValidatedConfig();
+    const config = this.getValidatedConfig(credentials);
     const normalizedRuc = ruc.trim();
     const normalizedSolUser = solUser.trim();
     if (!normalizedRuc || !normalizedSolUser) {
@@ -242,11 +254,13 @@ export class SireReadOnlyPeriodsClient {
     throwForSunatStatus(response, PERIODS_STATUS_MESSAGES);
   }
 
-  private getValidatedConfig(): ValidatedSireConfig {
+  private getValidatedConfig(
+    credentials?: SireClientCredentials,
+  ): ValidatedSireConfig {
     this.assertIntegrationEnabled();
 
-    const clientId = this.readClientId();
-    const clientSecret = this.configService.get<string>('SUNAT_CLIENT_SECRET');
+    const clientId = this.readClientId(credentials?.clientId);
+    const clientSecret = this.readClientSecret(credentials?.clientSecret);
     if (!clientSecret) {
       throw new SireConfigurationError(
         'La integración API SIRE no está configurada.',
@@ -279,11 +293,15 @@ export class SireReadOnlyPeriodsClient {
    *
    * Un valor de ejemplo se rechaza antes de llamar a SUNAT: fallar aquí es
    * más claro que recibir un 401 desde el exterior.
+   *
+   * El Client ID propio de la empresa tiene prioridad sobre el del entorno:
+   * cada contribuyente se autentica con el suyo.
    */
-  private readClientId(): string {
-    const clientId = this.configService
-      .get<string>('SUNAT_CLIENT_ID')
-      ?.trim();
+  private readClientId(preferred?: string): string {
+    const own = preferred?.trim();
+    const clientId = own
+      ? own
+      : this.configService.get<string>('SUNAT_CLIENT_ID')?.trim();
     if (!clientId) {
       throw new SireConfigurationError(
         'La integración API SIRE no está configurada.',
@@ -295,6 +313,19 @@ export class SireReadOnlyPeriodsClient {
       );
     }
     return clientId;
+  }
+
+  /**
+   * Client Secret de la aplicación de SUNAT.
+   *
+   * El secreto propio de la empresa tiene prioridad sobre el del entorno.
+   */
+  private readClientSecret(preferred?: string): string | undefined {
+    const own = preferred?.trim();
+    if (own) {
+      return own;
+    }
+    return this.configService.get<string>('SUNAT_CLIENT_SECRET');
   }
 
   private readTimeoutMs(): number {

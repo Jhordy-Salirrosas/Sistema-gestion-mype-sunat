@@ -23,6 +23,16 @@ export const SUMMARY_QUEUE = 'sunat-summary-queue';
 export const SUMMARY_DLQ = 'sunat-summary-dlq';
 export const SIRE_PERIODS_QUEUE = 'sunat-sire-periods-queue';
 export const SIRE_PERIODS_DLQ = 'sunat-sire-periods-dlq';
+/**
+ * Cola del menú SIRE: importación de propuestas y envío de reportes.
+ *
+ * Es una cola aparte de la de consulta de períodos porque el trabajo es
+ * distinto: el archivo ya está guardado y validado, y lo que viaja en el
+ * payload es solo su identificador. Mezclarlos obligaría al consumidor de
+ * períodos a distinguir dos formatos de mensaje en cada job.
+ */
+export const SIRE_IMPORT_QUEUE = 'sunat-sire-import-queue';
+export const SIRE_IMPORT_DLQ = 'sunat-sire-import-dlq';
 
 /** Payload que viaja en la cola de resúmenes. */
 export interface SummaryJobData {
@@ -50,12 +60,36 @@ export interface InvoiceJobData {
   invoice_id: string;
 }
 
+/**
+ * Payload del trabajo de consulta de períodos SIRE.
+ *
+ * NO viaja ninguna credencial: el worker las resuelve desde
+ * `sire_configurations` usando `companyId`. Así la cola nunca guarda secretos
+ * y una credencial rotada se aplica al trabajo siguiente sin reencolar nada.
+ */
 export interface SirePeriodsJobData {
   messageId: string;
   companyId: string;
   ruc: string;
   bookCode: '140000' | '080000';
-  encryptedSolCredentials: string;
+}
+
+/**
+ * Payload de los trabajos del menú SIRE.
+ *
+ * Viaja solo lo necesario para PROCESSAR: el archivo ya está guardado en el
+ * almacenamiento y su ruta vive en la tabla, no en el mensaje de la cola.
+ */
+export interface SireImportJobData {
+  /** Identificador del trabajo; es también el `messageId` del frontend. */
+  messageId: string;
+  companyId: string;
+  /** `IMPORTACION` procesa el archivo subido; `REPORTE` simula el envío. */
+  tipo: 'IMPORTACION' | 'REPORTE';
+  /** Identificador del registro `sire_importaciones` o `sire_reportes`. */
+  registroId: string;
+  periodo: string;
+  libro: 'RVIE_VENTAS' | 'RCE_COMPRAS';
 }
 
 @Injectable()
@@ -140,6 +174,21 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       });
       this.logger.log(
         `Colas SIRE inicializadas: ${SIRE_PERIODS_QUEUE} y ${SIRE_PERIODS_DLQ}`,
+      );
+
+      this.logger.log(
+        `Inicializando colas del menú SIRE: ${SIRE_IMPORT_QUEUE} y ${SIRE_IMPORT_DLQ}`,
+      );
+      await this.boss.createQueue(SIRE_IMPORT_DLQ, { retryLimit: 0 });
+      await this.boss.createQueue(SIRE_IMPORT_QUEUE, {
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        retryDelayMax: 300,
+        deadLetter: SIRE_IMPORT_DLQ,
+      });
+      this.logger.log(
+        `Colas del menú SIRE inicializadas: ${SIRE_IMPORT_QUEUE} y ${SIRE_IMPORT_DLQ}`,
       );
 
       this.logger.log('Servicio de colas PgBoss iniciado correctamente');
@@ -607,5 +656,103 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         tipo: job.data?.tipo ?? 'RESUMEN_DIARIO',
         intentosFallidos: job.retryCount ?? 0,
       }));
+  }
+
+  /**
+   * Encola un trabajo del menú SIRE (importación o reporte).
+   *
+   * El identificador del trabajo de PgBoss ES el `messageId` que recibe el
+   * frontend, igual que en la consulta de períodos: el usuario sondea con ese
+   * valor y el worker actualiza el registro correspondiente.
+   */
+  async enqueueSireImport(job: SireImportJobData): Promise<string> {
+    if (this.bypass) {
+      this.logger.error(
+        `No se puede encolar el trabajo SIRE ${job.messageId}: PgBoss está en modo bypass.`,
+      );
+      throw new ServiceUnavailableException(
+        'La cola de trabajos SIRE no está disponible.',
+      );
+    }
+
+    let jobId: string | null = null;
+    try {
+      jobId = await this.boss.send(SIRE_IMPORT_QUEUE, job, {
+        id: job.messageId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `No se pudo encolar el trabajo SIRE ${job.messageId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo registrar el trabajo SIRE en la cola.',
+      );
+    }
+
+    if (!jobId) {
+      this.logger.error(
+        `PgBoss no devolvió id para el trabajo SIRE ${job.messageId}.`,
+      );
+      throw new ServiceUnavailableException(
+        'No se pudo registrar el trabajo SIRE en la cola.',
+      );
+    }
+    return jobId;
+  }
+
+  async registerSireImportWorker(
+    handler: (job: SireImportJobData) => Promise<unknown>,
+  ): Promise<string> {
+    if (this.bypass) {
+      this.logger.warn(
+        `No se registra el worker ${SIRE_IMPORT_QUEUE}: PgBoss está en modo bypass.`,
+      );
+      return '';
+    }
+    this.logger.log(
+      `Registrando worker del menú SIRE en la cola ${SIRE_IMPORT_QUEUE}`,
+    );
+    const workerId = await this.boss.work<SireImportJobData>(
+      SIRE_IMPORT_QUEUE,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+        await handler(job.data);
+      },
+    );
+    this.logger.log(
+      `Worker del menú SIRE registrado en ${SIRE_IMPORT_QUEUE} (id=${workerId})`,
+    );
+    return workerId;
+  }
+
+  async registerSireImportDlqWorker(
+    handler: (job: SireImportJobData) => Promise<unknown>,
+  ): Promise<string> {
+    if (this.bypass) {
+      this.logger.warn(
+        `No se registra el worker de DLQ ${SIRE_IMPORT_DLQ}: PgBoss está en modo bypass.`,
+      );
+      return '';
+    }
+    this.logger.log(
+      `Registrando worker de DLQ del menú SIRE en la cola ${SIRE_IMPORT_DLQ}`,
+    );
+    const workerId = await this.boss.work<SireImportJobData>(
+      SIRE_IMPORT_DLQ,
+      { batchSize: 1 },
+      async (jobs) => {
+        const job = jobs[0];
+        if (!job) return;
+        await handler(job.data);
+      },
+    );
+    this.logger.log(
+      `Worker de DLQ del menú SIRE registrado en ${SIRE_IMPORT_DLQ} (id=${workerId})`,
+    );
+    return workerId;
   }
 }

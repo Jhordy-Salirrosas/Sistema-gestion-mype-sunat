@@ -64,7 +64,7 @@ export const SIRE_FAILURE_MESSAGES: Record<SirePeriodErrorCode, string> = {
   REQUEST_CONTEXT_INVALID:
     'La solicitud no corresponde a una empresa activa.',
   CREDENTIALS_UNAVAILABLE:
-    'No fue posible recuperar las credenciales SOL de esta solicitud.',
+    'La empresa no tiene credenciales SIRE configuradas. Configúralas antes de consultar los períodos.',
   QUEUE_ENQUEUE_FAILED: SIRE_QUEUE_UNAVAILABLE_MESSAGE,
   SUNAT_HTTP_400:
     'SUNAT rechazó la solicitud. Verifica el usuario SOL, la clave y el libro consultado.',
