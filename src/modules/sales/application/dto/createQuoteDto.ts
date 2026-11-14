@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
+export const QUOTE_KINDS = ['COTIZACION', 'PEDIDO'] as const;
 export const QUOTE_STATUSES = ['BORRADOR', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'CONVERTIDA', 'ANULADA'] as const;
 
 export class QuoteItemDto {
@@ -11,6 +12,7 @@ export class QuoteItemDto {
   @IsNumber() @Min(0) unitPrice!: number;
 }
 export class CreateQuoteDto {
+  @IsOptional() @IsIn(QUOTE_KINDS as unknown as string[]) kind?: typeof QUOTE_KINDS[number];
   @IsOptional() @IsString() customerDocType?: string;
   @IsOptional() @IsString() customerDocNumber?: string;
   @IsString() customerName!: string;

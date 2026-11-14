@@ -1,3 +1,8 @@
+enum SalesDocumentKind {
+  COTIZACION
+  PEDIDO
+}
+
 enum SalesQuoteStatus {
   BORRADOR
   ENVIADA
@@ -11,6 +16,7 @@ model SalesQuote {
   id                  String           @id @default(uuid())
   company_id          String
   company             Company          @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  kind                SalesDocumentKind @default(COTIZACION)
   quote_number        String
   customer_doc_type   String           @default("6")
   customer_doc_number String?
@@ -28,7 +34,7 @@ model SalesQuote {
   items               SalesQuoteItem[]
 
   @@unique([company_id, quote_number])
-  @@index([company_id, status, issue_date])
+  @@index([company_id, kind, status, issue_date])
   @@map("sales_quotes")
 }
 
