@@ -15,3 +15,7 @@ Encargo vigente: reemplazo completo de siete puntos. Rama `fix/m1-paquete-recorr
 No hay puntos detenidos. Pruebas sin transporte fiscal real, PostgreSQL exclusivamente local. No se crean PRs ni se despliega. El ferry sustituye el inventario heredado ya presente en main y solo transporta los archivos de este encargo.
 
 Líneas base completas verdes antes de modificar código: back 401 suites / 4034 pruebas, con 4 suites / 38 pruebas omitidas y 12 snapshots; front 182 archivos / 1404 pruebas. PostgreSQL local con el esquema de main, sin aplicar migraciones nuevas.
+
+## Punto 1
+
+Panel con contención de ancho, texto con corte de palabras largas, motivo en bloque propio, textarea completo, checkbox alineado y acciones separadas con texto adaptable. El modal contiene el desbordamiento horizontal. Se conservan los campos, textos, permisos, confirmación, decisión y petición existentes. Pruebas del flujo de reenvío forzado verdes; no se modifican los paneles hermanos, que no comparten la causa.
