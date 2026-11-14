@@ -180,7 +180,7 @@ export const InvoiceEmitCampos = ({
               value={b.motivoCodigo}
               onChange={(v) => {
                 const elegido = motivos.find((m) => m.codigo === v);
-                actualizar(vincularDocumentoAfectado({ ...b, motivoCodigo: v, motivoDescripcion: elegido?.descripcion ?? '' }, existentes).borrador);
+                actualizar(vincularDocumentoAfectado({ ...b, motivoCodigo: v, motivoDescripcion: b.tipo === '07' && v === '10' ? '' : elegido?.descripcion ?? '' }, existentes).borrador);
               }}
               opciones={motivos.map((m) => ({
                 value: m.codigo,
@@ -188,6 +188,10 @@ export const InvoiceEmitCampos = ({
               }))}
             />
           </div>
+          {b.tipo === '07' && b.motivoCodigo === '10' && <label className="block text-sm sm:col-span-2">Sustento de Otros conceptos
+            <input aria-label="Sustento de Otros conceptos" className="w-full rounded border p-2" value={b.motivoDescripcion} onChange={e => actualizar({ motivoDescripcion: e.target.value })} maxLength={500} aria-required="true" />
+            <span className="block text-xs text-muted-foreground">Solo ajustes monetarios sobre líneas del comprobante original. Este motivo no corrige únicamente el IGV.</span>
+          </label>}
         </>
       )}
 

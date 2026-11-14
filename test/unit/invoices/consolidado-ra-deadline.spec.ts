@@ -6,7 +6,7 @@ it.each([0,7,8,-1])('el despacho diferido recalcula %s días por documento y con
  jest.spyOn(Date,'now').mockReturnValue(Date.parse('2026-11-13T17:00:00Z'));
  const h=summaryDispatchHarness();h.row.kind='RA';h.job.tipo='COMUNICACION_BAJA';h.row.members=[{id:'a'},{id:'b'}] as never;
  const fecha=new Date(Date.parse('2026-11-13T00:00:00Z')-dias*86400000);
- const db={invoice:{findMany:jest.fn(async()=>[{id:'a',fecha_emision:new Date('2026-11-13')},{id:'b',fecha_emision:fecha}])}};
+ const db={invoice:{findMany:jest.fn(async()=>[{id:'a',tipo_comprobante:'01',serie:'F001',fecha_emision:new Date('2026-11-13')},{id:'b',tipo_comprobante:'01',serie:'F001',fecha_emision:fecha}])}};
  Object.assign(h.store,{validarPlazoDespacho:(row:any)=>validarPlazoDespachoRa(db as never,row)});
  const before=h.row.xml;const result=await h.service.procesar(h.job,{maxConsultas:0});
  if(dias<0||dias>7){expect(result).toMatchObject({enviado:false,status:'BLOQUEADO',error:expect.stringContaining('2957')});expect(h.store.revision).toHaveBeenCalledWith(h.row.id,expect.stringContaining('b'));expect(h.client.sendSummary).not.toHaveBeenCalled();expect(h.store.reclamar).not.toHaveBeenCalled();}

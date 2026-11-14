@@ -6,7 +6,7 @@ import { presentarResultado } from './invoiceResultPresentation';
 import { aCdr, numeroComprobante } from './invoiceQueryMapper';
 import type { DetalleReintentoMasivo, ReintentoMasivoDto } from '../dto/invoiceBatchRetryDto';
 
-const SELECT_REENVIO = {
+export const SELECT_REENVIO = {
   id:true, estado:true, serie:true, correlativo:true, transport_uncertain:true, cdr_sunat:true,
   history:{ orderBy:{created_at:'desc' as const}, select:{estado_nuevo:true,codigo_error:true,mensaje_error:true,created_at:true} },
 } as const;
@@ -17,9 +17,9 @@ const ESTADOS = ['EN_COLA','PENDIENTE','ERROR_RED','ENVIADO','RECHAZADO','PROCES
 export function clasificarReintentoMasivo(fila: Fila): DetalleReintentoMasivo {
   const base={id:fila.id,numero:numeroComprobante(fila.serie,fila.correlativo),estado:fila.estado};
   if (fila.transport_uncertain === true) return {...base,resultado:'OMITIDO_INCERTIDUMBRE',motivo:'Incertidumbre de transporte: consultar SUNAT; no reenviar.'};
-  const resultado=presentarResultado(fila.estado,aCdr(fila.cdr_sunat),fila.history,fila.transport_uncertain);
+  const resultado=presentarResultado(fila.estado,aCdr(fila.cdr_sunat),fila.history ?? [],fila.transport_uncertain);
   if (resultado?.origen === 'SUNAT' && fila.estado === 'RECHAZADO') return {...base,resultado:'OMITIDO_RECHAZO_DEFINITIVO',motivo:'Rechazo definitivo de SUNAT: no se reabre ni se reenvía.'};
-  const ultimoError=fila.history.find(e=>e.codigo_error && e.codigo_error!=='M1_NOTE_DESCRIPTION_COMPLETED');
+  const ultimoError=(fila.history ?? []).find(e=>e.codigo_error && e.codigo_error!=='M1_NOTE_DESCRIPTION_COMPLETED');
   const localSinDetalle=!resultado && ultimoError?.codigo_error?.startsWith('M1_PREPARATION_');
   if (resultado?.origen === 'VALIDACION_LOCAL' || (resultado?.origen === 'PREPARACION_LOCAL' && resultado.recuperable !== true) || localSinDetalle) {
     return {...base,resultado:'OMITIDO_BLOQUEO_LOCAL',motivo:'Bloqueo local: corregir los datos o verificar la causa antes de reintentar.'};

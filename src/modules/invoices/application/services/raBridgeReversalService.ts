@@ -1,3 +1,4 @@
+import { esAnulacionRc } from './summaryCancellation';
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { Prisma } from '../../../../generated/client/client';
@@ -24,7 +25,7 @@ export class RaBridgeReversalService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      const rows = await this.prisma.invoiceAggregate.findMany({ where: { kind: 'RA', state: 'ACCEPTED', result: { path: ['bridgeReversals'], array_contains: [{ status: 'PENDING' }] } }, orderBy: { updated_at: 'asc' }, take: 50 });
+      const rows = await this.prisma.invoiceAggregate.findMany({ where: { kind: { in: ['RA', 'RC'] }, state: 'ACCEPTED', result: { path: ['bridgeReversals'], array_contains: [{ status: 'PENDING' }] } }, orderBy: { updated_at: 'asc' }, take: 50 });
       for (const row of rows) for (const work of raWorks(row.result)) {
         if (work.status !== 'DONE' && Date.parse(work.nextAt) <= Date.now()) await this.procesar(row.id, work.invoiceId);
       }
@@ -37,7 +38,7 @@ export class RaBridgeReversalService implements OnModuleInit, OnModuleDestroy {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`m1:bridge:${invoiceId}`}, 0))`;
         await tx.$executeRaw`SELECT id FROM invoice_aggregates WHERE id = ${aggregateId} FOR UPDATE`;
         const row = await tx.invoiceAggregate.findUniqueOrThrow({ where: { id: aggregateId } });
-        if (row.kind !== 'RA' || row.state !== 'ACCEPTED') throw new Error('RA_REVERSAL_NOT_ACCEPTED');
+        if ((row.kind !== 'RA' && !(row.kind === 'RC' && esAnulacionRc(row.members))) || row.state !== 'ACCEPTED') throw new Error('RA_REVERSAL_NOT_ACCEPTED');
         const works = raWorks(row.result);
         const work = works.find(w => w.invoiceId === invoiceId && w.action === 'REVERSE_RA_BRIDGE');
         if (!work || work.status === 'DONE') return true;
@@ -55,7 +56,7 @@ export class RaBridgeReversalService implements OnModuleInit, OnModuleDestroy {
             unit_cost: Number(movement.total_cost.div(movement.quantity)), operation_type_code: movement.direction === 'SALIDA' ? '05' : '01',
             source_reference_id: key, document_type_code: invoice.tipo_comprobante, document_serial: invoice.serie,
             document_number: String(invoice.correlativo), movement_date: row.generation_date,
-            notes: `Contramovimiento RA ${row.identifier}; origen ${movement.id}` }, row.company_id);
+            notes: `Contramovimiento ${row.kind} ${row.identifier}; origen ${movement.id}` }, row.company_id);
           if (!new Prisma.Decimal(reversed.totalCost).toDecimalPlaces(2).equals(movement.total_cost.toDecimalPlaces(2))) throw new Error('RA_REVERSAL_COST_MISMATCH');
         }
         // Revertir las líneas realmente asentadas, no las reglas o precios actuales.
@@ -67,13 +68,13 @@ export class RaBridgeReversalService implements OnModuleInit, OnModuleDestroy {
         const generate = new GenerateAccountingEntryUseCase(new PrismaAccountingRepository(tx as unknown as PrismaService));
         for (const entry of entries) {
           await generate.execute({ companyId: row.company_id, period: row.generation_date.slice(0, 7), entryDate: `${row.generation_date}T00:00:00Z`,
-            journalCode: entry.journal_code, glosa: `Reversión RA ${row.identifier}; asiento ${entry.id}`,
+            journalCode: entry.journal_code, glosa: `Reversión ${row.kind} ${row.identifier}; asiento ${entry.id}`,
             sourceModule: MODULO_ORIGEN, sourceReferenceId: `ra:${aggregateId}:${entry.id}`, idempotencyKey: `m1:ra:${aggregateId}:${entry.id}`,
             lines: entry.lines.map(l => ({ lineOrder: l.line_order, accountCode: l.account_code, accountName: l.account_name, debitAmount: Number(l.credit_amount), creditAmount: Number(l.debit_amount) })) });
         }
         work.status = 'DONE'; work.attempts++; delete work.cause;
         await tx.invoiceAggregate.update({ where: { id: row.id }, data: { result: { ...(row.result as object), bridgeReversals: works } as unknown as Prisma.InputJsonValue } });
-        await tx.transactionHistory.create({ data: { invoice_id: invoiceId, company_id: row.company_id, estado_anterior: 'ANULADO', estado_nuevo: 'ANULADO', codigo_error: 'M1_RA_REVERSAL_DONE', mensaje_error: `Reversión local completada para ${row.identifier}.` } });
+        await tx.transactionHistory.create({ data: { invoice_id: invoiceId, company_id: row.company_id, estado_anterior: 'ANULADO', estado_nuevo: 'ANULADO', codigo_error: `M1_${row.kind}_REVERSAL_DONE`, mensaje_error: `Reversión local completada para ${row.identifier}.` } });
         return true;
       }, { timeout: 30000 });
     } catch (error) {
@@ -86,7 +87,7 @@ export class RaBridgeReversalService implements OnModuleInit, OnModuleDestroy {
         work.cause = error instanceof Error && /^RA_REVERSAL_[A-Z_]+$/.test(error.message) ? error.message : 'RA_REVERSAL_LOCAL_FAILURE';
         await tx.invoiceAggregate.update({ where: { id: row.id }, data: { result: { ...(row.result as object), bridgeReversals: works } as unknown as Prisma.InputJsonValue } });
         const actual = await tx.invoice.findFirst({ where: { id: invoiceId, company_id: row.company_id }, select: { estado: true } });
-        if (actual) await tx.transactionHistory.create({ data: { invoice_id: invoiceId, company_id: row.company_id, estado_anterior: actual.estado, estado_nuevo: actual.estado, codigo_error: 'M1_RA_REVERSAL_PENDING', mensaje_error: `ANULADO con reversión pendiente: ${work.cause}.` } });
+        if (actual) await tx.transactionHistory.create({ data: { invoice_id: invoiceId, company_id: row.company_id, estado_anterior: actual.estado, estado_nuevo: actual.estado, codigo_error: `M1_${row.kind}_REVERSAL_PENDING`, mensaje_error: `ANULADO con reversión pendiente: ${work.cause}.` } });
       });
       return false;
     }

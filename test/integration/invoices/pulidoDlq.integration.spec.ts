@@ -42,6 +42,8 @@ const dbUrl = process.env.TEST_DATABASE_URL;
       expect(await boss.findJobs(INVOICE_QUEUE, { data: { invoice_id: invoiceId }, queued: true })).toHaveLength(1);
       expect(await service.reintentarCdr(companyId, invoiceId)).toMatchObject({ encolado: false, resultadoCola: 'YA_EN_COLA' });
       expect(publicar).toHaveBeenCalledTimes(1);
+      expect((await prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId } })).transport_uncertain).toBe(true);
+      expect(await boss.findJobs(INVOICE_QUEUE, { data: { invoice_id: invoiceId }, queued: true })).toHaveLength(1);
       await prisma.invoice.update({ where: { id: invoiceId }, data: { estado: 'ACEPTADO' } });
       expect(await service.reintentarCdr(companyId, invoiceId)).toMatchObject({ encolado: false });
       expect(publicar).toHaveBeenCalledTimes(1);

@@ -1,9 +1,11 @@
+import { avisosPadronReceptor } from './receiverRucWarning';
+import { RucConsultaService } from '../../../sunat/rucConsultaService';
 import { bloquearClasificacionProductos } from '../../../../common/productClassificationLock';
 import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 import { validarContenidoFiscal } from '../../validateInvoiceContent';
 import { traducirEmision } from './emitirComprobanteAdapter';
 import { validarReservaVenta } from './invoiceStockReservation';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../database/prismaService';
 import { Prisma } from '../../../../generated/client/client';
@@ -30,7 +32,8 @@ function canonical(value: unknown): unknown {
 /** Límite transaccional de AMBAS rutas HTTP. No abre conexiones a SUNAT. */
 @Injectable()
 export class AtomicInvoiceCreationService {
-  constructor(private readonly prisma: PrismaService, private readonly queue: QueueService) {}
+  constructor(private readonly prisma: PrismaService, private readonly queue: QueueService,
+    @Optional() private readonly rucConsulta?: RucConsultaService) {}
 
   create(dto: CreateInvoiceDto, companyId: string, key?: string): Promise<InvoicePersistenceResult> {
     return this.execute('fiscal', dto, companyId, key, async (tx) => {
@@ -44,8 +47,11 @@ export class AtomicInvoiceCreationService {
     });
   }
 
-  emitir(dto: EmitirComprobanteDto, companyId: string, key?: string): Promise<ResultadoEmision> {
-    return this.execute('pantalla', dto, companyId, key, (tx) => this.runEmission(tx, dto, companyId));
+  async emitir(dto: EmitirComprobanteDto, companyId: string, key?: string): Promise<ResultadoEmision> {
+    const resultado = await this.execute('pantalla', dto, companyId, key, (tx) => this.runEmission(tx, dto, companyId));
+    // La consulta externa queda fuera de la transacción y de la respuesta fiscal idempotente.
+    const avisos = await avisosPadronReceptor(dto, this.rucConsulta);
+    return avisos.length ? { ...resultado, avisos: [...resultado.avisos, ...avisos] } : resultado;
   }
 
   private async runEmission(tx: Prisma.TransactionClient, dto: EmitirComprobanteDto, companyId: string) {

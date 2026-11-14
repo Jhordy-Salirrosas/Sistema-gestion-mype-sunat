@@ -5,8 +5,8 @@
 require('dotenv/config');
 const { Client } = require('pg');
 
-const tablas = ['companies', 'invoices', 'accounting_entries', 'accounting_lines', 'accounting_rules', 'accounting_periods', 'accounting_fiscal_years', 'collections', 'expenses', 'national_purchases', 'inventory_products', 'inventory_balances'];
-const columnas = [['accounting_entries', 'journal_code'], ['invoices', 'detraccion_deposited_at'], ['invoices', 'detraccion_constancia'], ['invoices', 'detraccion_deposited_amount'], ['collections', 'invoice_id'], ['expenses', 'paid_amount']];
+const tablas = ['companies', 'invoices', 'accounting_entries', 'accounting_lines', 'accounting_rules', 'accounting_periods', 'accounting_fiscal_years', 'collections', 'expenses', 'national_purchases', 'inventory_products', 'inventory_balances', 'company_treasury_accounts', 'expense_distributions', 'collection_distributions'];
+const columnas = [['accounting_entries', 'journal_code'], ['invoices', 'detraccion_deposited_at'], ['invoices', 'detraccion_constancia'], ['invoices', 'detraccion_deposited_amount'], ['collections', 'invoice_id'], ['expenses', 'paid_amount'], ['accounting_entries', 'idempotency_key'], ['company_treasury_accounts', 'kind'], ['expense_distributions', 'percentage'], ['collection_distributions', 'percentage']];
 
 (async () => {
   const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });

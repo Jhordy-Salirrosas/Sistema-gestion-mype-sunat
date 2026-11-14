@@ -1,3 +1,4 @@
+import { fechaAceptacionNota, validarNotaAnulacionRc } from './summaryCancellation';
 import { fechaFiscalLima } from '../../fiscalDate';
 import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 /**
@@ -38,6 +39,7 @@ import {
   motivoYaInformado,
   TIPOS_EN_BAJA,
   vaEnResumen,
+  vaEnBaja,
   type CabeceraResumen,
   type ComprobanteAgregado,
 } from '../../application/services/summaryDocumentsBuilder';
@@ -73,6 +75,7 @@ export interface LineaVista {
   motivoExclusion: string;
   /** Días transcurridos desde la emisión (regla 2957). */
   dias: number | null;
+  fechaAceptacion?: string;
 }
 
 /** Resultado de la vista previa. */
@@ -191,6 +194,46 @@ export class InvoiceSummaryService {
     };
   }
 
+  /** Anulación RC separada de las altas: notas aceptadas de boleta, sin transmisión automática. */
+  async vistaAnulacionNotas(companyId: string, fecha: string, correlativo = 1, seleccion?: SeleccionBaja[], transaction?: Prisma.TransactionClient, excludeId?: string): Promise<VistaPrevia> {
+    const db = transaction ?? this.prisma;
+    const rows = await db.invoice.findMany({ where: { company_id: companyId,
+      fecha_emision: { gte: new Date(`${fecha}T00:00:00Z`), lte: new Date(`${fecha}T23:59:59.999Z`) },
+      tipo_comprobante: { in: ['07', '08'] }, serie: { startsWith: 'B' } },
+      include: { history: { where: { codigo_error: '0', estado_nuevo: { in: ['ACEPTADO', 'OBSERVADO'] } }, orderBy: { created_at: 'asc' }, take: 1 } },
+      orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }] });
+    const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RC', db);
+    const motivoDeclarado = await this.motivoPeriodoDeclarado(db, companyId, fecha);
+    const reservas = await db.invoiceAggregate.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { kind: true, state: true, members: true } });
+    const reservados = new Set(reservas.filter(r => !(r.kind === 'RC' && r.state === 'ACCEPTED' && (r.members as unknown as { conditionCode?: string }[]).every(m => !m.conditionCode)))
+      .flatMap(r => (r.members as unknown as { id: string }[]).map(m => m.id)));
+    const fiscal = new Map<string, ComprobanteAgregado>();
+    const lineas = rows.map(f => {
+      const fechaAceptacion = fechaAceptacionNota(f);
+      const c = { ...this.aComprobante(f), condicion: '3' as const, fechaAceptacion };
+      let motivoExclusion = '';
+      try {
+        validarNotaAnulacionRc(c, cabecera.fechaGeneracion);
+        if (motivoDeclarado) throw new Error(motivoDeclarado);
+        if (f.ruc_emisor !== cabecera.rucEmisor) throw new Error('RUC histórico distinto al emisor efectivo.');
+        if (reservados.has(f.id)) throw new Error('Ya reservado en un agregado.');
+        if (seleccion && !seleccion.some(s => s.id === f.id)) throw new Error('No seleccionado.');
+        fiscal.set(f.id, { ...c, fiscal: fiscalResumen(f.payload_ubl, Number(f.monto_total)) });
+      } catch (e) { motivoExclusion = this.mensajeDe(e); }
+      return { ...this.aAgregado(f, fecha), incluido: !motivoExclusion, reenviable: false, motivoExclusion, fechaAceptacion };
+    });
+    const incluidos = lineas.filter(l => l.incluido);
+    const errores: string[] = [];
+    if (seleccion && incluidos.length !== seleccion.length) errores.push('La selección contiene notas no elegibles para anulación RC');
+    let xml: string | null = null;
+    if (incluidos.length && !errores.length) {
+      try { xml = construirResumenDiario(cabecera, incluidos.map(l => fiscal.get(l.id)!)); }
+      catch (e) { errores.push(this.mensajeDe(e)); }
+    }
+    return { envio: { identificador: `RC-${cabecera.fechaGeneracion.replace(/-/g, '')}-${String(correlativo).padStart(3, '0')}`,
+      tipo: 'RESUMEN_DIARIO', fechaReferencia: fecha, correlativo, lineas: incluidos.length }, lineas, xml, errores };
+  }
+
   /**
    * Comprobantes candidatos a baja.
    *
@@ -218,6 +261,8 @@ export class InvoiceSummaryService {
       orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }],
     });
 
+    const motivoDeclarado = await this.motivoPeriodoDeclarado(db, companyId, fecha);
+
     const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RA', db);
     const notas = await db.invoice.findMany({ where: { company_id: companyId, tipo_comprobante: { in: ['07', '08'] }, referenced_invoice_id: { in: filas.map(f => f.id) }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } }, select: { referenced_invoice_id: true, estado: true, monto_total: true } });
     const reservas = await db.invoiceAggregate?.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(excludeAggregateId ? { id: { not: excludeAggregateId } } : {}) }, select: { members: true } }) ?? [];
@@ -228,7 +273,7 @@ export class InvoiceSummaryService {
       const asociada = creditos.some(n => ['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const pendiente = creditos.some(n => !['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const diasHastaHoy = diasDesdeEmision(fechaCorta(f.fecha_emision), cabecera.fechaGeneracion);
-      const motivo = f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
+      const motivo = !vaEnBaja(this.aComprobante(f)) ? 'La nota vinculada a boleta no admite RA; su baja corresponde al resumen diario (RC).' : motivoDeclarado ? motivoDeclarado : f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
       const admiteBaja = !motivo && (!seleccion || seleccion.some(l => l.id === f.id));
       return {
         ...linea,
@@ -271,6 +316,19 @@ export class InvoiceSummaryService {
       xml,
       errores,
     };
+  }
+
+  /** La anulación RA y la de notas por RC conservan la restricción contable de dev. */
+  private async motivoPeriodoDeclarado(db: PrismaService | Prisma.TransactionClient, companyId: string, fecha: string): Promise<string> {
+    const periodo = fecha.slice(0, 7);
+    const [periodoContable, libroPle] = await Promise.all([
+      (db as any).accountingPeriod?.findUnique?.({
+        where: { company_id_period: { company_id: companyId, period: periodo } }, select: { status: true },
+      }) ?? null,
+      (db as any).pleBook?.findFirst?.({ where: { company_id: companyId, period: periodo }, select: { id: true } }) ?? null,
+    ]);
+    return periodoContable?.status === 'CERRADO' || Boolean(libroPle)
+      ? 'El período ya está cerrado o declarado en el PLE: no se anula por comunicación de baja; emita la nota de débito o de crédito.' : '';
   }
 
   /** Convierte una fila de la base a la vista con su motivo de exclusión. */
@@ -334,9 +392,13 @@ export class InvoiceSummaryService {
     customer_identity_type: string | null;
     customer_identity_number: string | null;
     total_igv: unknown;
+    referenced_series_correlative?: string | null;
+    referenced_document_type?: string | null;
   }): ComprobanteAgregado {
     return {
       tipoComprobante: fila.tipo_comprobante,
+      documentoAfectado: fila.referenced_series_correlative ?? undefined,
+      tipoDocumentoAfectado: fila.referenced_document_type,
       serie: fila.serie,
       correlativo: fila.correlativo,
       fechaEmision: fechaCorta(fila.fecha_emision),

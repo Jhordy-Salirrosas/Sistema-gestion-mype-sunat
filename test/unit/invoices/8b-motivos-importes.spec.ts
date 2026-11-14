@@ -35,12 +35,12 @@ describe.each(['pantalla', 'fiscal'])('motivos e importes, %s', ruta => {
  });
 });
 it.each([0, -1, NaN, Infinity])('total no positivo/no finito %s se rechaza', total => expect(() => validarImporteNota(total)).toThrow('mayor que cero'));
-it('los catálogos oficiales coinciden con los assets SFS; el conjunto habilitado no crece', () => {
+it('los catálogos oficiales coinciden con los assets SFS; el conjunto habilitado incluye 10 restringido y mantiene 08 deshabilitado', () => {
  for (const [id, codigos] of [['09', MOTIVOS_OFICIALES_NC], ['10', MOTIVOS_OFICIALES_ND]] as const) {
   const xml = readFileSync(`assets/sunat-sfs/commons/cpe/catalogo/cat_${id}.xml`, 'utf8');
   expect([...xml.matchAll(/<c id="(\d+)"/g)].map(m => m[1])).toEqual(codigos);
  }
- expect(CATALOGO_09_MOTIVOS.map(m => m.codigo)).toEqual(['01','02','03','04','05','06','07','09','13']);
+ expect(CATALOGO_09_MOTIVOS.map(m => m.codigo)).toEqual(['01','02','03','04','05','06','07','09','10','13']);
  expect(CATALOGO_10_MOTIVOS.map(m => m.codigo)).toEqual(['01','02','03','11','12']);
  for (const m of CATALOGO_09_MOTIVOS) expect(() => validarMotivoNota('07', m.codigo)).not.toThrow();
  for (const m of CATALOGO_10_MOTIVOS) expect(() => validarMotivoNota('08', m.codigo)).not.toThrow();

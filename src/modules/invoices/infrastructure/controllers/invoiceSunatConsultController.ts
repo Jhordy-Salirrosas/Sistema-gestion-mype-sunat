@@ -1,3 +1,4 @@
+import { resumirTransporte } from '../../application/services/invoiceTransportEvidence';
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import { Roles } from '../../../../common/decorators';
 import { detalleErrorConsulta } from '../../../sunat/statusConsultaError';
@@ -21,8 +22,14 @@ export class InvoiceSunatConsultController {
   async consultar(@CurrentCompany() companyId: string, @Param('id') id: string) {
     try {
       const invoice = await this.prisma.invoice.findFirst({ where: { id, company_id: companyId },
-        select: { id: true, ruc_emisor: true, tipo_comprobante: true, serie: true, correlativo: true } });
+        select: { id: true, ruc_emisor: true, tipo_comprobante: true, serie: true, correlativo: true, transport_uncertain: true, cdr_sunat: true,
+          history: { select: { created_at: true, codigo_error: true, mensaje_error: true, estado_nuevo: true, tiempo_respuesta_ms: true, http_status_code: true } } } });
       if (!invoice) throw new NotFoundException('Comprobante no encontrado en la empresa');
+      const evidencia = resumirTransporte(invoice.history ?? []);
+      if (!invoice.cdr_sunat && !evidencia.envioAcreditado &&
+          (invoice.transport_uncertain === false || evidencia.bloqueoPrevioProbado)) {
+        return { tipo: 'SIN_TRANSMISION', motivo: 'El comprobante no tiene transmisión acreditada. Revise la preparación local antes de enviarlo.' };
+      }
       const result = await this.consulta.consultar({ companyId, invoiceId: id, rucEmisor: invoice.ruc_emisor,
         tipoComprobante: invoice.tipo_comprobante, serie: invoice.serie, correlativo: invoice.correlativo });
       if (result.tipo !== 'RECUPERADO') return result;

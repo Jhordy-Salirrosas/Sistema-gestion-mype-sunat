@@ -3686,3 +3686,259 @@ Lint backend sin errores, con las tres advertencias preexistentes. En los cinco 
 Archivos backend: src/modules/invoices/application/services/emitirComprobanteAdapter.ts, src/modules/invoices/ublTotalesHelper.ts, src/modules/invoices/application/services/invoiceBridgeCoordinatorService.ts y test/unit/invoices/retencionSinGravada.spec.ts. Front delta: src/modules/invoices/lib/invoiceRetentions.ts, src/modules/invoices/lib/invoiceFlujoPago.ts, src/modules/invoices/components/InvoiceEmitResumen.tsx, src/modules/invoices/pages/InvoiceEmissionPage.tsx, src/modules/invoices/data/invoiceDemoTypes.ts y test/unit/modules/invoices/retencionSinGravada.test.tsx, todos bajo frontend/ en la rama backend. FERRY.md explica aplicación incremental de esas seis rutas o aplicación completa sobre el main front base más paquete. SHA256SUMS se regenera para todos los 24 archivos transportados y FERRY.md; cada archivo se coteja contra el checkout probado.
 
 No hay capas detenidas. El ejemplo auditado exonerada 1000 + inafecta 500 queda con total/neto 1500 y retención cero. Mixto y gravado puro conservan los importes fijados en fase 0; el caso mixto no se reabre. Sin PR, despliegue, emisiones reales, migraciones, cambios de dependencias ni modificaciones de registros históricos. La auditoría del paquete se conserva íntegra y estas secciones son aditivas.
+
+## Pulidos M1 — fase 0
+
+Rama única fix/m1-pulidos creada desde main backend c663ea3ee0d3a5c34c97af9993d284a14892da3f. Frontend main confirmado: 3e4497367363c70d7c774c1d9dc0b65b221a120f. Las bases ya contienen el paquete de auditoría y la exclusión de retención sin gravada. Front trabajado en checkout separado sin rama de entrega; los cambios se transportan bajo frontend/ en la misma rama backend.
+
+Líneas base medidas antes de modificar código: backend 347 suites / 3489 pruebas aprobadas, 17 suites / 93 pruebas optativas omitidas y 12 snapshots; frontend 177 archivos / 1357 pruebas aprobadas, sin omisiones. Comandos: NODE_OPTIONS=--max-old-space-size=6144 npm test -- --runInBand y npm test. Dependencias reutilizadas tras cotejar package.json y package-lock.json sin diferencias. Sin credenciales reales ni emisiones externas.
+
+A — Confirmado. GET /invoices/alertas existe y solo informa certificado y DLQ. Invoice.fecha_emision y tipo_comprobante permiten calcular plazos de facturas 01 (3 días) y boletas 03 (7 días), usando el día civil de emisión persistido y hoy en America/Lima. Se añadirán documentos PENDIENTE/EN_COLA/PROCESANDO/ENVIADO/ERROR_RED/RECHAZADO, con aislamiento de empresa, fecha límite y días restantes, ordenados por urgencia. Se excluyen ACEPTADO/OBSERVADO/ANULADO y tipos sin ventana definida en este encargo (notas/agregados). Son avisos de plazo, no autorizaciones de reenvío; no se escribe ni encola. Se mantienen las ventanas y etiquetas 2108/2957 que ya aplica el sistema; no se reinterpreta aquí el catálogo de bajas.
+
+B — Confirmado con distinción fiable en el contrato existente. RucConsultaService convierte HTTP 404/422 en RUC_NO_ENCONTRADO; una respuesta válida exige RUC coincidente, razón social, estado y condición no vacíos. Un inactivo se representa como consulta exitosa con estado distinto de ACTIVO; no se confunde una excepción de consulta con un estado tributario. Se reutilizará ese servicio configurado, sin llamar Decolecta en pruebas. La ruta HTTP real de emisión pasa por AtomicInvoiceCreationService, que construye manualmente el servicio de emisión dentro de una transacción: el aviso debe consultarse después de resolver la transacción, con espera acotada, sin modificar persistencia, encolado ni respuesta fiscal guardada por idempotencia. Error, timeout, ausencia de RUC o respuesta inválida no producirán aviso ni impedirán la emisión. Solo se consulta al receptor RUC, nunca al emisor.
+
+C — Confirmado parcialmente y alcance precisado. La pantalla InvoiceSettingsPage, useInvoiceConfig y InvoiceIssuerConfigForm ya ejecutan un PUT real y recargan configuración para los campos editables. El defecto es específico del RUC: el campo es readOnly, ConfiguracionInput no tiene issuer_ruc y el front no presenta origen_ruc. El backend ya admite issuer_ruc de 11 dígitos exactos o null para limpiar; devuelve ruc efectivo y origen_ruc (issuer_config/company). Se añadirá edición del RUC M1 y su origen, guardado por el PUT existente, limpieza con null y presentación de errores del servidor. No se modifica el RUC compartido de empresa/sesión ni backend en este punto. No hay puntos detenidos.
+
+### Pulidos — punto A: antigüedad de envío
+
+GET /invoices/alertas añade antiguedad con evaluado, gravedad, mensaje y documentos (id, número, tipo, estado, fechaEmision, fechaLimite y diasRestantes). Se leen únicamente facturas/boletas de la empresa del token en estados pendientes o de error; no hay escrituras ni encolado. Se conserva el día fiscal persistido sin desplazarlo por zona horaria y se compara con hoy en Lima. Se ordena por días restantes, fecha de emisión e id; los vencidos tienen días negativos. Plazo hasta mañana/hoy/vencido es CRITICO, resto pendiente AVISO y lista vacía evaluada OK. Fallo de lectura o tenant ausente produce SIN_DATOS, nunca una falsa lista vacía evaluada.
+
+El Monitor muestra una tarjeta de plazo con los diez documentos más urgentes y el total; el endpoint incluye todos los elegibles. El resumen de facturación incorpora el motivo de plazo para no atribuir una gravedad nueva al certificado o DLQ. El normalizador tolera respuestas anteriores sin el campo. Notas/agregados no reciben una ventana inventada. RECHAZADO se incluye como error sin inferir que sea recuperable o autorizar reenvío.
+
+Archivos backend: invoiceSendAge.ts, invoiceAlertService.ts y pulidosAntiguedad.spec.ts. Front: invoiceAlertas.ts, InvoiceSendAgeAlert.tsx, InvoiceMonitorPage.tsx, InvoicesDashboardPage.tsx y pulidosAntiguedad.test.tsx; rutas completas en el ferry. Siete pruebas nuevas backend y tres front aprobadas; conjuntos con las regresiones anteriores, 29 y 11 pruebas respectivamente. Bordes 3/7 días, cambio UTC/Lima, vencimiento, orden mixto, estados finales, aislamiento, fallo y montaje real del Monitor verificados con dobles.
+
+### Pulidos — punto B: aviso de padrón del receptor
+
+AtomicInvoiceCreationService.emitir conserva primero el resultado fiscal confirmado y después consulta RucConsultaService para el RUC del receptor. La consulta está fuera de la transacción y de la respuesta fiscal almacenada por idempotencia, con espera máxima de 2000 ms. Solo una respuesta completa y coincidente permite avisar: estado distinto de ACTIVO y/o condición NO HABIDO. Se agregan los avisos sin sustituir los anteriores; no se modifica el documento, su número, sus importes ni su cola. En una repetición idempotente se conserva la emisión y el aviso se consulta nuevamente con la caché existente, sin repetir persistencia.
+
+404/422, 503, error de red, datos inválidos, timeout o RUC inexistente mantienen exactamente la respuesta confirmada sin añadir aviso. DNI, tipo extranjero o RUC inválido no disparan consulta. El proveedor puede completar su caché después del límite; ese resultado tardío no altera la respuesta ya devuelta. No se consulta identidad del emisor. La UI ya presenta avisos de la respuesta de emisión, por lo que este punto no requiere cambios front.
+
+Archivos: atomicInvoiceCreationService.ts, receiverRucWarning.ts y pulidosPadronReceptor.spec.ts. Catorce pruebas nuevas aprobadas; junto con creación atómica y Decolecta anteriores, 78 pruebas aprobadas. Se demuestra con el adaptador real y fetch doble que HTTP 200 con BAJA DEFINITIVA genera aviso y que 404/422 no lo generan; también orden posterior a confirmación, espera acotada y conservación de avisos. No se llama al proveedor real en pruebas ni se cambian sus variables o credenciales.
+
+### Pulidos — punto C: guardar RUC específico del emisor
+
+El formulario existente incorpora RUC emisor (M1), editable, con 11 dígitos exactos o vacío. El hook admite issuer_ruc y origen_ruc. Al guardar solo se envía issuer_ruc cuando cambia; vacío se traduce a null para retirar el pin M1 y recuperar el RUC de empresa. Se muestran RUC efectivo y origen (configuración del emisor M1 / RUC de empresa); la identidad compartida de la sesión no cambia. La recarga del GET actualiza origen y valor efectivo. Se mantienen el guardado real previo de otros campos y el tratamiento de secretos.
+
+El front comprueba formato y presenta los errores del PUT, incluidos RUC inválido o falta de autorización, conservando la edición ante fallo. El guardado sigue sujeto a las validaciones y permisos existentes del servidor; no se modifica backend ni se fuerza coherencia SOL/certificado a ciegas. Un RUC efectivo de respaldo no se confunde con un pin guardado: el campo de configuración permanece vacío cuando origen_ruc es company.
+
+Archivos front: InvoiceIssuerConfigForm.tsx, useInvoiceConfig.ts, invoiceConfigError.ts, InvoiceSettingsPage.tsx, invoiceD1Config.test.tsx y pulidosRucEmisor.test.tsx. Siete pruebas nuevas y once regresiones previas aprobadas (18 en total): PUT real del formulario, recarga, limpieza null, origen, sesión intacta, formatos inválidos y errores 400/403. La comprobación anterior de readOnly se actualiza al comportamiento editable expresamente solicitado, manteniendo las pruebas de secretos y guardado parcial. No hay punto detenido.
+
+### Pulidos — cierre
+
+Ningún punto detenido. A y B confirmados; C precisado: ya existía guardado real para otros campos y se completó el RUC editable específico de M1. Backend final 349 suites / 3510 pruebas aprobadas (+2 suites / +21 pruebas contra fase 0), mismas 17 suites / 93 pruebas optativas omitidas y 12 snapshots. Front final 179 archivos / 1367 pruebas aprobadas (+2 archivos / +10 pruebas), sin omisiones. Suites completas finales sin fallos. Ambos builds correctos y secuenciales, posteriores a Jest, sin regeneración concurrente de Prisma.
+
+Lint backend sin errores, con tres advertencias preexistentes. ESLint de los ocho archivos productivos front de este encargo sin errores, con dos advertencias preexistentes de Fast Refresh del Monitor. No se declara el lint global frontend como verde. El único ajuste de una expectativa anterior es el RUC de configuración editable, solicitado en C; no se eliminan pruebas ni controles de secretos.
+
+Entrega en fix/m1-pulidos: un commit de fase 0 y un commit por A/B/C. El cierre documental y el manifiesto se incluyen en C, sin un commit adicional. FERRY.md enumera rutas, veredictos, límites y aplicación de once archivos front de este encargo. El directorio conserva los 24 archivos heredados más los once nuevos transportados; todos los 35 se cotejaron byte a byte con el front probado y SHA256SUMS incluye esos archivos y FERRY.md. La auditoría anterior permanece íntegra y se verificó como prefijo del archivo final.
+
+Sin PR, despliegues, emisiones reales, consultas al proveedor real en pruebas, migraciones, cambios de dependencias ni modificaciones de registros históricos. Las consultas del padrón usan el servicio configurado y la caché existentes; sus fallos no alteran la emisión confirmada. El RUC compartido de empresa/sesión se conserva; las validaciones del PUT, SOL y certificado siguen siendo las del backend vigente.
+
+### Pulidos — corrección de elegibilidad de la alerta A
+
+La inclusión anterior de RECHAZADO en A era incorrecta y queda sustituida por este criterio. InvoiceJobConsumer.ESTADOS_FINALES y las guardas de CdrPersistenceService identifican ACEPTADO, OBSERVADO, RECHAZADO y ANULADO como finales. La intersección con el listado de elegibilidad anterior era únicamente RECHAZADO, que se retira de ESTADOS_PLAZO_ENVIO. La consulta y el cálculo comparten esta lista. Se mantienen sin cambios PENDIENTE, EN_COLA, PROCESANDO, ENVIADO y ERROR_RED; no se modifica el tratamiento de incertidumbre, recuperación ni reenvío.
+
+Se ajustan las pruebas existentes de pulidosAntiguedad.spec.ts: el ejemplo de ordenación usa ENVIADO, un rechazado histórico no aparece ni mantiene gravedad crítica, los cinco estados no terminales siguen entrando y la consulta exige exactamente esos estados. La nueva expectativa falla en la versión anterior (exclusión y consulta) y pasa con la corrección. No aumenta el número de pruebas: siete específicas de A; con las regresiones de certificado/DLQ, 29 aprobadas. El front no fija RECHAZADO en sus pruebas y no se cambia ningún archivo bajo frontend/.
+
+Verificación de la corrección: suite completa backend 349 suites / 3510 pruebas aprobadas, mismas 17 suites / 93 pruebas optativas omitidas y 12 snapshots. Build backend correcto, posterior a Jest. Los conteos del cierre y del FERRY no cambian. Frontend sin cambios de código o pruebas; se conserva su verificación anterior de 179 archivos / 1367 pruebas, sin repetirla. FERRY.md incorpora el criterio corregido y se actualiza su hash en SHA256SUMS; las entradas frontend permanecen iguales. Un único commit adicional en fix/m1-pulidos, sin PR, migraciones, emisiones, cambios en B/C ni reenvíos.
+
+
+## Arreglos de auditorías M1 — fase 0 (2026-11-14)
+
+- Rama: `fix/m1-arreglos-auditorias`, creada desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`.
+- Front reproducible: `3e4497367363c70d7c774c1d9dc0b65b221a120f` + superposición íntegra del ferry de esa cabeza de pulidos. El main remoto consultado es `5b9edeece1cc05faae1fc44ddddc5009781b4440` (cierre de caja posterior, sin diferencias en los archivos de motivos/Monitor/API que se modificarán); se conserva la base del ferry para componer esta entrega sobre pulidos.
+- Línea base medida, sin build simultáneo: back 349 suites / 3510 pruebas aprobadas, 17 suites / 93 pruebas omitidas por configuración; 12 snapshots. Front 179 archivos / 1367 pruebas aprobadas.
+- Pruebas con dobles; no se consultó producción, ni se emitieron comprobantes ni se ejecutaron migraciones.
+
+### Veredictos y mapa previo a los cambios
+
+1. Confirmado: `invoiceMapper.ts` resuelve motivos primero en NC y después en ND tanto en listado como en detalle. Estos mapeadores alimentan bandeja, notas, Monitor y auditoría. Se centralizará la selección por tipo (07/09, 08/10), conservando el fallback vacío para códigos desconocidos.
+2. Confirmada divergencia: `InvoiceQueryController` → `InvoiceQueryService.reintentarCdr` → `QueueService.reenqueueInvoiceIfIdle` rescata DLQ y decide principalmente por estado. El masivo usa `InvoiceBatchRetryService.clasificarReintentoMasivo`, bloqueo por empresa, relectura bajo bloqueo y comprobación de jobs vivos. La compuerta excluye incertidumbre explícita, rechazo SUNAT, bloqueo XSL/preparación no recuperable y estados no elegibles. El worker `InvoiceJobConsumer` → `InvoiceRetryService` valida, firma y concilia antes del transporte; el reenvío forzado tiene su propia autorización y no se modifica. Se aplicará la clasificación masiva al individual, también en su relectura previa a publicar.
+   Consulta explícita: `InvoiceSunatConsultController` → `SunatStatusConsultaService` → getStatusCdr. No escribe incertidumbre si falla; devuelve INCIERTO incluso sin transmisión previa. Además `resumirTransporte` considera un marcador de consulta como actividad incierta por sí solo. Se distinguirá la ausencia de transmisión acreditada cuando exista evidencia positiva de no envío (marcador false o bloqueo previo probado), sin inferirla de un null histórico; una consulta aislada no acreditará transporte.
+3. Confirmado en código: `sendToDlq`/`moveToDlq` dejan trabajos `sunat-invoice-dlq` con el estado del intento agotado; la recuperación del CDR no elimina esos trabajos. `listDlq`, alertas y proyección de membresía los siguen contando; el Monitor impide reintentar estados finales. No se han inspeccionado trabajos de producción. Se implementará una acción explícita Resolver DLQ en el Monitor: solo ACEPTADO con CDR código 0, misma empresa, elimina exclusivamente trabajos DLQ pendientes de ese documento. No toca Invoice ni publica jobs. Los puentes pendientes conservan su acción independiente.
+4a. Confirmado: 08 y 10 son oficiales en `noteReasonGuard.ts`, pero no están habilitados en `noteCatalogs.ts` ni en el front. Solo diagnóstico; no se habilitan.
+4b. Confirmado: `vaEnBaja` solo filtra tipo 01/07/08 y no distingue serie/origen de las notas. La documentación oficial de SUNAT sitúa la baja de notas vinculadas a boletas en el resumen diario, no en RA. Solo diagnóstico; no se modifica RA/RC en este paquete. Fuentes y requisitos se detallarán en el cierre.
+
+### Punto 1 — implementación
+
+`invoiceNoteReason.ts` selecciona el catálogo por tipo. Listado y detalle usan el mismo formateador, incluidos Monitor/auditoría y notas. Se fijan los seis cruces 07/08 × 01/02/03 en ambos mapeadores. Verificación dirigida: 1 archivo / 44 pruebas aprobadas.
+
+### Punto 2 — implementación
+
+El individual reutiliza la selección y clasificación del masivo antes de entrar a la cola y en la relectura de la compuerta. Las exclusiones no modifican incertidumbre ni publican jobs. Se conserva el rescate conservador de null históricos elegibles; false no se cambia. La consulta explícita devuelve SIN_TRANSMISION sin llamar a SUNAT cuando hay evidencia de no envío y no hay CDR ni transporte acreditado. El front presenta ese resultado como tal. Una consulta inconclusa aislada deja de ser evidencia de envío/incertidumbre; los transportes reales y los marcadores históricos desconocidos mantienen su protección en el worker. Verificación dirigida: back 7 suites / 119 pruebas; front 1 archivo / 7 pruebas. Se actualizan las expectativas anteriores que atribuían transporte a una consulta aislada.
+
+### Punto 3 — implementación
+
+Acción explícita `Resolver DLQ` en Monitor y `POST /invoices/:id/resolver-dlq`, autenticado y limitado a ADMIN/OPERADOR_FACTURACION. El servidor exige la empresa del token, estado ACEPTADO y CDR `responseCode=0`; limpia todos los trabajos pendientes de `sunat-invoice-dlq` del mismo documento/empresa. Repetir con cero trabajos es válido. No actualiza Invoice, no borra su historial ni CDR, no toca la cola principal y no reenvía. Un fallo de cola se propaga y mantiene la fila visible; al resolver se recargan membresía y alertas. La acción de puente pendiente permanece independiente. Los trabajos ajenos, incompletos o sin aceptación comprobable no se retiran. Verificación dirigida: back 4 suites / 83 pruebas; front 2 archivos / 19 pruebas. El endpoint genérico de resiliencia `retryDlq` sigue siendo un camino independiente hacia la cola principal; esta resolución no lo utiliza ni cambia su contrato.
+
+### Punto 4 — diagnóstico exclusivo, sin habilitación ni cambios RA/RC
+
+**4a. Catálogo 09, motivos 08 y 10.** Ambos constan en `assets/sunat-sfs/commons/cpe/catalogo/cat_09.xml`; el rechazo actual es deliberado (`MOTIVO_NO_HABILITADO`), no una ausencia en el catálogo oficial. La viabilidad es aditiva y condicionada a un alcance definido; no basta añadir dos opciones al selector.
+
+- Estructura actual: `creationGuards.ts` exige un origen real de la empresa y del mismo receptor, SKU del origen, cantidades positivas sin exceder las originales, unidad/afectación histórica y saldo monetario disponible. `noteReasonGuard.ts` exige importe total mayor que cero; `invoiceNotaOrigen.ts` también rechaza importe cero en el front. La política de devolución física solo incluye 01/02/06/07; habilitar 08/10 no debe convertirlos implícitamente en devoluciones de stock ni alterar los motivos actuales.
+- **08 Bonificación:** hay infraestructura para gratuitas (afectaciones 15/31, valor referencial, precio cero, PriceTypeCode 02, base de línea cero y leyenda 1002), pero el alta de notas conserva afectación/unidad del origen y no admite indiscriminadamente productos nuevos; tampoco admite una nota con total cero. Debe definirse si la bonificación ajusta el valor de bienes del origen o representa una entrega gratuita, con sus efectos de cantidad/stock, saldo e impuestos. Para el segundo supuesto se necesitan guardas específicas, no relajar globalmente las existentes. Se requiere verificar el XML CreditNoteLine/CreditedQuantity, PricingReference, TaxTotal y total monetario contra XSD y XSL con fixtures propios. **Veredicto:** viable como desarrollo acotado posterior; no se certifica habilitable con un cambio de catálogo.
+- **10 Otros conceptos:** el generador ya produce CreditNote, DiscrepancyResponse/ResponseCode y BillingReference por tipo. Un primer alcance vinculado al origen, con líneas existentes, importe positivo y saldo suficiente podría conservar las guardas actuales. El XSL incluido (`assets/sunat-sfs/commons/xsl/validation/2.X/ValidaExprRegNC-2.0.1.xsl`, bloques 2524, 2116/2399 y referencias 99) contiene excepciones específicas para el código 10: no se debe inferir que ese alcance cubre notas sin origen u otros documentos. Ampliar esas referencias exigiría DTO, selector, validaciones y XML adicionales. **Veredicto:** viable aditivamente para el alcance restringido, pendiente de fixtures XSD/XSL, definición funcional y regresión de todos los motivos habilitados.
+
+Para ambos: alinear catálogos back/front y descripción canónica; probar referencias factura/boleta, receptor, monedas, saldos, cantidades, afectaciones y puentes contables/inventario, además del XML firmado con dobles. No se propone migración. En este paquete no se habilita ningún código ni se cambia una guarda.
+
+**4b. Notas de boleta en RA.** `summaryDocumentsBuilder.ts:vaEnBaja` admite 07/08 por tipo, sin filtrar serie ni documento afectado; por ello una nota BC01/BD01 vinculada a boleta puede resultar elegible. El diagnóstico normativo es **excluirlas de RA y comunicar su anulación mediante RC**, verificando tanto serie como vínculo real al origen. No basta aceptar 07/08 sin distinguir factura/boleta. El canal de notas a factura sigue siendo RA. Esta conclusión queda para decisión posterior; el paquete no cambia selección, XML, ventanas ni envío de RA/RC.
+
+Fuentes oficiales consultadas el 2026-11-14:
+
+1. [SUNAT, Nota de Crédito Electrónica, sección Desde los Sistemas del Contribuyente / Comunicación de baja](https://cpe.sunat.gob.pe/tipos_de_comprobantes/nota_de_credito): la baja de boletas y notas vinculadas se comunica en el resumen diario, con estado anulado.
+2. [R.S. 000048-2026/SUNAT, anexos, Anexo XII / Anexo 10, página 21, campos 4 y 5](https://www.sunat.gob.pe/legislacion/superin/2026/anexo-000048-2026.pdf): el canal para la baja de boletas y sus notas es exclusivamente el resumen diario (Anexo 5-A); la serie RA se inicia en F, C o S según corresponda, no B.
+3. [R.S. 000048-2026/SUNAT, artículo 15.2 y primera disposición final, página 38](https://www.sunat.gob.pe/legislacion/superin/2026/000048-2026.pdf): modificación de anexos de la R.S. 097-2012; vigencia general desde el 1 de agosto de 2026. Las excepciones de vigencia no afectan este anexo.
+
+No se realizaron emisiones ni se alteraron comprobantes para contrastar estos veredictos.
+
+### Cierre — arreglos de auditorías M1
+
+| Capa | Base del paquete de pulidos | Cierre |
+| --- | --- | --- |
+| Back | 349 suites / 3510 pruebas | 351 suites / 3538 pruebas |
+| Front | 179 archivos / 1367 pruebas | 179 archivos / 1377 pruebas |
+
+Suites completas aprobadas. Back conserva 17 suites / 93 pruebas omitidas por configuración, y 12 snapshots aprobados. Builds back y front OK, ejecutados después de las suites; ninguna regeneración Prisma concurrente con Jest. La prueba de rescate manual verifica que el marcador se persiste después de releer elegibilidad y antes de publicar, y que un fallo de persistencia impide publicar. El build front comprueba también los tipos de las pruebas; tras precisar los dobles del Monitor se repitieron sus 7 pruebas y el build completo, ambos aprobados.
+
+Puntos 1, 2 y 3 construidos. Punto 4a/4b exclusivamente documentado para decisión posterior; ninguno se habilita o cambia en este paquete. Sin puntos detenidos por premisa falsa. FERRY.md detalla archivos por punto y aplicación; SHA256SUMS inventaría 42 archivos frontend más FERRY.md, conservando íntegro el ferry anterior de pulidos. Sin PR, migraciones ni emisiones reales.
+
+
+## Segunda adenda — fase 0 y construcción de 4a/4b (2026-11-14, America/Lima)
+
+Base de esta adenda: `fix/m1-arreglos-auditorias` `e15caad936bc989a0f7578d38743e1db3ee336f4`; front reproducido `3e4497367363c70d7c774c1d9dc0b65b221a120f` + su ferry compuesto. Última medición completa en esta misma sesión: back 351 suites / 3538 pruebas, 17 suites / 93 pruebas omitidas, 12 snapshots; front 179 archivos / 1377 pruebas. Se mantienen sin PR, migraciones ni emisiones reales.
+
+### 4a — veredicto de habilitación completa: detenido
+
+El veredicto anterior era de viabilidad futura **condicionada y restringida**, no de habilitación completa validada. La revisión adicional distingue estos límites:
+
+- **08:** la guía oficial UBL 2.1, sección 8, página 20 del PDF, describe bonificaciones posteriores sobre bienes previamente vendidos y excluye boletas. Esto precisa la hipótesis anterior: no equivale automáticamente a una entrega nueva ni exige por sí mismo una nota de total cero. Un desarrollo restringido a facturas de bienes podría conservar la ausencia de devolución física, pero necesita identificar las unidades bonificadas, sus importes históricos y su consumo por bonificaciones previas, además de excluir servicios/boletas y conservar los motivos existentes. Hoy `validarCantidadesNota` solo descuenta cantidades de motivos que devuelven unidades (01/02/06/07); habilitar 08 sin política propia permitiría reutilizar las mismas unidades bonificadas mientras quede saldo monetario.
+- **10:** el [Informe SUNAT 000057-2025/7T0000, análisis 1 y conclusiones](https://www.sunat.gob.pe/legislacion/oficios/2025/informe-oficios/i000057-2025-7T0000.pdf) sitúa en “otros” los supuestos previstos por normativa, incluidos ajustes de impuesto; no es un descuento libre. El catálogo por sí solo no define una única transformación fiscal válida. Técnicamente, `emitirComprobanteAdapter.ts` liquida base e IGV a partir del precio/cantidad/afectación; `creationGuards.ts` conserva la afectación histórica y exige precio positivo en líneas onerosas; `noteReasonGuard.ts` exige importe positivo. No existe en el DTO un ajuste de IGV independiente de la base. Ejemplo de incompatibilidad: corregir S/ 5 de IGV facturado en exceso, conservando la base original, no se representa con una línea gravada de S/ 5: esta genera aproximadamente S/ 4.24 de base y S/ 0.76 de IGV. Esta aplicación al motivo 10 es una inferencia del alcance del informe y de que 03/13 tienen semánticas distintas; no se presenta como una tabla de casos publicada por SUNAT.
+
+**Decisión:** la habilitación conjunta y completa de 08/10 no es segura sobre el modelo actual. El límite no es una migración pendiente ni la existencia del código en el catálogo: falta un contrato de ajuste fiscal y una política de unidades bonificadas que cubran estos casos sin modificar indiscriminadamente las guardas compartidas. No se habilita un subconjunto bajo la etiqueta de implementación completa. Se detiene únicamente 4a; ambos códigos siguen respondiendo MOTIVO_NO_HABILITADO y los motivos existentes conservan su comportamiento. No se añaden campos de impuesto libre ni se relajan validaciones.
+
+Requisitos para retomarlo: contrato de ajustes por concepto con sustento normativo, cantidades bonificadas separadas de devoluciones físicas, conciliación de saldo por base/impuesto, traducción de XML y efectos contables coherentes, fixtures XSD/XSL y regresión de todos los motivos actuales. La [guía oficial de Nota de Crédito UBL 2.1](https://cpe.sunat.gob.pe/sites/default/files/inline-files/guia%2Bxml%2Bnota%20de%20cr%C3%A9dito%2Bversion%202-1%2B1%2B0_0_0%20%282%29.pdf) se usa para el alcance técnico de 08, no para reutilizar plazos antiguos de esa guía.
+
+### 4b — fase 0: construir exclusión de notas de boleta en RA
+
+Se ratifica el veredicto previo con el Anexo XII/Anexo 10 de la R.S. 000048-2026/SUNAT, campos 4/5, y la orientación SUNAT sobre baja de notas vinculadas a boletas (fuentes enlazadas en el diagnóstico anterior). `vaEnBaja` acepta por tipo sin distinguir serie; `vistaComunicacionBaja` también incluye 07/08 sin esa guarda, y `EnviarBajaPanel` confía en `incluido` para habilitar selección. Se excluirán BC01/BD01 y vínculos a boleta en elegibilidad y XML; FC01/FD01 conservan su elegibilidad sujeta a las demás guardas. El front deshabilitará esas filas y mostrará que corresponden a RC, incluso ante una vista previa obsoleta que las marque incluidas. No se construye aquí la anulación RC ni se modifica un agregado ya transmitido.
+
+### 4b — implementación y verificación dirigida
+
+`vaEnBaja` excluye notas 07/08 cuya serie empieza en B o cuyo origen indica boleta (referencia B o tipo 03). La vista previa usa esa misma política antes de contar/generar XML y explica la exclusión. El constructor XML la impone también a llamadas directas. La comprobación previa al primer despacho consulta la serie/tipo/origen de los miembros persistidos: impide transmitir RA preparadas por versiones anteriores con notas de boleta. Una RA con ticket ya existente conserva la consulta de ese ticket, sin volver a enviarse. No se alteran plazos, RC, correlativos ni estados fiscales.
+
+`EnviarBajaPanel` deshabilita BC01/BD01 aunque una vista obsoleta las marque incluidas, muestra la vía RC y filtra la selección efectiva al cambiar elegibilidad. FC01/FD01 permanecen seleccionables cuando el servidor las incluye. Pruebas dirigidas: back 5 suites / 105 pruebas, front 1 archivo / 14 pruebas. Cubren elegibilidad, XML, vista, despacho diferido, origen inconsistente y selección obsoleta; todas con dobles. Para 4a se verificaron además 2 suites / 40 pruebas de motivos/saldos existentes, sin habilitar 08/10.
+
+### Cierre de la segunda adenda
+
+| Capa | Base de adenda e15caad9 | Final |
+| --- | --- | --- |
+| Back | 351 suites / 3538 pruebas | 352 suites / 3549 pruebas |
+| Front | 179 archivos / 1377 pruebas | 179 archivos / 1382 pruebas |
+
+Suites completas verdes; back mantiene 17 suites / 93 pruebas omitidas y 12 snapshots aprobados. Builds completos back y front OK, posteriores a ambas suites. Incremento de la adenda: 11 pruebas back y 5 front. Veredicto definitivo: 4a detenido por los límites de ajuste fiscal/unidades documentados; 4b construido en elegibilidad, XML, primer despacho y front. Dos commits adicionales, uno por subpunto, en la misma rama. Sin PR, migraciones ni emisiones reales. Ferry compuesto: 44 archivos frontend y FERRY.md, 45 entradas SHA-256 verificadas.
+
+
+## Adenda menor — Bajas y Monitor (2026-11-14, America/Lima)
+
+Base: `fix/m1-arreglos-auditorias` `58b3d533ed11978a322a93e74e403e2b38e29c18`. Front reconstruido con el ferry compuesto. Base medida de la adenda anterior: back 352 suites / 3549 pruebas (17 suites / 93 pruebas omitidas, 12 snapshots), front 179 archivos / 1382 pruebas. Esta adenda solo cambia front y documentos; conserva el veredicto detenido de 4a.
+
+- **a, confirmado y corregido:** al borrar o dejar en blanco el motivo de una fila seleccionada, el input muestra “El motivo de baja es obligatorio.”, asociado con aria-describedby y aria-invalid. La explicación desaparece al completar el motivo. Se conserva la guarda del botón Ver XML y no se realizan solicitudes mientras falta el campo.
+- **b, confirmado y corregido:** las recargas de cola y agregados muestran su última lectura completada en HH:mm:ss, America/Lima. La marca se actualiza al terminar correctamente, incluso con lista vacía; si falla una recarga conserva la hora del último éxito y el error visible. Una carga inicial fallida no muestra una actualización completada.
+- **c, confirmado y corregido:** las celdas y badges heredaban whitespace-nowrap y el layout automático asignaba ancho al texto largo, desplazando Acción. El Monitor usa tabla de ancho fijo y columnas proporcionadas, permite envolver nombres/estados/botones y coloca la explicación del error bajo Estado. Acción conserva su espacio sin añadir otra columna. El tipo ya está en `Invoice.tipoComprobante`; se muestra bajo el número, sin nueva llamada ni cambio backend. No se modifican componentes globales de tabla/badge/botón.
+
+Verificación dirigida: 3 archivos / 33 pruebas aprobadas. Comprobación adicional en Chromium headless con API sustituida por un adaptador local de datos ficticios, margen lateral de 256 px y nombres/motivos largos: a viewport 1280 px, tabla/contenedor/scroll interno 961/961/961 px y borde derecho de Acción 1241 px; a 1024 px, 705/705/705 px y borde de Acción 985 px. El botón Reintentar queda dentro del viewport y el tipo Factura (01) es visible en ambos. El montaje temporal fue retirado; no se transportan archivos de prueba visual ni se consulta producción.
+
+Los tres ítems siguen siendo menores y están construidos; ninguno de esta adenda queda detenido. Sin PR, migraciones ni emisiones reales.
+
+### Validación final de la adenda menor
+
+| Capa | Base 58b3d533 | Cierre |
+| --- | --- | --- |
+| Front | 179 archivos / 1382 pruebas | 179 archivos / 1387 pruebas |
+| Back (sin cambios) | 352 suites / 3549 pruebas | misma última corrida verde |
+
+Suite completa del front verde, cinco pruebas adicionales. Tras corregir una opción no admitida por los tipos de la consulta de elementos en las pruebas, se repitieron las 14 pruebas del Monitor afectado y el build completo (tsc -b + vite), ambos aprobados. Esa corrección conserva el comportamiento predeterminado de coincidencia del nombre del botón. El back conserva su build y su última suite de la adenda anterior; no se vuelven a ejecutar al no cambiar código ni dependencias del servidor. Conserva 17 suites / 93 pruebas omitidas y 12 snapshots aprobados.
+
+Ferry: 48 archivos frontend coincidentes con el checkout validado, más FERRY.md; 49 entradas SHA-256 verificadas. Un único commit adicional para los tres ítems menores en la misma rama. Sin PR, migraciones ni emisiones reales.
+
+
+## Corrección CI del PR #388 — precedencia de YA_EN_COLA (2026-11-14, America/Lima)
+
+Base: `fix/m1-arreglos-auditorias` `37de84ea624c15f8531f52dae57e931785121a8b`. Se revisó el [fallo de CI](https://github.com/Jhordy-Salirrosas/Sistema-gestion-mype-sunat/actions/runs/43561547645) y se reprodujo el mismo resultado en `pulidoDlq.integration.spec.ts` sobre esta cabeza: tras rescatar la DLQ una vez, el segundo clic esperaba YA_EN_COLA pero recibía ESTADO_NO_PERMITIDO. El primer rescate había persistido transport_uncertain=true antes de publicar; la clasificación impedía reconocer el trabajo creado por ese mismo rescate.
+
+Corrección mínima en `InvoiceQueryService.reintentarCdr`: antes de aplicar la exclusión por incertidumbre, para EN_COLA/PENDIENTE/ERROR_RED/ENVIADO se comprueba si existe un job vivo (created/retry/active) mediante la lectura existente `hasLiveInvoiceJob`. Si existe, responde YA_EN_COLA, encolado=false, sin publicar, borrar trabajos, modificar el documento, limpiar incertidumbre ni escribir auditoría de otro intento. Sin job vivo, permanece la exclusión por incertidumbre. El resto de la clasificación masiva, bloqueos locales, estados finales/PROCESANDO y relectura previa a publicar conservan su comportamiento. La consulta se hace después de verificar pertenencia del comprobante a la empresa.
+
+Regresión: el test de integración conserva el segundo clic, comprueba un solo job publicado y confirma que la incertidumbre permanece true. Se añaden 14 casos unitarios para estados reintentables con/sin job vivo, estados excluidos y bloqueo local. Verificación dirigida con PostgreSQL local: 5 suites / 111 pruebas aprobadas, incluida la integración que fallaba. No se modifica código frontend ni el contenido de sus 48 archivos transportados.
+
+Para la suite completa se creó una base exclusiva `m1_ci388_test` en el contenedor local de pruebas, con TEST_DATABASE_URL local. Se aplicaron las 56 migraciones existentes del repositorio únicamente a esa base nueva: no se crean migraciones ni se interviene una base compartida. SUNAT permanece sustituido por dobles en las pruebas de transporte. Lint backend aprobado, con avisos preexistentes fuera de estos archivos. Los builds se ejecutan después de terminar las suites, sin regenerar Prisma mientras Jest lo utiliza.
+
+### Cierre de la corrección CI #388
+
+| Capa | Última ejecución anterior | Ejecución de cierre |
+| --- | --- | --- |
+| Back | 352 suites / 3549 pruebas; 17 suites / 93 pruebas omitidas | 365 suites / 3618 pruebas; 4 suites / 38 pruebas omitidas |
+| Front | 179 archivos / 1387 pruebas | 179 archivos / 1387 pruebas |
+
+Ambas suites completas aprobadas. Back conserva 12 snapshots. El incremento back se descompone en 14 pruebas nuevas y 55 pruebas previamente omitidas que ahora se ejecutan al habilitar PostgreSQL; no son 69 pruebas nuevas. Los conteos corresponden al checkout de esta rama. La regresión de DLQ que fallaba en CI está incluida y aprobada. Lint y builds completos back/front OK, posteriores a las suites para evitar regeneración concurrente de Prisma. Los 48 archivos front no cambian; el manifiesto conserva 49 entradas (incluido FERRY.md), verificadas. Un commit de corrección en la misma rama, sin abrir PR ni realizar emisiones reales.
+
+
+## Aclaración y terminación del punto 4 — fase 0 y construcción (2026-11-14)
+
+Cabeza remota comprobada al iniciar: `70dd9fd7c4cca965556707fd36d9f1f499465d38`, igual al checkout local. Ya contiene los tres menores en `37de84ea` (mensaje requerido, hora de actualización y Acción visible), la exclusión BC01/BD01 de RA en `58b3d533` y YA_EN_COLA en `70dd9fd7`. Se comprobó el código bajo frontend/ y los servicios del back. Se conservan esos commits; no se repiten ni se crean commits vacíos.
+
+Pendientes constatados: 10 seguía deshabilitado porque la adenda anterior exigía habilitación completa; la nueva aclaración autoriza expresamente el alcance restringido previamente considerado viable. RC solo construía altas (ConditionCode 1), excluía documentos aceptados y su materialización únicamente pasaba PENDIENTE a ACEPTADO: la indicación de usar RC no equivalía a tener un flujo de anulación. Se construyen estos pendientes como un bloque del punto 4. La base medida es back 365 suites / 3618 pruebas (4 suites / 38 pruebas omitidas, con PostgreSQL) y front 179 archivos / 1387 pruebas.
+
+### 10 Otros conceptos — habilitado con alcance restringido
+
+Se incorpora al catálogo back/front como ajuste monetario no total sobre líneas de una factura o boleta origen real, del mismo adquirente, con cantidades, afectación y unidad históricas, importe positivo y control de saldo del servidor. No devuelve unidades físicas. El sustento específico es obligatorio: vacío o el mero nombre del catálogo se rechazan; el selector deja el campo vacío para que se describa el ajuste. Se conserva el tratamiento de pago de las notas existente.
+
+No habilita rectificación exclusiva de IGV, impuestos libres, líneas ajenas, cambios de afectación, documentos sin origen ni las referencias excepcionales del código 10. Los importes se siguen calculando desde las líneas con las reglas del servidor; no se relajan las guardas comunes. El XML usa CreditNoteLine, BillingReference al origen y ResponseCode 10. Las pruebas cubren ambas rutas (pantalla/fiscal), sustento, origen, SKU, afectación, cantidades, saldo, precio cero y XML firmado contra XSD/XSL oficiales sin transporte. Este alcance sustituye la detención conjunta anterior únicamente para 10.
+
+### 08 Bonificación — solo documentado, permanece deshabilitado
+
+Se conserva el veredicto de la guía oficial: bonificación posterior sobre bienes vendidos, con exclusión de boletas. Habilitarla exige definir unidades bonificadas y su consumo separado de devoluciones físicas/importes históricos. No se añade 08 al catálogo habilitado, ni se simula como 10 o descuento genérico. Los detalles y fuentes previos siguen vigentes para 08.
+
+### Notas de boleta — exclusión de RA conservada y anulación RC construida
+
+La pestaña nueva “Anulación de notas (RC)” permite seleccionar BC01/BD01 aceptadas u observadas, por su fecha original de emisión, ver el XML de selección, indicar motivo y confirmar que no fueron otorgadas al receptor antes de confirmar el envío. Usa endpoints propios `resumenes/anulacion-notas` (GET), `/vista` (POST) y `/enviar` (POST con permisos ADMIN/OPERADOR_FACTURACION). No ejecuta envíos al abrir la pantalla ni mezcla anulaciones con altas. FC01/FD01 permanecen fuera de este RC y siguen sujetas a RA.
+
+El XML RC conserva emisor, receptor, referencia a boleta, fecha original y desglose fiscal; usa ConditionCode 3 del Catálogo 19. Se verifica la ventana de siete días desde una aceptación acreditada (historial fiscal código 0 o fecha del CDR), sin usar updated_at ni eventos del puente para prolongarla; si falta evidencia de fecha, la fila queda excluida con motivo. La guarda se repite antes del primer despacho; no impide consultar tickets existentes.
+
+La reserva usa los locks por empresa/documento existentes, un fingerprint distinto del alta y un snapshot durable de la operación 3, fecha de aceptación y confirmación de no otorgamiento. Un alta RC anterior aceptada no impide reservar la anulación; otra reserva activa o anulación sí. La recuperación conserva esta operación. El CDR se coteja con identificador, emisor, XML/hash, miembros y ConditionCode del snapshot. Solo su aceptación cambia ACEPTADO/OBSERVADO a ANULADO atómicamente y deja trabajo durable de reversión; rechazo o error no anula. La repetición del CDR no duplica transiciones ni trabajos.
+
+La reversión reutiliza el mecanismo local de RA, ampliado a RC de anulación: contramovimientos y asientos inversos de los registros reales, con locks y claves de idempotencia existentes. No abre transporte fiscal ni publica de nuevo la nota. Las marcas RC_REVERSAL_PENDING/DONE y el Monitor distinguen aceptación fiscal de efectos locales pendientes. No se crea migración: toda la operación vive en los JSON de snapshot/resultado existentes.
+
+Fuentes oficiales adicionales: [Catálogo 19, estado 3 Anulado](https://www.sunat.gob.pe/legislacion/superin/2017/anexoE-245-2017.pdf) y [Guía SUNAT de Resumen Diario, estado de ítem/no otorgamiento](https://cpe.sunat.gob.pe/sites/default/files/inline-files/GUIA_Resumen_de_Boletas_11-01-2018%20%282%29_2_0%20%281%29_0.pdf). El canal y la ventana de baja de notas a boleta se contrastan además con las fuentes vigentes ya enlazadas (orientación SUNAT y Anexo XII de R.S. 000048-2026). Solo se usan dobles de transporte; PostgreSQL es local, con las migraciones existentes.
+
+### Cierre vigente del bloque completado
+
+| Capa | Base remota 70dd9fd7 | Cierre |
+| --- | --- | --- |
+| Back con PostgreSQL | 365 suites / 3618 pruebas | 368 suites / 3653 pruebas |
+| Front | 179 archivos / 1387 pruebas | 179 archivos / 1391 pruebas |
+
+Suites completas verdes, incluidas las integraciones de YA_EN_COLA y de anulación RC; back mantiene 4 suites / 38 pruebas omitidas y 12 snapshots aprobados. Incremento: 35 pruebas back y 4 front. Las únicas expectativas antiguas ajustadas fijaban el conjunto de motivos sin el 10 en back/front; 08 permanece excluido. Lint y builds completos back/front OK. El build final se ejecutó después de las suites, sin regeneración Prisma concurrente con Jest.
+
+Estado final: menores aplicados en 37de84ea; exclusión BC01/BD01 de RA en 58b3d533; YA_EN_COLA en 70dd9fd7; este bloque completa 10 restringido y la anulación RC. 08 queda solo documentado conforme al alcance. Se entrega un único commit adicional del bloque pendiente, sin duplicar los bloques ya aplicados ni abrir otro PR. El ferry tiene 55 archivos frontend más FERRY.md (56 entradas SHA-256 verificadas). Su aplicación al repo frontend y despliegue siguen a cargo del tren de revisión. Sin migraciones nuevas ni emisiones reales.
+
+
+## Fusión de dev para PR #388 — 2026-11-14
+
+Se integra `dev` `bf60df93c2f3434225e7d89acf90b4436c31f7fb` (incluye pulidos y PR #387 de Contabilidad) en `fix/m1-arreglos-auditorias`, cuya cabeza previa era `c4e4a3c920afbabb415f220711ee8c5968476ecc`. Se conserva el historial mediante un commit de fusión, sin crear otro PR.
+
+Único conflicto textual: `src/modules/invoices/application/services/invoiceSummaryService.ts`, en la razón de exclusión de RA. Se conservan ambas reglas: BC01/BD01 se excluyen con la indicación de anulación por RC; las demás filas respetan el bloqueo de período cerrado o declarado en PLE de Contabilidad. La comprobación contable se comparte con la anulación de notas por RC para que esa ruta tampoco eluda la restricción. Las demás guardas de fechas, reservas, estados, RUC y notas asociadas permanecen vigentes. Ocho pruebas adicionales fijan la combinación BC01/BD01 y períodos abiertos/cerrados/PLE; las cuatro pruebas incorporadas desde dev se conservan.
+
+La cola se fusiona automáticamente: conserva las colas SIRE de dev y la resolución de DLQ de documentos aceptados. Se mantiene la prioridad de YA_EN_COLA previa a la guarda de incertidumbre. Los módulos Contabilidad, cobros, gastos, compras, ventas y SIRE quedan idénticos a dev. El ferry conserva íntegros sus 55 archivos frontend. La validación frontend se actualiza a main `ebf5e34f2821ee773d7ff23af432443ff2cfe8b8`: su avance no intersecta ninguna ruta transportada.
+
+Las integraciones usan una base PostgreSQL local aislada con las 62 migraciones ya existentes; no se crea ninguna migración ni se actúa sobre bases compartidas. Transporte fiscal con dobles, sin emisiones reales.
+
+
+### Validación de la fusión
+
+| Capa | Cierre anterior c4e4a3c9 | Fusión con dev actual |
+| --- | --- | --- |
+| Back, PostgreSQL local | 368 suites / 3653 pruebas | 401 suites / 4034 pruebas |
+| Front | 179 archivos / 1391 pruebas | 182 archivos / 1404 pruebas |
+
+Suites completas verdes. Back mantiene 4 suites y 38 pruebas omitidas y 12 snapshots aprobados. El incremento incorpora las pruebas de dev y ocho regresiones de esta resolución; front incorpora las pruebas del main vigente, sin modificar archivos transportados. Las seis suites dirigidas previas pasaron 127 pruebas. Lint backend y builds backend/frontend OK; los builds se ejecutaron después de finalizar ambas suites.
+
+El manifiesto conserva 56 entradas: 55 archivos frontend sin cambios y FERRY.md actualizado. No hay migraciones nuevas, emisiones reales ni PR nuevo.
