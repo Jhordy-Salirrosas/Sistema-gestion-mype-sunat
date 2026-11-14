@@ -10,7 +10,7 @@ import { esUnidadFiscalSunat } from '../../sunatUnits';
  * recurso: si respondiera 403, un atacante sabría que el id es válido en otra
  * organización (IDOR por enumeración).
  */
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AFECTACIONES_GRILLA } from '../dto/emitirComprobanteDto';
 import { PrismaService } from '../../../../database/prismaService';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
@@ -23,6 +23,7 @@ import type {
 } from '../dto/invoiceQueryDto';
 import { construirWhere, normalizarPaginacion } from './invoiceQueryFilters';
 import {
+  aCdr,
   aComprobanteOrigenFallback,
   aDetalle,
   aListado,
@@ -297,6 +298,19 @@ export class InvoiceQueryService {
         comprobante_origen: aComprobanteOrigenFallback(fila, origenDb),
       };
     });
+  }
+
+  /** Resuelve trabajos obsoletos sin modificar el comprobante ni publicar un envío. */
+  async resolverDlqAceptado(companyId: string, id: string) {
+    const fila = await this.prisma.invoice.findFirst({
+      where: { id, company_id: companyId }, select: { estado: true, cdr_sunat: true },
+    });
+    if (!fila) throw new NotFoundException('Comprobante no encontrado en la empresa');
+    if (fila.estado !== 'ACEPTADO' || aCdr(fila.cdr_sunat)?.codigo !== '0') {
+      throw new BadRequestException({ code: 'DLQ_CDR_ACEPTADO_REQUERIDO', message: 'Solo se resuelve la DLQ de un comprobante ACEPTADO con CDR de aceptación.' });
+    }
+    const resueltos = await this.queue.resolveAcceptedInvoiceDlq(id, companyId);
+    return { resueltos, mensaje: `${resueltos} trabajos de DLQ resueltos. El comprobante fiscal conserva su estado.` };
   }
 
   /**

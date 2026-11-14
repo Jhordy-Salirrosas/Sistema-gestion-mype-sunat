@@ -278,6 +278,13 @@ export class InvoiceQueryController {
     return this.consultas.detalle(companyId, id);
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @Post(':id/resolver-dlq')
+  resolverDlq(@CurrentCompany() companyId: string, @Param('id') id: string) {
+    return this.consultas.resolverDlqAceptado(companyId, id);
+  }
+
   /**
    * POST /api/v1/invoices/:id/retry-cdr
    *

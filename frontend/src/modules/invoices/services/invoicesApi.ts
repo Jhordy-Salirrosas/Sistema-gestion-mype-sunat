@@ -77,6 +77,10 @@ export interface ResultadoReprocesoPuente {
 }
 
 export const invoicesApi = {
+  resolverDlq: async (id: string): Promise<{ resueltos: number; mensaje: string }> => {
+    const { data } = await apiClient.post<{ resueltos: number; mensaje: string }>(`/invoices/${encodeURIComponent(id)}/resolver-dlq`);
+    return data;
+  },
   reprocesarPuente: async (id: string): Promise<ResultadoReprocesoPuente> => {
     const { data } = await apiClient.post<ResultadoReprocesoPuente>(`/invoices/${encodeURIComponent(id)}/reprocesar-puente`);
     return data;

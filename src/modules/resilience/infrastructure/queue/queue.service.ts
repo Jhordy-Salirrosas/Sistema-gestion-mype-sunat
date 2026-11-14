@@ -365,6 +365,17 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** Retira únicamente trabajos DLQ pendientes; el llamador valida el CDR aceptado. */
+  async resolveAcceptedInvoiceDlq(invoiceId: string, companyId: string): Promise<number> {
+    const jobs = await this.boss.findJobs<{ invoice_id?: string; company_id?: string }>(
+      INVOICE_DLQ, { data: { invoice_id: invoiceId, company_id: companyId }, queued: true },
+    );
+    const ids = jobs.filter(job => job.data?.invoice_id === invoiceId && job.data?.company_id === companyId)
+      .map(job => job.id);
+    if (ids.length) await this.boss.deleteJob(INVOICE_DLQ, ids);
+    return ids.length;
+  }
+
   /** Devuelve un trabajo propio de la empresa autenticada a la cola principal. */
   async retryDlq(id: string, companyId: string): Promise<void> {
     const [job] = await this.boss.findJobs<{ company_id?: string; invoice_id?: string }>(

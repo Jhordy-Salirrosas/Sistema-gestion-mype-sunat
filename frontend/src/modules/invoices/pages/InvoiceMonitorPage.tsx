@@ -141,6 +141,17 @@ export default function InvoiceMonitorPage() {
     finally { setReintentando(null); }
   };
 
+  const resolverDlq = async (id: string) => {
+    setReintentando(id); setAvisoPuente(null);
+    try {
+      const resultado = await invoicesApi.resolverDlq(id);
+      setAvisoPuente(resultado.mensaje);
+      await cargar();
+    } catch (e) {
+      setAvisoPuente(extractApiErrorMessage(e, 'No se pudo resolver la DLQ.'));
+    } finally { setReintentando(null); }
+  };
+
   const reintentar = async (id: string) => {
     setReintentando(id);
     setAvisoReintento(null);
@@ -307,6 +318,11 @@ export default function InvoiceMonitorPage() {
                     </Badge>
                   </TableCell>
                   <TableCell align="center">
+                    {inv.enDlq === true && inv.estadoBackend === 'ACEPTADO' && inv.cdrCodigo === '0' && (
+                      <InvoiceWriteButton variant="outline" size="sm" disabled={reintentando === inv.id} onClick={() => void resolverDlq(inv.id)}>
+                        Resolver DLQ
+                      </InvoiceWriteButton>
+                    )}
                     {/* El servidor concilia antes de autorizar cualquier reenvío. */}
                     {estadoDeMonitor(inv) === 'PUENTE_PENDIENTE' && <InvoiceWriteButton disabled={reintentando === inv.id} onClick={() => void reprocesar(inv.id)}>Reprocesar puente</InvoiceWriteButton>}
                     {['TRANSPORTE_INCIERTO', 'PREPARACION_LOCAL', 'BRIDGE_PENDING'].includes(inv.resultadoPresentacion?.origen ?? '') && <p className="text-xs text-muted-foreground">{inv.resultadoPresentacion?.motivo}</p>}
