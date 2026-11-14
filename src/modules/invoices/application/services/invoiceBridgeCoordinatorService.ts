@@ -378,7 +378,7 @@ export class InvoiceBridgeCoordinatorService {
       }
 
       const detraccion = Number(payload.montoDetraccion ?? 0);
-      const retencion = Number(payload.montoRetencion ?? 0);
+      const retencion = gravadoR === 0 ? 0 : Number(payload.montoRetencion ?? 0);
 
       return {
         gravado: gravadoR,
@@ -419,7 +419,7 @@ export class InvoiceBridgeCoordinatorService {
     const bolsas = Number(payload.bolsasIcBper ?? 0);
     const icbper = centimos(Number.isFinite(bolsas) ? bolsas * 0.5 : 0);
     const detraccion = Number(payload.montoDetraccion ?? 0);
-    const retencion = Number(payload.montoRetencion ?? 0);
+    const retencion = gravadoR === 0 ? 0 : Number(payload.montoRetencion ?? 0);
 
     return {
       gravado: gravadoR,
