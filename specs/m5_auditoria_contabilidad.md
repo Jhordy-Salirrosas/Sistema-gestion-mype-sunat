@@ -244,9 +244,9 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 210 pruebas (124 nuevas: reglas, auditoría,
-tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 3 en compras, 9 en el
-frontend de contabilidad (1 326 en total).
+**Pruebas**: el módulo de contabilidad pasa de 86 a 214 pruebas (128 nuevas: reglas, auditoría,
+tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 24 en compras, 10 en
+el frontend de contabilidad (1 328 en total).
 
 ## 5. Pendiente (tareas 4 y 6) y por qué
 
