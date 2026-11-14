@@ -263,11 +263,11 @@ export class MasterDataService {
       });
     }
 
-    if (dto.contactName) {
+    if (dto.contactName?.trim() || dto.email?.trim() || dto.phone?.trim()) {
       await this.prisma.partnerContact.create({
         data: {
           partner_id: partner.id,
-          name: dto.contactName.trim(),
+          name: dto.contactName?.trim() || dto.legalName.trim(),
           email: dto.email?.trim() || null,
           phone: dto.phone?.trim() || null,
           position: 'Contacto Comercial',
