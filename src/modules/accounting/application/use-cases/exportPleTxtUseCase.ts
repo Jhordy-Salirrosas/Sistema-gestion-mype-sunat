@@ -94,7 +94,7 @@ export class ExportPleTxtUseCase {
       const correlativoAsiento = `M${String(numeroAsiento).padStart(3, '0')}`;
       const fechaContable = this.fecha(entry.entryDate);
 
-      entry.lines.forEach((line, lineIdx) => {
+      entry.lines.forEach((line) => {
         const debitVal = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
         const creditVal = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
 
