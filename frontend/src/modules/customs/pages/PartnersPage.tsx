@@ -1,3 +1,4 @@
+import { resumenTercero } from '../lib/partnerSummary';
 import { etiquetaCondicionPago } from '../lib/paymentTerms';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -108,6 +109,7 @@ export default function PartnersPage({ context = 'customs' }: { context?: 'custo
                   <td className="p-3 font-mono font-medium">{p.doc_type} - {p.doc_number}</td>
                   <td className="p-3">
                     <p className="font-semibold text-foreground">{p.legal_name}</p>
+                    {resumenTercero(p).address && <p className="text-[11px] text-muted-foreground">{resumenTercero(p).address}</p>}
                     {p.trade_name && <p className="text-[11px] text-muted-foreground">{p.trade_name}</p>}
                   </td>
                   <td className="p-3">{p.country_code}</td>
@@ -122,7 +124,7 @@ export default function PartnersPage({ context = 'customs' }: { context?: 'custo
                       : etiquetaCondicionPago(p.payment_terms)}
                     {p.allows_discount === true ? ' · Con desc.' : ''}
                   </td>
-                  <td className="p-3">{p.email || p.phone || '—'}</td>
+                  <td className="p-3"><div>{resumenTercero(p).email || '—'}</div><div className="text-muted-foreground">{resumenTercero(p).phone || '—'}</div></td>
                   <td className="p-3 text-center">
                     <Badge variant={p.is_active ? 'default' : 'secondary'}>
                       {p.is_active ? 'Activo' : 'Inactivo'}
