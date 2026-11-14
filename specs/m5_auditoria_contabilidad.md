@@ -266,8 +266,10 @@ el frontend de contabilidad (1 326 en total).
   la nota de débito se genera desde el mismo flujo o queda como documento aparte.
 - **Tarea 6 — resto**: el 5.1 ya tiene la estructura de 21 columnas, pero el orden se tomó de la
   descripción del formato y no del PDF oficial de la R.S. 286-2009, que este entorno no pudo abrir.
-  Antes de presentar el primer archivo hay que contrastarlo con la hoja oficial, y falta el libro
-  **6.1 Libro Mayor**, que hoy no se exporta.
+  Antes de presentar el primer archivo hay que contrastarlo con la hoja oficial. El libro **6.1 Libro
+  Mayor** no está implementado: el exportador ahora **rechaza** ese código con un mensaje explícito,
+  porque antes devolvía filas con forma de Libro Diario en un archivo rotulado 6.1 (se podía presentar
+  sin que nadie lo notara).
 - **Tarea 7 — resto**: la prueba de cierre corre sobre una base en memoria; falta ejecutarla contra
   PostgreSQL, que no está disponible en este entorno (`DATABASE_URL` vacío) y no debe correrse contra
   producción sin respaldo.
