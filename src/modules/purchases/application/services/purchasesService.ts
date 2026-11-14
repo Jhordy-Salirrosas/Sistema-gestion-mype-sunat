@@ -248,13 +248,16 @@ export class PurchasesService {
           throw new BadRequestException(`El ítem ${sku} no es inventariable ni está habilitado como servicio facturable.`);
         }
         const quantity = Number(item.quantity);
-        const unitCostNet = Number(item.unitCost);
-        if (!(quantity > 0) || !Number.isFinite(unitCostNet) || unitCostNet < 0) {
+        const unitCostOriginal = Number(item.unitCost);
+        if (!(quantity > 0) || !Number.isFinite(unitCostOriginal) || unitCostOriginal < 0) {
           throw new BadRequestException(`Cantidad o costo inválido para ${sku}.`);
         }
-        const subtotal = r2(quantity * unitCostNet);
-        const itemIgv = r2(subtotal * 0.18);
-        const itemTotal = r2(subtotal + itemIgv);
+        const precioConIgv = dto.pricesIncludeIgv === true;
+        const totalConIgv = r2(quantity * unitCostOriginal);
+        const subtotal = precioConIgv ? r2(totalConIgv / 1.18) : totalConIgv;
+        const itemIgv = precioConIgv ? r2(totalConIgv - subtotal) : r2(subtotal * 0.18);
+        const itemTotal = precioConIgv ? totalConIgv : r2(subtotal + itemIgv);
+        const unitCostNet = precioConIgv ? subtotal / quantity : unitCostOriginal;
         totalNet += subtotal;
         totalIgv += itemIgv;
         totalAmount += itemTotal;
@@ -294,6 +297,7 @@ export class PurchasesService {
           net_amount: r2(totalNet),
           igv_amount: r2(totalIgv),
           total_amount: r2(totalAmount),
+          prices_include_igv: dto.pricesIncludeIgv === true,
           status: 'REGISTRADA',
           reception_status: receptionStatus,
           notes: dto.notes,

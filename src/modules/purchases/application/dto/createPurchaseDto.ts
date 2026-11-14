@@ -65,6 +65,9 @@ export class CreatePurchaseDto {
   @IsOptional()
   currencyCode?: string; // Default: PEN
 
+  @IsOptional()
+  pricesIncludeIgv?: boolean;
+
   @IsString()
   @IsOptional()
   responsible?: string;
