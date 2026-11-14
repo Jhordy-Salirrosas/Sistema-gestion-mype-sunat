@@ -28,9 +28,23 @@ export class GetLedgerUseCase {
       throw new BadRequestException(`La cuenta PCGE ${accountCode} no existe`);
     }
 
-    const rows = await this.repository.findLedgerMovements(companyId, normalizado, accountCode);
+    // El detalle de una cuenta de mayor vive en sus subcuentas. Si se pide el
+    // mayor, se muestran todas sus hijas; si se pide una subcuenta, solo esa.
+    const hijas = accounts
+      .filter((item) => item.code !== accountCode && item.code.startsWith(accountCode))
+      .map((item) => item.code);
+    const codigos = [accountCode, ...hijas];
+    const porVariasCuentas = hijas.length > 0 && this.repository.findLedgerMovementsByAccounts;
+
+    const rows = porVariasCuentas
+      ? await this.repository.findLedgerMovementsByAccounts!(companyId, normalizado, codigos)
+      : await this.repository.findLedgerMovements(companyId, normalizado, accountCode);
+
     const factor = account.nature === 'Acreedora' ? -1 : 1;
-    const openingBalance = Math.round(factor * ((await this.repository.findLedgerOpeningBalance?.(companyId, normalizado, accountCode)) ?? 0) * 100) / 100;
+    const saldoInicial = porVariasCuentas && this.repository.findLedgerOpeningBalanceByAccounts
+      ? await this.repository.findLedgerOpeningBalanceByAccounts(companyId, normalizado, codigos)
+      : (await this.repository.findLedgerOpeningBalance?.(companyId, normalizado, accountCode)) ?? 0;
+    const openingBalance = Math.round(factor * saldoInicial * 100) / 100;
     let saldo = openingBalance;
     const movements = rows.map((row) => {
       saldo = Math.round((saldo + factor * (row.debit - row.credit)) * 100) / 100;
@@ -52,7 +66,11 @@ export class GetLedgerUseCase {
       movements,
       totalDebit,
       totalCredit,
-      closingBalance: Math.round(factor * (totalDebit - totalCredit) * 100) / 100,
+      // El saldo final incluye el de apertura: antes se calculaba solo con el
+      // movimiento del período y una cuenta con arrastre cerraba mal.
+      closingBalance: movements.length > 0 ? movements[movements.length - 1].saldo : openingBalance,
+      /** Subcuentas incluidas en el mayor cuando se pide una cuenta de mayor. */
+      subcuentas: codigos,
     };
   }
 }

@@ -320,14 +320,27 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
   }
 
   async findLedgerMovements(companyId: string, period: string, accountCode: string) {
+    return this.findLedgerMovementsByAccounts(companyId, period, [accountCode]);
+  }
+
+  /**
+   * Movimientos de varias cuentas en un período.
+   *
+   * El Libro Mayor de una cuenta de mayor (por ejemplo 104) no tiene líneas
+   * propias: el detalle vive en sus subcuentas (1041, 1042, 1043). Sin esto, el
+   * mayor de la cuenta padre salía vacío aunque hubiera movimientos.
+   */
+  async findLedgerMovementsByAccounts(companyId: string, period: string, accountCodes: readonly string[]) {
+    if (accountCodes.length === 0) return [];
     const entries = await this.prisma.accountingEntry.findMany({
       where: { company_id: companyId, period },
       include: { lines: true },
       orderBy: [{ entry_date: 'asc' }, { entry_number: 'asc' }],
     });
+    const codigos = new Set(accountCodes);
     return entries.flatMap((entry) =>
       entry.lines
-        .filter((line) => line.account_code === accountCode)
+        .filter((line) => codigos.has(line.account_code))
         .map((line) => ({
           entryId: entry.id,
           entryNumber: entry.entry_number,
@@ -339,6 +352,23 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           debit: Number(line.debit_amount),
           credit: Number(line.credit_amount),
         })),
+    );
+  }
+
+  async findLedgerOpeningBalanceByAccounts(companyId: string, period: string, accountCodes: readonly string[]) {
+    if (accountCodes.length === 0) return 0;
+    const codigos = new Set(accountCodes);
+    const entries = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period: { lt: period } },
+      include: { lines: true },
+    });
+    return entries.reduce(
+      (sum, entry) =>
+        sum +
+        entry.lines
+          .filter((line) => codigos.has(line.account_code))
+          .reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0),
+      0,
     );
   }
 

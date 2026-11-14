@@ -40,6 +40,33 @@ describe('Reportes contables', () => {
     expect(result.movements.map((m) => m.saldo)).toEqual([318, 268]);
   });
 
+  it('el saldo final incluye el saldo de apertura', async () => {
+    repository.findLedgerOpeningBalance.mockResolvedValue(200);
+    const result = await new GetLedgerUseCase(repository).execute('c1', '2026-11', '1211');
+    expect(result.closingBalance).toBe(268);
+  });
+
+  it('el mayor de una cuenta de mayor incluye sus subcuentas', async () => {
+    repository.findAccounts.mockResolvedValue([
+      { code: '104', name: 'Cuentas corrientes', element: 'Activo', nature: 'Deudora', parentCode: '10', level: 3, isActive: true },
+      { code: '1041', name: 'Cuenta corriente operativa', element: 'Activo', nature: 'Deudora', parentCode: '104', level: 4, isActive: true },
+      { code: '1042', name: 'Cuenta corriente BCP', element: 'Activo', nature: 'Deudora', parentCode: '104', level: 4, isActive: true },
+    ]);
+    repository.findLedgerMovementsByAccounts = jest.fn().mockResolvedValue([
+      { entryId: 'e1', entryNumber: 1, entryDate: new Date('2026-11-01'), glosa: 'Cobro', sourceModule: 'COLLECTIONS', accountCode: '1041', accountName: 'Cuenta corriente operativa', debit: 100, credit: 0 },
+      { entryId: 'e2', entryNumber: 2, entryDate: new Date('2026-11-02'), glosa: 'Cobro', sourceModule: 'COLLECTIONS', accountCode: '1042', accountName: 'Cuenta corriente BCP', debit: 50, credit: 0 },
+    ]);
+    repository.findLedgerOpeningBalanceByAccounts = jest.fn().mockResolvedValue(10);
+
+    const result = await new GetLedgerUseCase(repository).execute('c1', '2026-11', '104');
+
+    expect(result.subcuentas).toEqual(['104', '1041', '1042']);
+    expect(result.movements.map((m) => m.accountCode)).toEqual(['1041', '1042']);
+    expect(result.openingBalance).toBe(10);
+    expect(result.closingBalance).toBe(160);
+    expect(repository.findLedgerMovements).not.toHaveBeenCalled();
+  });
+
   it('rechaza una cuenta inexistente', async () => {
     await expect(new GetLedgerUseCase(repository).execute('c1', '2026-11', '9999')).rejects.toThrow(BadRequestException);
   });

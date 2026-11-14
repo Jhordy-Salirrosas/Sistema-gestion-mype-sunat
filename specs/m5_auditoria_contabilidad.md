@@ -161,6 +161,11 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
   existente, activa y hoja.
 - Los asientos de pago de gasto, pago de compra y cobro usan la subcuenta elegida.
 - UI: selector en Gastos (diálogo de pago) y Cobros, y gestión en Contabilidad → Plan de cuentas.
+- **Libro Mayor con detalle**: al consultar una cuenta de mayor se incluyen sus subcuentas
+  (`104` muestra `1041`, `1042`, `1043`) y la respuesta indica cuáles se sumaron. Antes el mayor de
+  una cuenta padre salía vacío porque las líneas viven en las hijas.
+- **Saldo final corregido**: se calculaba solo con el movimiento del período e ignoraba el saldo de
+  apertura; ahora cierra con el arrastre incluido.
 
 **Tarea 5 — regularización de históricos**
 
