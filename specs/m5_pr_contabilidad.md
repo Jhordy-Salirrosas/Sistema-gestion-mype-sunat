@@ -57,6 +57,21 @@ La primera inserta las subcuentas 1011, 1012, 1013 y 1043 en `accounting_account
 | POST | `/api/v1/invoices/accounting/reprocess` |
 | POST | `/api/v1/purchases/:id/post-accounting` |
 
+## Cambios de contrato que el revisor debe mirar
+
+1. **`POST /expenses/:id/pay`** ahora valida el cuerpo con DTO (`whitelist` +
+   `forbidNonWhitelisted`): un campo desconocido devuelve 400 en lugar de ignorarse. Los campos
+   admitidos son `amount`, `paymentMethod`, `bankName` y `treasuryAccountId`.
+2. **Cuenta de caja por defecto**: los asientos en efectivo usan `1011` (Caja principal) en lugar de
+   `101` (cuenta de mayor). Requiere la migración aplicada antes del despliegue.
+3. **Libro 5.1**: pasa de 8 a 21 columnas; cambia la posición de cuenta, debe, haber y glosa.
+4. **Libro 6.1**: devuelve 400 con mensaje en lugar de un archivo con forma de 5.1.
+5. **Mensajes de validación** de reglas y cuentas: mismo rechazo, texto más accionable.
+6. **`POST /purchases` y `POST /purchases/:id/receive`** agregan `contabilidad` a la respuesta
+   (`{ asientoGenerado, motivo }`); el resto del contrato no cambia.
+7. **`GET /accounting/ledger`** agrega `subcuentas` y el saldo final ahora incluye el saldo de
+   apertura (antes lo ignoraba: era un error de cálculo).
+
 ## Pruebas
 
 - Backend: `nest build` ✅, `oxlint` 0 errores, 223 pruebas de contabilidad + 24 de compras ✅.

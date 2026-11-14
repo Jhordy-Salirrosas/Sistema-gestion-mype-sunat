@@ -8,6 +8,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { AUndefinedSiVacio } from '../../../../common/validators/emptyStringTransform';
 
 /** Línea de distribución del importe cobrado entre varias cuentas por cobrar. */
 export class CollectionDistributionDto {
@@ -29,7 +30,7 @@ export class CreateCollectionDto {
    * cobro. Si no llega, se usa la cuenta de las reglas COBRO o, en efectivo,
    * la caja principal.
    */
-  @IsOptional() @IsUUID() treasuryAccountId?: string;
+  @AUndefinedSiVacio() @IsOptional() @IsUUID() treasuryAccountId?: string;
   /** Reparto del importe entre varias cuentas por cobrar. */
   @IsOptional()
   @IsArray()

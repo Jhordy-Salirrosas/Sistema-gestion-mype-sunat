@@ -1,4 +1,5 @@
 import { IsIn, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { AUndefinedSiVacio } from '../../../../common/validators/emptyStringTransform';
 
 export class PayPurchaseDto {
   @IsOptional() @IsNumber() @Min(0.01) amount?: number;
@@ -9,5 +10,5 @@ export class PayPurchaseDto {
    * Cuenta de tesorería (`GET /accounting/treasury-accounts`) de la que sale el
    * pago. Si no llega se usa la cuenta de la regla PAGO o la caja principal.
    */
-  @IsOptional() @IsUUID() treasuryAccountId?: string;
+  @AUndefinedSiVacio() @IsOptional() @IsUUID() treasuryAccountId?: string;
 }
