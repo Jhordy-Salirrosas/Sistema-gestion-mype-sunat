@@ -218,6 +218,24 @@ export class InvoiceSummaryService {
       orderBy: [{ serie: 'asc' }, { correlativo: 'asc' }],
     });
 
+    // Regla contable de la baja: una vez que el período se cerró o su libro se
+    // presentó en el PLE, el comprobante ya está declarado y no se anula por
+    // comunicación de baja; el camino es la nota de débito o de crédito.
+    const periodo = fecha.slice(0, 7);
+    const [periodoContable, libroPle] = await Promise.all([
+      (db as any).accountingPeriod?.findUnique?.({
+        where: { company_id_period: { company_id: companyId, period: periodo } },
+        select: { status: true },
+      }) ?? null,
+      (db as any).pleBook?.findFirst?.({
+        where: { company_id: companyId, period: periodo },
+        select: { id: true },
+      }) ?? null,
+    ]);
+    const periodoDeclarado = periodoContable?.status === 'CERRADO' || Boolean(libroPle);
+    const motivoDeclarado =
+      'El período ya está cerrado o declarado en el PLE: no se anula por comunicación de baja; emita la nota de débito o de crédito.';
+
     const cabecera = await this.cabecera(companyId, fecha, correlativo, 'RA', db);
     const notas = await db.invoice.findMany({ where: { company_id: companyId, tipo_comprobante: { in: ['07', '08'] }, referenced_invoice_id: { in: filas.map(f => f.id) }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } }, select: { referenced_invoice_id: true, estado: true, monto_total: true } });
     const reservas = await db.invoiceAggregate?.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(excludeAggregateId ? { id: { not: excludeAggregateId } } : {}) }, select: { members: true } }) ?? [];
@@ -228,7 +246,7 @@ export class InvoiceSummaryService {
       const asociada = creditos.some(n => ['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const pendiente = creditos.some(n => !['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const diasHastaHoy = diasDesdeEmision(fechaCorta(f.fecha_emision), cabecera.fechaGeneracion);
-      const motivo = f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
+      const motivo = periodoDeclarado ? motivoDeclarado : f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
       const admiteBaja = !motivo && (!seleccion || seleccion.some(l => l.id === f.id));
       return {
         ...linea,
