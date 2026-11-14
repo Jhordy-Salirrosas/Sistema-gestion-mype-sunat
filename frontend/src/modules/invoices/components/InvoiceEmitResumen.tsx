@@ -52,7 +52,7 @@ export const InvoiceEmitResumen = ({ borrador }: InvoiceEmitResumenProps) => {
   const importeTotal = resumenGlobal.total;
   const igvReferencial = igvReferencialGratuito(borrador.items);
   const detraccion = calcularFlujo(borrador).detraccion;
-  const retencion = calcularRetencion(importeTotal, !esNota && borrador.agenteRetencion, 1, detraccion);
+  const retencion = calcularRetencion(importeTotal, !esNota && borrador.agenteRetencion, 1, detraccion, resumenGlobal.gravado);
   const neto = round2(importeTotal - detraccion - retencion);
 
   return (

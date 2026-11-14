@@ -51,4 +51,12 @@ describe('SalesQuotesService', () => {
     prisma.salesQuote.findFirst.mockResolvedValueOnce(null);
     await expect(service.updateStatus('c1', 'no', 'ACEPTADA')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('crea pedidos con prefijo PED y filtra por tipo', async () => {
+    const { prisma, service } = setup();
+    await service.create('c1', { kind: 'PEDIDO', customerName: 'Cliente', items: [{ description: 'Producto', quantity: 1, unitPrice: 118 }] });
+    expect(prisma.salesQuote.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ kind: 'PEDIDO', quote_number: expect.stringMatching(/^PED-/) }) }));
+    await service.list('c1', 'PEDIDO');
+    expect(prisma.salesQuote.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ kind: 'PEDIDO' }) }));
+  });
 });
