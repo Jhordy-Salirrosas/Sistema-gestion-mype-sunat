@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { PurchasesService } from '../../../src/modules/purchases/application/services/purchasesService';
 
 const item = (over: Record<string, any> = {}) => ({

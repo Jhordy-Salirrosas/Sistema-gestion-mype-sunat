@@ -151,6 +151,7 @@ export class PurchasesService {
         notes: `[PEDIDO EXTERIOR - ${importOrder.incoterm}] ${importOrder.notes || ''}`.trim(),
         responsible: importOrder.responsible || 'Comercio Exterior',
         created_at: importOrder.created_at,
+        documents: importOrder.documents || [],
         items: (importOrder.items || []).map((it: any) => ({
           id: it.id,
           purchase_id: importOrder.id,

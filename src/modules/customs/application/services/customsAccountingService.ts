@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 
@@ -419,7 +419,7 @@ export class CustomsAccountingService {
   async syncToGeneralLedger(
     companyId: string,
     shipmentId: string,
-    responsible = 'Operador Contable Aduanas',
+    _responsible = 'Operador Contable Aduanas',
   ) {
     // 1. Garantizar existencia de cuentas contables del catálogo PCGE oficial
     const defaultAccounts = [
@@ -463,7 +463,7 @@ export class CustomsAccountingService {
 
     const createdEntries: any[] = [];
 
-    for (const [idx, entry] of summary.entries.entries()) {
+    for (const entry of summary.entries) {
       const idempotencyKey = `customs-entry:${summary.shipmentId}:${entry.entryCode}`;
 
       try {
