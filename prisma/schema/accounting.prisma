@@ -32,8 +32,30 @@ model Expense {
   status           String   @default("REGISTRADO")
   created_at       DateTime @default(now())
 
+  distributions    ExpenseDistribution[]
+
   @@index([company_id, expense_date])
   @@map("expenses")
+}
+
+/// Reparto de la base de un gasto entre varias cuentas contables.
+///
+/// La base se reparte en importes exactos (o porcentajes que suman 100) y el
+/// asiento carga cada cuenta con su parte; el IGV y la cuenta por pagar siguen
+/// saliendo de las reglas del proceso GASTO.
+model ExpenseDistribution {
+  id           String   @id @default(uuid())
+  expense_id   String
+  expense      Expense  @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  company_id   String
+  account_code String
+  amount       Decimal  @db.Decimal(14, 2)
+  percentage   Decimal  @db.Decimal(5, 2)
+  created_at   DateTime @default(now())
+
+  @@unique([expense_id, account_code])
+  @@index([company_id, account_code])
+  @@map("expense_distributions")
 }
 
 
@@ -54,8 +76,26 @@ model Collection {
   status          String   @default("REGISTRADO")
   created_at      DateTime @default(now())
 
+  distributions   CollectionDistribution[]
+
   @@index([company_id, collection_date])
   @@map("collections")
+}
+
+/// Reparto del importe de un cobro entre varias cuentas por cobrar.
+model CollectionDistribution {
+  id           String     @id @default(uuid())
+  collection_id String
+  collection   Collection @relation(fields: [collection_id], references: [id], onDelete: Cascade)
+  company_id   String
+  account_code String
+  amount       Decimal    @db.Decimal(14, 2)
+  percentage   Decimal    @db.Decimal(5, 2)
+  created_at   DateTime   @default(now())
+
+  @@unique([collection_id, account_code])
+  @@index([company_id, account_code])
+  @@map("collection_distributions")
 }
 
 /// Ejercicio fiscal por empresa. Agrupa los períodos mensuales.

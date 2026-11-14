@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TreasuryAccountsService } from '../../../src/modules/accounting/application/services/treasuryAccountsService';
+import { AccountingCatalogService } from '../../../src/modules/accounting/application/services/accountingCatalogService';
 
 const CATALOGO = [
   { code: '10', name: 'Efectivo', parent_code: null, is_active: true },
@@ -35,7 +36,7 @@ describe('TreasuryAccountsService', () => {
   it('lista las cuentas de la empresa con nombres de API', async () => {
     const prisma = crearPrisma();
     prisma.companyTreasuryAccount.findMany.mockResolvedValue([cuenta()]);
-    const r = await new TreasuryAccountsService(prisma as never).list('c1');
+    const r = await new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).list('c1');
     expect(r[0]).toEqual({
       id: 't1',
       code: '1041',
@@ -53,7 +54,7 @@ describe('TreasuryAccountsService', () => {
   it('rechaza una subcuenta que no existe en el catálogo PCGE', async () => {
     const prisma = crearPrisma();
     await expect(
-      new TreasuryAccountsService(prisma as never).create('c1', { code: '9999', name: 'Inventada' }),
+      new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).create('c1', { code: '9999', name: 'Inventada' }),
     ).rejects.toThrow(BadRequestException);
     expect(prisma.companyTreasuryAccount.create).not.toHaveBeenCalled();
   });
@@ -61,7 +62,7 @@ describe('TreasuryAccountsService', () => {
   it('rechaza una cuenta de mayor con subcuentas', async () => {
     const prisma = crearPrisma();
     await expect(
-      new TreasuryAccountsService(prisma as never).create('c1', { code: '101', name: 'Caja' }),
+      new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).create('c1', { code: '101', name: 'Caja' }),
     ).rejects.toThrow('es de mayor y tiene subcuentas');
   });
 
@@ -69,13 +70,13 @@ describe('TreasuryAccountsService', () => {
     const prisma = crearPrisma();
     prisma.companyTreasuryAccount.findFirst.mockResolvedValue({ id: 't1', name: 'BCP' });
     await expect(
-      new TreasuryAccountsService(prisma as never).create('c1', { code: '1041', name: 'BCP' }),
+      new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).create('c1', { code: '1041', name: 'BCP' }),
     ).rejects.toThrow('ya está registrada');
   });
 
   it('crea la cuenta con los valores por defecto', async () => {
     const prisma = crearPrisma();
-    const r = await new TreasuryAccountsService(prisma as never).create('c1', {
+    const r = await new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).create('c1', {
       code: '1043',
       name: '  BBVA  ',
     });
@@ -88,14 +89,14 @@ describe('TreasuryAccountsService', () => {
   it('exige nombre en el alta', async () => {
     const prisma = crearPrisma();
     await expect(
-      new TreasuryAccountsService(prisma as never).create('c1', { code: '1011', name: '   ' }),
+      new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).create('c1', { code: '1011', name: '   ' }),
     ).rejects.toThrow('El nombre de la cuenta es obligatorio.');
   });
 
   it('actualiza solo los campos enviados', async () => {
     const prisma = crearPrisma();
     prisma.companyTreasuryAccount.findFirst.mockResolvedValue(cuenta());
-    await new TreasuryAccountsService(prisma as never).update('c1', 't1', { isActive: false });
+    await new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).update('c1', 't1', { isActive: false });
     expect(prisma.companyTreasuryAccount.update).toHaveBeenCalledWith({
       where: { id: 't1' },
       data: { is_active: false },
@@ -105,21 +106,21 @@ describe('TreasuryAccountsService', () => {
   it('no actualiza una cuenta de otra empresa', async () => {
     const prisma = crearPrisma();
     await expect(
-      new TreasuryAccountsService(prisma as never).update('c1', 'ajena', { name: 'X' }),
+      new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).update('c1', 'ajena', { name: 'X' }),
     ).rejects.toThrow(NotFoundException);
   });
 
   it('no resuelve una cuenta inactiva o de otra empresa', async () => {
     const prisma = crearPrisma();
     await expect(
-      new TreasuryAccountsService(prisma as never).resolve('c1', 't1'),
+      new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).resolve('c1', 't1'),
     ).rejects.toThrow('no existe, está inactiva o no pertenece a la empresa');
   });
 
   describe('cuentaParaAsiento', () => {
     it('devuelve el respaldo cuando no se eligió cuenta', async () => {
       const prisma = crearPrisma();
-      const r = await new TreasuryAccountsService(prisma as never).cuentaParaAsiento(
+      const r = await new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).cuentaParaAsiento(
         'c1',
         undefined,
         { code: '1041', name: 'Cuenta corriente' },
@@ -133,7 +134,7 @@ describe('TreasuryAccountsService', () => {
       prisma.companyTreasuryAccount.findFirst.mockResolvedValue(
         cuenta({ code: '1043', name: 'BBVA', is_active: true }),
       );
-      const r = await new TreasuryAccountsService(prisma as never).cuentaParaAsiento('c1', 't1', {
+      const r = await new TreasuryAccountsService(prisma as never, new AccountingCatalogService(prisma as never)).cuentaParaAsiento('c1', 't1', {
         code: '1041',
         name: 'Cuenta corriente',
       });

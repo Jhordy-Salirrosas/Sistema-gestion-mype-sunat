@@ -1,13 +1,31 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import { CreateCollectionDto } from '../../application/dto/createCollectionDto';
+import { CreateCollectionDto, SetCollectionDistributionsDto } from '../../application/dto/createCollectionDto';
 import { CollectionsService } from '../../application/services/collectionsService';
 
 @Controller('api/v1/collections')
 @UseGuards(AuthGuard)
 export class CollectionsController {
   constructor(private readonly collections: CollectionsService) {}
+
+  @Get(':id/distributions')
+  distributions(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.distributions(companyId, id);
+  }
+
+  /** Reemplaza la distribución mientras el cobro no tenga asiento. */
+  @Put(':id/distributions')
+  @HttpCode(HttpStatus.OK)
+  setDistributions(
+    @Param('id') id: string,
+    @Body() dto: SetCollectionDistributionsDto,
+    @CurrentCompany() companyId?: string,
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    return this.collections.setDistributions(companyId, id, dto.items ?? []);
+  }
 
   @Post(':id/annul')
   @HttpCode(HttpStatus.OK)

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
-import { checkAccountCode, type CatalogAccount } from '../../domain/rules/catalogIntegrityRule';
+import { checkAccountCode } from '../../domain/rules/catalogIntegrityRule';
+import { AccountingCatalogService } from './accountingCatalogService';
 import type { CreateTreasuryAccountDto, UpdateTreasuryAccountDto } from '../dto/treasuryAccountDto';
 
 /**
@@ -13,7 +14,10 @@ import type { CreateTreasuryAccountDto, UpdateTreasuryAccountDto } from '../dto/
  */
 @Injectable()
 export class TreasuryAccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalog: AccountingCatalogService,
+  ) {}
 
   async list(companyId: string) {
     const cuentas = await this.prisma.companyTreasuryAccount.findMany({
@@ -28,7 +32,7 @@ export class TreasuryAccountsService {
     const nombre = dto.name.trim();
     if (!nombre) throw new BadRequestException('El nombre de la cuenta es obligatorio.');
 
-    const issue = checkAccountCode(await this.catalogo(), code);
+    const issue = checkAccountCode(await this.catalog.catalogo(), code);
     if (issue) throw new BadRequestException(issue.message);
 
     const yaExiste = await this.prisma.companyTreasuryAccount.findFirst({
@@ -101,18 +105,6 @@ export class TreasuryAccountsService {
     if (!treasuryAccountId) return respaldo;
     const cuenta = await this.resolve(companyId, treasuryAccountId);
     return { code: cuenta.code, name: cuenta.name };
-  }
-
-  private async catalogo(): Promise<CatalogAccount[]> {
-    const filas = await this.prisma.accountingAccount.findMany({
-      select: { code: true, name: true, parent_code: true, is_active: true },
-    });
-    return filas.map((f) => ({
-      code: f.code,
-      name: f.name,
-      parentCode: f.parent_code,
-      isActive: f.is_active,
-    }));
   }
 
   private mapear(cuenta: {
