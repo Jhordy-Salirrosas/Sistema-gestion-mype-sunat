@@ -1,3 +1,5 @@
+import { PrismaService } from '../../../../database/prismaService';
+import { calcularAntiguedadEnvio, ESTADOS_PLAZO_ENVIO, type AlertaAntiguedadEnvio } from './invoiceSendAge';
 import {
   IssuerConfigResolver,
   type IssuerContext,
@@ -74,6 +76,7 @@ export interface AlertaDlq {
 export interface AlertasOperativas {
   certificado: AlertaCertificado;
   dlq: AlertaDlq;
+  antiguedad: AlertaAntiguedadEnvio;
   /** La gravedad más alta de las dos, para que el front pinte un solo aviso. */
   gravedadGlobal: GravedadAlerta;
   /** Instante en que se tomaron los datos. */
@@ -166,6 +169,7 @@ export class InvoiceAlertService {
     private readonly certificado: CertificateService,
     private readonly cola: QueueService,
     @Optional() private readonly issuerConfig?: IssuerConfigResolver,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
   /**
@@ -257,18 +261,33 @@ export class InvoiceAlertService {
    * endpoint responde siempre 200: una alerta ilegible se informa dentro del
    * cuerpo, no como un fallo de la petición.
    */
+  public async estadoAntiguedad(companyId: string): Promise<AlertaAntiguedadEnvio> {
+    try {
+      if (!companyId || !this.prisma) throw new Error('Fuente no disponible');
+      const filas = await this.prisma.invoice.findMany({
+        where: { company_id: companyId, tipo_comprobante: { in: ['01', '03'] }, estado: { in: [...ESTADOS_PLAZO_ENVIO] } },
+        select: { id: true, tipo_comprobante: true, serie: true, correlativo: true, estado: true, fecha_emision: true },
+      });
+      return calcularAntiguedadEnvio(filas);
+    } catch {
+      return { evaluado: false, gravedad: 'SIN_DATOS', mensaje: 'No se pudo evaluar la antigüedad de envío.', documentos: [] };
+    }
+  }
+
   public async estado(companyId: string): Promise<AlertasOperativas> {
-    const [certificado, dlq] = await Promise.all([
+    const [certificado, dlq, antiguedad] = await Promise.all([
       Promise.resolve(
         this.estadoCertificado(await this.issuerConfig?.resolve(companyId)),
       ),
       this.estadoDlq(companyId),
+      this.estadoAntiguedad(companyId),
     ]);
 
     return {
       certificado,
       dlq,
-      gravedadGlobal: gravedadMaxima([certificado.gravedad, dlq.gravedad]),
+      antiguedad,
+      gravedadGlobal: gravedadMaxima([certificado.gravedad, dlq.gravedad, antiguedad.gravedad]),
       consultadoEl: new Date().toISOString(),
     };
   }

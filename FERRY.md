@@ -1,67 +1,79 @@
-# M1 — retención cero sin operación gravada
+# Pulidos M1 — A, B y C
 
-## Base y entrega
+Rama única `fix/m1-pulidos`, desde backend main `c663ea3ee0d3a5c34c97af9993d284a14892da3f`. Base frontend main: `3e4497367363c70d7c774c1d9dc0b65b221a120f`, CarlosSoles/Fronted-sistema-mype-sunat. Un commit de fase 0 y uno por punto. Sin PR, despliegue, emisiones reales ni migraciones.
 
-Rama única de entrega: `fix/m1-retencion-sin-gravada`, creada desde `fix/m1-paquete-auditoria` en `38a6402371b7969cce005315eabad72ca1c34079`, no desde main. Incluye el backend en sus rutas y los archivos del front bajo `frontend/`. No se crea PR ni rama de entrega en el repo front.
+## Veredictos y comportamiento
 
-La base frontend es main `04c137fcba62b24e907876e5f646158c92f57461` de CarlosSoles/Fronted-sistema-mype-sunat más los 22 archivos que transportó el paquete. Esa composición se reconstruyó y probó antes del cambio. Se conservan los archivos heredados del ferry del paquete; este encargo modifica o añade únicamente las rutas enumeradas abajo.
+- **A, confirmado y construido:** GET /invoices/alertas añade `antiguedad`: estado de evaluación, gravedad, mensaje y documentos con número, tipo, estado, fecha de emisión, fecha límite y días restantes. Solo facturas 01 (3 días) y boletas 03 (7 días) de la empresa autenticada en PENDIENTE, EN_COLA, PROCESANDO, ENVIADO o ERROR_RED. Se excluyen los estados finales ACEPTADO, OBSERVADO, RECHAZADO y ANULADO; un rechazado histórico no mantiene una alerta vencida. Vencidos primero; hoy/mañana/vencido crítico, resto pendiente aviso. El día persistido no se desplaza por zona horaria y hoy se calcula en Lima. El Monitor muestra diez más urgentes y el total; el endpoint devuelve todos. El resumen de facturación incorpora el motivo nuevo. No hay escrituras, reenvíos ni interpretación de recuperabilidad. No se asignan ventanas a notas/agregados. Fallo de lectura es SIN_DATOS, no una lista vacía evaluada.
+- **B, confirmado y construido:** la consulta RUC existente distingue 404/422 (no encontrado) de una respuesta 200 válida con estado inactivo. Solo tras confirmar la emisión se consulta el RUC del receptor, fuera de la transacción y de la respuesta fiscal almacenada por idempotencia, con espera máxima de dos segundos. Estado distinto de ACTIVO y/o NO HABIDO añade avisos sin sustituir los anteriores. Fallo, timeout, no encontrado o datos inválidos devuelven la respuesta confirmada sin aviso nuevo. DNI o tipo extranjero no consultan. Una consulta tardía puede completar la caché existente, pero no modifica la respuesta ya devuelta. La repetición idempotente consulta el aviso nuevamente sin repetir emisión. No se cambian proveedor, variables ni credenciales; las pruebas solo usan dobles.
+- **C, premisa precisada y construido:** el guardado de otros campos ya era real. Faltaba RUC editable y envío de `issuer_ruc`. El formulario admite 11 dígitos exactos o vacío (PUT con null para limpiar), muestra RUC efectivo y origen y recarga tras guardar. Mantiene errores de formato/servidor, permisos y coherencia SOL/certificado del backend existente. No cambia el RUC compartido de la empresa ni la sesión. Cuando el origen es company, el campo de pin permanece vacío y el RUC efectivo se presenta aparte. No hay cambio backend para C.
 
-## Regla y límite
+Ningún punto detenido. Las ventanas y etiquetas 2108/2957 son las ya aplicadas por el sistema; este paquete no reinterpreta el catálogo de bajas. La auditoría previa se conserva íntegra y las decisiones se añaden al final de docs/m1/auditoria-solucion.md.
 
-Una base gravada exactamente cero excluye la retención del IGV, aunque el cliente sea agente y el total supere S/700. Se aplica a exoneradas, inafectas, su combinación y gratuitas. Se comprueba la base gravada del documento; no se deduce la regla solo del IGV informado.
+## Archivos por punto
 
-No se reabre el caso mixto. El cálculo heredado permanece sobre el total cuando hay base gravada distinta de cero: gravada 1000 + IGV 180 + exonerada 500 mantiene retención 50.40 y neto 1629.60; gravada pura 1000 + IGV 180 mantiene retención 35.40 y neto 1144.60. La exclusión por SPOT del paquete permanece. No cambian tasa, umbral ni moneda. El tratamiento normativo de mixtos sigue pendiente según la auditoría del paquete.
+Todas las rutas front siguientes tienen prefijo `frontend/` en esta rama y conservan su ruta relativa en destino.
 
-El front aporta la base gravada al helper desde liquidación, flujo, resumen y página real. La fábrica de demostración también aporta su afectación; sus restantes cálculos permanecen iguales. El parámetro adicional es opcional para no romper usos escalares anteriores sin contexto documental. Backend usa bases.gravado en el adaptador, el agregado/desglose en totales UBL y gravadoR en ambos caminos del puente contable M1. No hay capas detenidas.
+**A — backend:**
 
-## Archivos de este encargo
+- src/modules/invoices/application/services/invoiceAlertService.ts
+- src/modules/invoices/application/services/invoiceSendAge.ts
+- test/unit/invoices/pulidosAntiguedad.spec.ts
 
-Backend, rutas relativas al repo:
+**A — front:**
 
-- `src/modules/invoices/application/services/emitirComprobanteAdapter.ts`
-- `src/modules/invoices/ublTotalesHelper.ts`
-- `src/modules/invoices/application/services/invoiceBridgeCoordinatorService.ts`
-- `test/unit/invoices/retencionSinGravada.spec.ts`
-- `docs/m1/auditoria-solucion.md` (adiciones al final; auditoría anterior íntegra).
+- src/modules/invoices/lib/invoiceAlertas.ts
+- src/modules/invoices/components/InvoiceSendAgeAlert.tsx
+- src/modules/invoices/pages/InvoiceMonitorPage.tsx
+- src/modules/invoices/pages/InvoicesDashboardPage.tsx
+- test/unit/modules/invoices/pulidosAntiguedad.test.tsx
 
-Front, rutas relativas al destino, transportadas con prefijo `frontend/`:
+**B — backend:**
 
-- `src/modules/invoices/lib/invoiceRetentions.ts`
-- `src/modules/invoices/lib/invoiceFlujoPago.ts`
-- `src/modules/invoices/components/InvoiceEmitResumen.tsx`
-- `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
-- `src/modules/invoices/data/invoiceDemoTypes.ts`
-- `test/unit/modules/invoices/retencionSinGravada.test.tsx`
+- src/modules/invoices/application/services/atomicInvoiceCreationService.ts
+- src/modules/invoices/application/services/receiverRucWarning.ts
+- test/unit/invoices/pulidosPadronReceptor.spec.ts
 
-También se actualizan este FERRY.md y SHA256SUMS. El manifiesto cubre todos los archivos frontend presentes, incluidos los heredados sin cambio, y este documento; no se incluye a sí mismo.
+El front ya muestra `avisos` de emisión; B no requiere archivos frontend.
 
-## Aplicación
+**C — front:**
 
-1. Revisar el diff de esta rama contra `38a6402371b7969cce005315eabad72ca1c34079`. Este arreglo depende del paquete.
-2. Ejecutar `sha256sum -c SHA256SUMS` desde la raíz de la rama.
-3. Si el paquete ya está aplicado en el frontend, copiar únicamente las seis rutas de este encargo. Si se parte del main frontend base indicado, aplicar los 24 archivos bajo frontend/ (paquete más este cambio), retirando solo el prefijo frontend/. Son archivos completos: ante cambios posteriores, comparar e integrar antes de reemplazar.
-4. Ejecutar las suites completas y luego los builds. Back: `NODE_OPTIONS=--max-old-space-size=6144 npm test -- --runInBand`; front: `npm test`; después `npm run build` en cada repo. No ejecutar el build junto con Jest. No configurar credenciales reales ni habilitar pruebas SUNAT beta.
-5. Incorporar backend y front mediante el tren de revisión habitual, manteniendo ambos lados alineados. Esta entrega no ejecuta integración, PR ni despliegue.
+- src/modules/invoices/components/InvoiceIssuerConfigForm.tsx
+- src/modules/invoices/hooks/useInvoiceConfig.ts
+- src/modules/invoices/lib/invoiceConfigError.ts
+- src/modules/invoices/pages/InvoiceSettingsPage.tsx
+- test/unit/modules/invoices/invoiceD1Config.test.tsx
+- test/unit/modules/invoices/pulidosRucEmisor.test.tsx
 
-## Verificación
+Además: docs/m1/auditoria-solucion.md, FERRY.md y SHA256SUMS. El ajuste de invoiceD1Config sustituye la expectativa de solo lectura por la edición expresamente solicitada, conservando los controles de secretos y guardado parcial.
 
-| Verificación | Base del paquete | Final |
+## Validación
+
+| Verificación | Base | Final |
 |---|---:|---:|
-| Backend: suites aprobadas | 346 | 347 (+1) |
-| Backend: pruebas aprobadas | 3477 | 3488 (+11) |
-| Backend: optativas omitidas | 17 suites / 93 pruebas | 17 suites / 93 pruebas |
-| Backend: snapshots | 12 | 12 |
-| Front: archivos aprobados | 176 | 177 (+1) |
-| Front: pruebas aprobadas | 1345 | 1357 (+12) |
+| Back: suites aprobadas | 347 | 349 (+2) |
+| Back: pruebas aprobadas | 3489 | 3510 (+21) |
+| Back: optativas omitidas | 17 suites / 93 pruebas | 17 suites / 93 pruebas |
+| Back: snapshots | 12 | 12 |
+| Front: archivos aprobados | 177 | 179 (+2) |
+| Front: pruebas aprobadas | 1357 | 1367 (+10) |
 
-Cero fallos en las suites completas finales. Builds de ambos repositorios correctos, ejecutados secuencialmente después de terminar Jest. Lint backend sin errores, con las tres advertencias heredadas. ESLint de los cinco archivos productivos frontend de este encargo conserva únicamente el error preexistente react-hooks/set-state-in-effect en InvoiceEmissionPage; no se declara el lint global frontend verde.
+Las dos suites completas finales terminan sin fallos; el front no tiene omisiones. Builds backend y frontend correctos, ejecutados secuencialmente después de terminar Jest. Lint backend sin errores y tres advertencias heredadas; ESLint de los ocho archivos productivos front tocados sin errores y dos advertencias preexistentes de Fast Refresh del Monitor. No se declara el lint global frontend como verde.
 
-Los 24 archivos frontend transportados (incluidos los heredados sin cambio) se cotejaron byte a byte con el checkout final probado. SHA256SUMS contiene 25 entradas: esos archivos y este FERRY.md.
+Pruebas dirigidas A: siete nuevas backend y tres front. B: catorce nuevas backend con fetch y persistencia dobles. C: siete nuevas front y actualización de una expectativa existente de solo lectura. Se conserva el resto de las regresiones y snapshots.
 
-Pruebas nuevas con dobles/fixtures: exonerada sola, inafecta sola, exo+inafecta, gratuita, gratuita con ICBPER superior al umbral, agregado sin detalle, dos caminos del puente, liquidación, flujo, resumen, helper, fábrica y página real. Los ejemplos mixto y gravado puro fijan exactamente los importes anteriores. Permanecen las regresiones del paquete que comparan respuesta serializada y XML de regímenes únicos.
+### Corrección de elegibilidad de antigüedad
 
-## Reversión y límites
+Se retira únicamente RECHAZADO del listado anterior de A. invoiceJobConsumer.ts y cdr-persistence.service.ts consideran finales ACEPTADO, OBSERVADO, RECHAZADO y ANULADO; de los seis estados antes elegibles, solo RECHAZADO era final. Los otros cinco se conservan íntegros. La misma lista controla la consulta a la base y el filtro del cálculo. Las pruebas existentes fijan ahora el rechazo histórico fuera de la alerta, gravedad OK si solo hay terminales y AVISO ante un pendiente vigente aunque existan rechazados históricos, además de la permanencia de los cinco estados elegibles.
 
-Revertir únicamente los commits posteriores a 38a64023 y la aplicación de las seis rutas frontend de este encargo. Los cambios anteriores del paquete permanecen independientes.
+No se modifican archivos ni pruebas frontend: sus casos de A ya usan ERROR_RED. Se mantienen siete pruebas específicas de antigüedad y los conteos del cierre: backend 349 suites / 3510 pruebas; front 179 archivos / 1367 pruebas. Suite completa backend repetida sin fallos: 349 suites / 3510 pruebas, mismas 17 suites / 93 pruebas omitidas y 12 snapshots; build backend correcto después de Jest. Frontend sin cambios: conserva la verificación anterior de 179 archivos / 1367 pruebas y no se volvió a ejecutar. Se actualiza el hash de FERRY.md; los 35 hashes frontend permanecen idénticos.
 
-Sin dependencias nuevas, migraciones, acceso a base compartida, emisiones reales, llamadas a Decolecta, reescritura de documentos persistidos ni cambios en configuración del emisor. El tratamiento de mixtos continúa como quedó documentado en el paquete; el caso puro sin gravada queda corregido.
+## Aplicación del ferry
+
+1. Revisar el diff contra el SHA backend base y ejecutar `sha256sum -c SHA256SUMS` desde la raíz.
+2. El directorio frontend/ conserva archivos heredados de los paquetes anteriores. Para este encargo sobre el main front base indicado, aplicar solamente las once rutas front A/C enumeradas, retirando el prefijo frontend/. Ante cambios posteriores, comparar e integrar; se transportan archivos completos.
+3. Los 35 archivos presentes bajo frontend/ coinciden con el checkout final probado. El manifiesto contiene hashes de todos ellos, incluidos heredados, y de este documento; no incluye su propio hash.
+4. Ejecutar en back `NODE_OPTIONS=--max-old-space-size=6144 npm test -- --runInBand` y en front `npm test`. Después, `npm run build` en cada repositorio sin solapar build y Jest. No habilitar pruebas SUNAT beta ni configurar credenciales reales para las pruebas.
+5. Revisar y promover por el tren habitual. Este trabajo no crea PR ni despliega.
+
+No hay dependencias nuevas ni modificaciones de esquema. Para retirar el paquete, revertir sus commits y la aplicación de las once rutas front, sin revertir los paquetes anteriores. No se reescriben documentos históricos ni se reparan datos de producción.
