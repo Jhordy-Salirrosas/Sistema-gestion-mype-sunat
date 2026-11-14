@@ -24,7 +24,7 @@ it('muestra descripción al abandonar o editar y revisa todos los campos al aña
 it('marca valor al editar y mantiene los mensajes asociados a cada campo',()=>{
  const item={...itemVacio('a'),descripcion:'Servicio',valorUnitario:10,cantidad:0};
  const {rerender}=render(<InvoiceItemsGrid items={[item]} {...callbacks}/>);
- fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'),{target:{value:'0'}});
+ fireEvent.blur(screen.getByLabelText('Valor unitario de la línea 1'));
  rerender(<InvoiceItemsGrid items={[{...item,valorUnitario:0}]} {...callbacks}/>);
  expect(screen.getByText('El valor unitario de una línea onerosa debe ser mayor que cero.')).toBeTruthy();
  fireEvent.blur(screen.getByLabelText('Cantidad de la línea 1'));

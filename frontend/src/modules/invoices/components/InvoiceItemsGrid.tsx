@@ -231,9 +231,9 @@ export const InvoiceItemsGrid = ({
                     {cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i] && <p role="alert" className="text-xs text-destructive">Supera las unidades disponibles del origen (máximo {cantidadesMaximas[i]}).</p>}
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Valor unitario (sin IGV)</span>
-                    <InvoiceMoneyInput aria-label={`Valor unitario de la línea ${i + 1}`} aria-invalid={visible('valorUnitario')} data-line-field="valorUnitario" data-line-invalid={Boolean(errores.valorUnitario)} aria-describedby={visible('valorUnitario') ? `${item.clave}-valorUnitario-error` : undefined} title={item.afectacion === 'GRATUITA' ? 'Valor referencial' : 'Valor unitario sin IGV'}
-                      className={`${CLASE_CELDA} text-right`} value={item.valorUnitario}
-                      onValue={valorUnitario => onCambiar(i, { valorUnitario })} />
+                    <input type="text" aria-label={`Valor unitario de la línea ${i + 1}`} aria-invalid={visible('valorUnitario')} data-line-field="valorUnitario" data-line-invalid={Boolean(errores.valorUnitario)} aria-describedby={visible('valorUnitario') ? `${item.clave}-valorUnitario-error` : undefined} title={item.afectacion === 'GRATUITA' ? 'Valor referencial' : 'Valor unitario sin IGV'}
+                      className={`${CLASE_CELDA} text-right`} value={item.valorUnitario.toFixed(2)}
+                      readOnly />
                     {visible('valorUnitario') && <p id={`${item.clave}-valorUnitario-error`} role="alert" className="text-xs text-destructive">{errores.valorUnitario}</p>}
                     <span className="block text-right text-[10px] text-muted-foreground">
                       {item.afectacion === 'GRATUITA' ? 'Valor referencial · precio cobrado S/ 0.00' : 'Valor unitario sin IGV'}

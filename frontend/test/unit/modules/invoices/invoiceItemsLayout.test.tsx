@@ -41,7 +41,7 @@ describe('presentación del detalle de líneas', () => {
     expect(screen.getByRole('option', { name: 'Sin descuento' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '21 - Exonerado - Transferencia gratuita' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '25' } });
-    expect(callbacks.onCambiar).toHaveBeenCalledWith(0, { valorUnitario: 25 });
+    expect(callbacks.onCambiar).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar la línea 1' }));
     expect(callbacks.onEliminar).toHaveBeenCalledWith(0);
   });

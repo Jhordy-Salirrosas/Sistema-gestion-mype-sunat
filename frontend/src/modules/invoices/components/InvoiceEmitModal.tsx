@@ -349,15 +349,7 @@ export const InvoiceEmitModal = ({
 
   const nuevoItem = () => enfocarBusquedaProducto(formularioRef.current);
 
-  /**
-   * Agrega una línea con los datos del producto elegido en el buscador (TA-61).
-   *
-   * El valor unitario del catálogo se trata como el precio CON IGV incluido
-   * cuando el producto lo trae así: es como se rotula en una ferretería
-   * ("cemento S/ 32.90"). Si el producto no trae precio, la línea se crea igual
-   * con 0 y el usuario lo completa, en lugar de no hacer nada y dejarle la
-   * duda de si el clic funcionó.
-   */
+  /** Agrega los datos fiscales y el precio de venta del producto seleccionado. */
   const itemDeProducto = (producto: ProductoBuscado) => {
     try {
       const item = itemDesdeProducto(producto, nuevaClave());
