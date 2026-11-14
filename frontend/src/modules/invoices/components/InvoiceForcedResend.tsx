@@ -1,3 +1,4 @@
+import { notifyInvoiceQueued } from '../lib/invoiceQueueEvents';
 import { useState } from 'react';
 import { Button } from '@/components/ui';
 import { useRolePermissions } from '@/hooks/useRolePermissions';
@@ -11,7 +12,7 @@ export function InvoiceForcedResend({ id, incierto }: { id: string; incierto: bo
  const [motivo, setMotivo] = useState(''), [confirmado, setConfirmado] = useState(false), [busy, setBusy] = useState(false), [mensaje, setMensaje] = useState(''), [error, setError] = useState('');
  if (!admin || !incierto) return null;
  const enviar = async () => { if (busy || !motivo.trim() || !confirmado) return; setBusy(true); setError('');
-  try { const r = await apiClient.post<{ mensaje: string; resultadoCola: string; autorizacionId?: string; requiereNuevaDecision?: boolean }>(`/invoices/${encodeURIComponent(id)}/forzar-reenvio`, { motivo: motivo.trim(), confirmado: true, decisionId, ...(renovar ? { renovarAutorizacionId: renovar } : {}) }); if (r.data.requiereNuevaDecision) setAnterior(r.data.autorizacionId); setMensaje(`${r.data.mensaje} Cola: ${r.data.resultadoCola}`); }
+  try { const r = await apiClient.post<{ mensaje: string; resultadoCola: string; autorizacionId?: string; requiereNuevaDecision?: boolean }>(`/invoices/${encodeURIComponent(id)}/forzar-reenvio`, { motivo: motivo.trim(), confirmado: true, decisionId, ...(renovar ? { renovarAutorizacionId: renovar } : {}) }); if (['ENCOLADO', 'YA_EN_COLA'].includes(r.data.resultadoCola)) notifyInvoiceQueued(id); if (r.data.requiereNuevaDecision) setAnterior(r.data.autorizacionId); setMensaje(`${r.data.mensaje} Cola: ${r.data.resultadoCola}`); }
   catch(e) { setError(extractApiErrorMessage(e, 'No se pudo registrar la decisión.')); } finally { setBusy(false); }
  };
  return <section aria-label="Reenvío forzado con constancia" className="min-w-0 space-y-4 rounded-lg border p-3 text-sm [overflow-wrap:anywhere]">

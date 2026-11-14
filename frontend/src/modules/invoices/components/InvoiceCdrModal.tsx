@@ -1,3 +1,5 @@
+import { useInvoiceDetailRefresh } from '../hooks/useInvoiceDetailRefresh';
+import { aComprobanteDemo } from '../lib/invoiceApiMapper';
 import { consultarSunatAporta } from '../lib/invoiceBandejaState';
 import { InvoiceForcedResend } from './InvoiceForcedResend';
 import { lecturaRechazo } from '../lib/invoiceResultPresentation';
@@ -38,7 +40,6 @@ import { InvoiceStatusBadge } from './InvoiceStatusBadge';
 import { InvoiceBridgeReprocess } from './InvoiceBridgeReprocess';
 import { InvoiceSunatConsulta } from './InvoiceSunatConsulta';
 import { InvoiceAuditTrail } from './InvoiceAuditTrail';
-import { invoicesApi } from '../services/invoicesApi';
 import type { Invoice } from '../types/invoice.types';
 import { leerTributosXml, NOMBRES_AFECTACION, NOMBRES_TRIBUTO, requiereRevisionContableXml, rotularCodigo } from '../lib/invoiceTributosXml';
 
@@ -67,18 +68,13 @@ export const InvoiceCdrModal = ({
    * dentro del efecto, que dispara renders en cascada.
    */
   const [xmlReal, setXmlReal] = useState<string | null | undefined>(undefined);
-  const [historialCargado, setHistorialCargado] = useState<{ id: string; eventos?: Invoice['historial']; tieneCdr?: boolean; comprobanteOrigen?: Invoice['comprobanteOrigen']; resultado?: Invoice['resultadoPresentacion']; ultimoErrorCodigo?: string; ultimoErrorMensaje?: string; error?: boolean } | null>(null);
-
   const idComprobante = comprobante?.id ?? null;
-
-  useEffect(() => {
-    if (!idComprobante) return;
-    let vigente = true;
-    void Promise.resolve().then(() => invoicesApi.getInvoiceById(idComprobante)).then((detalle) => {
-      if (vigente) setHistorialCargado({ id: idComprobante, eventos: detalle.historial ?? [], tieneCdr: detalle.tieneCdr ?? Boolean(detalle.cdrCodigo), comprobanteOrigen: detalle.comprobanteOrigen ?? null, resultado: detalle.resultadoPresentacion, ultimoErrorCodigo: detalle.ultimoErrorCodigo, ultimoErrorMensaje: detalle.ultimoErrorMensaje });
-    }).catch(() => { if (vigente) setHistorialCargado({ id: idComprobante, error: true }); });
-    return () => { vigente = false; };
-  }, [idComprobante]);
+  const live = useInvoiceDetailRefresh(idComprobante);
+  const detalle = live?.detail;
+  const historialCargado: { id: string; eventos?: Invoice['historial']; tieneCdr?: boolean; comprobanteOrigen?: Invoice['comprobanteOrigen']; resultado?: Invoice['resultadoPresentacion']; ultimoErrorCodigo?: string; ultimoErrorMensaje?: string; error?: boolean } | null = detalle ? {
+    id: detalle.id, eventos: detalle.historial ?? [], tieneCdr: detalle.tieneCdr ?? Boolean(detalle.cdrCodigo), comprobanteOrigen: detalle.comprobanteOrigen ?? null,
+    resultado: detalle.resultadoPresentacion, ultimoErrorCodigo: detalle.ultimoErrorCodigo, ultimoErrorMensaje: detalle.ultimoErrorMensaje,
+  } : live?.error && idComprobante ? { id: idComprobante, error: true } : null;
 
   /**
    * Trae el XML firmado del backend.
@@ -96,12 +92,12 @@ export const InvoiceCdrModal = ({
     return () => {
       vigente = false;
     };
-  }, [idComprobante]);
+  }, [idComprobante, detalle?.estadoBackend, detalle?.hashCpe]);
 
   if (!comprobante) return null;
 
   const ficha = historialCargado?.id === comprobante.id && !historialCargado.error ? historialCargado : null;
-  const c = { ...comprobante, resultadoPresentacion: ficha?.resultado ?? comprobante.resultadoPresentacion, ultimoErrorCodigo: ficha?.ultimoErrorCodigo ?? comprobante.ultimoErrorCodigo, ultimoErrorMensaje: ficha?.ultimoErrorMensaje ?? comprobante.ultimoErrorMensaje };
+  const c = detalle ? { ...comprobante, ...aComprobanteDemo(detalle) } : comprobante;
   const rechazo = (c.estado === 'RECHAZADO' || ['PREPARACION_LOCAL', 'RA_REVERSAL_PENDING', 'RA_REVERSAL_DONE', 'BRIDGE_PENDING'].includes(c.resultadoPresentacion?.origen ?? '')) ? lecturaRechazo(c.resultadoPresentacion) : null;
 
   /**

@@ -19,3 +19,7 @@ Líneas base completas verdes antes de modificar código: back 401 suites / 4034
 ## Punto 1
 
 Panel con contención de ancho, texto con corte de palabras largas, motivo en bloque propio, textarea completo, checkbox alineado y acciones separadas con texto adaptable. El modal contiene el desbordamiento horizontal. Se conservan los campos, textos, permisos, confirmación, decisión y petición existentes. Pruebas del flujo de reenvío forzado verdes; no se modifican los paneles hermanos, que no comparten la causa.
+
+## Punto 2
+
+El modal usa el detalle actualizado completo, incluido estado, CDR, historial e información fiscal. Las acciones existentes notifican por identificador al detalle abierto. Tras encolado o trabajo ya en cola, el seguimiento hace como máximo 12 lecturas, separadas 1.5 s y con límite absoluto de 20 s; se detiene ante estado final y al cerrar/cambiar de comprobante. No crea otro botón de reintento ni dispara envíos. Las respuestas tardías se descartan. La lectura de seguimiento omite el fallback offline; otras consultas conservan su caché. El XML se relee al cambiar estado/hash. Pruebas dirigidas: 4 archivos / 10 pruebas verdes, incluidos cierre, límite y aceptación.
