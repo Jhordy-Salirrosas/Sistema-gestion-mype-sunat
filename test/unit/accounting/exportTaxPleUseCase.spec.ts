@@ -9,7 +9,7 @@ describe('ExportTaxPleUseCase', () => {
       monto_total: 118, currency_code: 'PEN',
     }]) } };
     const useCase = new ExportTaxPleUseCase(prisma as never);
-    const r = await useCase.execute('c1', '20601234567', 2026, 11, '140100');
+    const r = await useCase.execute('c1', '20100070970', 2026, 11, '140100');
     expect(r.recordsCount).toBe(1);
     expect(r.content).toContain('F001|57|6|20100070970|Cliente SAC|0.00|100.00|0.00|18.00');
   });
@@ -21,8 +21,51 @@ describe('ExportTaxPleUseCase', () => {
       net_amount: 100, igv_amount: 18, total_amount: 118, currency_code: 'PEN', status: 'REGISTRADA',
     }]) } };
     const useCase = new ExportTaxPleUseCase(prisma as never);
-    const r = await useCase.execute('c1', '20601234567', 2026, 11, '080100');
+    const r = await useCase.execute('c1', '20100070970', 2026, 11, '080100');
     expect(r.recordsCount).toBe(1);
     expect(r.content).toContain('F001|1|6|20100070970|Proveedor SAC|100.00|18.00');
+  });
+
+  it('devuelve los totales del libro para contrastarlos con la contabilidad', async () => {
+    const prisma = { invoice: { findMany: jest.fn().mockResolvedValue([
+      { fecha_emision: new Date('2026-11-05'), tipo_comprobante: '01', serie: 'F001', correlativo: 1,
+        customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'A',
+        taxable_operations: 100, total_igv: 18, exempt_operations: 0, unaffected_operations: 0,
+        monto_total: 118, currency_code: 'PEN' },
+      { fecha_emision: new Date('2026-11-06'), tipo_comprobante: '01', serie: 'F001', correlativo: 2,
+        customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'B',
+        taxable_operations: 200, total_igv: 36, exempt_operations: 0, unaffected_operations: 0,
+        monto_total: 236, currency_code: 'PEN' },
+    ]) } };
+    const r = await new ExportTaxPleUseCase(prisma as never).execute('c1', '20100070970', 2026, 11, '140100');
+    expect(r.totales).toEqual({ baseGravada: 300, igv: 54, total: 354 });
+  });
+
+  it('rechaza un RUC de emisor con dígito verificador inválido', async () => {
+    const useCase = new ExportTaxPleUseCase({ invoice: { findMany: jest.fn() } } as never);
+    await expect(useCase.execute('c1', '20601234567', 2026, 11, '140100')).rejects.toThrow('módulo 11');
+  });
+
+  it('rechaza un libro con comprobantes repetidos', async () => {
+    const fila = { fecha_emision: new Date('2026-11-05'), tipo_comprobante: '01', serie: 'F001', correlativo: 7,
+      customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente SAC',
+      taxable_operations: 100, total_igv: 18, exempt_operations: 0, unaffected_operations: 0,
+      monto_total: 118, currency_code: 'PEN' };
+    const prisma = { invoice: { findMany: jest.fn().mockResolvedValue([fila, fila]) } };
+    await expect(
+      new ExportTaxPleUseCase(prisma as never).execute('c1', '20100070970', 2026, 11, '140100'),
+    ).rejects.toThrow('comprobantes repetidos');
+  });
+
+  it('sanea la razón social para no correr las columnas', async () => {
+    const prisma = { invoice: { findMany: jest.fn().mockResolvedValue([{
+      fecha_emision: new Date('2026-11-05'), tipo_comprobante: '01', serie: 'F001', correlativo: 3,
+      customer_identity_type: '6', customer_identity_number: '20100070970',
+      customer_legal_name: 'Cliente|SAC\nsegunda', taxable_operations: 100, total_igv: 18,
+      exempt_operations: 0, unaffected_operations: 0, monto_total: 118, currency_code: 'PEN',
+    }]) } };
+    const r = await new ExportTaxPleUseCase(prisma as never).execute('c1', '20100070970', 2026, 11, '140100');
+    expect(r.content).toContain('Cliente SAC segunda');
+    expect(r.content).not.toContain('Cliente|SAC');
   });
 });

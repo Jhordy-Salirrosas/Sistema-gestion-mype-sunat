@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ExportPleDto } from '../dto/exportPleDto';
 import { PleFileNameRule } from '../../domain/rules/pleFileNameRule';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
+import { construirLinea, validarEstructura, validarRucEmisor } from '../../domain/rules/pleStructureRule';
 
 export interface PleExportResult {
   fileName: string;
@@ -17,14 +18,19 @@ export class ExportPleTxtUseCase {
     dto: ExportPleDto,
     entries: AccountingEntryEntity[] = [],
   ): Promise<PleExportResult> {
+    const ruc = (dto.companyRuc ?? '').replace(/\s/g, '');
+    const problemaRuc = validarRucEmisor(ruc);
+    if (problemaRuc) throw new BadRequestException(problemaRuc);
+
     const fileName = PleFileNameRule.generate({
-      ruc: dto.companyRuc,
+      ruc,
       year: dto.year,
       month: dto.month,
       bookCode: dto.bookCode,
       hasInformation: entries.length > 0,
     });
 
+    const periodo = `${dto.year}${String(dto.month).padStart(2, '0')}00`;
     let totalDebit = 0;
     let totalCredit = 0;
     const lines: string[] = [];
@@ -49,16 +55,19 @@ export class ExportPleTxtUseCase {
         index += 1;
         totalDebit += cuenta.debit;
         totalCredit += cuenta.credit;
-        lines.push([
-          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
-          `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(index).padStart(3, '0')}`,
-          code,
-          cuenta.name,
-          cuenta.debit.toFixed(2),
-          cuenta.credit.toFixed(2),
-          '1',
-        ].join('|'));
+        lines.push(
+          construirLinea([
+            periodo,
+            `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(index).padStart(3, '0')}`,
+            code,
+            cuenta.name,
+            cuenta.debit.toFixed(2),
+            cuenta.credit.toFixed(2),
+            '1',
+          ]),
+        );
       }
+      this.exigirFormato(lines, '030100');
       return {
         fileName,
         recordsCount: lines.length,
@@ -88,30 +97,42 @@ export class ExportPleTxtUseCase {
         const lineCorrelative = `M${String(lineOrderNum).padStart(3, '0')}`;
         const accountCode = line.accountCode || (line as any).account_code || '';
 
-        const record = [
-          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
-          cuo,
-          lineCorrelative,
-          accountCode,
-          debitVal.toFixed(2),
-          creditVal.toFixed(2),
-          entry.glosa || '',
-          '1',
-          '',
-        ].join('|');
-
-        lines.push(record);
+        lines.push(
+          construirLinea([
+            periodo,
+            cuo,
+            lineCorrelative,
+            accountCode,
+            debitVal.toFixed(2),
+            creditVal.toFixed(2),
+            entry.glosa || '',
+            '1',
+          ]),
+        );
       });
     });
 
-    const content = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
+    this.exigirFormato(lines, String(dto.bookCode));
 
     return {
       fileName,
       recordsCount: lines.length,
       totalDebit: Math.round(totalDebit * 100) / 100,
       totalCredit: Math.round(totalCredit * 100) / 100,
-      content,
+      content: lines.length > 0 ? lines.join('\r\n') + '\r\n' : '',
     };
+  }
+
+  /**
+   * Un archivo con filas de distinto número de columnas lo rechaza SUNAT sin
+   * decir en qué línea: se corta acá, con el número de línea.
+   */
+  private exigirFormato(lines: readonly string[], bookCode: string): void {
+    const issues = validarEstructura(lines);
+    if (issues.length > 0) {
+      throw new BadRequestException(
+        `El libro ${bookCode} tiene una fila con formato inconsistente: ${issues[0].message}`,
+      );
+    }
   }
 }

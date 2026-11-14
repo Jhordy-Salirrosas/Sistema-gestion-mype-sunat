@@ -33,4 +33,60 @@ describe('PurchasesService - reglas COMPRA', () => {
     }, new Date('2026-11-10'));
     expect(accounting.execute).not.toHaveBeenCalled();
   });
+
+  it('informa el motivo cuando no puede contabilizar la compra', async () => {
+    const prisma = {
+      accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new PurchasesService(prisma as never, { execute: jest.fn() } as never);
+
+    const resultado = await (service as any).registrarAsientoCompra('c1', {
+      purchaseNumber: 'COM-2', documentSerial: 'F001', documentNumber: '2', supplierName: 'Proveedor',
+      netAmount: 100, igvAmount: 18, totalAmount: 118,
+    }, new Date('2026-11-10'));
+
+    expect(resultado).toEqual({
+      asientoGenerado: false,
+      motivo: 'reglas COMPRA incompletas: se requieren las líneas 1 a 3',
+    });
+  });
+
+  it('informa el motivo cuando el asiento falla, sin romper la compra', async () => {
+    const prisma = {
+      accountingEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+      accountingRule: { findMany: jest.fn().mockResolvedValue([
+        { line_order: 1, account_code: '60111' },
+        { line_order: 2, account_code: '40111' },
+        { line_order: 3, account_code: '42121' },
+      ]) },
+    };
+    const accounting = { execute: jest.fn().mockRejectedValue(new Error('cuenta inexistente')) };
+    const service = new PurchasesService(prisma as never, accounting as never);
+
+    const resultado = await (service as any).registrarAsientoCompra('c1', {
+      purchaseNumber: 'COM-3', documentSerial: 'F001', documentNumber: '3', supplierName: 'Proveedor',
+      netAmount: 100, igvAmount: 18, totalAmount: 118,
+    }, new Date('2026-11-10'));
+
+    expect(resultado.asientoGenerado).toBe(false);
+    expect(resultado.motivo).toContain('cuenta inexistente');
+  });
+
+  it('no reasienta una compra que ya tiene asiento', async () => {
+    const prisma = {
+      accountingEntry: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) },
+      accountingRule: { findMany: jest.fn() },
+    };
+    const accounting = { execute: jest.fn() };
+    const service = new PurchasesService(prisma as never, accounting as never);
+
+    const resultado = await (service as any).registrarAsientoCompra('c1', {
+      purchaseNumber: 'COM-4', documentSerial: 'F001', documentNumber: '4', supplierName: 'Proveedor',
+      netAmount: 100, igvAmount: 18, totalAmount: 118,
+    }, new Date('2026-11-10'));
+
+    expect(resultado).toEqual({ asientoGenerado: true });
+    expect(accounting.execute).not.toHaveBeenCalled();
+  });
 });
