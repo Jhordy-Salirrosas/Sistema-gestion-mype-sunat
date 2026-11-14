@@ -30,10 +30,11 @@ it('el atajo enfoca buscador sin alta vacía y elegir producto bloquea el SKU',a
  expect(document.activeElement).toBe(buscador);
  client.clear();
 });
-it('SKU manual sigue editable y el del catálogo ofrece explicación',()=>{
+it('código y descripción son de solo lectura con explicación para sustituir producto',()=>{
  const elegido=itemDesdeProducto(producto,'b');
  render(<InvoiceItemsGrid items={[itemVacio('a'),elegido]} onCambiar={vi.fn()} onEliminar={vi.fn()} onAgregar={vi.fn()} onAgregarBolsa={vi.fn()}/>);
- expect((screen.getByLabelText('Código de la línea 1') as HTMLInputElement).readOnly).toBe(false);
+ expect((screen.getByLabelText('Código de la línea 1') as HTMLInputElement).readOnly).toBe(true);
+ expect((screen.getByLabelText('Descripción de la línea 2') as HTMLTextAreaElement).readOnly).toBe(true);
  expect((screen.getByLabelText('Código de la línea 2') as HTMLInputElement).readOnly).toBe(true);
  expect(screen.getByLabelText('Código de la línea 2').title).toContain('elija otro producto');
 });

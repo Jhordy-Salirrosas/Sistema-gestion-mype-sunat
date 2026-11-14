@@ -70,7 +70,6 @@ export const InvoiceItemsGrid = ({
   items,
   tipo = '01',
   mostrarErrores = false,
-  codigoSoloCatalogo = false,
   onCambiar,
   onEliminar,
   onAgregarBolsa,
@@ -169,26 +168,22 @@ export const InvoiceItemsGrid = ({
                   }`}
                 >
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Código</span>
-                    <input
+                    <textarea rows={1}
                       aria-label={`Código de la línea ${i + 1}`}
-                      className={CLASE_CELDA}
-                      onFocus={() => duplicado.recordarCodigo(i)} onBlur={() => duplicado.confirmarCodigo(i)}
-                      readOnly={codigoSoloCatalogo || item.codigoHeredado === true}
-                      title={codigoSoloCatalogo || item.codigoHeredado ? 'Para cambiar el SKU, quite la línea o elija otro producto del catálogo.' : undefined}
+                      className={`${CLASE_CELDA} h-auto min-h-8 resize-none [field-sizing:content]`}
+                      readOnly
+                      title="Para cambiar el SKU, quite la línea o elija otro producto del catálogo."
                       value={item.codigo}
-                      onChange={(e) => onCambiar(i, { codigo: e.target.value })}
                       placeholder="COD-001"
                     />
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Descripción</span>
-                    <input
+                    <textarea rows={1}
                       aria-label={`Descripción de la línea ${i + 1}`} aria-invalid={visible('descripcion')} data-line-field="descripcion" data-line-invalid={Boolean(errores.descripcion)} aria-describedby={visible('descripcion') ? `${item.clave}-descripcion-error` : undefined}
-                      className={CLASE_CELDA}
+                      className={`${CLASE_CELDA} h-auto min-h-8 resize-none [field-sizing:content]`}
                       maxLength={500}
                       value={item.descripcion}
-                      onChange={(e) =>
-                        onCambiar(i, { descripcion: e.target.value })
-                      }
+                      readOnly
                       placeholder="Cemento Portland tipo I"
                     />
                     {visible('descripcion') && <p id={`${item.clave}-descripcion-error`} role="alert" className="text-xs text-destructive">{errores.descripcion}</p>}

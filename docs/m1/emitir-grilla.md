@@ -33,3 +33,5 @@ Los puntos 4 y 8 continúan por su cambio visual explícito; no se introduce una
 1. Construido: bloques adaptables con las once celdas y sus etiquetas. Prueba dirigida: 1 archivo / 5 pruebas aprobadas. Verificación geométrica conjunta al cierre.
 
 2. Construido: sin botones de alta libre ni filas vacías iniciales/reiniciadas; Alt+L solo enfoca búsqueda. Se puede retirar la última línea. Pruebas dirigidas de página, modal, teclado, búsqueda y presentación: 6 archivos / 30 pruebas aprobadas.
+
+3. Construido: código y descripción siempre de solo lectura, sin callbacks de edición; campos multilínea ajustables al contenido para conservar textos largos visibles. Pruebas dirigidas: 3 archivos / 16 pruebas aprobadas.
