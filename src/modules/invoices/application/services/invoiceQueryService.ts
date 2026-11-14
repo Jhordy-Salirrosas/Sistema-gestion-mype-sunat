@@ -1,3 +1,4 @@
+import { SELECT_REENVIO, clasificarReintentoMasivo } from './invoiceBatchRetryService';
 import { leerIdsDlq, filtrarDlq } from './invoiceDlqProjection';
 import { esUnidadFiscalSunat } from '../../sunatUnits';
 /**
@@ -311,7 +312,7 @@ export class InvoiceQueryService {
   ): Promise<ReintentoCdrDto> {
     const fila = await this.prisma.invoice.findFirst({
       where: { id, company_id: companyId },
-      select: { id: true, estado: true, serie: true, correlativo: true },
+      select: SELECT_REENVIO,
     });
 
     if (!fila) {
@@ -321,26 +322,30 @@ export class InvoiceQueryService {
       });
     }
 
-    if (fila.estado === 'RECHAZADO') return {
-      id: fila.id, estado: fila.estado, encolado: false, codigo: 'INVOICE_REJECTED_FINAL',
+    const decision = clasificarReintentoMasivo(fila);
+    if (decision.resultado !== 'ELEGIBLE') return {
+      id: fila.id, estado: fila.estado, encolado: false,
+      codigo: fila.estado === 'RECHAZADO' && decision.resultado !== 'OMITIDO_BLOQUEO_LOCAL' ? 'INVOICE_REJECTED_FINAL' : decision.resultado,
       resultadoCola: 'ESTADO_NO_PERMITIDO',
-      mensaje: 'El comprobante está RECHAZADO y tiene estado fiscal final. No se reencola ni se reabre desde Reintentar CDR.',
+      mensaje: fila.estado === 'RECHAZADO' && decision.resultado !== 'OMITIDO_BLOQUEO_LOCAL'
+        ? 'El comprobante está RECHAZADO. No se reencola ni se reabre desde Reintentar CDR.'
+        : decision.motivo,
     };
 
     if (fila.estado === 'EN_COLA' || fila.estado === 'PENDIENTE') {
-      // Un rescate histórico sin marcador no demuestra que nunca se abrió red.
-      // Confirmar la incertidumbre antes de publicar; false/true existentes se conservan.
-      await this.prisma.invoice.updateMany({
-        where: { id: fila.id, company_id: companyId, estado: { in: ['EN_COLA', 'PENDIENTE'] }, transport_uncertain: null },
-        data: { transport_uncertain: true },
-      });
       let estadoActual: InvoiceStatus = fila.estado;
       const resultado = await this.queue.reenqueueInvoiceIfIdle(fila.id, companyId, async () => {
         const actual = await this.prisma.invoice.findFirst({
           where: { id: fila.id, company_id: companyId },
-          select: { estado: true },
+          select: SELECT_REENVIO,
         });
-        if (!actual) return false;
+        if (!actual || clasificarReintentoMasivo(actual).resultado !== 'ELEGIBLE') return false;
+        // Un rescate histórico sin marcador no demuestra que nunca se abrió red.
+        // Confirmar la incertidumbre antes de publicar; false/true existentes se conservan.
+        await this.prisma.invoice.updateMany({
+          where: { id: fila.id, company_id: companyId, estado: { in: ['EN_COLA', 'PENDIENTE'] }, transport_uncertain: null },
+          data: { transport_uncertain: true },
+        });
         estadoActual = actual.estado;
         return actual.estado === 'EN_COLA' || actual.estado === 'PENDIENTE';
       }, { rescatarDlq: true });
@@ -383,9 +388,9 @@ export class InvoiceQueryService {
         async () => {
           const actual = await this.prisma.invoice.findUnique({
             where: { id: fila.id },
-            select: { estado: true },
+            select: SELECT_REENVIO,
           });
-          if (!actual || !ESTADOS_REINTENTABLES.includes(actual.estado)) return false;
+          if (!actual || clasificarReintentoMasivo(actual).resultado !== 'ELEGIBLE') return false;
           await this.prisma.invoice.updateMany({ where: { id: fila.id, company_id: companyId, estado: { in: ESTADOS_REINTENTABLES as InvoiceStatus[] }, transport_uncertain: null }, data: { transport_uncertain: true } });
           return true;
         },

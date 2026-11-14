@@ -3761,3 +3761,7 @@ Verificación de la corrección: suite completa backend 349 suites / 3510 prueba
 ### Punto 1 — implementación
 
 `invoiceNoteReason.ts` selecciona el catálogo por tipo. Listado y detalle usan el mismo formateador, incluidos Monitor/auditoría y notas. Se fijan los seis cruces 07/08 × 01/02/03 en ambos mapeadores. Verificación dirigida: 1 archivo / 44 pruebas aprobadas.
+
+### Punto 2 — implementación
+
+El individual reutiliza la selección y clasificación del masivo antes de entrar a la cola y en la relectura de la compuerta. Las exclusiones no modifican incertidumbre ni publican jobs. Se conserva el rescate conservador de null históricos elegibles; false no se cambia. La consulta explícita devuelve SIN_TRANSMISION sin llamar a SUNAT cuando hay evidencia de no envío y no hay CDR ni transporte acreditado. El front presenta ese resultado como tal. Una consulta inconclusa aislada deja de ser evidencia de envío/incertidumbre; los transportes reales y los marcadores históricos desconocidos mantienen su protección en el worker. Verificación dirigida: back 7 suites / 119 pruebas; front 1 archivo / 7 pruebas. Se actualizan las expectativas anteriores que atribuían transporte a una consulta aislada.
