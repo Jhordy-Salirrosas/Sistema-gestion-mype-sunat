@@ -31,3 +31,7 @@ Trama alineada con invoiceQrService del backend: diez campos, correlativo de och
 ## Punto 4
 
 Listado (incluida búsqueda) y detalle agregan `primary_contact` y `primary_address`, sin sobrescribir campos planos. La selección ordena por marca principal, creación e id; la lectura masiva de relaciones mantiene filtro de empresa y evita una consulta por fila. Un resolvedor frontend común alimenta contacto/dirección en lista, General y los campos iniciales del formulario. La edición de cabecera elige el mismo principal. No se reescriben datos existentes. Pruebas dirigidas: back 2 suites / 20 pruebas; front 2 archivos / 4 pruebas verdes.
+
+## Punto 5
+
+La ficha agrega Activar/Inactivar tercero mediante el PUT existente con `isActive`; respeta readOnly, deshabilita mientras guarda, presenta el error del servidor y refresca ficha/listado. El selector previo del formulario se conserva. Pruebas dirigidas: 1 archivo / 3 pruebas verdes (ambas transiciones, solo lectura y fallo).

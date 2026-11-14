@@ -56,6 +56,12 @@ export function PartnerDetailDrawer({ partnerId, onClose, readOnly = false }: Pr
     queryClient.invalidateQueries({ queryKey: ['master-data', 'partners'] });
   };
 
+  const statusMutation = useMutation({
+    mutationFn: () => masterDataApi.updatePartner(partnerId as string, { isActive: !detail.data?.is_active }),
+    onSuccess: () => { invalidate(); setError(null); },
+    onError: (e) => setError(apiError(e)),
+  });
+
   const addressMutation = useMutation({
     mutationFn: () => masterDataApi.addAddress(partnerId as string, address),
     onSuccess: () => {
@@ -116,6 +122,7 @@ export function PartnerDetailDrawer({ partnerId, onClose, readOnly = false }: Pr
               <Badge variant={p.is_active ? 'default' : 'secondary'} className="text-[10px]">
                 {p.is_active ? 'Activo' : 'Inactivo'}
               </Badge>
+              {!readOnly && <Button size="sm" variant="outline" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate()}>{statusMutation.isPending ? 'Guardando estado…' : p.is_active ? 'Inactivar tercero' : 'Activar tercero'}</Button>}
             </div>
 
             <div className="flex gap-1 border-b pb-2">

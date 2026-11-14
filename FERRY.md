@@ -27,6 +27,7 @@ El documento `docs/m1/paquete-recorrido.md` registra los siete veredictos, decis
 - `test/unit/modules/invoices/invoiceQueueEvents.test.ts`
 - `test/unit/modules/invoices/invoiceTramaQrDigest.test.ts`
 - `test/unit/modules/invoices/p9-close.test.tsx`
+- `test/unit/modules/invoices/partnerStatus.test.tsx`
 - `test/unit/modules/invoices/partnerSummary.test.tsx`
 
-20 archivos frontend y FERRY.md: 21 entradas SHA-256. No se incluye el hash del manifiesto en sí mismo.
+21 archivos frontend y FERRY.md: 22 entradas SHA-256. No se incluye el hash del manifiesto en sí mismo.
