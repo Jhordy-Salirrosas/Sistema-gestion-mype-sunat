@@ -86,6 +86,14 @@ export class ExportPleTxtUseCase {
         ? rawEntryNumber
         : `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(entryIndex + 1).padStart(3, '0')}`;
 
+      // Campo 3: el primer dígito del correlativo indica el tipo de asiento
+      // (A apertura, M movimiento, C cierre). Todo lo que emite el sistema es
+      // movimiento del mes. Si el número viene formateado como CUO, se usa la
+      // posición del asiento en el período.
+      const numeroAsiento = /^\d+$/.test(rawEntryNumber) ? Number(rawEntryNumber) : entryIndex + 1;
+      const correlativoAsiento = `M${String(numeroAsiento).padStart(3, '0')}`;
+      const fechaContable = this.fecha(entry.entryDate);
+
       entry.lines.forEach((line, lineIdx) => {
         const debitVal = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
         const creditVal = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
@@ -93,20 +101,35 @@ export class ExportPleTxtUseCase {
         totalDebit += debitVal;
         totalCredit += creditVal;
 
-        const lineOrderNum = line.lineOrder ?? (line as any).line_order ?? (lineIdx + 1);
-        const lineCorrelative = `M${String(lineOrderNum).padStart(3, '0')}`;
         const accountCode = line.accountCode || (line as any).account_code || '';
 
+        // Estructura oficial del 5.1: 21 columnas (22-44 quedan libres y no se
+        // emiten). Los campos 5 y 6 (unidad de operación y centro de costos),
+        // 8 a 12 (documento del emisor y comprobante) y 14, 15 y 17 no tienen
+        // dato en el asiento, así que van vacíos y no se inventan.
         lines.push(
           construirLinea([
-            periodo,
-            cuo,
-            lineCorrelative,
-            accountCode,
-            debitVal.toFixed(2),
-            creditVal.toFixed(2),
-            entry.glosa || '',
-            '1',
+            periodo, // 1 período
+            cuo, // 2 CUO
+            correlativoAsiento, // 3 correlativo del asiento
+            accountCode, // 4 cuenta contable
+            '', // 5 unidad de operación
+            '', // 6 centro de costos
+            'PEN', // 7 moneda
+            '', // 8 tipo de documento del emisor
+            '', // 9 número de documento del emisor
+            '', // 10 tipo de comprobante
+            '', // 11 serie
+            '', // 12 número
+            fechaContable, // 13 fecha contable
+            '', // 14 fecha de vencimiento
+            '', // 15 fecha de la operación
+            entry.glosa || '', // 16 glosa
+            '', // 17 glosa referencial
+            debitVal.toFixed(2), // 18 debe
+            creditVal.toFixed(2), // 19 haber
+            '', // 20 dato estructurado
+            '1', // 21 estado de la operación
           ]),
         );
       });
@@ -134,5 +157,13 @@ export class ExportPleTxtUseCase {
         `El libro ${bookCode} tiene una fila con formato inconsistente: ${issues[0].message}`,
       );
     }
+  }
+
+  /** Fecha `DD/MM/YYYY` como la espera el PLE. */
+  private fecha(valor: Date | string | undefined): string {
+    if (!valor) return '';
+    const d = valor instanceof Date ? valor : new Date(valor);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
   }
 }

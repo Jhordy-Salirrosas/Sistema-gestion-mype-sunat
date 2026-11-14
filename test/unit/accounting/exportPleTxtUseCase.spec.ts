@@ -7,6 +7,7 @@ describe('ExportPleTxtUseCase', () => {
     {
       id: 'entry-1',
       entryNumber: '001-202603-001', // Caso 1: CUO formateado
+      entryDate: new Date('2026-03-15T00:00:00Z'),
       glosa: 'Venta de mercadería',
       lines: [
         { lineOrder: 1, accountCode: '1212', debitAmount: 118, creditAmount: 0 },
@@ -43,8 +44,33 @@ describe('ExportPleTxtUseCase', () => {
     expect(result.recordsCount).toBe(5); // 3 líneas de entry-1 + 2 líneas de entry-2
     expect(result.totalDebit).toBe(168);
     expect(result.totalCredit).toBe(168);
-    expect(result.content).toContain('1212|118.00|0.00|Venta de mercadería|1|');
+    const primera = result.content.split('\r\n')[0].split('|');
+    expect(primera[3]).toBe('1212'); // cuenta contable
+    expect(primera[17]).toBe('118.00'); // debe
+    expect(primera[18]).toBe('0.00'); // haber
     expect(typeof result.fileName).toBe('string');
+  });
+
+  it('emite las 21 columnas del formato 5.1', async () => {
+    const result = await useCase.execute(
+      { companyRuc: '20100070970', year: 2026, month: 3, bookCode: '050100' } as any,
+      [mockEntries[0]],
+    );
+
+    const columnas = result.content.split('\r\n')[0].split('|');
+    // Se descarta el último elemento, que es la tubería final.
+    expect(columnas.slice(0, -1)).toHaveLength(21);
+    const [periodo, cuo, correlativo, cuenta, , , moneda, , , , , , fecha, , , glosa, , debe, haber, , estado] = columnas;
+    expect(periodo).toBe('20260300');
+    expect(cuo).toBe('001-202603-001');
+    expect(correlativo).toMatch(/^M\d{3}$/);
+    expect(cuenta).toBe('1212');
+    expect(moneda).toBe('PEN');
+    expect(fecha).toBe('15/03/2026');
+    expect(glosa).toBe('Venta de mercadería');
+    expect(debe).toBe('118.00');
+    expect(haber).toBe('0.00');
+    expect(estado).toBe('1');
   });
 
   it('debe generar la estructura vacía cuando el arreglo de asientos es vacío', async () => {

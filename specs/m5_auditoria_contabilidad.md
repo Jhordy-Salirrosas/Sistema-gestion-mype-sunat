@@ -182,6 +182,13 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
   comprobantes duplicados en lugar de generar un TXT que SUNAT devolvería sin explicar la línea.
 - El libro 14.1/8.1 devuelve ahora `totales` (base gravada, IGV y total) para contrastarlos con la
   contabilidad.
+- El **5.1 Libro Diario** pasa de 8 columnas a las **21 del formato**: período, CUO, correlativo del
+  asiento (con prefijo `M` de movimiento), cuenta, unidad de operación, centro de costos, moneda,
+  documento del emisor, comprobante, fecha contable, vencimiento, fecha de operación, glosa, glosa
+  referencial, debe, haber, dato estructurado y estado. Antes el debe, el haber y la glosa estaban
+  corridos nueve posiciones, así que el archivo no se podía presentar. Los campos sin dato en el
+  asiento (unidad de operación, centro de costos, documento del emisor y comprobante) se emiten vacíos
+  a propósito: no se inventan.
 
 **Tarea 7 — cierre anual de extremo a extremo**
 
@@ -219,19 +226,19 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 197 pruebas (111 nuevas: reglas, auditoría,
+**Pruebas**: el módulo de contabilidad pasa de 86 a 198 pruebas (111 nuevas: reglas, auditoría,
 tesorería, distribución, PLE, cierre y concurrencia), más 3 en compras, 9 en el frontend de
 contabilidad (1 326 en total) y las 1 318 previas siguen verdes.
 
-## 5. Pendiente (resto de las tareas 4 y 6) y por qué
+## 5. Pendiente (tareas 4 y 6) y por qué
 
 - **Tarea 4 — resto**: el bloqueo de la baja en períodos declarados ya está. Falta decidir si la
   anulación de una venta revierte en cascada sus cobros (hoy el cobro se anula por su endpoint) y si
   la nota de débito se genera desde el mismo flujo o queda como documento aparte.
-- **Tarea 6 — resto**: falta confirmar contra el PDF oficial de la R.S. 286-2009 el **orden exacto de
-  columnas del 5.1** (hoy el libro diario emite 8 columnas con cuenta, debe, haber y glosa, sin la
-  denominación de la cuenta). Lo que sí quedó cubierto es la forma del archivo: saneo, tubería final,
-  columnas coherentes, RUC con dígito verificador y comprobantes no repetidos.
+- **Tarea 6 — resto**: el 5.1 ya tiene la estructura de 21 columnas, pero el orden se tomó de la
+  descripción del formato y no del PDF oficial de la R.S. 286-2009, que este entorno no pudo abrir.
+  Antes de presentar el primer archivo hay que contrastarlo con la hoja oficial, y falta el libro
+  **6.1 Libro Mayor**, que hoy no se exporta.
 - **Tarea 7 — resto**: la prueba de cierre corre sobre una base en memoria; falta ejecutarla contra
   PostgreSQL, que no está disponible en este entorno (`DATABASE_URL` vacío) y no debe correrse contra
   producción sin respaldo.
@@ -254,7 +261,7 @@ contabilidad (1 326 en total) y las 1 318 previas siguen verdes.
 4. ✅ Propagación de errores contables en Compras (`contabilidad` en la respuesta) — **A3**.
 5. ◐ Anulación/reversión: baja bloqueada en período declarado ✅; cascada de cobros pendiente — **tarea 4**.
 6. ✅ Regularización de históricos usando la auditoría como fuente — **tarea 5**.
-7. ◐ PLE: estructura, RUC y duplicados ✅; orden oficial de columnas del 5.1 pendiente — **tarea 6**.
+7. ◐ PLE: estructura, RUC, duplicados y 21 columnas del 5.1 ✅; falta contrastar con el PDF oficial y el libro 6.1 — **tarea 6**.
 8. ◐ Cierre anual: E2E con repositorio real en memoria ✅; falta contra PostgreSQL — **tarea 7**.
 9. ✅ Numeración segura ante emisiones simultáneas — **A5**.
 10. ✅ UI de auditoría con simulación y ejecución de la regularización.
