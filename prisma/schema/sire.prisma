@@ -61,6 +61,42 @@ enum SireTicketOperation {
   GENERACION
 }
 
+/**
+ * Estados de los trabajos asíncronos del menú SIRE.
+ *
+ * `PENDING` es el estado en el que se registra el trabajo ANTES de publicarlo
+ * en la cola: el frontend recibe el `messageId` y sondea el estado hasta que
+ * pasa a `COMPLETED` o `FAILED`.
+ */
+enum SireJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/**
+ * Credenciales de la empresa para la integración con SUNAT/SIRE.
+ *
+ * Cada contribuyente tiene SU propio `client_id`/`client_secret` (credenciales
+ * OAuth de la API SIRE) y SU propio usuario SOL con clave. Todo se guarda
+ * cifrado con AES-256-GCM (`SOL_CREDENTIAL_CIPHER`); el texto plano nunca
+ * llega a la base de datos ni a la cola.
+ */
+model SireConfiguration {
+  id               String   @id @default(uuid())
+  company_id       String   @unique
+  company          Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  client_id_enc    String?
+  client_secret_enc String?
+  sol_user_enc     String?
+  sol_password_enc String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@map("sire_configurations")
+}
+
 model SirePeriod {
   id              String              @id @default(uuid())
   company_id      String
@@ -96,6 +132,84 @@ model SirePeriodQuery {
 
   @@index([company_id, created_at])
   @@map("sire_period_queries")
+}
+
+/**
+ * Importación de una propuesta SIRE (archivo `.txt` o `.zip` del contribuyente).
+ *
+ * Es el registro del TRABAJO, no del contenido: el archivo vive en el
+ * almacenamiento de objetos y aquí solo queda su nombre, su ruta y el estado
+ * del procesamiento. `message_id` es el identificador que el frontend usa para
+ * sondecir el avance (mismo patrón que `SirePeriodQuery.job_id`).
+ */
+model SireImportacion {
+  id              String        @id @default(uuid())
+  company_id      String
+  company         Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  periodo         String
+  libro           SireBookType
+  nombre_archivo  String
+  estado          SireJobStatus @default(PENDING)
+  message_id      String?       @unique
+  ruta_archivo    String?
+  hash_archivo    String?
+  backend_almacen String?
+  total_registros Int           @default(0)
+  error_code      String?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  completed_at    DateTime?
+
+  @@index([company_id, periodo])
+  @@index([company_id, created_at])
+  @@map("sire_importaciones")
+}
+
+/**
+ * Resultado de la conciliación de un periodo.
+ *
+ * `conciliados` y `diferencias` son los contadores del cruce; `detalle` guarda
+ * el JSON con el resumen y la lista de comprobantes para poder auditar la
+ * conciliación sin volver a simularla.
+ */
+model SireConciliacion {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  periodo     String
+  conciliados Int      @default(0)
+  diferencias Int      @default(0)
+  detalle     Json?
+  created_at  DateTime @default(now())
+
+  @@index([company_id, periodo])
+  @@index([company_id, created_at])
+  @@map("sire_conciliaciones")
+}
+
+/**
+ * Envío del libro conciliado a SUNAT.
+ *
+ * Se registra como trabajo porque el frontend recibe un ticket y un
+ * `messageId` y sondea hasta que el envío termina (aquí, la simulación).
+ */
+model SireReporte {
+  id           String        @id @default(uuid())
+  company_id   String
+  company      Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  periodo      String
+  libro        SireBookType
+  estado       SireJobStatus @default(PENDING)
+  message_id   String?       @unique
+  ticket       String?
+  error_code   String?
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
+  completed_at DateTime?
+
+  @@index([company_id, periodo])
+  @@index([company_id, created_at])
+  @@map("sire_reportes")
 }
 
 model SireReportUpload {

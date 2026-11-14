@@ -9,7 +9,6 @@ import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 import { ClientSafeHttpException } from '../../../src/common/exceptions';
 import type { PrismaService } from '../../../src/database/prismaService';
 import type { IUserRepositoryPort } from '../../../src/modules/auth/domain/ports/userRepositoryPort';
-import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
 import type { QueueService } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 import { SireReadOnlyPeriodsController } from '../../../src/modules/sire/infrastructure/controllers/sireReadOnlyPeriodsController';
 import type { SireReadOnlyPeriodsClient } from '../../../src/modules/sire/infrastructure/sunat/sireReadOnlyPeriodsClient';
@@ -38,21 +37,14 @@ describe('SireReadOnlyPeriodsController', () => {
   const queue = {
     enqueueSirePeriods: jest.fn(),
   } as unknown as QueueService;
-  const credentialCipher = {
-    encrypt: jest.fn(() => 'opaque-encrypted-credentials'),
-    decrypt: jest.fn(),
-  } as unknown as SolCredentialCipherPort;
   const controller = new SireReadOnlyPeriodsController(
     users,
     sireClient,
     prisma,
     queue,
-    credentialCipher,
   );
   const dto = {
     bookCode: '140000' as const,
-    solUser: 'FAKEUSER',
-    solPassword: 'fake-sol-password',
   };
   const user = {
     sub: 'user-id',
@@ -73,7 +65,7 @@ describe('SireReadOnlyPeriodsController', () => {
     logError.mockRestore();
   });
 
-  it('creates a pending job using tenant RUC and encrypts SOL credentials in the payload', async () => {
+  it('creates a pending job using tenant RUC without enqueueing any credential', async () => {
     const response = await controller.getPeriods(dto, user);
 
     expect(response).toMatchObject({ status: 'PENDING' });
@@ -82,12 +74,6 @@ describe('SireReadOnlyPeriodsController', () => {
     );
     expect(users.findCompanyById).toHaveBeenCalledWith(user.companyId);
     expect(sireClient.assertConfigured).toHaveBeenCalled();
-    expect(credentialCipher.encrypt).toHaveBeenCalledWith(
-      JSON.stringify({
-        solUser: dto.solUser,
-        solPassword: dto.solPassword,
-      }),
-    );
     expect(prisma.sirePeriodQuery.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         id: response.messageId,
@@ -103,12 +89,22 @@ describe('SireReadOnlyPeriodsController', () => {
       companyId: company.id,
       ruc: company.ruc,
       bookCode: dto.bookCode,
-      encryptedSolCredentials: 'opaque-encrypted-credentials',
     });
-    expect(queuedPayload.encryptedSolCredentials).not.toContain(
-      dto.solPassword,
+    expect(queuedPayload).not.toHaveProperty('encryptedSolCredentials');
+  });
+
+  it('ignores the deprecated SOL credentials sent by older clients', async () => {
+    const response = await controller.getPeriods(
+      { ...dto, solUser: 'FAKEUSER', solPassword: 'fake-sol-password' },
+      user,
     );
-    expect(queuedPayload.encryptedSolCredentials).not.toContain(dto.solUser);
+
+    expect(response).toMatchObject({ status: 'PENDING' });
+
+    const queuedPayload = (queue.enqueueSirePeriods as jest.Mock).mock
+      .calls[0][0];
+    expect(JSON.stringify(queuedPayload)).not.toContain('fake-sol-password');
+    expect(JSON.stringify(queuedPayload)).not.toContain('FAKEUSER');
   });
 
   it('rejects requests without an authenticated tenant', async () => {

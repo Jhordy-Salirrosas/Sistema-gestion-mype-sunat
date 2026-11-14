@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import {
-  SOL_CREDENTIAL_CIPHER,
-  type SolCredentialCipherPort,
-} from '../../../auth/domain/ports/solCredentialCipherPort';
+  SIRE_CONFIGURATION_REPOSITORY_PORT,
+  type ISireConfigurationRepositoryPort,
+} from '../../domain/ports/sireConfigurationRepositoryPort';
 import {
   QueueService,
   type SirePeriodsJobData,
@@ -26,18 +26,17 @@ import { SireTransportError } from '../sunat/sunatErrors';
  */
 import { SireReadOnlyPeriodsClient } from '../sunat/sireReadOnlyPeriodsClient';
 
-interface SolCredentials {
+/**
+ * Credenciales con las que el worker llama a SUNAT.
+ *
+ * `clientId` y `clientSecret` son opcionales: cuando la empresa no tiene
+ * credenciales propias, el cliente usa las del entorno.
+ */
+interface ResolvedSireCredentials {
   solUser: string;
   solPassword: string;
-}
-
-function isSolCredentials(value: unknown): value is SolCredentials {
-  if (value === null || typeof value !== 'object') return false;
-  const credentials = value as Record<string, unknown>;
-  return (
-    typeof credentials['solUser'] === 'string' &&
-    typeof credentials['solPassword'] === 'string'
-  );
+  clientId?: string;
+  clientSecret?: string;
 }
 
 @Injectable()
@@ -48,8 +47,8 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
     private readonly queue: QueueService,
     private readonly prisma: PrismaService,
     private readonly sireClient: SireReadOnlyPeriodsClient,
-    @Inject(SOL_CREDENTIAL_CIPHER)
-    private readonly credentialCipher: SolCredentialCipherPort,
+    @Inject(SIRE_CONFIGURATION_REPOSITORY_PORT)
+    private readonly configurationRepository: ISireConfigurationRepositoryPort,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -103,7 +102,7 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
       return;
     }
 
-    const credentials = this.readCredentials(job);
+    const credentials = await this.resolveCredentials(job.companyId);
     if (!credentials) {
       await this.markFailedSafely(
         job.messageId,
@@ -162,38 +161,46 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
   }
 
   /**
-   * Descifra las credenciales SOL dentro del worker.
+   * Resuelve las credenciales de la empresa desde la configuración SIRE.
+   *
+   * LAS CREDENCIALES NO VIAJAN EN LA COLA
+   *
+   * El trabajo solo lleva el `companyId`: las credenciales se leen de
+   * `sire_configurations` en el momento de ejecutarlo. Así la cola nunca
+   * guarda un secreto, una credencial rotada se aplica al trabajo siguiente
+   * y el frontend deja de tener que mandarlas en cada consulta.
    *
    * Devuelve `undefined` cuando no se pueden recuperar: el caso se marca como
    * fallido y no se intenta llamar a SUNAT.
    */
-  private readCredentials(
-    job: SirePeriodsJobData,
-  ): SolCredentials | undefined {
-    let decrypted: string;
+  private async resolveCredentials(
+    companyId: string,
+  ): Promise<ResolvedSireCredentials | undefined> {
+    let resolved;
     try {
-      decrypted = this.credentialCipher.decrypt(job.encryptedSolCredentials);
-    } catch {
+      resolved = await this.configurationRepository.findByCompanyId(companyId);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo leer la configuración SIRE de la empresa ${companyId}: ${describeErrorSafely(error)}`,
+      );
       return undefined;
     }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(decrypted) as unknown;
-    } catch {
+    if (!resolved) {
       return undefined;
     }
 
-    if (!isSolCredentials(parsed)) {
+    const solUser = resolved.solUser?.trim();
+    if (!solUser || !resolved.solPassword) {
       return undefined;
     }
 
-    const solUser = parsed.solUser.trim();
-    if (!solUser) {
-      return undefined;
-    }
-
-    return { solUser, solPassword: parsed.solPassword };
+    return {
+      solUser,
+      solPassword: resolved.solPassword,
+      clientId: resolved.clientId,
+      clientSecret: resolved.clientSecret,
+    };
   }
 
   /**
@@ -205,7 +212,7 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
    */
   private async queryPeriods(
     job: SirePeriodsJobData,
-    credentials: SolCredentials,
+    credentials: ResolvedSireCredentials,
   ): Promise<unknown> {
     try {
       return await this.sireClient.getPeriods(
@@ -213,6 +220,10 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
         credentials.solUser,
         credentials.solPassword,
         job.bookCode,
+        {
+          clientId: credentials.clientId,
+          clientSecret: credentials.clientSecret,
+        },
       );
     } catch (error) {
       const failure = classifySireSunatFailure(error);
@@ -287,9 +298,14 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
    */
   private describeSunatError(
     error: unknown,
-    credentials: SolCredentials,
+    credentials: ResolvedSireCredentials,
   ): string {
-    const secrets = [credentials.solUser, credentials.solPassword];
+    const secrets = [
+      credentials.solUser,
+      credentials.solPassword,
+      credentials.clientId,
+      credentials.clientSecret,
+    ].filter((secret): secret is string => Boolean(secret));
 
     if (error instanceof SireTransportError) {
       return redactSensitiveText(error.diagnostic, secrets);
