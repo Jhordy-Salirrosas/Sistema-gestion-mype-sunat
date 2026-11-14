@@ -18,6 +18,8 @@ export interface EventoPresentacion {
 /** Solo lectura. Un código SUNAT también puede surgir del XSL local: no basta por sí solo. */
 export function presentarResultado(estado: string, cdr: { codigo: string | null; descripcion: string | null } | null,
   history: readonly EventoPresentacion[] = [], transportUncertain?: boolean | null): ResultadoPresentacion | undefined {
+  // El registro financiero local no sustituye evidencia fiscal ni de transporte.
+  history = history.filter(e => e.codigo_error !== 'M1_DETRACTION_DEPOSIT');
   if (transportUncertain && ['ENVIADO', 'ERROR_RED', 'EN_COLA', 'PENDIENTE', 'PROCESANDO'].includes(estado)) {
     const consultas = history.filter(e => e.codigo_error === 'M1_TRANSPORT_UNCERTAIN');
     const ultima = [...consultas].sort((a, b) => (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0))[0];
