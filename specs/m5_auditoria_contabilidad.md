@@ -41,12 +41,12 @@ Severidad: **A** = rompe la contabilidad o el PLE; **B** = riesgo operativo; **C
 
 `defaultAccountingRules.ts` usa cuentas que existen en el PCGE pero **no son hoja**:
 
-| Proceso / línea | Código | Por qué está mal |
+| Proceso / línea | Código | Estado |
 | --- | --- | --- |
-| VENTA 9 (descuento) | `74` | Elemento: cuelgan `741`, `7411`, `74111`, `7412` |
-| RECEPCION 2 | `611` | Cuelgan `6111` |
-| AJUSTE 1 (faltante) | `659` | Cuelgan `6591`, `6592` |
-| AJUSTE 3 (sobrante) | `759` | Cuelgan `7591`…`7599` |
+| VENTA 9 (descuento) | `74` | **Pendiente de decisión del contador** (excepción documentada en `specs/M1-ASIENTO-DESCUENTOS.md`) |
+| RECEPCION 2 | `611` | ✅ Corregido a `6111` (Mercaderías) |
+| AJUSTE 1 (faltante) | `659` | **Pendiente de decisión** (la semilla no tiene hoja útil bajo 659) |
+| AJUSTE 3 (sobrante) | `759` | ✅ Corregido a `7599` (Otros ingresos de gestión) |
 
 El asiento sigue cuadrando, así que ningún control de partida doble lo detecta: el daño es de
 **clasificación**, no de balance, y se propaga al Libro Mayor y al PLE.
@@ -55,12 +55,23 @@ El asiento sigue cuadrando, así que ningún control de partida doble lo detecta
 > decidió usar la cuenta 74 para los descuentos 01/03 que no afectan la base. La decisión es del
 > contador; lo que falta es elegir la **subcuenta** (`7411`/`7412`) o mantener 74 como excepción
 > documentada. **No se modifica sin su confirmación.**
+>
+> Hay una prueba de regresión (`defaultAccountingRules.spec.ts`) que contrasta las reglas con la
+> semilla del PCGE: falla si aparece una cuenta inexistente o una cuenta agregada que no esté en la
+> lista de excepciones documentadas.
 
 ### A2. Los asientos automáticos no validan sus cuentas
 
 `generateAccountingEntryUseCase` valida existencia, cuenta inactiva y “cuenta de mayor con
 subcuentas” **solo cuando `sourceModule === 'MANUAL'`**. Los siete procesos automáticos escriben el
 `account_code` de la regla sin comprobarlo; si la regla está mal, el asiento se crea igual.
+
+> **Corrección importante (A2-bis).** La comprobación de “cuenta de mayor” era demasiado amplia:
+> consideraba agregada a cualquier cuenta que tuviera hijas, y eso incluye a la `40111` “IGV cuenta
+> propia”, que tiene las subdivisionarias opcionales `401111` y `401119`. Resultado: **un asiento
+> manual con IGV se rechazaba**. Ahora una cuenta es agregada solo si tiene hijas y está en nivel de
+> subcuenta o superior (4 dígitos o menos); a partir de 5 dígitos es divisionaria y sí se postea. La
+> regla vive en `catalogIntegrityRule` y la usan la validación, la auditoría y las pruebas.
 
 ### A3. Errores contables silenciados en Compras
 
@@ -231,9 +242,9 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 198 pruebas (111 nuevas: reglas, auditoría,
-tesorería, distribución, PLE, cierre y concurrencia), más 3 en compras, 9 en el frontend de
-contabilidad (1 326 en total) y las 1 318 previas siguen verdes.
+**Pruebas**: el módulo de contabilidad pasa de 86 a 210 pruebas (124 nuevas: reglas, auditoría,
+tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 3 en compras, 9 en el
+frontend de contabilidad (1 326 en total).
 
 ## 5. Pendiente (tareas 4 y 6) y por qué
 

@@ -75,13 +75,27 @@ export const LINEAS_POR_PROCESO: Readonly<
 
 export const PROCESOS_SOPORTADOS = Object.keys(LINEAS_POR_PROCESO);
 
-/** Códigos de cuenta que tienen al menos una hija en el catálogo. */
+/**
+ * Nivel a partir del cual una cuenta es divisionaria y sí admite asientos.
+ *
+ * El PCGE llega a seis dígitos (40111 → 401111), pero una divisionaria que
+ * tiene subdivisionarias opcionales sigue siendo una cuenta de posteo: la 40111
+ * "IGV cuenta propia" se usa en todas las ventas aunque existan 401111 y
+ * 401119. Marcar esas cuentas como "de mayor" llenaba la auditoría de falsos
+ * positivos. Se considera agregada solo una cuenta de 4 dígitos o menos que
+ * tenga hijas: elemento (2), cuenta (3) y subcuenta (4).
+ */
+export const LONGITUD_MINIMA_POSTEO = 5;
+
+/** Códigos de cuenta agregados: tienen hijas y están en nivel de subcuenta o superior. */
 export const cuentasConHijos = (
   catalog: readonly CatalogAccount[],
 ): ReadonlySet<string> => {
   const padres = new Set<string>();
   for (const cuenta of catalog) {
-    if (cuenta.parentCode) padres.add(cuenta.parentCode);
+    const padre = cuenta.parentCode;
+    if (!padre) continue;
+    if (padre.length < LONGITUD_MINIMA_POSTEO) padres.add(padre);
   }
   return padres;
 };
@@ -105,6 +119,7 @@ export const checkAccountCode = (
   catalog: readonly CatalogAccount[],
   accountCode: string,
   contexto: { process?: string; lineOrder?: number } = {},
+  agregadas: ReadonlySet<string> = cuentasConHijos(catalog),
 ): IntegrityIssue | null => {
   const prefijo = etiqueta(contexto.process, contexto.lineOrder);
   const cuenta = catalog.find((c) => c.code === accountCode);
@@ -128,7 +143,7 @@ export const checkAccountCode = (
       message: `${prefijo}la cuenta PCGE ${accountCode} está inactiva`,
     };
   }
-  if (cuentasConHijos(catalog).has(accountCode)) {
+  if (agregadas.has(accountCode)) {
     return {
       severity: 'ERROR',
       code: 'CUENTA_MADRE',
@@ -137,8 +152,7 @@ export const checkAccountCode = (
       accountCode,
       message: `${prefijo}la cuenta PCGE ${accountCode} es de mayor y tiene subcuentas; use una subcuenta`,
     };
-  }
-  return null;
+  }  return null;
 };
 
 /**
@@ -164,6 +178,7 @@ export const checkRules = (
   }
 
   const activas = rules.filter((r) => r.is_active !== false);
+  const agregadas = cuentasConHijos(catalog);
   const porProceso = new Map<string, AccountingRuleLike[]>();
   for (const regla of activas) {
     const lista = porProceso.get(regla.process_code) ?? [];
@@ -189,7 +204,7 @@ export const checkRules = (
       const issue = checkAccountCode(catalog, regla.account_code, {
         process: proceso,
         lineOrder: regla.line_order,
-      });
+      }, agregadas);
       if (issue) issues.push(issue);
 
       if (regla.side && !['DEBE', 'HABER'].includes(regla.side)) {
@@ -277,8 +292,9 @@ export const checkEntryLines = (
     ];
   }
   const issues: IntegrityIssue[] = [];
+  const agregadas = cuentasConHijos(catalog);
   lines.forEach((linea, index) => {
-    const issue = checkAccountCode(catalog, linea.accountCode, { lineOrder: index + 1 });
+    const issue = checkAccountCode(catalog, linea.accountCode, { lineOrder: index + 1 }, agregadas);
     if (issue) issues.push(issue);
   });
   return issues;
