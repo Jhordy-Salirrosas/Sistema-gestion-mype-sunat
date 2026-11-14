@@ -30,4 +30,4 @@ Los puntos 4 y 8 continúan por su cambio visual explícito; no se introduce una
 
 ## Ejecución por punto
 
-Pendiente de implementación tras este registro de fase 0.
+1. Construido: bloques adaptables con las once celdas y sus etiquetas. Prueba dirigida: 1 archivo / 5 pruebas aprobadas. Verificación geométrica conjunta al cierre.
