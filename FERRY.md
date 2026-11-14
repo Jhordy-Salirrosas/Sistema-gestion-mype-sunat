@@ -1,15 +1,15 @@
 # Arreglos de auditorías M1
 
-Rama única `fix/m1-arreglos-auditorias`, desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`. Sin PR, despliegue, migraciones ni emisiones reales. Pruebas con dobles.
+Rama única `fix/m1-arreglos-auditorias`, desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`. Sin PR nuevo, despliegue, migraciones ni emisiones reales. Pruebas con dobles.
 
-Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 48 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
+Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 55 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
 
 ## Veredictos
 
 1. Confirmado y corregido: listado y detalle seleccionan Catálogo 09 para 07 y Catálogo 10 para 08 mediante un formateador común. Pruebas de los códigos 01/02/03 en ambos tipos; las vistas comparten los mapeadores.
 2. Confirmado y corregido: el individual usa la clasificación masiva antes de la cola y en la relectura. Excluye bloqueo local, rechazo definitivo e incertidumbre. Consulta sin transmisión probada devuelve SIN_TRANSMISION sin consultar SUNAT cuando el marcador false o el bloqueo previo acreditan no envío y no existe evidencia contraria. Una consulta aislada no prueba transporte. Null histórico sin evidencia conserva la protección conservadora del worker. No cambia el reenvío forzado ni el endpoint genérico de DLQ de resiliencia.
 3. Confirmado en código y corregido: acción explícita Resolver DLQ en Monitor, POST /invoices/:id/resolver-dlq. Solo ACEPTADO y CDR código 0 de la empresa autenticada. Retira trabajos DLQ pendientes propios del documento; cero trabajos es idempotente. No escribe el documento fiscal ni publica un envío; puentes pendientes conservan su acción separada. Las alertas y filas se actualizan tras resolver. No se inspeccionaron trabajos de producción.
-4. Diagnóstico inicial (sustituido por la segunda adenda al final de este documento): 08 Bonificación requiere definir líneas, gratuidad y efectos físicos/monetarios antes de habilitarse; 10 Otros conceptos es viable con alcance restringido al origen y regresión XML, sin asumir cobertura de sus referencias excepcionales. Las notas de boleta BC01/BD01 deben excluirse de RA y anularse por RC. Fuentes oficiales vigentes, guardas y límites en `docs/m1/auditoria-solucion.md`. No se modificaron catálogos habilitados ni RA/RC.
+4. Punto 4 construido según el alcance aclarado: 10 Otros conceptos habilitado para ajustes monetarios sobre líneas del origen con sustento obligatorio; 08 Bonificación sigue documentado y deshabilitado. BC01/BD01 permanecen excluidas de RA y ahora cuentan con anulación RC explícita (ítem 3), reserva durable, CDR y reversión local idempotente. Véase el cierre vigente al final.
 
 Estado inicial previo a la segunda adenda: puntos 1–3 construidos y punto 4 documentado. Véase la actualización de 4a/4b al final.
 
@@ -17,7 +17,7 @@ Estado inicial previo a la segunda adenda: puntos 1–3 construidos y punto 4 do
 
 `frontend/` conserva todos los archivos heredados de pulidos y superpone los de este paquete. Cada ruta es relativa a la raíz del repo frontend; no crear una segunda carpeta frontend en destino. Verificar primero `sha256sum -c SHA256SUMS` en el repo backend y copiar `frontend/.` sobre el checkout frontend. Conservar los demás archivos del destino. Revisar cualquier avance posterior que toque esas rutas antes de aplicar.
 
-`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 48 archivos frontend y por este FERRY.md (49 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
+`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 55 archivos frontend y por este FERRY.md (56 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
 
 ## Archivos de este paquete por punto
 
@@ -155,3 +155,60 @@ Se añaden 14 pruebas unitarias y se refuerza la integración para conservar la 
 | Front | 179 archivos / 1387 pruebas | 179 archivos / 1387 pruebas |
 
 Ambas suites completas aprobadas. Back conserva 12 snapshots. El incremento back se descompone en 14 pruebas nuevas y 55 pruebas previamente omitidas que ahora se ejecutan al habilitar PostgreSQL; no son 69 pruebas nuevas. Los conteos corresponden al checkout de esta rama. La regresión de DLQ que fallaba en CI está incluida y aprobada. Lint y builds completos back/front OK, posteriores a las suites para evitar regeneración concurrente de Prisma. Los 48 archivos front no cambian; el manifiesto conserva 49 entradas (incluido FERRY.md), verificadas. Un commit de corrección en la misma rama, sin abrir PR ni realizar emisiones reales.
+
+## Cierre vigente — terminación de las adendas
+
+La cabeza remota 70dd9fd7 ya incluía los menores (37de84ea), la exclusión de RA (58b3d533) y YA_EN_COLA (70dd9fd7), con su código frontend transportado. Se conservan esos commits y se completa el bloque pendiente del punto 4 en un commit adicional, sin PR nuevo.
+
+- **10 construido, restringido:** ajuste monetario positivo sobre líneas de factura/boleta origen, mismo receptor, unidad/afectación y control de cantidades/saldo vigentes. Sustento específico obligatorio, editable en el formulario. XML CreditNoteLine y ResponseCode 10, probado con ambas rutas y hojas oficiales. No habilita rectificación exclusiva de IGV, líneas nuevas ajenas, referencias sin origen ni otros tratamientos especiales del código 10.
+- **08 solo documentado:** requiere definir consumo de unidades bonificadas y su tratamiento; no se habilita.
+- **RC de anulación construido:** pestaña Anulación de notas (RC), selección BC01/BD01 aceptadas/observadas, motivo, XML de ítem 3 y confirmación de no otorgamiento al receptor. FC01/FD01 conservan la vía RA. Ventana de siete días desde aceptación acreditada, revalidada antes del primer despacho. Si falta evidencia de fecha, se informa la exclusión. Una lectura, vista previa o reserva no cambia el documento fiscal.
+- **Persistencia y aceptación:** fingerprint separado del alta RC, locks y snapshot de la operación. Se recuperan reservas sin cambiar su modo; no se duplican cancelaciones. Solo el CDR aceptado y consistente con snapshot/XML cambia la nota a ANULADO y registra trabajo local durable para invertir movimientos/asientos reales. El rechazo no anula, y repetir CDR/reversión no duplica efectos. No se reenvía el comprobante individual.
+
+Se reutilizan las tablas/JSON y mecanismos existentes; no hay migraciones nuevas. La reversión pendiente continúa visible y se reprocesa localmente. Las fuentes SUNAT del Catálogo 19, resumen diario y no otorgamiento están enlazadas en docs/m1/auditoria-solucion.md.
+
+Archivos de este bloque:
+
+- frontend/src/modules/invoices/components/EnviarBajaPanel.tsx
+- frontend/src/modules/invoices/components/InvoiceAggregateMonitor.tsx
+- frontend/src/modules/invoices/components/InvoiceEmitCampos.tsx
+- frontend/src/modules/invoices/lib/invoiceEmitValidation.ts
+- frontend/src/modules/invoices/lib/invoiceNotaOrigen.ts
+- frontend/src/modules/invoices/pages/InvoiceBajasPage.tsx
+- frontend/src/modules/invoices/services/invoicesApi.ts
+- frontend/test/unit/modules/invoices/invoiceBajaEnvio.test.tsx
+- frontend/test/unit/modules/invoices/invoiceBajasRace.test.tsx
+- frontend/test/unit/modules/invoices/invoiceNotaOrigen.test.ts
+- frontend/test/unit/modules/invoices/invoiceNotasLineasOrigen.test.tsx
+- frontend/test/unit/modules/invoices/p9-close.test.tsx
+- src/modules/invoices/application/services/invoiceNoteService.ts
+- src/modules/invoices/application/services/invoiceResultPresentation.ts
+- src/modules/invoices/application/services/invoiceSummaryService.ts
+- src/modules/invoices/application/services/noteCatalogs.ts
+- src/modules/invoices/application/services/noteDescription.ts
+- src/modules/invoices/application/services/noteReasonGuard.ts
+- src/modules/invoices/application/services/raBridgeReversalService.ts
+- src/modules/invoices/application/services/summaryAggregateStore.ts
+- src/modules/invoices/application/services/summaryCancellation.ts
+- src/modules/invoices/application/services/summaryDispatchDeadline.ts
+- src/modules/invoices/application/services/summaryDispatchService.ts
+- src/modules/invoices/application/services/summaryDocumentsBuilder.ts
+- src/modules/invoices/application/services/summaryEnvioService.ts
+- src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts
+- test/integration/invoices/rcCancellation.integration.spec.ts
+- test/unit/invoices/8b-motivos-importes.spec.ts
+- test/unit/invoices/otrosConceptosRestringido.spec.ts
+- test/unit/invoices/rcCancellation.spec.ts
+
+El ferry compuesto contiene ahora 55 archivos frontend más FERRY.md, 56 entradas SHA-256. Conserva los menores y todos los archivos heredados; aplicar frontend/. sobre el checkout destino conforme a las instrucciones iniciales. La entrega en esta rama es código backend y ferry: no implica despliegue ni aplicación automática en el repositorio frontend.
+
+## Validación final del bloque completado
+
+| Capa | Base remota 70dd9fd7 | Cierre |
+| --- | --- | --- |
+| Back con PostgreSQL | 365 suites / 3618 pruebas | 368 suites / 3653 pruebas |
+| Front | 179 archivos / 1387 pruebas | 179 archivos / 1391 pruebas |
+
+Suites completas verdes, incluidas las integraciones de YA_EN_COLA y de anulación RC; back mantiene 4 suites / 38 pruebas omitidas y 12 snapshots aprobados. Incremento: 35 pruebas back y 4 front. Las únicas expectativas antiguas ajustadas fijaban el conjunto de motivos sin el 10 en back/front; 08 permanece excluido. Lint y builds completos back/front OK. El build final se ejecutó después de las suites, sin regeneración Prisma concurrente con Jest.
+
+Estado final: menores aplicados en 37de84ea; exclusión BC01/BD01 de RA en 58b3d533; YA_EN_COLA en 70dd9fd7; este bloque completa 10 restringido y la anulación RC. 08 queda solo documentado conforme al alcance. Se entrega un único commit adicional del bloque pendiente, sin duplicar los bloques ya aplicados ni abrir otro PR. El ferry tiene 55 archivos frontend más FERRY.md (56 entradas SHA-256 verificadas). Su aplicación al repo frontend y despliegue siguen a cargo del tren de revisión. Sin migraciones nuevas ni emisiones reales.

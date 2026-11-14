@@ -85,6 +85,15 @@ export const invoicesApi = {
     const { data } = await apiClient.post<ResultadoReprocesoPuente>(`/invoices/${encodeURIComponent(id)}/reprocesar-puente`);
     return data;
   },
+  getVistaAnulacionNotas: async (fecha: string): Promise<VistaPreviaResumen> => {
+    const { data } = await apiClient.get<VistaPreviaResumen>('/invoices/resumenes/anulacion-notas', { params: { fecha } }); return data;
+  },
+  previsualizarAnulacionNotas: async (fecha: string, lineas: SeleccionBaja[]): Promise<VistaPreviaResumen> => {
+    const { data } = await apiClient.post<VistaPreviaResumen>('/invoices/resumenes/anulacion-notas/vista', { lineas }, { params: { fecha } }); return data;
+  },
+  enviarAnulacionNotas: async (fecha: string, lineas: SeleccionBaja[]): Promise<ResultadoEnvioAgregado> => {
+    const { data } = await apiClient.post<ResultadoEnvioAgregado>('/invoices/resumenes/anulacion-notas/enviar', { lineas, noOtorgado: true }, { params: { fecha } }); return data;
+  },
   previsualizarBaja: async (fecha: string, lineas: SeleccionBaja[]): Promise<VistaPreviaResumen> => {
     const { data } = await apiClient.post<VistaPreviaResumen>('/invoices/resumenes/baja/vista', { lineas }, { params: { fecha } }); return data;
   },

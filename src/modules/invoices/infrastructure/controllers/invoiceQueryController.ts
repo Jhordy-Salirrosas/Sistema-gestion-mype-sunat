@@ -218,6 +218,24 @@ export class InvoiceQueryController {
     return this.resumenes.vistaComunicacionBaja(companyId, this.fechaDe(fecha), 1, seleccionBaja(body?.lineas));
   }
 
+  @Get('resumenes/anulacion-notas')
+  vistaAnulacionNotas(@CurrentCompany() companyId: string, @Query('fecha') fecha?: string) {
+    return this.resumenes.vistaAnulacionNotas(companyId, this.fechaDe(fecha));
+  }
+
+  @Post('resumenes/anulacion-notas/vista')
+  vistaSeleccionAnulacionNotas(@CurrentCompany() companyId: string, @Query('fecha') fecha?: string, @Body() body?: { lineas?: unknown }) {
+    return this.resumenes.vistaAnulacionNotas(companyId, this.fechaDe(fecha), 1, seleccionBaja(body?.lineas));
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @Post('resumenes/anulacion-notas/enviar')
+  @HttpCode(HttpStatus.OK)
+  enviarAnulacionNotas(@CurrentCompany() companyId: string, @Query('fecha') fecha?: string, @Body() body?: { lineas?: unknown; noOtorgado?: boolean }) {
+    return this.envioResumenes.enviarAnulacionNotas(companyId, this.fechaDe(fecha), body?.lineas, body?.noOtorgado === true);
+  }
+
   @Get('resumenes/envios')
   listarAgregados(@CurrentCompany() companyId: string) { return this.aggregates.listar(companyId); }
 

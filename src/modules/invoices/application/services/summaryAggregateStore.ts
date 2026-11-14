@@ -1,3 +1,4 @@
+import { esAnulacionRc } from './summaryCancellation';
 import { fechaFiscalLima } from '../../fiscalDate';
 import { validarPlazoDespachoRa } from './summaryDispatchDeadline';
 import { SummaryPollingCoordinator, pollingOf } from './summaryPollingCoordinator';
@@ -15,7 +16,7 @@ import type { IssuerContext } from '../../../sunat/issuerConfigResolver';
 import type { VistaPrevia } from './invoiceSummaryService';
 
 export interface SeleccionBaja { id: string; motivo: string; }
-export interface AggregateMember { id: string; serie: string; correlativo: number; tipoComprobante: string; motivo?: string; }
+export interface AggregateMember { id: string; serie: string; correlativo: number; tipoComprobante: string; motivo?: string; conditionCode?: '3'; acceptedDate?: string; noOtorgado?: boolean; }
 export const membersOf = (row: Pick<InvoiceAggregate, 'members'>): AggregateMember[] => row.members as unknown as AggregateMember[];
 export const resumenFingerprint = (kind: string, fecha: string, selection: SeleccionBaja[]) => createHash('sha256').update(JSON.stringify([kind, fecha, [...selection].sort((a, b) => a.id.localeCompare(b.id))])).digest('hex');
 export const hoyLima = fechaFiscalLima;
@@ -36,9 +37,10 @@ export class SummaryAggregateStore {
   constructor(private readonly prisma: PrismaService, private readonly queue: QueueService) { this.polling = new SummaryPollingCoordinator(prisma,queue); }
 
   async reservar(companyId: string, kind: AggregateKind, fecha: string, selection: SeleccionBaja[], context: IssuerContext,
-    preview: (tx: Prisma.TransactionClient, correlativo: number, excludeId?: string) => Promise<VistaPrevia>): Promise<{ row: InvoiceAggregate; vista?: VistaPrevia }> {
+    preview: (tx: Prisma.TransactionClient, correlativo: number, excludeId?: string) => Promise<VistaPrevia>, anular = false): Promise<{ row: InvoiceAggregate; vista?: VistaPrevia }> {
+    if (anular && kind !== 'RC') throw new BadRequestException('RC_ANULACION_TIPO');
     if (context.companyId !== companyId) throw new BadRequestException('SUMMARY_COMPANY_MISMATCH');
-    const fingerprint = resumenFingerprint(kind, fecha, selection);
+    const fingerprint = resumenFingerprint(anular ? 'RC_ANULACION' : kind, fecha, selection);
     return this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${companyId}))`;
       const existing = await tx.invoiceAggregate.findUnique({ where: { company_id_kind_fingerprint: { company_id: companyId, kind, fingerprint } } });
@@ -55,10 +57,11 @@ export class SummaryAggregateStore {
       vista.envio.identificador = identifier;
       vista.xml = vista.xml.replace(/(<cbc:ID>)[^<]*(<\/cbc:ID>)/, `$1${identifier}$2`).replace(/(<cbc:IssueDate>)[^<]*(<\/cbc:IssueDate>)/, `$1${existing?.generation_date ?? today}$2`);
       const members = vista.lineas.filter(l => l.incluido).map(l => ({ id: l.id, serie: l.serie, correlativo: l.correlativo, tipoComprobante: l.tipoComprobante,
-        ...(kind === 'RA' ? { motivo: selection.find(s => s.id === l.id)?.motivo } : {}) }));
+        ...(kind === 'RA' ? { motivo: selection.find(s => s.id === l.id)?.motivo } : {}),
+        ...(anular ? { conditionCode: '3' as const, acceptedDate: l.fechaAceptacion, noOtorgado: true, motivo: selection.find(s => s.id === l.id)?.motivo } : {}) }));
       if (!members.length || members.length !== selection.length) throw new BadRequestException('Selección de baja no elegible o ajena a la empresa');
       const active = await tx.invoiceAggregate.findMany({ where: { company_id: companyId, state: { notIn: ['BLOCKED', 'REJECTED'] }, ...(existing ? { id: { not: existing.id } } : {}) } });
-      if (active.some(a => membersOf(a).some(m => members.some(n => n.id === m.id)))) throw new ConflictException('SUMMARY_MEMBER_ALREADY_RESERVED');
+      if (active.some(a => !(anular && a.kind === 'RC' && a.state === 'ACCEPTED' && membersOf(a).every(m => !m.conditionCode)) && membersOf(a).some(m => members.some(n => n.id === m.id)))) throw new ConflictException('SUMMARY_MEMBER_ALREADY_RESERVED');
       const row = existing ?? await tx.invoiceAggregate.create({ data: { company_id: companyId, kind, identifier, fingerprint,
         reference_date: fecha, generation_date: today, state: 'RESERVED', issuer_ruc: context.ruc, environment: context.environment ?? '', members: members as unknown as Prisma.InputJsonValue } });
       return { row, vista };
@@ -121,7 +124,7 @@ export class SummaryAggregateStore {
     const lines = Array.isArray(rawLines) ? rawLines : [rawLines];
     const snapshot = membersOf(row);
     const xmlNumbers = lines.map(l => row.kind === 'RA' ? `${l?.DocumentSerialID}-${Number(l?.DocumentNumberID)}` : normalizeNumber(String(l?.ID)));
-    if (lines.length !== snapshot.length || xmlNumbers.some((n, i) => n !== numberOf(snapshot[i]) || String(lines[i]?.DocumentTypeCode) !== snapshot[i].tipoComprobante || Number(lines[i]?.LineID) !== i + 1)) throw new Error('SUMMARY_CDR_MEMBER_MISMATCH');
+    if (lines.length !== snapshot.length || xmlNumbers.some((n, i) => n !== numberOf(snapshot[i]) || String(lines[i]?.DocumentTypeCode) !== snapshot[i].tipoComprobante || (row.kind === 'RC' && String(lines[i]?.Status?.ConditionCode ?? '1') !== (snapshot[i].conditionCode ?? '1')) || Number(lines[i]?.LineID) !== i + 1)) throw new Error('SUMMARY_CDR_MEMBER_MISMATCH');
     // Si el CDR enumera documentos, la lista debe coincidir exactamente. Un CDR
     // global vincula la aceptación al identificador único y al XML inmutable.
     const named: string[] = [];
@@ -154,20 +157,23 @@ export class SummaryAggregateStore {
       const actual = await tx.invoiceAggregate.findUniqueOrThrow({ where: { id: row.id } });
       if (['ACCEPTED', 'REJECTED'].includes(actual.state)) return actual;
       if (actual.xml_hash !== row.xml_hash || JSON.stringify(actual.members) !== JSON.stringify(row.members)) throw new Error('SUMMARY_CDR_SNAPSHOT_CHANGED');
-      if (accepted && row.kind === 'RA') {
+      if (accepted && (row.kind === 'RA' || esAnulacionRc(row.members))) {
         const updated = await tx.invoice.updateMany({ where: { company_id: row.company_id, id: { in: snapshot.map(m => m.id) }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } }, data: { estado: 'ANULADO' } });
         if (updated.count !== snapshot.length) throw new Error('SUMMARY_MEMBER_STATE_CHANGED');
-        for (const m of snapshot) await tx.transactionHistory.create({ data: { invoice_id: m.id, company_id: row.company_id, estado_anterior: null, estado_nuevo: 'ANULADO', codigo_error: 'M1_RA_REVERSAL_PENDING', mensaje_error: `ANULADO con reversión pendiente: ${row.identifier}.` } });
+        for (const m of snapshot) await tx.transactionHistory.create({ data: { invoice_id: m.id, company_id: row.company_id, estado_anterior: null, estado_nuevo: 'ANULADO', codigo_error: `M1_${row.kind}_REVERSAL_PENDING`, mensaje_error: `ANULADO con reversión pendiente: ${row.identifier}.` } });
       }
-      if (accepted && row.kind === 'RC') {
+      if (accepted && row.kind === 'RC' && !esAnulacionRc(row.members)) {
         const updated = await tx.invoice.updateMany({ where: { company_id: row.company_id, id: { in: snapshot.map(m => m.id) }, estado: 'PENDIENTE', transport_uncertain: false }, data: { estado: 'ACEPTADO' } });
         if (updated.count !== snapshot.length) throw new Error('SUMMARY_MEMBER_STATE_CHANGED');
         // La reentrega de un comprobante final solo completa el puente contable;
         // la publicación transaccional impide perder ese trabajo tras el CDR.
-        for (const member of snapshot) if (!await this.queue.enqueueInvoiceInTx(tx, member.id)) throw new Error('SUMMARY_ACCOUNTING_ENQUEUE_FAILED');
+        for (const member of snapshot) {
+          await tx.transactionHistory.create({ data: { invoice_id: member.id, company_id: row.company_id, estado_anterior: 'PENDIENTE', estado_nuevo: 'ACEPTADO', codigo_error: '0', mensaje_error: `Aceptado mediante ${row.identifier}.` } });
+          if (!await this.queue.enqueueInvoiceInTx(tx, member.id)) throw new Error('SUMMARY_ACCOUNTING_ENQUEUE_FAILED');
+        }
       }
       return tx.invoiceAggregate.update({ where: { id: row.id }, data: { state: accepted ? 'ACCEPTED' : 'REJECTED', transport_uncertain: false, error: accepted ? null : cdr.description,
-        result: { codigo: cdr.responseCode, mensaje: cdr.description, referencia: cdr.referenceId, status, contenido, xml: cdr.rawXml, ...(accepted && row.kind === 'RA' ? { bridgeReversals: raReversalWork(snapshot.map(m => m.id)) } : {}) } as unknown as Prisma.InputJsonValue } });
+        result: { codigo: cdr.responseCode, mensaje: cdr.description, referencia: cdr.referenceId, status, contenido, xml: cdr.rawXml, ...(accepted && (row.kind === 'RA' || esAnulacionRc(row.members)) ? { bridgeReversals: raReversalWork(snapshot.map(m => m.id)) } : {}) } as unknown as Prisma.InputJsonValue } });
     });
   }
 }

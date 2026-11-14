@@ -3879,3 +3879,43 @@ Para la suite completa se creó una base exclusiva `m1_ci388_test` en el contene
 | Front | 179 archivos / 1387 pruebas | 179 archivos / 1387 pruebas |
 
 Ambas suites completas aprobadas. Back conserva 12 snapshots. El incremento back se descompone en 14 pruebas nuevas y 55 pruebas previamente omitidas que ahora se ejecutan al habilitar PostgreSQL; no son 69 pruebas nuevas. Los conteos corresponden al checkout de esta rama. La regresión de DLQ que fallaba en CI está incluida y aprobada. Lint y builds completos back/front OK, posteriores a las suites para evitar regeneración concurrente de Prisma. Los 48 archivos front no cambian; el manifiesto conserva 49 entradas (incluido FERRY.md), verificadas. Un commit de corrección en la misma rama, sin abrir PR ni realizar emisiones reales.
+
+
+## Aclaración y terminación del punto 4 — fase 0 y construcción (2026-11-14)
+
+Cabeza remota comprobada al iniciar: `70dd9fd7c4cca965556707fd36d9f1f499465d38`, igual al checkout local. Ya contiene los tres menores en `37de84ea` (mensaje requerido, hora de actualización y Acción visible), la exclusión BC01/BD01 de RA en `58b3d533` y YA_EN_COLA en `70dd9fd7`. Se comprobó el código bajo frontend/ y los servicios del back. Se conservan esos commits; no se repiten ni se crean commits vacíos.
+
+Pendientes constatados: 10 seguía deshabilitado porque la adenda anterior exigía habilitación completa; la nueva aclaración autoriza expresamente el alcance restringido previamente considerado viable. RC solo construía altas (ConditionCode 1), excluía documentos aceptados y su materialización únicamente pasaba PENDIENTE a ACEPTADO: la indicación de usar RC no equivalía a tener un flujo de anulación. Se construyen estos pendientes como un bloque del punto 4. La base medida es back 365 suites / 3618 pruebas (4 suites / 38 pruebas omitidas, con PostgreSQL) y front 179 archivos / 1387 pruebas.
+
+### 10 Otros conceptos — habilitado con alcance restringido
+
+Se incorpora al catálogo back/front como ajuste monetario no total sobre líneas de una factura o boleta origen real, del mismo adquirente, con cantidades, afectación y unidad históricas, importe positivo y control de saldo del servidor. No devuelve unidades físicas. El sustento específico es obligatorio: vacío o el mero nombre del catálogo se rechazan; el selector deja el campo vacío para que se describa el ajuste. Se conserva el tratamiento de pago de las notas existente.
+
+No habilita rectificación exclusiva de IGV, impuestos libres, líneas ajenas, cambios de afectación, documentos sin origen ni las referencias excepcionales del código 10. Los importes se siguen calculando desde las líneas con las reglas del servidor; no se relajan las guardas comunes. El XML usa CreditNoteLine, BillingReference al origen y ResponseCode 10. Las pruebas cubren ambas rutas (pantalla/fiscal), sustento, origen, SKU, afectación, cantidades, saldo, precio cero y XML firmado contra XSD/XSL oficiales sin transporte. Este alcance sustituye la detención conjunta anterior únicamente para 10.
+
+### 08 Bonificación — solo documentado, permanece deshabilitado
+
+Se conserva el veredicto de la guía oficial: bonificación posterior sobre bienes vendidos, con exclusión de boletas. Habilitarla exige definir unidades bonificadas y su consumo separado de devoluciones físicas/importes históricos. No se añade 08 al catálogo habilitado, ni se simula como 10 o descuento genérico. Los detalles y fuentes previos siguen vigentes para 08.
+
+### Notas de boleta — exclusión de RA conservada y anulación RC construida
+
+La pestaña nueva “Anulación de notas (RC)” permite seleccionar BC01/BD01 aceptadas u observadas, por su fecha original de emisión, ver el XML de selección, indicar motivo y confirmar que no fueron otorgadas al receptor antes de confirmar el envío. Usa endpoints propios `resumenes/anulacion-notas` (GET), `/vista` (POST) y `/enviar` (POST con permisos ADMIN/OPERADOR_FACTURACION). No ejecuta envíos al abrir la pantalla ni mezcla anulaciones con altas. FC01/FD01 permanecen fuera de este RC y siguen sujetas a RA.
+
+El XML RC conserva emisor, receptor, referencia a boleta, fecha original y desglose fiscal; usa ConditionCode 3 del Catálogo 19. Se verifica la ventana de siete días desde una aceptación acreditada (historial fiscal código 0 o fecha del CDR), sin usar updated_at ni eventos del puente para prolongarla; si falta evidencia de fecha, la fila queda excluida con motivo. La guarda se repite antes del primer despacho; no impide consultar tickets existentes.
+
+La reserva usa los locks por empresa/documento existentes, un fingerprint distinto del alta y un snapshot durable de la operación 3, fecha de aceptación y confirmación de no otorgamiento. Un alta RC anterior aceptada no impide reservar la anulación; otra reserva activa o anulación sí. La recuperación conserva esta operación. El CDR se coteja con identificador, emisor, XML/hash, miembros y ConditionCode del snapshot. Solo su aceptación cambia ACEPTADO/OBSERVADO a ANULADO atómicamente y deja trabajo durable de reversión; rechazo o error no anula. La repetición del CDR no duplica transiciones ni trabajos.
+
+La reversión reutiliza el mecanismo local de RA, ampliado a RC de anulación: contramovimientos y asientos inversos de los registros reales, con locks y claves de idempotencia existentes. No abre transporte fiscal ni publica de nuevo la nota. Las marcas RC_REVERSAL_PENDING/DONE y el Monitor distinguen aceptación fiscal de efectos locales pendientes. No se crea migración: toda la operación vive en los JSON de snapshot/resultado existentes.
+
+Fuentes oficiales adicionales: [Catálogo 19, estado 3 Anulado](https://www.sunat.gob.pe/legislacion/superin/2017/anexoE-245-2017.pdf) y [Guía SUNAT de Resumen Diario, estado de ítem/no otorgamiento](https://cpe.sunat.gob.pe/sites/default/files/inline-files/GUIA_Resumen_de_Boletas_11-01-2018%20%282%29_2_0%20%281%29_0.pdf). El canal y la ventana de baja de notas a boleta se contrastan además con las fuentes vigentes ya enlazadas (orientación SUNAT y Anexo XII de R.S. 000048-2026). Solo se usan dobles de transporte; PostgreSQL es local, con las migraciones existentes.
+
+### Cierre vigente del bloque completado
+
+| Capa | Base remota 70dd9fd7 | Cierre |
+| --- | --- | --- |
+| Back con PostgreSQL | 365 suites / 3618 pruebas | 368 suites / 3653 pruebas |
+| Front | 179 archivos / 1387 pruebas | 179 archivos / 1391 pruebas |
+
+Suites completas verdes, incluidas las integraciones de YA_EN_COLA y de anulación RC; back mantiene 4 suites / 38 pruebas omitidas y 12 snapshots aprobados. Incremento: 35 pruebas back y 4 front. Las únicas expectativas antiguas ajustadas fijaban el conjunto de motivos sin el 10 en back/front; 08 permanece excluido. Lint y builds completos back/front OK. El build final se ejecutó después de las suites, sin regeneración Prisma concurrente con Jest.
+
+Estado final: menores aplicados en 37de84ea; exclusión BC01/BD01 de RA en 58b3d533; YA_EN_COLA en 70dd9fd7; este bloque completa 10 restringido y la anulación RC. 08 queda solo documentado conforme al alcance. Se entrega un único commit adicional del bloque pendiente, sin duplicar los bloques ya aplicados ni abrir otro PR. El ferry tiene 55 archivos frontend más FERRY.md (56 entradas SHA-256 verificadas). Su aplicación al repo frontend y despliegue siguen a cargo del tren de revisión. Sin migraciones nuevas ni emisiones reales.

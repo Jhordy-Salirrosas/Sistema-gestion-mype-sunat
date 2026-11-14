@@ -1,3 +1,4 @@
+import { validarNotaAnulacionRc } from './summaryCancellation';
 import { redondearMoneda as r2 } from '../../money';
 /**
  * Comunicación de baja (RA) y resumen diario de boletas (RC) — TA-67.
@@ -62,6 +63,8 @@ export interface ComprobanteAgregado {
   /** Estado del comprobante ante SUNAT: solo lo aceptado puede darse de baja. */
   motivoBaja?: string;
   fiscal?: SummaryFiscal;
+  condicion?: '3';
+  fechaAceptacion?: string;
 }
 
 /** Datos del emisor y del envío del resumen. */
@@ -130,6 +133,7 @@ export const ESTADOS_YA_INFORMADOS: readonly string[] = [
  * con su motivo en lugar de que desaparezca sin explicación.
  */
 export const excluidoDelResumen = (c: ComprobanteAgregado): boolean =>
+  c.condicion === '3' ? !['ACEPTADO', 'OBSERVADO'].includes(c.estado) :
   ['RECHAZADO', 'ANULADO'].includes(c.estado) ||
   ESTADOS_YA_INFORMADOS.includes(c.estado);
 
@@ -278,7 +282,7 @@ const lineaResumen = (c: ComprobanteAgregado, index: number): string => {
       <cbc:ID>${esc(c.serie)}-${String(c.correlativo).padStart(8, '0')}</cbc:ID>
       <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>${esc(c.numDocCliente)}</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>${esc(c.tipoDocCliente)}</cbc:AdditionalAccountID></cac:AccountingCustomerParty>${c.documentoAfectado ? `
       <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${esc(c.documentoAfectado)}</cbc:ID><cbc:DocumentTypeCode>03</cbc:DocumentTypeCode></cac:InvoiceDocumentReference></cac:BillingReference>` : ''}
-      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <cac:Status><cbc:ConditionCode>${c.condicion ?? '1'}</cbc:ConditionCode></cac:Status>
       <sac:TotalAmount currencyID="PEN">${money(c.total)}</sac:TotalAmount>
 ${c.fiscal.pagos.map(p => `      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">${money(p.monto)}</cbc:PaidAmount><cbc:InstructionID>${p.codigo}</cbc:InstructionID></sac:BillingPayment>`).join('\n')}
 ${c.fiscal.tributos.map(t => `      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${money(t.impuesto)}</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">${money(t.impuesto)}</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>${t.codigo}</cbc:ID><cbc:Name>${names[t.codigo][0]}</cbc:Name><cbc:TaxTypeCode>${names[t.codigo][1]}</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>`).join('\n')}
@@ -307,6 +311,10 @@ export const construirResumenDiario = (
     });
   }
 
+  if (comprobantes.some(c => c.condicion === '3')) {
+    if (!comprobantes.every(c => c.condicion === '3')) throw new BadRequestException('RC_ANULACION_MIXTA: no mezcle altas y anulaciones');
+    for (const c of comprobantes) validarNotaAnulacionRc(c, cabecera.fechaGeneracion);
+  }
   const incluidos = comprobantes.filter((c) => !excluidoDelResumen(c));
 
   if (incluidos.length === 0) {
