@@ -58,6 +58,7 @@ export interface ComprobanteAgregado {
   igv: number;
   /** Documento que la nota modifica; obligatorio en 07 y 08. */
   documentoAfectado?: string;
+  tipoDocumentoAfectado?: string | null;
   /** Estado del comprobante ante SUNAT: solo lo aceptado puede darse de baja. */
   motivoBaja?: string;
   fiscal?: SummaryFiscal;
@@ -230,8 +231,10 @@ export const validarPlazoResumen = (
 export const TIPOS_EN_BAJA: readonly string[] = ['01', '07', '08'];
 
 /** ¿El comprobante puede ir en una comunicación de baja? */
-export const vaEnBaja = (c: ComprobanteAgregado): boolean =>
-  TIPOS_EN_BAJA.includes(c.tipoComprobante);
+export const vaEnBaja = (c: Pick<ComprobanteAgregado, 'tipoComprobante' | 'serie' | 'documentoAfectado' | 'tipoDocumentoAfectado'>): boolean =>
+  TIPOS_EN_BAJA.includes(c.tipoComprobante) &&
+  !(['07', '08'].includes(c.tipoComprobante) &&
+    (/^B/i.test(c.serie.trim()) || /^B/i.test(c.documentoAfectado?.trim() ?? '') || c.tipoDocumentoAfectado === '03'));
 
 /**
  * Valida la regla 2308 para un conjunto de bajas.
@@ -247,10 +250,13 @@ export const validarTiposEnBaja = (
 
   const c = fuera[0];
   const esBoleta = c.tipoComprobante === '03';
+  const esNota = ['07', '08'].includes(c.tipoComprobante);
 
   throw new BadRequestException({
     code: 'BAJA_TIPO_INVALIDO',
-    message: esBoleta
+    message: esNota
+      ? `La nota ${c.serie}-${c.correlativo} vinculada a boleta no admite RA: su baja corresponde al resumen diario (RC).`
+      : esBoleta
       ? `La boleta ${c.serie}-${c.correlativo} no se puede dar de baja con una ` +
         'comunicación RA (regla 2308): las boletas se anulan en el resumen ' +
         'diario, restándolas en un resumen posterior.'

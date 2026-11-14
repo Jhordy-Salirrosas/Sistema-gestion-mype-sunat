@@ -2,7 +2,7 @@
 
 Rama única `fix/m1-arreglos-auditorias`, desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`. Sin PR, despliegue, migraciones ni emisiones reales. Pruebas con dobles.
 
-Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 42 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
+Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 44 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
 
 ## Veredictos
 
@@ -17,7 +17,7 @@ Estado inicial previo a la segunda adenda: puntos 1–3 construidos y punto 4 do
 
 `frontend/` conserva todos los archivos heredados de pulidos y superpone los de este paquete. Cada ruta es relativa a la raíz del repo frontend; no crear una segunda carpeta frontend en destino. Verificar primero `sha256sum -c SHA256SUMS` en el repo backend y copiar `frontend/.` sobre el checkout frontend. Conservar los demás archivos del destino. Revisar cualquier avance posterior que toque esas rutas antes de aplicar.
 
-`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 42 archivos frontend y por este FERRY.md (43 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
+`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 44 archivos frontend y por este FERRY.md (45 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
 
 ## Archivos de este paquete por punto
 
@@ -58,7 +58,7 @@ Las rutas de frontend siguientes se transportan con el prefijo `frontend/`; el r
 - FERRY.md
 - SHA256SUMS
 
-## Validación completa
+## Validación anterior a la segunda adenda
 
 | Capa | Base pulidos | Resultado final |
 | --- | --- | --- |
@@ -72,3 +72,31 @@ Las omisiones del back corresponden a suites optativas sin entorno habilitado. L
 ## Segunda adenda — 4a
 
 Base: e15caad9. La habilitación completa y conjunta de 08/10 queda detenida: falta una política de unidades bonificadas y el modelo de cálculo no representa un ajuste exclusivo del IGV conservando la base. Los códigos permanecen deshabilitados. El informe SUNAT 057-2025 y la guía UBL precisan el alcance; el documento de auditoría registra contratos, guardas, ejemplo numérico y requisitos para retomarlo. No se confunde viabilidad futura restringida con habilitación completa validada. La exclusión RA del subpunto 4b continúa de forma independiente.
+
+## Segunda adenda — 4b construido
+
+La norma vigente excluye de RA las notas vinculadas a boletas. Se aplica la guarda común en elegibilidad, construcción XML y comprobación previa al primer despacho: BC01/BD01 quedan fuera; FC01/FD01 permanecen sujetas a las demás reglas. También se excluye una serie F inconsistente cuyo documento afectado sea boleta (por tipo 03 o referencia B). Los tickets ya existentes conservan la consulta, sin reenviar ni modificar el documento fiscal.
+
+El front deshabilita las notas de serie B, indica que corresponden a RC y elimina de la selección efectiva cualquier fila que deje de ser elegible. No incorpora aquí un flujo nuevo de anulación RC.
+
+Archivos adicionales de 4b:
+
+- src/modules/invoices/application/services/summaryDocumentsBuilder.ts
+- src/modules/invoices/application/services/invoiceSummaryService.ts
+- src/modules/invoices/application/services/summaryDispatchDeadline.ts
+- test/unit/invoices/raBoletaNotes.spec.ts
+- test/unit/invoices/consolidado-ra-deadline.spec.ts
+- test/unit/invoices/fiscalDate.spec.ts
+- frontend/src/modules/invoices/components/EnviarBajaPanel.tsx
+- frontend/test/unit/modules/invoices/invoiceBajaEnvio.test.tsx
+
+Los dos archivos front se añaden al ferry heredado: 44 archivos frontend más FERRY.md, 45 entradas SHA-256. El documento de auditoría conserva el historial previo y añade los veredictos definitivos de la segunda adenda: 4a detenido y 4b construido.
+
+## Validación final de la segunda adenda
+
+| Capa | Base de adenda e15caad9 | Final |
+| --- | --- | --- |
+| Back | 351 suites / 3538 pruebas | 352 suites / 3549 pruebas |
+| Front | 179 archivos / 1377 pruebas | 179 archivos / 1382 pruebas |
+
+Suites completas verdes; back mantiene 17 suites / 93 pruebas omitidas y 12 snapshots aprobados. Builds completos back y front OK, posteriores a ambas suites. Incremento de la adenda: 11 pruebas back y 5 front. Veredicto definitivo: 4a detenido por los límites de ajuste fiscal/unidades documentados; 4b construido en elegibilidad, XML, primer despacho y front. Dos commits adicionales, uno por subpunto, en la misma rama. Sin PR, migraciones ni emisiones reales. Ferry compuesto: 44 archivos frontend y FERRY.md, 45 entradas SHA-256 verificadas.

@@ -3820,3 +3820,18 @@ Requisitos para retomarlo: contrato de ajustes por concepto con sustento normati
 ### 4b — fase 0: construir exclusión de notas de boleta en RA
 
 Se ratifica el veredicto previo con el Anexo XII/Anexo 10 de la R.S. 000048-2026/SUNAT, campos 4/5, y la orientación SUNAT sobre baja de notas vinculadas a boletas (fuentes enlazadas en el diagnóstico anterior). `vaEnBaja` acepta por tipo sin distinguir serie; `vistaComunicacionBaja` también incluye 07/08 sin esa guarda, y `EnviarBajaPanel` confía en `incluido` para habilitar selección. Se excluirán BC01/BD01 y vínculos a boleta en elegibilidad y XML; FC01/FD01 conservan su elegibilidad sujeta a las demás guardas. El front deshabilitará esas filas y mostrará que corresponden a RC, incluso ante una vista previa obsoleta que las marque incluidas. No se construye aquí la anulación RC ni se modifica un agregado ya transmitido.
+
+### 4b — implementación y verificación dirigida
+
+`vaEnBaja` excluye notas 07/08 cuya serie empieza en B o cuyo origen indica boleta (referencia B o tipo 03). La vista previa usa esa misma política antes de contar/generar XML y explica la exclusión. El constructor XML la impone también a llamadas directas. La comprobación previa al primer despacho consulta la serie/tipo/origen de los miembros persistidos: impide transmitir RA preparadas por versiones anteriores con notas de boleta. Una RA con ticket ya existente conserva la consulta de ese ticket, sin volver a enviarse. No se alteran plazos, RC, correlativos ni estados fiscales.
+
+`EnviarBajaPanel` deshabilita BC01/BD01 aunque una vista obsoleta las marque incluidas, muestra la vía RC y filtra la selección efectiva al cambiar elegibilidad. FC01/FD01 permanecen seleccionables cuando el servidor las incluye. Pruebas dirigidas: back 5 suites / 105 pruebas, front 1 archivo / 14 pruebas. Cubren elegibilidad, XML, vista, despacho diferido, origen inconsistente y selección obsoleta; todas con dobles. Para 4a se verificaron además 2 suites / 40 pruebas de motivos/saldos existentes, sin habilitar 08/10.
+
+### Cierre de la segunda adenda
+
+| Capa | Base de adenda e15caad9 | Final |
+| --- | --- | --- |
+| Back | 351 suites / 3538 pruebas | 352 suites / 3549 pruebas |
+| Front | 179 archivos / 1377 pruebas | 179 archivos / 1382 pruebas |
+
+Suites completas verdes; back mantiene 17 suites / 93 pruebas omitidas y 12 snapshots aprobados. Builds completos back y front OK, posteriores a ambas suites. Incremento de la adenda: 11 pruebas back y 5 front. Veredicto definitivo: 4a detenido por los límites de ajuste fiscal/unidades documentados; 4b construido en elegibilidad, XML, primer despacho y front. Dos commits adicionales, uno por subpunto, en la misma rama. Sin PR, migraciones ni emisiones reales. Ferry compuesto: 44 archivos frontend y FERRY.md, 45 entradas SHA-256 verificadas.

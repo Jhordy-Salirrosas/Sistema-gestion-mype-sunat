@@ -38,6 +38,7 @@ import {
   motivoYaInformado,
   TIPOS_EN_BAJA,
   vaEnResumen,
+  vaEnBaja,
   type CabeceraResumen,
   type ComprobanteAgregado,
 } from '../../application/services/summaryDocumentsBuilder';
@@ -228,7 +229,7 @@ export class InvoiceSummaryService {
       const asociada = creditos.some(n => ['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const pendiente = creditos.some(n => !['ACEPTADO', 'OBSERVADO'].includes(n.estado));
       const diasHastaHoy = diasDesdeEmision(fechaCorta(f.fecha_emision), cabecera.fechaGeneracion);
-      const motivo = f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
+      const motivo = !vaEnBaja(this.aComprobante(f)) ? 'La nota vinculada a boleta no admite RA; su baja corresponde al resumen diario (RC).' : f.ruc_emisor && f.ruc_emisor !== cabecera.rucEmisor ? 'RUC histórico distinto al emisor efectivo.' : diasHastaHoy !== null && (diasHastaHoy < 0 || diasHastaHoy > 7) ? 'Fuera del plazo de 7 días respecto de la generación.' : asociada ? 'Tiene notas asociadas.' : pendiente ? 'Nota de crédito en proceso.' : reservados.has(f.id) ? 'Ya reservado en un agregado.' : !['ACEPTADO', 'OBSERVADO'].includes(f.estado) ? `Estado ${f.estado}: solo aceptados u observados admiten baja.` : '';
       const admiteBaja = !motivo && (!seleccion || seleccion.some(l => l.id === f.id));
       return {
         ...linea,
@@ -334,9 +335,13 @@ export class InvoiceSummaryService {
     customer_identity_type: string | null;
     customer_identity_number: string | null;
     total_igv: unknown;
+    referenced_series_correlative?: string | null;
+    referenced_document_type?: string | null;
   }): ComprobanteAgregado {
     return {
       tipoComprobante: fila.tipo_comprobante,
+      documentoAfectado: fila.referenced_series_correlative ?? undefined,
+      tipoDocumentoAfectado: fila.referenced_document_type,
       serie: fila.serie,
       correlativo: fila.correlativo,
       fechaEmision: fechaCorta(fila.fecha_emision),
