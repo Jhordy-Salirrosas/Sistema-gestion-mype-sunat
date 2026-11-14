@@ -133,24 +133,56 @@ describe('PrismaLandedCostRepository', () => {
     });
   });
 
-  it('debe buscar hoja de costeo por shipmentId con relaciones anidadas', async () => {
+  it('debe buscar hoja de costeo por shipmentId con relaciones anidadas y mapear series_breakdown', async () => {
     prismaMock.landedCostSheet.findFirst = jest.fn().mockResolvedValue({
       id: 'sheet-1',
       shipment_id: 'ship-1',
+      total_inventory_cost_pen: 402900,
+      shipment: {
+        company_id: 'company-1',
+        declarations: [
+          {
+            items: [
+              {
+                id: 'it-1',
+                series_order: 1,
+                product_code: 'POR-120',
+                commercial_description: 'Porcelanato',
+                quantity: 100,
+                allocated_cif_pen: 1000,
+                allocated_duties_pen: 60,
+                allocated_local_cost_pen: 50,
+                final_landed_cost_unit_pen: 11.1,
+                destination_type: 'MERCADERIA',
+              },
+            ],
+          },
+        ],
+      },
     });
 
-    const result = await repository.findLandedCostSheetByShipmentId('ship-1');
+    const result = await repository.findLandedCostSheetByShipmentId('ship-1', 'company-1');
     expect(result?.id).toBe('sheet-1');
+    expect(result?.series_breakdown).toHaveLength(1);
+    expect(result?.series_breakdown[0].product_code).toBe('POR-120');
+    expect(result?.itemsProration).toHaveLength(1);
     expect(prismaMock.landedCostSheet.findFirst).toHaveBeenCalledWith({
       where: {
         OR: [
           { shipment_id: 'ship-1' },
           { shipment: { shipment_number: 'ship-1' } },
         ],
+        shipment: { company_id: 'company-1' },
       },
       include: expect.objectContaining({
         shipment: expect.any(Object),
       }),
     });
+  });
+
+  it('debe retornar null si la hoja de liquidación no existe', async () => {
+    prismaMock.landedCostSheet.findFirst = jest.fn().mockResolvedValue(null);
+    const result = await repository.findLandedCostSheetByShipmentId('non-existent');
+    expect(result).toBeNull();
   });
 });
