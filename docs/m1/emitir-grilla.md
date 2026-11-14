@@ -43,3 +43,5 @@ Los puntos 4 y 8 continúan por su cambio visual explícito; no se introduce una
 6. Construido: valor unitario fijo sin callback de modificación; precisión del valor/precio y payload conservada. Descuentos por línea y global siguen siendo los controles comerciales. Pruebas dirigidas: 3 archivos / 15 pruebas aprobadas, incluida preservación del valor precargado del origen en notas.
 
 7. Construido: ICBPER usa entrada entera no negativa; rechaza decimales, signos y exponentes al ingresar y no los redondea. Cero es válido; una entrada vacía conserva la validación de obligatoriedad. Pruebas dirigidas compartidas de entrada: 2 archivos / 20 pruebas aprobadas.
+
+8. Construido el cambio de presentación: afectación/tributo como dato fijo, incluidos los códigos 10/20/30/40; Gratuita conserva activación, motivo fiscal y restauración del precio original. Sin cambio de regla del back, ya existente. Pruebas dirigidas: 1 archivo / 8 pruebas aprobadas.

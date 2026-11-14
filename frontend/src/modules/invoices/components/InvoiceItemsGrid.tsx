@@ -27,15 +27,8 @@ import {
 import { CODIGOS_DETRACCION } from '../lib/invoiceDetraccion';
 import { revisarGrilla } from '../lib/invoiceStockLinea';
 import type { ProductoBuscado } from '../lib/invoiceSearch';
-import { type AfectacionIgv } from '../lib/invoiceTaxes';
 
 const OPCIONES_GRATUITAS = Object.entries(NOMBRES_AFECTACION).filter(([codigo]) => { try { return normalizarAfectacionProducto(codigo) === 'GRATUITA'; } catch { return false; } });
-
-const OPCIONES_AFECTACION: readonly { value: AfectacionIgv; label: string }[] = [
-  { value: 'GRAVADA', label: '10 - Gravada onerosa (tributo 1000 - IGV)'  },
-  { value: 'EXONERADA', label: '20 - Exonerada (tributo 9997 - Exonerado)'  },
-  { value: 'INAFECTA', label: '30 - Inafecta (tributo 9998 - Inafecto)'  },
-];
 
 const CLASE_CELDA =
   'h-8 min-w-0 w-full rounded border bg-background px-2 text-xs text-foreground';
@@ -156,6 +149,8 @@ export const InvoiceItemsGrid = ({
           <tbody className="block space-y-3">
             {items.map((item, i) => {
               const errores = erroresCamposLinea(item, esNota);
+              const codigoAfectacion = item.codigoAfectacion || ({ GRAVADA: '10', EXONERADA: '20', INAFECTA: '30' } as Record<string, string>)[item.afectacion];
+              const tributo = codigoAfectacion === '40' ? '9995 - Exportación' : item.afectacion === 'GRAVADA' ? '1000 - IGV' : item.afectacion === 'EXONERADA' ? '9997 - Exonerado' : '9998 - Inafecto';
               const visible = (campo: keyof typeof errores) => Boolean(errores[campo]) && (mostrarErrores || editados.has(`${item.clave}:${campo}`));
               const totales = calcularItem(item);
               const revisionLinea = revision.lineas[i];
@@ -272,9 +267,11 @@ export const InvoiceItemsGrid = ({
                     {item.afectacion === 'GRATUITA' ? <select aria-label={`Motivo de gratuidad de la línea ${i + 1}`} className={CLASE_CELDA} value={item.codigoAfectacion ?? ''} disabled={esNota} onChange={e => onCambiar(i, { codigoAfectacion: e.target.value })}>
                       <option value="">Seleccione el motivo</option>
                       {OPCIONES_GRATUITAS.map(([codigo, nombre]) => <option key={codigo} value={codigo}>{codigo} - {nombre}</option>)}
-                    </select> : <select aria-label={`Afectación de la línea ${i + 1}`} className={CLASE_CELDA} disabled={Boolean(item.afectacionHeredada)} value={item.afectacion} onChange={e => { if (!item.afectacionHeredada) onCambiar(i, { afectacion: e.target.value as AfectacionIgv }); }}>
-                      {OPCIONES_AFECTACION.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>}
+                    </select> : <p aria-label={`Afectación de la línea ${i + 1}`} className="rounded border bg-muted/30 px-2 py-1 text-xs break-words">
+                      {codigoAfectacion} - {NOMBRES_AFECTACION[codigoAfectacion] ?? item.afectacion}
+                      {' · Tributo '}{tributo}
+                    </p>}
+
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Detracción</span>
                     <select
