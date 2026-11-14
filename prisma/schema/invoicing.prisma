@@ -76,6 +76,7 @@ model Invoice {
 
   items                       InvoiceItem[]
   history                     TransactionHistory[]
+  detraction_deposits          InvoiceDetractionDeposit[]
 
   created_at                  DateTime      @default(now())
   updated_at                  DateTime      @updatedAt
@@ -166,4 +167,21 @@ model InvoiceAggregate {
   @@unique([company_id, kind, fingerprint])
   @@index([company_id, state, created_at])
   @@map("invoice_aggregates")
+}
+
+// La constancia histórica se conserva; toda alta/edición pasa la validación del servicio.
+model InvoiceDetractionDeposit {
+  id              String   @id @default(uuid())
+  company_id      String
+  invoice_id      String
+  invoice         Invoice  @relation(fields: [company_id, invoice_id], references: [company_id, id], onDelete: Restrict, onUpdate: Cascade, map: "invoice_detraction_deposits_invoice_fkey")
+  date            DateTime
+  amount          Decimal  @db.Decimal(14, 2)
+  constancia      String?
+  legacy          Boolean  @default(false)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([company_id, invoice_id, date])
+  @@map("invoice_detraction_deposits")
 }
