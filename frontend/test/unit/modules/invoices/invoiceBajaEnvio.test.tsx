@@ -96,3 +96,19 @@ it('una selección que deja de ser elegible no pasa a preview ni a envío', () =
   expect((screen.getByRole('button', { name: 'Enviar baja a SUNAT' }) as HTMLButtonElement).disabled).toBe(true);
   expect(invoicesApi.previsualizarBaja).not.toHaveBeenCalled(); expect(invoicesApi.enviarBaja).not.toHaveBeenCalled();
 });
+
+it('explica el motivo requerido al borrarlo y retira el error al completarlo', () => {
+  render(<EnviarBajaPanel fecha="2026-11-09" vista={vista} onEnviado={vi.fn()} />);
+  fireEvent.click(screen.getByLabelText('Dar de baja F001-00000062'));
+  const motivo = screen.getByLabelText('Motivo de baja F001-00000062');
+  fireEvent.change(motivo, { target: { value: '   ' } });
+  expect(screen.getByText('El motivo de baja es obligatorio.')).toBeTruthy();
+  expect(motivo.getAttribute('aria-invalid')).toBe('true');
+  expect(document.getElementById(motivo.getAttribute('aria-describedby')!)?.textContent).toBe('El motivo de baja es obligatorio.');
+  expect((screen.getByRole('button', { name: 'Ver XML de selección' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(motivo, { target: { value: 'Corrección comercial' } });
+  expect(screen.queryByText('El motivo de baja es obligatorio.')).toBeNull();
+  expect(motivo.getAttribute('aria-invalid')).toBe('false');
+  expect((screen.getByRole('button', { name: 'Ver XML de selección' }) as HTMLButtonElement).disabled).toBe(false);
+  expect(invoicesApi.previsualizarBaja).not.toHaveBeenCalled();
+});

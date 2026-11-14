@@ -3835,3 +3835,27 @@ Se ratifica el veredicto previo con el Anexo XII/Anexo 10 de la R.S. 000048-2026
 | Front | 179 archivos / 1377 pruebas | 179 archivos / 1382 pruebas |
 
 Suites completas verdes; back mantiene 17 suites / 93 pruebas omitidas y 12 snapshots aprobados. Builds completos back y front OK, posteriores a ambas suites. Incremento de la adenda: 11 pruebas back y 5 front. Veredicto definitivo: 4a detenido por los límites de ajuste fiscal/unidades documentados; 4b construido en elegibilidad, XML, primer despacho y front. Dos commits adicionales, uno por subpunto, en la misma rama. Sin PR, migraciones ni emisiones reales. Ferry compuesto: 44 archivos frontend y FERRY.md, 45 entradas SHA-256 verificadas.
+
+
+## Adenda menor — Bajas y Monitor (2026-11-14, America/Lima)
+
+Base: `fix/m1-arreglos-auditorias` `58b3d533ed11978a322a93e74e403e2b38e29c18`. Front reconstruido con el ferry compuesto. Base medida de la adenda anterior: back 352 suites / 3549 pruebas (17 suites / 93 pruebas omitidas, 12 snapshots), front 179 archivos / 1382 pruebas. Esta adenda solo cambia front y documentos; conserva el veredicto detenido de 4a.
+
+- **a, confirmado y corregido:** al borrar o dejar en blanco el motivo de una fila seleccionada, el input muestra “El motivo de baja es obligatorio.”, asociado con aria-describedby y aria-invalid. La explicación desaparece al completar el motivo. Se conserva la guarda del botón Ver XML y no se realizan solicitudes mientras falta el campo.
+- **b, confirmado y corregido:** las recargas de cola y agregados muestran su última lectura completada en HH:mm:ss, America/Lima. La marca se actualiza al terminar correctamente, incluso con lista vacía; si falla una recarga conserva la hora del último éxito y el error visible. Una carga inicial fallida no muestra una actualización completada.
+- **c, confirmado y corregido:** las celdas y badges heredaban whitespace-nowrap y el layout automático asignaba ancho al texto largo, desplazando Acción. El Monitor usa tabla de ancho fijo y columnas proporcionadas, permite envolver nombres/estados/botones y coloca la explicación del error bajo Estado. Acción conserva su espacio sin añadir otra columna. El tipo ya está en `Invoice.tipoComprobante`; se muestra bajo el número, sin nueva llamada ni cambio backend. No se modifican componentes globales de tabla/badge/botón.
+
+Verificación dirigida: 3 archivos / 33 pruebas aprobadas. Comprobación adicional en Chromium headless con API sustituida por un adaptador local de datos ficticios, margen lateral de 256 px y nombres/motivos largos: a viewport 1280 px, tabla/contenedor/scroll interno 961/961/961 px y borde derecho de Acción 1241 px; a 1024 px, 705/705/705 px y borde de Acción 985 px. El botón Reintentar queda dentro del viewport y el tipo Factura (01) es visible en ambos. El montaje temporal fue retirado; no se transportan archivos de prueba visual ni se consulta producción.
+
+Los tres ítems siguen siendo menores y están construidos; ninguno de esta adenda queda detenido. Sin PR, migraciones ni emisiones reales.
+
+### Validación final de la adenda menor
+
+| Capa | Base 58b3d533 | Cierre |
+| --- | --- | --- |
+| Front | 179 archivos / 1382 pruebas | 179 archivos / 1387 pruebas |
+| Back (sin cambios) | 352 suites / 3549 pruebas | misma última corrida verde |
+
+Suite completa del front verde, cinco pruebas adicionales. Tras corregir una opción no admitida por los tipos de la consulta de elementos en las pruebas, se repitieron las 14 pruebas del Monitor afectado y el build completo (tsc -b + vite), ambos aprobados. Esa corrección conserva el comportamiento predeterminado de coincidencia del nombre del botón. El back conserva su build y su última suite de la adenda anterior; no se vuelven a ejecutar al no cambiar código ni dependencias del servidor. Conserva 17 suites / 93 pruebas omitidas y 12 snapshots aprobados.
+
+Ferry: 48 archivos frontend coincidentes con el checkout validado, más FERRY.md; 49 entradas SHA-256 verificadas. Un único commit adicional para los tres ítems menores en la misma rama. Sin PR, migraciones ni emisiones reales.

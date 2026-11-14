@@ -2,7 +2,7 @@
 
 Rama única `fix/m1-arreglos-auditorias`, desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`. Sin PR, despliegue, migraciones ni emisiones reales. Pruebas con dobles.
 
-Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 44 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
+Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 48 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
 
 ## Veredictos
 
@@ -17,7 +17,7 @@ Estado inicial previo a la segunda adenda: puntos 1–3 construidos y punto 4 do
 
 `frontend/` conserva todos los archivos heredados de pulidos y superpone los de este paquete. Cada ruta es relativa a la raíz del repo frontend; no crear una segunda carpeta frontend en destino. Verificar primero `sha256sum -c SHA256SUMS` en el repo backend y copiar `frontend/.` sobre el checkout frontend. Conservar los demás archivos del destino. Revisar cualquier avance posterior que toque esas rutas antes de aplicar.
 
-`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 44 archivos frontend y por este FERRY.md (45 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
+`SHA256SUMS` contiene un hash SHA-256 por cada uno de los 48 archivos frontend y por este FERRY.md (49 entradas). No incluye su propio hash. Es el inventario íntegro y verificable del ferry compuesto.
 
 ## Archivos de este paquete por punto
 
@@ -100,3 +100,34 @@ Los dos archivos front se añaden al ferry heredado: 44 archivos frontend más F
 | Front | 179 archivos / 1377 pruebas | 179 archivos / 1382 pruebas |
 
 Suites completas verdes; back mantiene 17 suites / 93 pruebas omitidas y 12 snapshots aprobados. Builds completos back y front OK, posteriores a ambas suites. Incremento de la adenda: 11 pruebas back y 5 front. Veredicto definitivo: 4a detenido por los límites de ajuste fiscal/unidades documentados; 4b construido en elegibilidad, XML, primer despacho y front. Dos commits adicionales, uno por subpunto, en la misma rama. Sin PR, migraciones ni emisiones reales. Ferry compuesto: 44 archivos frontend y FERRY.md, 45 entradas SHA-256 verificadas.
+
+## Adenda menor — Bajas y Monitor
+
+Base 58b3d533. Los tres ítems son menores y quedan construidos en un único commit adicional, solo front/documentos:
+
+- Motivo de baja vacío: mensaje obligatorio junto al campo, enlazado de forma accesible; se conserva el bloqueo de Ver XML hasta completarlo.
+- Cola y agregados: última actualización exitosa en HH:mm:ss de Lima. Los errores no adelantan la marca; se conserva el último éxito.
+- Comprobantes en vuelo: columnas proporcionadas, texto/badges/botones ajustables y Acción visible sin desplazamiento lateral en las comprobaciones de 1280/1024 px, con margen lateral de 256 px y textos largos. Tipo de comprobante bajo el número usando el dato existente, sin llamada adicional. No se cambian componentes globales.
+
+Archivos de esta adenda (rutas relativas al frontend, bajo frontend/ en el ferry):
+
+- src/modules/invoices/components/EnviarBajaPanel.tsx
+- src/modules/invoices/components/InvoiceLastUpdated.tsx
+- src/modules/invoices/components/InvoiceAggregateMonitor.tsx
+- src/modules/invoices/pages/InvoiceMonitorPage.tsx
+- test/unit/modules/invoices/invoiceBajaEnvio.test.tsx
+- test/unit/modules/invoices/invoiceMonitorRetry.test.tsx
+- test/unit/modules/invoices/invoice8cAggregateMonitor.test.tsx
+
+El ferry compuesto contiene ahora 48 archivos frontend más FERRY.md, con 49 entradas SHA-256. La última sección del documento de auditoría registra los veredictos y las medidas de Chromium. No se transporta el montaje visual temporal. El subpunto 4a conserva su detención documentada; esta adenda no cambia sus catálogos ni el backend.
+
+## Validación final de la adenda menor
+
+| Capa | Base 58b3d533 | Cierre |
+| --- | --- | --- |
+| Front | 179 archivos / 1382 pruebas | 179 archivos / 1387 pruebas |
+| Back (sin cambios) | 352 suites / 3549 pruebas | misma última corrida verde |
+
+Suite completa del front verde, cinco pruebas adicionales. Tras corregir una opción no admitida por los tipos de la consulta de elementos en las pruebas, se repitieron las 14 pruebas del Monitor afectado y el build completo (tsc -b + vite), ambos aprobados. Esa corrección conserva el comportamiento predeterminado de coincidencia del nombre del botón. El back conserva su build y su última suite de la adenda anterior; no se vuelven a ejecutar al no cambiar código ni dependencias del servidor. Conserva 17 suites / 93 pruebas omitidas y 12 snapshots aprobados.
+
+Ferry: 48 archivos frontend coincidentes con el checkout validado, más FERRY.md; 49 entradas SHA-256 verificadas. Un único commit adicional para los tres ítems menores en la misma rama. Sin PR, migraciones ni emisiones reales.
