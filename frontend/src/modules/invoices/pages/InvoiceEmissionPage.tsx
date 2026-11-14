@@ -230,8 +230,8 @@ export default function InvoiceEmissionPage() {
 
   // Retención del IGV: es del CLIENTE, no del comprobante.
   const retencion = useMemo(
-    () => calcularRetencion(importeTotal, agenteRetencion, 1, detraccion.monto),
-    [importeTotal, agenteRetencion, detraccion.monto],
+    () => calcularRetencion(importeTotal, agenteRetencion, 1, detraccion.monto, totales.gravado),
+    [importeTotal, agenteRetencion, detraccion.monto, totales.gravado],
   );
 
   const reparto = useMemo(

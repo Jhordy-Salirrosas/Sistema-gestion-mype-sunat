@@ -87,15 +87,17 @@ export const calcularDetraccion = (
  * Calcula el monto de la retención del IGV (3%).
  *
  * Aplica solo para clientes Agentes de Retención cuando el importe total supera
- * el umbral de S/ 700.00.
+ * el umbral de S/ 700.00. Una base gravada explícita cero excluye retención;
+ * los consumidores documentales la informan y los mixtos conservan su cálculo.
  */
 export const calcularRetencion = (
   importeTotal: number,
   esAgenteRetencion: boolean,
   tipoCambio = 1,
   montoDetraccion = 0,
+  baseGravada?: number,
 ): number => {
-  if (!esAgenteRetencion || montoDetraccion > 0) return 0;
+  if (baseGravada === 0 || !esAgenteRetencion || montoDetraccion > 0) return 0;
 
   const totalEnSoles = round2(importeTotal * tipoCambio);
   if (totalEnSoles <= UMBRAL_SOLES) return 0;
@@ -133,6 +135,7 @@ export const liquidarComprobante = (
     opciones.esAgenteRetencion ?? false,
     tipoCambio,
     montoDetraccion,
+    opGravada,
   );
 
   // SPOT efectivo excluye la retención IGV; solo un régimen reduce el neto.
