@@ -1,7 +1,8 @@
 import { fechaFiscalLima } from '../../fiscalDate';
 import type { GravedadAlerta } from './invoiceAlertService';
 
-export const ESTADOS_PLAZO_ENVIO = ['PENDIENTE', 'EN_COLA', 'PROCESANDO', 'ENVIADO', 'ERROR_RED', 'RECHAZADO'] as const;
+/** Solo estados no finales; RECHAZADO no conserva ventana de envío. */
+export const ESTADOS_PLAZO_ENVIO = ['PENDIENTE', 'EN_COLA', 'PROCESANDO', 'ENVIADO', 'ERROR_RED'] as const;
 export interface DocumentoPlazoEnvio {
   id: string; numero: string; tipoComprobante: string; estado: string;
   fechaEmision: string; fechaLimite: string; diasRestantes: number;
