@@ -23,14 +23,18 @@ export interface KardexMovementRecord {
 
 export interface CustomsDeclarationSummary {
   id: string;
+  shipmentId?: string | null;
   duaNumber: string;
   customsAgencyCode: string;
+  channel?: string | null;
   numerationDate: Date;
+  fobValueUsd?: number;
   cifValueUsd: number;
   cifValuePen: number;
   totalCustomsTaxesPen: number;
   status: string;
   itemsCount: number;
+  items?: CustomsItemEntity[];
   createdAt: Date;
 }
 

@@ -20,6 +20,7 @@ import {
   UpsertCountryDto,
   UpsertPortDto,
   UpdateExchangeRateDto,
+  UpsertCustomsServiceDto,
 } from '../dto/masterDataDto';
 
 /**
@@ -721,5 +722,187 @@ export class MasterDataService {
 
   async deletePort(code: string) {
     return this.prisma.port.delete({ where: { code: code.trim().toUpperCase() } });
+  }
+
+  // -------------------------------------------------------------------------
+  // Servicios Aduaneros / Gastos de Despacho (Sincronizados con inventory_products)
+  // -------------------------------------------------------------------------
+  async listCustomsServices(companyId: string) {
+    const defaultServices = [
+      {
+        sku: 'SRV-AGENCIA-ADU',
+        description: 'Servicio de Agenciamiento Aduanero',
+        category: 'SERVICIOS_ADUANEROS',
+        sunat_unit_code: 'ZZ',
+        tax_affectation: '10',
+        cost_price: 350.0,
+      },
+      {
+        sku: 'SRV-FLETE-LOCAL',
+        description: 'Servicio de Flete Local Callao ➔ Almacén',
+        category: 'SERVICIOS_ADUANEROS',
+        sunat_unit_code: 'ZZ',
+        tax_affectation: '10',
+        cost_price: 450.0,
+      },
+      {
+        sku: 'SRV-ALM-PORT',
+        description: 'Servicio de Almacenaje Terminal Portuario (APM Terminals / DP World)',
+        category: 'SERVICIOS_ADUANEROS',
+        sunat_unit_code: 'ZZ',
+        tax_affectation: '10',
+        cost_price: 600.0,
+      },
+      {
+        sku: 'SRV-ESTIBA',
+        description: 'Servicio de Tracción y Cuadrilla de Estiba',
+        category: 'SERVICIOS_ADUANEROS',
+        sunat_unit_code: 'ZZ',
+        tax_affectation: '10',
+        cost_price: 180.0,
+      },
+      {
+        sku: 'SRV-INSPECCION',
+        description: 'Servicio de Inspección y Aforo SENASA / DIGESA',
+        category: 'SERVICIOS_ADUANEROS',
+        sunat_unit_code: 'ZZ',
+        tax_affectation: '10',
+        cost_price: 220.0,
+      },
+    ];
+
+    // Asegurar que los 5 servicios aduaneros normativos existan en el catálogo
+    for (const ds of defaultServices) {
+      const exists = await this.prisma.inventoryProduct.findUnique({
+        where: {
+          company_id_sku: {
+            company_id: companyId,
+            sku: ds.sku,
+          },
+        },
+      });
+
+      if (!exists) {
+        await this.prisma.inventoryProduct.create({
+          data: {
+            company_id: companyId,
+            sku: ds.sku,
+            description: ds.description,
+            category: ds.category,
+            sunat_unit_code: ds.sunat_unit_code,
+            sunat_type_code: '02',
+            tax_affectation: ds.tax_affectation,
+            origin_type: 'IMPORTADO',
+            is_service: true,
+            is_inventory: false,
+            is_active: true,
+            cost_price: ds.cost_price,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    // Filtrar estrictamente los servicios propios del despacho aduanero y comercio exterior
+    return this.prisma.inventoryProduct.findMany({
+      where: {
+        company_id: companyId,
+        is_service: true,
+        OR: [
+          {
+            category: {
+              in: [
+                'SERVICIOS_ADUANEROS',
+                'ORIGEN_IMPORTACION',
+                'AGENCIA_ADUANA',
+                'FLETE_LOCAL',
+                'ALMACENAJE',
+                'ESTIBA',
+                'INSPECCION',
+              ],
+            },
+          },
+          { origin_type: 'IMPORTADO' },
+          {
+            sku: {
+              in: [
+                'SRV-AGENCIA-ADU',
+                'SRV-FLETE-LOCAL',
+                'SRV-ALM-PORT',
+                'SRV-ESTIBA',
+                'SRV-INSPECCION',
+              ],
+            },
+          },
+        ],
+      },
+      orderBy: { sku: 'asc' },
+    });
+  }
+
+  async upsertCustomsService(companyId: string, dto: UpsertCustomsServiceDto) {
+    const sku = dto.sku.trim().toUpperCase();
+    const existing = await this.prisma.inventoryProduct.findUnique({
+      where: {
+        company_id_sku: {
+          company_id: companyId,
+          sku,
+        },
+      },
+    });
+
+    if (existing) {
+      return this.prisma.inventoryProduct.update({
+        where: { id: existing.id },
+        data: {
+          description: dto.description.trim(),
+          category: dto.category?.trim() || existing.category,
+          sunat_unit_code: dto.sunatUnitCode?.trim() || existing.sunat_unit_code,
+          tax_affectation: dto.taxAffectation?.trim() || existing.tax_affectation,
+          cost_price: dto.costPrice !== undefined ? dto.costPrice : existing.cost_price,
+          sale_price: dto.salePrice !== undefined ? dto.salePrice : existing.sale_price,
+          is_active: dto.isActive !== undefined ? dto.isActive : existing.is_active,
+          is_service: true,
+          is_inventory: false,
+          origin_type: 'IMPORTADO',
+        },
+      });
+    }
+
+    return this.prisma.inventoryProduct.create({
+      data: {
+        company_id: companyId,
+        sku,
+        description: dto.description.trim(),
+        category: dto.category?.trim() || 'SERVICIOS_ADUANEROS',
+        sunat_unit_code: dto.sunatUnitCode?.trim() || 'ZZ',
+        sunat_type_code: '02',
+        tax_affectation: dto.taxAffectation?.trim() || '10',
+        origin_type: 'IMPORTADO',
+        is_service: true,
+        is_inventory: false,
+        cost_price: dto.costPrice ?? null,
+        sale_price: dto.salePrice ?? null,
+        is_active: dto.isActive ?? true,
+      },
+    });
+  }
+
+  async deleteCustomsService(companyId: string, sku: string) {
+    const existing = await this.prisma.inventoryProduct.findUnique({
+      where: {
+        company_id_sku: {
+          company_id: companyId,
+          sku: sku.trim().toUpperCase(),
+        },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Servicio con código ${sku} no encontrado.`);
+    }
+
+    return this.prisma.inventoryProduct.update({
+      where: { id: existing.id },
+      data: { is_active: false },
+    });
   }
 }

@@ -229,6 +229,32 @@ export class InventoryStocksController {
     return created;
   }
 
+  @Get('products')
+  async listAllProducts(
+    @CurrentCompany() companyId?: string,
+    @Query('includeServices') includeServices?: string,
+  ) {
+    if (!companyId) throw new UnauthorizedException('Identificador de empresa requerido.');
+    const products = await this.prisma.inventoryProduct.findMany({
+      where: {
+        company_id: companyId,
+        is_active: true,
+        ...(includeServices === 'false' ? { is_service: false } : {}),
+      },
+      orderBy: { sku: 'asc' },
+    });
+    return products.map((p) => ({
+      id: p.id,
+      sku: p.sku,
+      description: p.description,
+      isService: Boolean(p.is_service),
+      isInventory: Boolean(p.is_inventory),
+      unitCode: p.sunat_unit_code || 'NIU',
+      costPrice: p.cost_price ? Number(p.cost_price) : undefined,
+      salePrice: p.sale_price ? Number(p.sale_price) : undefined,
+    }));
+  }
+
   @Get('products/:sku')
   async getProductBySku(
     @Param('sku') sku: string,

@@ -28,6 +28,7 @@ import {
   UpsertCountryDto,
   UpsertPortDto,
   UpdateExchangeRateDto,
+  UpsertCustomsServiceDto,
 } from '../../application/dto/masterDataDto';
 
 /**
@@ -253,6 +254,28 @@ export class MasterDataController {
       this.requireCompany(companyId),
       dto,
     );
+  }
+
+  // Servicios Aduaneros / Gastos de Despacho (Sincronizados con inventory_products)
+  @Get('services')
+  listCustomsServices(@CurrentCompany() companyId: string | undefined) {
+    return this.masterData.listCustomsServices(this.requireCompany(companyId));
+  }
+
+  @Put('services')
+  upsertCustomsService(
+    @CurrentCompany() companyId: string | undefined,
+    @Body() dto: UpsertCustomsServiceDto,
+  ) {
+    return this.masterData.upsertCustomsService(this.requireCompany(companyId), dto);
+  }
+
+  @Delete('services/:sku')
+  deleteCustomsService(
+    @CurrentCompany() companyId: string | undefined,
+    @Param('sku') sku: string,
+  ) {
+    return this.masterData.deleteCustomsService(this.requireCompany(companyId), sku);
   }
 
   private requireCompany(companyId?: string): string {

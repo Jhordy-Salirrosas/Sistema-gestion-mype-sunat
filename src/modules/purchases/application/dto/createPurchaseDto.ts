@@ -73,6 +73,10 @@ export class CreatePurchaseDto {
   @IsOptional()
   notes?: string;
 
+  @IsString()
+  @IsOptional()
+  shipmentId?: string;
+
   @IsArray()
   @ArrayMinSize(1, { message: 'La compra debe incluir al menos un producto.' })
   @ValidateNested({ each: true })
