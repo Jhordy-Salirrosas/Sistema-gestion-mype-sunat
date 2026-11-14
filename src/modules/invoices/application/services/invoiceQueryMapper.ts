@@ -1,5 +1,12 @@
 import { transporteAcreditado, type EvidenciaTransporteVista } from './invoiceTransportPresentation';
 function mensajeHistorial(codigo: string | null, mensaje: string | null): string | null {
+ if (codigo === 'M1_DETRACTION_DEPOSIT') {
+  try {
+   const data = JSON.parse(mensaje ?? '{}');
+   const valores = (v: { fecha: string | null; monto: number | null; constancia: string | null } | null) => v ? `fecha ${v.fecha?.slice(0, 10) ?? '—'}, monto ${v.monto ?? '—'}, constancia ${v.constancia ?? '—'}` : 'sin depósito';
+   return `${data.accion}. Usuario: ${data.actor}. Anterior: ${valores(data.anterior)}. Nuevo: ${valores(data.nuevo)}.`;
+  } catch { return mensaje; }
+ }
  if (codigo !== 'M1_FORCE_RESEND_AUTHORIZED') return mensaje;
  try { const data = JSON.parse(mensaje ?? '{}'); return `Reenvío forzado por decisión registrada. Usuario: ${data.usuarioId}; motivo: ${data.motivo}`; } catch { return mensaje; }
 }
@@ -273,7 +280,7 @@ export function ultimoErrorDelHistorial(
 ): { ultimo_error_codigo: string | null; ultimo_error_mensaje: string | null } {
   for (let i = historial.length - 1; i >= 0; i -= 1) {
     const fila = historial[i];
-    if (fila && fila.estado_nuevo === 'RECHAZADO') {
+    if (fila && fila.estado_nuevo === 'RECHAZADO' && fila.codigo_error !== 'M1_DETRACTION_DEPOSIT') {
       return {
         ultimo_error_codigo: fila.codigo_error ?? null,
         ultimo_error_mensaje: fila.mensaje_error ?? null,
