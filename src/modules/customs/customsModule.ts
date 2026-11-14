@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/authModule';
+import { AccountingModule } from '../accounting/accountingModule';
 import { CustomsController } from './infrastructure/controllers/customsController';
 import { CustomsShipmentController } from './infrastructure/controllers/customsShipmentController';
 import { CustomsSettlementController } from './infrastructure/controllers/customsSettlementController';
@@ -12,6 +13,8 @@ import { ImportOrderController } from './infrastructure/controllers/importOrderC
 import { ForeignSupplierController } from './infrastructure/controllers/foreignSupplierController';
 import { ImportOrderService } from './application/services/importOrderService';
 import { ForeignSupplierService } from './application/services/foreignSupplierService';
+import { CustomsAccountingController } from './infrastructure/controllers/customsAccountingController';
+import { CustomsAccountingService } from './application/services/customsAccountingService';
 
 // Use Cases
 import {
@@ -50,7 +53,7 @@ import { PrismaGoodsReceiptRepository } from './infrastructure/persistence/prism
 import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nestCustomsEventPublisherAdapter';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AccountingModule],
   controllers: [
     CustomsController,
     CustomsShipmentController,
@@ -61,11 +64,13 @@ import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nest
     MasterDataController,
     ImportOrderController,
     ForeignSupplierController,
+    CustomsAccountingController,
   ],
   providers: [
     MasterDataService,
     ImportOrderService,
     ForeignSupplierService,
+    CustomsAccountingService,
     // Use Cases
     CalculateDuaUseCase,
     RegisterDuaUseCase,

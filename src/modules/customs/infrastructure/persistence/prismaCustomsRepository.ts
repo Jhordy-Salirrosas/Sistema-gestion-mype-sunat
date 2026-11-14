@@ -66,6 +66,7 @@ export class PrismaCustomsRepository implements ICustomsRepositoryPort {
       where: { company_id: companyId },
       orderBy: { numeration_date: 'desc' },
       include: {
+        items: true,
         _count: {
           select: { items: true },
         },

@@ -1,0 +1,65 @@
+# Paquete del recorrido M1
+
+## Fase 0
+
+Encargo vigente: reemplazo completo de siete puntos. Rama `fix/m1-paquete-recorrido`, desde back main `9f61bc553955d6e2c332bc35780c5865aeb62e6d`. Ferry sobre front main `8393ea1c72b865d2c4442147e2453f479e11c84b`. No incorpora la rama de depósitos de detracción.
+
+1. Confirmado. InvoiceForcedResend usa etiquetas y textarea sin distribución ni límites de ancho. Se reorganiza solo su presentación y la contención de su modal, conservando campos, llamadas y habilitación. Los paneles hermanos no comparten esa estructura de campos.
+2. Confirmado. InvoiceCdrModal lee una vez; conserva el estado del objeto inicial aunque haya consultado el detalle nuevo. Se actualiza con el detalle completo y se relee de forma acotada tras acciones de cola. El reintento vigente se dispara desde bandeja/Monitor, no existe un botón de reintento propio en el modal: no se añade otro; se conectan las acciones actuales con el detalle abierto. El back ya expone estado, CDR e historial suficientes.
+3. Confirmado. El QR backend usa correlativo de ocho posiciones, fecha ISO, digest Base64 con relleno y diez campos sin separador sobrante. El generador frontend difiere en los cuatro aspectos. Se alinea con la trama del backend, preservando la espera por XML firmado; se ajustan las expectativas antiguas que fijaban el formato distinto.
+4. Confirmado. Cabecera y pestañas son fuentes separadas. Listado y General/formulario consumen cabecera. Se añaden proyecciones del contacto y dirección principales, con orden determinista (marca principal, creación e id) y fallback a cabecera cuando no existen registros. Los campos planos y demás contratos se conservan. Las tres superficies frontend usarán el mismo resolvedor. La edición de cabecera debe actualizar el mismo registro principal que se muestra.
+5. Confirmado en ficha. Ya existe selector de estado en el formulario de edición, pero la ficha no ofrece acción. Se agrega allí, respetando readOnly y refrescando ficha/lista; no se añade acción duplicada a la tabla.
+6. Confirmado en front: el validador ignora el indicador de edición y rechaza la identidad histórica, aunque los campos están deshabilitados y el PUT no los envía. El back ya valida documentos solo en altas y no acepta cambios de identidad en UpdatePartnerDto. Se exime únicamente una identidad exactamente igual a la original; alta o identidad distinta conserva validación completa. Se fija el comportamiento existente del servidor con regresión, sin abrir una ruta para cambiar identidad.
+7. Confirmado. Solo hay endpoints/formularios de alta en las tres pestañas. Se agregan PUT y DELETE con pertenencia empresa/tercero/registro, actualización de principales y refresco. Se valida al escribir: celular peruano de nueve dígitos comenzando por 9, con +51/0051 opcional y separadores habituales; email válido; cuenta peruana y CCI numéricos (CCI de 20 dígitos). Se conserva el soporte internacional de bancos extranjeros, IBAN/SWIFT; no se valida ni reescribe en lecturas históricas. Sin nuevas tablas ni migraciones.
+
+No hay puntos detenidos. Pruebas sin transporte fiscal real, PostgreSQL exclusivamente local. No se crean PRs ni se despliega. El ferry sustituye el inventario heredado ya presente en main y solo transporta los archivos de este encargo.
+
+Líneas base completas verdes antes de modificar código: back 401 suites / 4034 pruebas, con 4 suites / 38 pruebas omitidas y 12 snapshots; front 182 archivos / 1404 pruebas. PostgreSQL local con el esquema de main, sin aplicar migraciones nuevas.
+
+## Punto 1
+
+Panel con contención de ancho, texto con corte de palabras largas, motivo en bloque propio, textarea completo, checkbox alineado y acciones separadas con texto adaptable. El modal contiene el desbordamiento horizontal. Se conservan los campos, textos, permisos, confirmación, decisión y petición existentes. Pruebas del flujo de reenvío forzado verdes; no se modifican los paneles hermanos, que no comparten la causa.
+
+## Punto 2
+
+El modal usa el detalle actualizado completo, incluido estado, CDR, historial e información fiscal. Las acciones existentes notifican por identificador al detalle abierto. Tras encolado o trabajo ya en cola, el seguimiento hace como máximo 12 lecturas, separadas 1.5 s y con límite absoluto de 20 s; se detiene ante estado final y al cerrar/cambiar de comprobante. No crea otro botón de reintento ni dispara envíos. Las respuestas tardías se descartan. La lectura de seguimiento omite el fallback offline; otras consultas conservan su caché. El XML se relee al cambiar estado/hash. Pruebas dirigidas: 4 archivos / 10 pruebas verdes, incluidos cierre, límite y aceptación.
+
+## Punto 3
+
+Trama alineada con invoiceQrService del backend: diez campos, correlativo de ocho dígitos, fecha ISO y digest Base64 íntegro (solo se retiran espacios de formato), sin barra final adicional. El detalle prefiere el RUC histórico devuelto por el servidor al de configuración actual. El generador compartido conserva coherencia con el PDF rápido frontend. Se ajustan las expectativas que fijaban el formato anterior. Pruebas dirigidas: 5 archivos / 66 pruebas verdes.
+
+## Punto 4
+
+Listado (incluida búsqueda) y detalle agregan `primary_contact` y `primary_address`, sin sobrescribir campos planos. La selección ordena por marca principal, creación e id; la lectura masiva de relaciones mantiene filtro de empresa y evita una consulta por fila. Un resolvedor frontend común alimenta contacto/dirección en lista, General y los campos iniciales del formulario. La edición de cabecera elige el mismo principal. No se reescriben datos existentes. Pruebas dirigidas: back 2 suites / 20 pruebas; front 2 archivos / 4 pruebas verdes.
+
+## Punto 5
+
+La ficha agrega Activar/Inactivar tercero mediante el PUT existente con `isActive`; respeta readOnly, deshabilita mientras guarda, presenta el error del servidor y refresca ficha/listado. El selector previo del formulario se conserva. Pruebas dirigidas: 1 archivo / 3 pruebas verdes (ambas transiciones, solo lectura y fallo).
+
+## Punto 6
+
+La excepción frontend requiere identidad original explícita y coincidencia exacta de tipo/número; no omite validaciones de nombre, correo u otros campos. Alta, identidad distinta o ausencia de original mantienen la validación completa. El formulario sigue sin enviar identidad en PUT. El servidor ya soporta este comportamiento: se añade regresión del tercero histórico de nueve dígitos y del rechazo de un alta equivalente, sin cambiar su contrato de actualización. Pruebas dirigidas verdes en ambas capas.
+
+## Punto 7
+
+Las tres pestañas permiten editar, cancelar edición y eliminar con confirmación, conservando el alta y readOnly. PUT/DELETE comprueban empresa, tercero y pertenencia del registro bajo bloqueo de la cabecera; no aceptan identificadores de otro tercero. Una edición/deleción de contacto o dirección actualiza los campos planos con el principal resultante (o null al eliminar el último), evitando datos eliminados como fallback. En edición, marcar principal desmarca los demás dentro de la transacción. Un PUT sin datos no se interpreta como eliminación.
+
+Validación de escrituras de las pestañas: celular peruano de nueve dígitos comenzando por 9, con +51/0051 y separadores habituales; email válido; cuenta peruana solo numérica y CCI opcional de 20 dígitos. La cuenta conserva ceros iniciales; bancos extranjeros siguen admitiendo identificadores alfanuméricos mediante su país. Las lecturas históricas no pasan por estas validaciones; un registro antiguo inválido se puede consultar y eliminar, y al corregirlo se validan sus valores nuevos. No se crean tablas ni migraciones.
+
+Pruebas dirigidas: back 4 suites / 34 pruebas, front 3 archivos / 9 pruebas. La validación completa detectó dobles antiguos del detalle que devolvían solo historial; se actualizan al contrato completo, manteniendo sus comprobaciones de consulta SUNAT y aislamiento de emisor. Se actualizan también las expectativas restantes del QR sin ceros/digest sin relleno. Esos tres archivos de regresión pasan 53 pruebas.
+
+
+## Cierre
+
+Los siete puntos quedan construidos; no hay puntos detenidos.
+
+| Capa | Base main | Final |
+| --- | --- | --- |
+| Back con PostgreSQL local | 401 suites / 4034 pruebas | 404 suites / 4051 pruebas |
+| Front | 182 archivos / 1404 pruebas | 188 archivos / 1421 pruebas |
+
+Suites completas verdes: +17 pruebas en cada capa. Back conserva 4 suites / 38 pruebas omitidas y 12 snapshots aprobados; la corrida completa final pasó en 221.331 segundos. Además, las siete pruebas de búsqueda con PostgreSQL pasaron habilitando su base local específica. La primera pasada del front detectó dobles parciales del detalle y expectativas del QR anterior; se corrigieron sin debilitar comprobaciones. La suite completa posterior pasó; el ajuste final de tipos del doble se verificó también mediante build y sus 53 regresiones.
+
+Builds completos backend/frontend y lint backend OK. Los warnings de lint existentes no se amplían. El build backend y la generación Prisma se ejecutaron fuera de Jest. La presentación se verificó con pruebas de componentes y compilación; no se certifica un recorrido visual de navegador.
+
+El ferry contiene 29 archivos frontend más FERRY.md, con 30 entradas SHA-256 verificadas. Se aplica sobre frontend main `8393ea1c72b865d2c4442147e2453f479e11c84b`. El backend parte de main `9f61bc553955d6e2c332bc35780c5865aeb62e6d` y solo cambia maestro de terceros; no modifica otros servicios fiscales ni el esquema. No incluye el registro de depósitos de detracción, no se crean PRs ni migraciones, no se despliega ni se realizan emisiones reales.

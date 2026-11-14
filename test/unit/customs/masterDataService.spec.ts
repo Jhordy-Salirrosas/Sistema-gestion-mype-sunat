@@ -34,12 +34,14 @@ describe('MasterDataService', () => {
         delete: jest.fn(),
       },
       partnerAddress: {
+        findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         deleteMany: jest.fn(),
       },
       partnerContact: {
+        findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -173,7 +175,7 @@ describe('MasterDataService', () => {
       await expect(service.getPartner(companyId, 'non-existent')).rejects.toThrow(NotFoundException);
 
       mockPrisma.businessPartner.findFirst.mockResolvedValue({ id: 'bp-1' });
-      expect(await service.getPartner(companyId, 'bp-1')).toEqual({ id: 'bp-1' });
+      expect(await service.getPartner(companyId, 'bp-1')).toMatchObject({ id: 'bp-1', primary_contact: null, primary_address: null });
     });
 
     it('crea un tercero nuevo y valida duplicados', async () => {
@@ -232,7 +234,7 @@ describe('MasterDataService', () => {
 
       const bank = await service.addBankAccount(companyId, 'bp-1', {
         bankName: 'BCP',
-        accountNumber: '191-123456',
+        accountNumber: '191123456',
       });
       expect(bank.id).toBe('bank-1');
     });
