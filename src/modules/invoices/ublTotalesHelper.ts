@@ -186,7 +186,7 @@ export const calcularTotales = (
       ? centimos((totalBase + icbperAdicional) * porcentaje)
       : 0);
 
-  const retencion = payload.montoRetencion ?? 0;
+  const retencion = detraccion > 0 ? 0 : payload.montoRetencion ?? 0;
 
   const total = centimos(totalBase + icbperAdicional);
   const importePagar = centimos(total - detraccion - retencion);
