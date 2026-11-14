@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { CreateAccountingEntryDto } from '../dto/createAccountingEntryDto';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 import { DoubleEntryRule } from '../../domain/rules/doubleEntryRule';
+import { checkAccountCode, cuentasConHijos } from '../../domain/rules/catalogIntegrityRule';
 import { ACCOUNTING_REPOSITORY_PORT } from '../../domain/ports/accountingRepositoryPort';
 import type { IAccountingRepositoryPort } from '../../domain/ports/accountingRepositoryPort';
 
@@ -57,14 +58,19 @@ export class GenerateAccountingEntryUseCase {
 
     if (dto.sourceModule === 'MANUAL' && this.accountingRepository.findAccounts) {
       const catalogo = await this.accountingRepository.findAccounts();
-      const padres = new Set(catalogo.map((c) => c.parentCode).filter((p): p is string => Boolean(p)));
-      const inactivas = new Set(catalogo.filter((c) => c.isActive === false).map((c) => c.code));
+      // La comprobación de "cuenta de mayor con subcuentas" se comparte con la
+      // auditoría: una divisionaria con subdivisionarias opcionales (40111) sí
+      // admite asientos, y antes se rechazaba por error.
+      const agregadas = cuentasConHijos(catalogo);
       dto.lines.forEach((linea, index) => {
-        if (padres.has(linea.accountCode)) {
-          throw new BadRequestException(`Línea ${index + 1}: la cuenta ${linea.accountCode} es de mayor y tiene subcuentas; use una subcuenta.`);
-        }
-        if (inactivas.has(linea.accountCode)) {
-          throw new BadRequestException(`Línea ${index + 1}: la cuenta ${linea.accountCode} está inactiva.`);
+        const issue = checkAccountCode(
+          catalogo,
+          linea.accountCode,
+          { lineOrder: index + 1 },
+          agregadas,
+        );
+        if (issue) {
+          throw new BadRequestException(`Línea ${index + 1}: ${issue.message.replace(/^Línea \d+: /, '')}`);
         }
       });
     }

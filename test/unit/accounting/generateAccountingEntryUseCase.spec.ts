@@ -131,4 +131,30 @@ describe('GenerateAccountingEntryUseCase', () => {
       lines: [{ lineOrder: 1, accountCode: '60121', accountName: 'Compras', debitAmount: 10, creditAmount: 0 }],
     })).rejects.toThrow('está inactiva');
   });
+
+  it('acepta una divisionaria con subdivisionarias opcionales (40111)', async () => {
+    // La 40111 "IGV cuenta propia" es la cuenta de posteo de todas las ventas,
+    // aunque existan las subdivisionarias 401111 y 401119. Antes se rechazaba
+    // como si fuera una cuenta de mayor.
+    mockRepository.findAccounts.mockResolvedValue([
+      { code: '401', parentCode: '40', isActive: true },
+      { code: '4011', parentCode: '401', isActive: true },
+      { code: '40111', parentCode: '4011', isActive: true },
+      { code: '401111', parentCode: '40111', isActive: true },
+      { code: '12121', parentCode: '1212', isActive: true },
+      { code: '70121', parentCode: '7012', isActive: true },
+    ] as never);
+
+    const asiento = await useCase.execute({
+      companyId: 'company-uuid-1', period: '2026-03', entryDate: '2026-03-10T00:00:00.000Z',
+      glosa: 'Venta manual con IGV', sourceModule: 'MANUAL',
+      lines: [
+        { lineOrder: 1, accountCode: '12121', accountName: 'CxC', debitAmount: 118, creditAmount: 0 },
+        { lineOrder: 2, accountCode: '70121', accountName: 'Ventas', debitAmount: 0, creditAmount: 100 },
+        { lineOrder: 3, accountCode: '40111', accountName: 'IGV', debitAmount: 0, creditAmount: 18 },
+      ],
+    });
+
+    expect(asiento.getTotalDebit()).toBe(118);
+  });
 });

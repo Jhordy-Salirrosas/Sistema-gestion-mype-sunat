@@ -148,7 +148,7 @@ async function verifyAll() {
     console.log('\n--- 5. MAPEO CONTABLE PCGE 2019 ---');
     const defaultMappings = [
       { process: 'VENTA', cxc: '12121', igv: '40111', ingreso: '70121', costo: '69111', stock: '20111' },
-      { process: 'COMPRA', gasto: '60111', igv: '40111', cxp: '42121', stock: '20111', var: '61111' },
+      { process: 'COMPRA', gasto: '60111', igv: '40111', cxp: '42121', stock: '20111', var: '6111' },
       { process: 'IMPORTACION', transito: '28111', cxpExt: '42122', adVal: '40151', igvImp: '40115', landedStock: '20111' },
     ];
     assert(defaultMappings.length === 3, 'Matriz de asignación de cuentas PCGE 2019 completa y consistente');

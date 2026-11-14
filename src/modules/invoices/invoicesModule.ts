@@ -5,6 +5,8 @@ import { InvoiceForcedResendService } from './application/services/invoiceForced
 import { InvoiceForcedResendController } from './infrastructure/controllers/invoiceForcedResendController';
 import { InvoiceBridgeCoordinatorService } from './application/services/invoiceBridgeCoordinatorService';
 import { InvoiceBridgeReprocessController } from './infrastructure/controllers/invoiceBridgeReprocessController';
+import { AccountingRegularizationService } from './application/services/accountingRegularizationService';
+import { InvoiceAccountingRegularizationController } from './infrastructure/controllers/invoiceAccountingRegularizationController';
 import { SummaryAggregateStore } from './application/services/summaryAggregateStore';
 import { SummaryGate } from './application/services/summaryGate';
 import { InvoiceAccountingFallbackService } from './application/services/invoiceAccountingFallbackService';
@@ -79,6 +81,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceBatchRetryController,
     InvoiceForcedResendController,
     InvoiceBridgeReprocessController,
+    InvoiceAccountingRegularizationController,
     InvoiceSunatConsultController,
     InvoicesController,
     // ORDEN IMPORTANTE. `InvoiceQueryController` declara `GET :id`, que actúa
@@ -101,6 +104,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     RaBridgeReversalService,
     InvoiceForcedResendService,
     InvoiceBridgeCoordinatorService,
+    AccountingRegularizationService,
     AtomicInvoiceCreationService,
     IssuerConfigWriter,
     CreateInvoiceUseCase,

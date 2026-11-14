@@ -3919,3 +3919,26 @@ Fuentes oficiales adicionales: [Catálogo 19, estado 3 Anulado](https://www.suna
 Suites completas verdes, incluidas las integraciones de YA_EN_COLA y de anulación RC; back mantiene 4 suites / 38 pruebas omitidas y 12 snapshots aprobados. Incremento: 35 pruebas back y 4 front. Las únicas expectativas antiguas ajustadas fijaban el conjunto de motivos sin el 10 en back/front; 08 permanece excluido. Lint y builds completos back/front OK. El build final se ejecutó después de las suites, sin regeneración Prisma concurrente con Jest.
 
 Estado final: menores aplicados en 37de84ea; exclusión BC01/BD01 de RA en 58b3d533; YA_EN_COLA en 70dd9fd7; este bloque completa 10 restringido y la anulación RC. 08 queda solo documentado conforme al alcance. Se entrega un único commit adicional del bloque pendiente, sin duplicar los bloques ya aplicados ni abrir otro PR. El ferry tiene 55 archivos frontend más FERRY.md (56 entradas SHA-256 verificadas). Su aplicación al repo frontend y despliegue siguen a cargo del tren de revisión. Sin migraciones nuevas ni emisiones reales.
+
+
+## Fusión de dev para PR #388 — 2026-11-14
+
+Se integra `dev` `bf60df93c2f3434225e7d89acf90b4436c31f7fb` (incluye pulidos y PR #387 de Contabilidad) en `fix/m1-arreglos-auditorias`, cuya cabeza previa era `c4e4a3c920afbabb415f220711ee8c5968476ecc`. Se conserva el historial mediante un commit de fusión, sin crear otro PR.
+
+Único conflicto textual: `src/modules/invoices/application/services/invoiceSummaryService.ts`, en la razón de exclusión de RA. Se conservan ambas reglas: BC01/BD01 se excluyen con la indicación de anulación por RC; las demás filas respetan el bloqueo de período cerrado o declarado en PLE de Contabilidad. La comprobación contable se comparte con la anulación de notas por RC para que esa ruta tampoco eluda la restricción. Las demás guardas de fechas, reservas, estados, RUC y notas asociadas permanecen vigentes. Ocho pruebas adicionales fijan la combinación BC01/BD01 y períodos abiertos/cerrados/PLE; las cuatro pruebas incorporadas desde dev se conservan.
+
+La cola se fusiona automáticamente: conserva las colas SIRE de dev y la resolución de DLQ de documentos aceptados. Se mantiene la prioridad de YA_EN_COLA previa a la guarda de incertidumbre. Los módulos Contabilidad, cobros, gastos, compras, ventas y SIRE quedan idénticos a dev. El ferry conserva íntegros sus 55 archivos frontend. La validación frontend se actualiza a main `ebf5e34f2821ee773d7ff23af432443ff2cfe8b8`: su avance no intersecta ninguna ruta transportada.
+
+Las integraciones usan una base PostgreSQL local aislada con las 62 migraciones ya existentes; no se crea ninguna migración ni se actúa sobre bases compartidas. Transporte fiscal con dobles, sin emisiones reales.
+
+
+### Validación de la fusión
+
+| Capa | Cierre anterior c4e4a3c9 | Fusión con dev actual |
+| --- | --- | --- |
+| Back, PostgreSQL local | 368 suites / 3653 pruebas | 401 suites / 4034 pruebas |
+| Front | 179 archivos / 1391 pruebas | 182 archivos / 1404 pruebas |
+
+Suites completas verdes. Back mantiene 4 suites y 38 pruebas omitidas y 12 snapshots aprobados. El incremento incorpora las pruebas de dev y ocho regresiones de esta resolución; front incorpora las pruebas del main vigente, sin modificar archivos transportados. Las seis suites dirigidas previas pasaron 127 pruebas. Lint backend y builds backend/frontend OK; los builds se ejecutaron después de finalizar ambas suites.
+
+El manifiesto conserva 56 entradas: 55 archivos frontend sin cambios y FERRY.md actualizado. No hay migraciones nuevas, emisiones reales ni PR nuevo.

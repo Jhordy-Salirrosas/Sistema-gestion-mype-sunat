@@ -12,6 +12,8 @@ Las operaciones del gateway SIRE general continúan sin cliente real: `SUNAT_SIR
 
 El endpoint autenticado `POST /api/v1/sire/consulta-manual` recibe un RUC, periodo y una clave SOL manual para facilitar pruebas del flujo backend. Es una simulación: no valida ni transmite la clave, no la persiste ni la registra, y devuelve ejemplos ficticios para RVIE y RCE ligados al RUC ingresado. La respuesta marca `mode: SIMULATED` y `sunatContacted: false`. Usar solo credenciales ficticias en este endpoint; no debe interpretarse como una consulta a SUNAT ni como una validación de credenciales.
 
+El RUC del cuerpo se coteja con el RUC de la empresa de la sesión: si no coinciden, la ruta responde HTTP 403 y no ejecuta la simulación. El RUC que se procesa es siempre el de la empresa autenticada, nunca el enviado por el cliente.
+
 Solicitud de ejemplo, únicamente con datos ficticios:
 
 ```json
@@ -26,29 +28,56 @@ La clave es requerida solo para probar el formulario manual y se descarta en el 
 
 ### Consulta de períodos SIRE (solo lectura)
 
-Existe la ruta autenticada `POST /api/v1/sire/periodos`, que devuelve HTTP 202 y `{ "messageId": "...", "status": "PENDING" }` al encolar la consulta de períodos de RVIE (`bookCode: "140000"`) o RCE (`bookCode: "080000"`). El RUC se obtiene de la empresa activa de la sesión; no se acepta un RUC enviado por el cliente. El usuario SOL y la clave SOL se reciben únicamente en el cuerpo HTTPS de esa solicitud. No se guardan en la tabla de consultas ni en texto plano en PgBoss: el payload persistido de la cola guarda las credenciales cifradas con `SOL_CREDENTIALS_ENCRYPTION_KEY`. El worker las descifra solo para realizar la autenticación y no las registra. `SUNAT_CLIENT_ID` y `SUNAT_CLIENT_SECRET` son credenciales de aplicación y deben inyectarse desde un secret manager.
+Existe la ruta autenticada `POST /api/v1/sire/periodos`, que devuelve HTTP 202 y `{ "messageId": "...", "status": "PENDING" }` al encolar la consulta de períodos de RVIE (`bookCode: "140000"`) o RCE (`bookCode: "080000"`). El RUC se obtiene de la empresa activa de la sesión; no se acepta un RUC enviado por el cliente.
+
+Las credenciales SOL **no viajan en el cuerpo ni en el payload de la cola**. Se configuran por empresa mediante `POST /api/v1/sire/configuracion` y se guardan cifradas con AES-256-GCM (`SOL_CREDENTIALS_ENCRYPTION_KEY`) en la tabla `sire_configurations`. El worker las resuelve por `companyId` al ejecutar el trabajo y las descifra solo para realizar la autenticación; nunca las registra. El payload persistido de PgBoss solo lleva `messageId`, `companyId`, `ruc` y `bookCode`: si alguien lee la cola, no obtiene credenciales. `SUNAT_CLIENT_ID` y `SUNAT_CLIENT_SECRET` siguen siendo el valor de respaldo cuando la empresa no tiene credenciales propias configuradas, y son credenciales de aplicación que deben inyectarse desde un secret manager.
+
+Por compatibilidad, `POST /api/v1/sire/periodos` sigue aceptando `solUser` y `solPassword` en el cuerpo, pero están **deprecados y se ignoran**: no se cifran, no se guardan y no se encolan. Un cliente antiguo que los envíe no obtiene un error, pero tampoco surte efecto.
 
 Si la cola de PgBoss no puede publicar el trabajo, la ruta NO devuelve un 5xx genérico: devuelve el mismo HTTP 202 con `{ "messageId": "...", "status": "FAILED", "errorCode": "QUEUE_ENQUEUE_FAILED", "message": "El servicio de colas no está disponible, por favor reintenta.", "error": "..." }`. La consulta queda persistida como `FAILED` con ese mismo código, de modo que `GET /api/v1/sire/periodos/status/:messageId` informa del mismo fallo con el mismo texto. El frontend recibe siempre un JSON estructurado en esta ruta: nunca una página HTML de proxy ni el mensaje interno de PgBoss (el error original se registra solo en el log del servidor). Si la propia base de datos no responde y la consulta ni siquiera puede registrarse, la respuesta es un HTTP 500 con cuerpo RFC 7807 y el mensaje redactado "No fue posible registrar la consulta de períodos SIRE. Inténtalo nuevamente.".
 
 PgBoss reintenta los errores HTTP 500/502/503 de SUNAT y los fallos de red o de tiempo de espera hasta tres veces, con backoff exponencial desde 30 segundos y un máximo de 300 segundos. Desde el primer fallo la solicitud queda `FAILED` con un código de error persistido (`SUNAT_HTTP_400`, `SUNAT_HTTP_422`, `SUNAT_AUTH_FAILED`, `SUNAT_HTTP_500`, `SUNAT_HTTP_502`, `SUNAT_TIMEOUT`, `SUNAT_TRANSPORT_ERROR`, `SIRE_NOT_CONFIGURED`) que no contiene credenciales ni cuerpos crudos de SUNAT; si un reintento posterior tiene éxito, la solicitud pasa a `COMPLETED`. Los errores no reintentables (400, 401, 422 y los de configuración del entorno) se marcan como fallidos de inmediato, sin reintento automático. Al agotar los intentos, el trabajo pasa a la DLQ y la solicitud queda `FAILED` con `SUNAT_RETRIES_EXHAUSTED`. La ruta autenticada `GET /api/v1/sire/periodos/status/:messageId` consulta solo la base de datos, devuelve el estado y, al completarse, los períodos guardados; cuando el estado es `FAILED` incluye un `message` redactado para que el frontend lo muestre sin exponer un error interno. El acceso se limita a la empresa propietaria. Los errores presentados al cliente son genéricos y no incluyen cuerpos crudos de SUNAT ni credenciales.
 
+Si la empresa no tiene credenciales SIRE configuradas, el trabajo se marca `FAILED` con `CREDENTIALS_UNAVAILABLE` y el mensaje "La empresa no tiene credenciales SIRE configuradas. Configúralas antes de consultar los períodos."; el frontend no necesita traducir el código.
+
 Los logs del worker y del cliente son operativos (inicio de la consulta, solicitud de token, tarea completada, error controlado) y no imprimen la clave SOL, el token de acceso ni el Client Secret, ni siquiera de forma parcial: las longitudes, los prefijos de usuario y los encabezados de autorización no se registran.
 
 La integración permanece desactivada salvo que `SUNAT_SIRE_INTEGRATION_ENABLED=true`. Al activarla, la validación exige `SIRE_AUTH_HOST=https://api-seguridad.sunat.gob.pe`, `SIRE_API_HOST=https://api-sire.sunat.gob.pe`, `SUNAT_CLIENT_ID` y `SUNAT_CLIENT_SECRET`. Habilitar el switch puede transmitir las credenciales SOL a SUNAT y realizar consultas reales. Solo se aceptan los dos hosts exactos mediante HTTPS, en su puerto estándar y sin rutas adicionales. Las rutas OAuth y de consulta deben cotejarse con el manual vigente de SUNAT antes de activar la variable; no se verificó conexión real. Las variables se leen con `ConfigService`; no se codifican credenciales ni hosts en TypeScript.
 
-La tabla `sire_period_queries` requiere aplicar la migración `20261108180000_sire_period_queries` antes del despliegue. El payload de PgBoss conserva únicamente las credenciales SOL cifradas y los identificadores/códigos de empresa, RUC y libro; proteger también el acceso a la base de datos de PgBoss. Las credenciales cifradas siguen siendo sensibles mientras exista el job, por lo que la clave de cifrado debe permanecer disponible y restringida al backend.
+La tabla `sire_period_queries` requiere aplicar la migración `20261108180000_sire_period_queries` antes del despliegue, y la tabla `sire_configurations` requiere la migración `20261115120000_sire_configuration`. El payload de PgBoss conserva únicamente los identificadores/códigos de empresa, RUC y libro; **no contiene credenciales**: proteger también el acceso a la base de datos de PgBoss, aunque leerla ya no expone secretos. Las credenciales cifradas viven en `sire_configurations`, por lo que la clave de cifrado debe permanecer disponible y restringida al backend.
 
 Solicitud de ejemplo con valores ficticios:
 
 ```json
 {
-  "bookCode": "140000",
-  "solUser": "USUARIO_SOL_FICTICIO",
-  "solPassword": "CLAVE_SOL_FICTICIA"
+  "bookCode": "140000"
 }
 ```
 
+Las credenciales se configuran aparte, con `POST /api/v1/sire/configuracion`:
+
+```json
+{
+  "solUser": "USUARIO_SOL_FICTICIO",
+  "solPassword": "CLAVE_SOL_FICTICIA",
+  "clientId": "CLIENT_ID_FICTICIO",
+  "clientSecret": "CLIENT_SECRET_FICTICIO"
+}
+```
+
+Los cuatro campos son opcionales: los que se omiten conservan el valor anterior y los que llegan vacíos (`null`) borran el valor almacenado. La respuesta es `{ "configured": true|false }` y **nunca** devuelve las credenciales. `GET /api/v1/sire/configuracion/status` devuelve el mismo indicador sin modificar nada.
+
 La consulta exitosa no sustituye una consulta independiente de existencia pública del RUC. Confirma únicamente que SUNAT autorizó la consulta y devolvió una respuesta de períodos para la empresa autenticada.
+
+### Menú SIRE (importar, conciliar, resumen, reportar, historial)
+
+Todas las rutas del menú están protegidas con `AuthGuard` y resuelven la empresa a partir del token (`user.companyId`), nunca a partir del cuerpo de la petición. Cada consulta al repositorio filtra por `company_id`, incluido el historial unificado, que une por `company_id` las tablas de importaciones, conciliaciones y reportes. Una empresa autenticada no puede ver ni tocar los trabajos de otra: si el `messageId` no pertenece a la empresa, la ruta responde HTTP 404.
+
+El RUC que se usa para validar el archivo y para construir el nombre de la propuesta se toma de la empresa de la sesión. Un archivo cuyo nombre no contenga ese RUC se rechaza con HTTP 400 y el mensaje "El nombre del archivo debe contener el RUC {ruc}."; un archivo que no empiece por `LE` se rechaza con HTTP 400 y "El archivo debe comenzar con \"LE\" (formato oficial LE<RUC>-<LIBRO>-<PERIODO>)."; una extensión distinta de `.txt` o `.zip` se rechaza en el propio filtro de subida con HTTP 400.
+
+Los trabajos se ejecutan en segundo plano sobre PgBoss. Si el worker falla, `GET /api/v1/sire/importar/estado/:messageId` y `GET /api/v1/sire/reportar/estado/:messageId` devuelven HTTP 200 con `estado: "FAILED"`, el `errorCode` persistido y un campo `message` con el texto listo para mostrar; nunca devuelven un 500 ni exponen el error interno. Los códigos `QUEUE_ENQUEUE_FAILED` y `SIRE_RETRIES_EXHAUSTED` tienen su propio texto accionable, y un código desconocido devuelve un texto genérico en lugar de filtrar detalles internos.
+
+Los archivos subidos se guardan en Supabase Storage (o en disco local si Supabase no está configurado) bajo una ruta que incluye el `companyId` y el periodo. La ruta completa y el hash del archivo se persisten, pero el contenido no se expone por la API.
 
 El parser TXT de nueve columnas es provisional; no debe ofrecerse ni describirse como formato oficial RVIE/RCE. La exportación sigue marcada como `BORRADOR`. Antes de habilitar intercambio automático hay que verificar en publicaciones oficiales SUNAT los servicios, autenticación, anexos y layouts vigentes de cada libro. No se verificó conexión alguna contra SUNAT.
 

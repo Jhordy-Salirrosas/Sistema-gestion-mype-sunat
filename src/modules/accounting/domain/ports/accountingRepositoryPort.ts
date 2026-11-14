@@ -28,6 +28,21 @@ export interface IAccountingRepositoryPort {
   findLedgerMovements(companyId: string, period: string, accountCode: string): Promise<LedgerMovement[]>;
   /** Saldo acumulado de la cuenta en períodos anteriores. */
   findLedgerOpeningBalance(companyId: string, period: string, accountCode: string): Promise<number>;
+  /**
+   * Movimientos de varias cuentas a la vez, para el mayor de una cuenta de
+   * mayor con subcuentas. Opcional: los dobles de prueba antiguos no lo tienen.
+   */
+  findLedgerMovementsByAccounts?(
+    companyId: string,
+    period: string,
+    accountCodes: readonly string[],
+  ): Promise<LedgerMovement[]>;
+  /** Saldo de apertura sumando varias cuentas. */
+  findLedgerOpeningBalanceByAccounts?(
+    companyId: string,
+    period: string,
+    accountCodes: readonly string[],
+  ): Promise<number>;
   /** Saldos por cuenta de todo el período. */
   findTrialBalanceRows(companyId: string, period: string): Promise<TrialBalanceRow[]>;
 }

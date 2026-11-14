@@ -22,6 +22,19 @@ export class GenerateClosingEntryUseCase {
     });
     if (entradas.length === 0) throw new BadRequestException(`No hay asientos en ${year}.`);
 
+    // Cerrar sobre un ejercicio con asientos descuadrados produce un resultado
+    // que "cuadra" por construcción y esconde el descuadre original.
+    const descuadrado = entradas.find((entrada) => {
+      const debe = entrada.lines.reduce((s: number, l: any) => s + Number(l.debit_amount), 0);
+      const haber = entrada.lines.reduce((s: number, l: any) => s + Number(l.credit_amount), 0);
+      return entrada.lines.length < 2 || Math.abs(debe - haber) > 0.01;
+    });
+    if (descuadrado) {
+      throw new BadRequestException(
+        `No se puede cerrar ${year}: el asiento ${descuadrado.entry_number} del período ${descuadrado.period} está descuadrado o sin líneas. Corríjalo antes de cerrar.`,
+      );
+    }
+
     const cuentas = new Map<string, { name: string; debit: number; credit: number }>();
     for (const entrada of entradas) {
       for (const linea of entrada.lines) {
@@ -53,8 +66,9 @@ export class GenerateClosingEntryUseCase {
     }
 
     const resultado = r2(totalIngresos - totalGastos);
-    lineas.push({ lineOrder: lineas.length + 1, accountCode: '59', accountName: 'Resultados acumulados', debitAmount: r2(totalGastos), creditAmount: 0 });
-    lineas.push({ lineOrder: lineas.length + 1, accountCode: '59', accountName: 'Resultados acumulados', debitAmount: 0, creditAmount: r2(totalIngresos) });
+    const cuentaCierre = await this.cuentaDeCierre(companyId);
+    lineas.push({ lineOrder: lineas.length + 1, accountCode: cuentaCierre.code, accountName: cuentaCierre.name, debitAmount: r2(totalGastos), creditAmount: 0 });
+    lineas.push({ lineOrder: lineas.length + 1, accountCode: cuentaCierre.code, accountName: cuentaCierre.name, debitAmount: 0, creditAmount: r2(totalIngresos) });
 
     return this.generar.execute({
       companyId,
@@ -65,6 +79,25 @@ export class GenerateClosingEntryUseCase {
       sourceReferenceId: `CIERRE-${year}`,
       idempotencyKey: `closing-${year}`,
       lines: lineas,
-    }).then((asiento) => ({ asiento, totalIngresos: r2(totalIngresos), totalGastos: r2(totalGastos), resultado }));
+    }).then((asiento) => ({ asiento, totalIngresos: r2(totalIngresos), totalGastos: r2(totalGastos), resultado, cuentaCierre: cuentaCierre.code }));
+  }
+
+  /**
+   * Cuenta contra la que se cierra el ejercicio.
+   *
+   * Por defecto `59 Resultados acumulados`, pero el contador puede fijar una
+   * subcuenta (591 utilidades, 592 pérdidas) con una regla del proceso `CIERRE`
+   * sin tocar código. La 59 es una cuenta de mayor: usarla deja el cierre sin
+   * detalle en el mayor y en el PLE.
+   */
+  private async cuentaDeCierre(companyId: string): Promise<{ code: string; name: string }> {
+    const regla = await this.prisma.accountingRule?.findFirst?.({
+      where: { company_id: companyId, process_code: 'CIERRE', line_order: 1, is_active: true },
+      select: { account_code: true, description: true },
+    });
+    if (regla?.account_code) {
+      return { code: regla.account_code, name: regla.description?.trim() || 'Resultados acumulados' };
+    }
+    return { code: '59', name: 'Resultados acumulados' };
   }
 }

@@ -21,10 +21,6 @@ import {
   USER_REPOSITORY_PORT,
   type IUserRepositoryPort,
 } from '../../../auth/domain/ports/userRepositoryPort';
-import {
-  SOL_CREDENTIAL_CIPHER,
-  type SolCredentialCipherPort,
-} from '../../../auth/domain/ports/solCredentialCipherPort';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { QueueService, type SirePeriodsJobData } from '../../../resilience/infrastructure/queue/queue.service';
@@ -92,8 +88,6 @@ export class SireReadOnlyPeriodsController {
     private readonly sireClient: SireReadOnlyPeriodsClient,
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
-    @Inject(SOL_CREDENTIAL_CIPHER)
-    private readonly credentialCipher: SolCredentialCipherPort,
   ) {}
 
   @Post('periodos')
@@ -106,13 +100,9 @@ export class SireReadOnlyPeriodsController {
     this.assertIntegrationEnabled();
 
     const messageId = randomUUID();
-    const encryptedSolCredentials = await this.registerQuery(
-      messageId,
-      company,
-      dto,
-    );
+    await this.registerQuery(messageId, company, dto);
 
-    return this.enqueueQuery(messageId, company, dto, encryptedSolCredentials);
+    return this.enqueueQuery(messageId, company, dto);
   }
 
   @Get('periodos/status/:messageId')
@@ -215,25 +205,20 @@ export class SireReadOnlyPeriodsController {
   }
 
   /**
-   * Cifra las credenciales SOL y registra la consulta.
+   * Registra la consulta.
+   *
+   * NO se guardan credenciales aquí: las resuelve el worker desde
+   * `sire_configurations` usando el `companyId` de la empresa.
    *
    * Si la base de datos no responde no hay `messageId` consultable, así que la
    * respuesta tiene que ser un error controlado y no un estado `FAILED`.
-   *
-   * @returns Las credenciales cifradas que viajarán en el trabajo encolado.
    */
   private async registerQuery(
     messageId: string,
     company: RequestCompany,
     dto: SirePeriodsRequestDto,
-  ): Promise<string> {
+  ): Promise<void> {
     try {
-      const encryptedSolCredentials = this.credentialCipher.encrypt(
-        JSON.stringify({
-          solUser: dto.solUser,
-          solPassword: dto.solPassword,
-        }),
-      );
       await this.prisma.sirePeriodQuery.create({
         data: {
           id: messageId,
@@ -242,7 +227,6 @@ export class SireReadOnlyPeriodsController {
           book_code: dto.bookCode,
         },
       });
-      return encryptedSolCredentials;
     } catch (error) {
       this.logger.error(
         `No se pudo registrar la consulta de períodos SIRE (messageId=${messageId}): ${describeErrorSafely(error)}`,
@@ -272,7 +256,6 @@ export class SireReadOnlyPeriodsController {
     messageId: string,
     company: RequestCompany,
     dto: SirePeriodsRequestDto,
-    encryptedSolCredentials: string,
   ): Promise<SirePeriodsRequestResponse> {
     try {
       await this.enqueueWithTimeout({
@@ -280,7 +263,6 @@ export class SireReadOnlyPeriodsController {
         companyId: company.id,
         ruc: company.ruc,
         bookCode: dto.bookCode,
-        encryptedSolCredentials,
       });
     } catch (error) {
       this.logger.error(

@@ -1,10 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { TreasuryAccountsService } from '../../../accounting/application/services/treasuryAccountsService';
+import { AccountingCatalogService } from '../../../accounting/application/services/accountingCatalogService';
+import { repartir, type DistributionInput, type DistributionLine } from '../../../accounting/domain/rules/distributionRule';
 
 @Injectable()
 export class CollectionsService {
-  constructor(private readonly prisma: PrismaService, private readonly accounting: GenerateAccountingEntryUseCase) {}
+  constructor(private readonly prisma: PrismaService, private readonly accounting: GenerateAccountingEntryUseCase, @Optional() private readonly tesoreria?: TreasuryAccountsService,
+    @Optional() private readonly catalogo?: AccountingCatalogService) {}
 
   async list(companyId: string) {
     return this.prisma.collection.findMany({ where: { company_id: companyId }, orderBy: { collection_date: 'desc' }, take: 200 });
@@ -172,7 +176,8 @@ export class CollectionsService {
 
   async create(companyId: string, dto: {
     customerName: string; customerDoc?: string; invoiceNumber?: string; description?: string;
-    collectionDate?: string; paymentMethod?: string; bankName?: string; amount: number;
+    collectionDate?: string; paymentMethod?: string; bankName?: string; amount: number; treasuryAccountId?: string;
+    distributions?: DistributionInput[];
   }) {
     if (!dto.customerName?.trim()) throw new BadRequestException('El cliente es obligatorio.');
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('El monto del cobro debe ser mayor a cero.');
@@ -204,26 +209,177 @@ export class CollectionsService {
       throw new BadRequestException('Las reglas COBRO están incompletas: se requieren las líneas 1 y 2.');
     }
 
+    const distribucion = dto.distributions?.length
+      ? await this.repartirCobro(monto, dto.distributions)
+      : null;
+
     const cobro = await this.prisma.collection.create({
       data: {
         company_id: companyId, collection_date: fecha, customer_name: dto.customerName.trim(),
         customer_doc: dto.customerDoc?.trim() || null, invoice_number: dto.invoiceNumber?.trim() || null, invoice_id: invoiceId,
         description: dto.description?.trim() || `Cobro a ${dto.customerName.trim()}`, amount: monto,
         payment_method: metodo, bank_name: dto.bankName?.trim() || null, status: 'REGISTRADO',
+        ...(distribucion
+          ? {
+              distributions: {
+                create: distribucion.map((linea) => ({
+                  company_id: companyId,
+                  account_code: linea.accountCode,
+                  amount: linea.amount,
+                  percentage: linea.percentage,
+                })),
+              },
+            }
+          : {}),
       },
     });
 
     const porOrden = new Map(reglas.map((r) => [r.line_order, r.account_code]));
     const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    const cuentaTesoreriaFallback = {
+      code: metodo === 'EFECTIVO' ? '1011' : (porOrden.get(1) ?? '1041'),
+      name: metodo === 'EFECTIVO' ? 'Caja principal' : 'Cuenta corriente',
+    };
+    const cuentaTesoreria = this.tesoreria
+      ? await this.tesoreria.cuentaParaAsiento(companyId, dto.treasuryAccountId, cuentaTesoreriaFallback)
+      : cuentaTesoreriaFallback;
+
+    const asiento: Array<{
+      lineOrder: number; accountCode: string; accountName: string; debitAmount: number; creditAmount: number;
+    }> = [
+      { lineOrder: 1, accountCode: cuentaTesoreria.code, accountName: cuentaTesoreria.name, debitAmount: monto, creditAmount: 0 },
+    ];
+    if (distribucion?.length) {
+      const nombres = this.catalogo
+        ? await this.catalogo.nombres(distribucion.map((d) => d.accountCode))
+        : new Map<string, string>();
+      for (const linea of distribucion) {
+        asiento.push({
+          lineOrder: asiento.length + 1,
+          accountCode: linea.accountCode,
+          accountName: nombres.get(linea.accountCode) || 'Cuentas por cobrar',
+          debitAmount: 0,
+          creditAmount: linea.amount,
+        });
+      }
+    } else {
+      asiento.push({
+        lineOrder: 2,
+        accountCode: porOrden.get(2) ?? '12121',
+        accountName: 'Cuentas por cobrar',
+        debitAmount: 0,
+        creditAmount: monto,
+      });
+    }
+
     await this.accounting.execute({
       companyId, period: periodo, entryDate: fecha.toISOString(),
       glosa: `Cobro de ${cobro.customer_name}${cobro.invoice_number ? ` · ${cobro.invoice_number}` : ''}`,
       sourceModule: 'COLLECTIONS', journalCode: 'CAJ', sourceReferenceId: cobro.id, idempotencyKey: `collection:${cobro.id}`,
-      lines: [
-        { lineOrder: 1, accountCode: metodo === 'EFECTIVO' ? '101' : (porOrden.get(1) ?? '1041'), accountName: 'Caja o banco', debitAmount: monto, creditAmount: 0 },
-        { lineOrder: 2, accountCode: porOrden.get(2) ?? '12121', accountName: 'Cuentas por cobrar', debitAmount: 0, creditAmount: monto },
-      ],
+      lines: asiento,
     });
     return cobro;
+  }
+
+  /**
+   * Anula todos los cobros vivos de un comprobante anulado.
+   *
+   * Es el reverso del cobro que pide la observación: cuando la venta se anula
+   * antes de declarar, el dinero no puede quedar registrado como cobrado. Se
+   * exige que el comprobante esté ANULADO y se reutiliza `annul` cobro por
+   * cobro, así cada uno genera su asiento de reversión y su movimiento de
+   * tesorería inverso.
+   */
+  async annulByInvoice(companyId: string, invoiceId: string) {
+    const comprobante = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, company_id: companyId },
+      select: { id: true, serie: true, correlativo: true, estado: true },
+    });
+    if (!comprobante) throw new BadRequestException('Comprobante no encontrado.');
+    if (comprobante.estado !== 'ANULADO') {
+      throw new BadRequestException(
+        'Solo se pueden revertir los cobros de un comprobante ANULADO. Anule primero la venta (comunicación de baja o nota de crédito).',
+      );
+    }
+
+    const cobros = await this.prisma.collection.findMany({
+      where: { company_id: companyId, invoice_id: invoiceId, status: { not: 'ANULADO' } },
+      select: { id: true },
+    });
+    const anulados: string[] = [];
+    const fallidos: Array<{ id: string; motivo: string }> = [];
+    for (const cobro of cobros) {
+      try {
+        await this.annul(companyId, cobro.id);
+        anulados.push(cobro.id);
+      } catch (error) {
+        // Un cobro sin asiento no debe frenar la reversión de los demás.
+        fallidos.push({ id: cobro.id, motivo: (error as Error).message });
+      }
+    }
+
+    return {
+      invoiceId,
+      comprobante: `${comprobante.serie}-${String(comprobante.correlativo).padStart(8, '0')}`,
+      cobros: cobros.length,
+      anulados: anulados.length,
+      ids: anulados,
+      fallidos,
+    };
+  }
+
+  /** Distribución vigente del cobro (vacía si no se repartió). */
+  async distributions(companyId: string, id: string) {
+    const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId }, select: { id: true } });
+    if (!cobro) throw new BadRequestException('Cobro no encontrado.');
+    const filas = await this.prisma.collectionDistribution.findMany({
+      where: { collection_id: id, company_id: companyId },
+      orderBy: { amount: 'desc' },
+    });
+    return filas.map((f) => ({ accountCode: f.account_code, amount: Number(f.amount), percentage: Number(f.percentage) }));
+  }
+
+  /** Reemplaza la distribución de un cobro que todavía no se contabilizó. */
+  async setDistributions(companyId: string, id: string, items: DistributionInput[]) {
+    const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId } });
+    if (!cobro) throw new BadRequestException('Cobro no encontrado.');
+    if (cobro.status === 'ANULADO') throw new BadRequestException('El cobro está anulado.');
+    const asiento = await this.prisma.accountingEntry.findFirst({
+      where: { company_id: companyId, source_module: 'COLLECTIONS', source_reference_id: id },
+      select: { id: true },
+    });
+    if (asiento) {
+      throw new BadRequestException(
+        'El cobro ya está contabilizado: no se puede redistribuir. Anule el cobro y registre uno nuevo.',
+      );
+    }
+    const lineas = await this.repartirCobro(Number(cobro.amount), items);
+    await this.prisma.$transaction([
+      this.prisma.collectionDistribution.deleteMany({ where: { collection_id: id, company_id: companyId } }),
+      this.prisma.collectionDistribution.createMany({
+        data: lineas.map((linea) => ({
+          collection_id: id,
+          company_id: companyId,
+          account_code: linea.accountCode,
+          amount: linea.amount,
+          percentage: linea.percentage,
+        })),
+      }),
+    ]);
+    return this.distributions(companyId, id);
+  }
+
+  /** Valida la distribución contra el importe cobrado y el catálogo PCGE. */
+  private async repartirCobro(monto: number, items: readonly DistributionInput[]): Promise<DistributionLine[]> {
+    let lineas: DistributionLine[];
+    try {
+      lineas = repartir(monto, items);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+    if (this.catalogo) {
+      await this.catalogo.validarCodigos(lineas.map((linea) => linea.accountCode));
+    }
+    return lineas;
   }
 }

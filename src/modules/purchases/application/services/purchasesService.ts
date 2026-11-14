@@ -12,6 +12,7 @@ import { CreatePurchaseDto } from '../dto/createPurchaseDto';
 import { PayPurchaseDto } from '../dto/payPurchaseDto';
 import { mapPurchaseRecord } from '../mappers/purchaseResponseMapper';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { TreasuryAccountsService } from '../../../accounting/application/services/treasuryAccountsService';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
@@ -34,6 +35,8 @@ export class PurchasesService {
     private readonly prisma: PrismaService,
     @Optional()
     private readonly accounting?: GenerateAccountingEntryUseCase,
+    @Optional()
+    private readonly tesoreria?: TreasuryAccountsService,
   ) {}
 
   async listPurchases(companyId: string) {
@@ -191,8 +194,8 @@ export class PurchasesService {
     });
 
     const mapped = mapPurchaseRecord(result, { includeExtended: true, includeItemsCount: true });
-    await this.registrarAsientoCompra(companyId, mapped, issueDate);
-    return mapped;
+    const contabilidad = await this.registrarAsientoCompra(companyId, mapped, issueDate);
+    return { ...mapped, contabilidad };
   }
 
   async receivePurchase(
@@ -314,8 +317,8 @@ export class PurchasesService {
 
     const totalRecepcion = recibidos.reduce((sum, r) => sum + r.quantity * r.unitCost, 0);
     const mapped = mapPurchaseRecord(result, { includeExtended: true, includeItemsCount: true });
-    await this.registrarAsientoRecepcion(companyId, mapped, totalRecepcion, receivedAt);
-    return mapped;
+    const contabilidad = await this.registrarAsientoRecepcion(companyId, mapped, totalRecepcion, receivedAt);
+    return { ...mapped, contabilidad };
   }
 
   async listPayments(companyId: string, id: string) {
@@ -518,7 +521,14 @@ export class PurchasesService {
         throw new BadRequestException('Las reglas PAGO están incompletas: faltan las líneas 1 y 2.');
       }
       const cxp = cuentaCxp;
-      const caja = metodo === 'EFECTIVO' ? '101' : cuentaBanco!;
+      const respaldo = {
+        code: metodo === 'EFECTIVO' ? '1011' : cuentaBanco!,
+        name: metodo === 'EFECTIVO' ? 'Caja principal' : 'Cuenta corriente',
+      };
+      // La cuenta elegida en tesorería manda; si no llega, se conserva la regla.
+      const cuentaCaja = this.tesoreria
+        ? await this.tesoreria.cuentaParaAsiento(companyId, dto.treasuryAccountId, respaldo)
+        : respaldo;
       const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       await this.accounting.execute({
         companyId,
@@ -539,8 +549,8 @@ export class PurchasesService {
           },
           {
             lineOrder: 2,
-            accountCode: caja,
-            accountName: metodo === 'EFECTIVO' ? 'Caja' : 'Cuenta corriente',
+            accountCode: cuentaCaja.code,
+            accountName: cuentaCaja.name,
             debitAmount: 0,
             creditAmount: monto,
           },
@@ -558,13 +568,48 @@ export class PurchasesService {
     };
   }
 
+  /**
+   * Reintenta el asiento de una compra que quedó sin contabilizar.
+   *
+   * Es la acción que ofrece la auditoría para el caso "compra registrada sin
+   * asiento": no crea nada nuevo, vuelve a ejecutar el mismo asiento de compra.
+   */
+  async postAccounting(companyId: string, id: string) {
+    const compra = await this.prisma.nationalPurchase.findFirst({
+      where: { id, company_id: companyId },
+      include: { items: true },
+    });
+    if (!compra) throw new NotFoundException('Compra no encontrada.');
+    if (compra.status === 'ANULADA') throw new BadRequestException('La compra está anulada.');
+
+    const existente = await this.prisma.accountingEntry.findFirst({
+      where: {
+        company_id: companyId,
+        source_module: 'PURCHASES',
+        source_reference_id: compra.purchase_number,
+      },
+      select: { id: true },
+    });
+    if (existente) {
+      return { compra: compra.purchase_number, asientoGenerado: true, yaExistia: true };
+    }
+
+    const mapped = mapPurchaseRecord(compra, { includeExtended: true, includeItemsCount: false });
+    const contabilidad = await this.registrarAsientoCompra(
+      companyId,
+      mapped,
+      new Date(compra.issue_date),
+    );
+    return { compra: compra.purchase_number, ...contabilidad, yaExistia: false };
+  }
+
   /** Asiento de compra PCGE: Naturaleza (60/40/42) y Destino al almacén (20/61). */
   private async registrarAsientoCompra(
     companyId: string,
     purchase: any,
     issueDate: Date,
-  ): Promise<void> {
-    if (!this.accounting) return;
+  ): Promise<{ asientoGenerado: boolean; motivo?: string }> {
+    if (!this.accounting) return { asientoGenerado: false, motivo: 'contabilidad deshabilitada' };
 
     const existente = await this.prisma.accountingEntry.findFirst({
       where: {
@@ -574,7 +619,7 @@ export class PurchasesService {
       },
       select: { id: true },
     });
-    if (existente) return;
+    if (existente) return { asientoGenerado: true };
 
     const reglas = await this.prisma.accountingRule.findMany({
       where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
@@ -582,8 +627,9 @@ export class PurchasesService {
     });
     const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
     if (![1, 2, 3].every((n) => porOrden.has(n))) {
+      const motivo = 'reglas COMPRA incompletas: se requieren las líneas 1 a 3';
       this.logger.error(`Compra ${purchase.purchaseNumber} sin reglas COMPRA completas; no se genera asiento.`);
-      return;
+      return { asientoGenerado: false, motivo };
     }
     const accGastoCompra = porOrden.get(1)!;
     const accIgvCredito = porOrden.get(2)!;
@@ -626,13 +672,16 @@ export class PurchasesService {
           },
         ],
       });
+      return { asientoGenerado: true };
     } catch (error) {
+      const motivo = (error as Error).message;
       this.logger.error(
-        `Compra ${purchase.purchaseNumber} registrada sin asiento: ${(error as Error).message}`,
+        `Compra ${purchase.purchaseNumber} registrada sin asiento: ${motivo}`,
       );
+      // La compra ya está guardada: se informa el motivo en la respuesta en
+      // lugar de devolver un 201 que aparente que todo se contabilizó.
+      return { asientoGenerado: false, motivo: `No se pudo contabilizar la compra: ${motivo}` };
     }
-
-
   }
 
   /** Asiento de recepción: entrada al almacén (20) contra variación de existencias (61). */
@@ -641,16 +690,18 @@ export class PurchasesService {
     purchase: any,
     importe: number,
     receivedAt: Date,
-  ): Promise<void> {
-    if (!this.accounting || !(importe > 0)) return;
+  ): Promise<{ asientoGenerado: boolean; motivo?: string }> {
+    if (!this.accounting) return { asientoGenerado: false, motivo: 'contabilidad deshabilitada' };
+    if (!(importe > 0)) return { asientoGenerado: true };
     const reglas = await this.prisma.accountingRule.findMany({
       where: { company_id: companyId, process_code: 'RECEPCION', is_active: true },
       orderBy: { line_order: 'asc' },
     });
     const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
     if (![1, 2].every((n) => porOrden.has(n))) {
+      const motivo = 'reglas RECEPCION incompletas: se requieren las líneas 1 y 2';
       this.logger.error(`Recepción ${purchase.purchaseNumber} sin reglas RECEPCION completas; no se genera asiento.`);
-      return;
+      return { asientoGenerado: false, motivo };
     }
     const periodo = `${receivedAt.getFullYear()}-${String(receivedAt.getMonth() + 1).padStart(2, '0')}`;
     try {
@@ -667,8 +718,11 @@ export class PurchasesService {
           { lineOrder: 2, accountCode: porOrden.get(2)!, accountName: 'Variación de existencias', debitAmount: 0, creditAmount: importe },
         ],
       });
+      return { asientoGenerado: true };
     } catch (error) {
-      this.logger.error(`Recepción ${purchase.purchaseNumber} sin asiento: ${(error as Error).message}`);
+      const motivo = (error as Error).message;
+      this.logger.error(`Recepción ${purchase.purchaseNumber} sin asiento: ${motivo}`);
+      return { asientoGenerado: false, motivo: `No se pudo contabilizar la recepción: ${motivo}` };
     }
   }
 }

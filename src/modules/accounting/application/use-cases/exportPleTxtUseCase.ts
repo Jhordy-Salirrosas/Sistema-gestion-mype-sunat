@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ExportPleDto } from '../dto/exportPleDto';
 import { PleFileNameRule } from '../../domain/rules/pleFileNameRule';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
+import { construirLinea, validarEstructura, validarRucEmisor } from '../../domain/rules/pleStructureRule';
 
 export interface PleExportResult {
   fileName: string;
@@ -11,20 +12,41 @@ export interface PleExportResult {
   content: string;
 }
 
+/**
+ * Libros que este exportador sabe emitir.
+ *
+ * El 6.1 (Libro Mayor) tiene estructura propia y todavía no está implementado;
+ * antes, pedirlo devolvía filas con forma de Libro Diario en un archivo
+ * rotulado 6.1, que es peor que un error porque se puede presentar sin que
+ * nadie lo note.
+ */
+const LIBROS_SOPORTADOS = new Set(['050100', '030100']);
+
 @Injectable()
 export class ExportPleTxtUseCase {
   async execute(
     dto: ExportPleDto,
     entries: AccountingEntryEntity[] = [],
   ): Promise<PleExportResult> {
+    const bookCode = String(dto.bookCode);
+    if (!LIBROS_SOPORTADOS.has(bookCode)) {
+      throw new BadRequestException(
+        `El libro ${bookCode} todavía no está implementado: hoy se exportan el 5.1 (Libro Diario) y el 3.1 (Inventarios y Balances).`,
+      );
+    }
+    const ruc = (dto.companyRuc ?? '').replace(/\s/g, '');
+    const problemaRuc = validarRucEmisor(ruc);
+    if (problemaRuc) throw new BadRequestException(problemaRuc);
+
     const fileName = PleFileNameRule.generate({
-      ruc: dto.companyRuc,
+      ruc,
       year: dto.year,
       month: dto.month,
       bookCode: dto.bookCode,
       hasInformation: entries.length > 0,
     });
 
+    const periodo = `${dto.year}${String(dto.month).padStart(2, '0')}00`;
     let totalDebit = 0;
     let totalCredit = 0;
     const lines: string[] = [];
@@ -49,16 +71,19 @@ export class ExportPleTxtUseCase {
         index += 1;
         totalDebit += cuenta.debit;
         totalCredit += cuenta.credit;
-        lines.push([
-          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
-          `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(index).padStart(3, '0')}`,
-          code,
-          cuenta.name,
-          cuenta.debit.toFixed(2),
-          cuenta.credit.toFixed(2),
-          '1',
-        ].join('|'));
+        lines.push(
+          construirLinea([
+            periodo,
+            `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(index).padStart(3, '0')}`,
+            code,
+            cuenta.name,
+            cuenta.debit.toFixed(2),
+            cuenta.credit.toFixed(2),
+            '1',
+          ]),
+        );
       }
+      this.exigirFormato(lines, '030100');
       return {
         fileName,
         recordsCount: lines.length,
@@ -77,41 +102,84 @@ export class ExportPleTxtUseCase {
         ? rawEntryNumber
         : `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(entryIndex + 1).padStart(3, '0')}`;
 
-      entry.lines.forEach((line, lineIdx) => {
+      // Campo 3: el primer dígito del correlativo indica el tipo de asiento
+      // (A apertura, M movimiento, C cierre). Todo lo que emite el sistema es
+      // movimiento del mes. Si el número viene formateado como CUO, se usa la
+      // posición del asiento en el período.
+      const numeroAsiento = /^\d+$/.test(rawEntryNumber) ? Number(rawEntryNumber) : entryIndex + 1;
+      const correlativoAsiento = `M${String(numeroAsiento).padStart(3, '0')}`;
+      const fechaContable = this.fecha(entry.entryDate);
+
+      entry.lines.forEach((line) => {
         const debitVal = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
         const creditVal = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
 
         totalDebit += debitVal;
         totalCredit += creditVal;
 
-        const lineOrderNum = line.lineOrder ?? (line as any).line_order ?? (lineIdx + 1);
-        const lineCorrelative = `M${String(lineOrderNum).padStart(3, '0')}`;
         const accountCode = line.accountCode || (line as any).account_code || '';
 
-        const record = [
-          `${dto.year}${String(dto.month).padStart(2, '0')}00`,
-          cuo,
-          lineCorrelative,
-          accountCode,
-          debitVal.toFixed(2),
-          creditVal.toFixed(2),
-          entry.glosa || '',
-          '1',
-          '',
-        ].join('|');
-
-        lines.push(record);
+        // Estructura oficial del 5.1: 21 columnas (22-44 quedan libres y no se
+        // emiten). Los campos 5 y 6 (unidad de operación y centro de costos),
+        // 8 a 12 (documento del emisor y comprobante) y 14, 15 y 17 no tienen
+        // dato en el asiento, así que van vacíos y no se inventan.
+        lines.push(
+          construirLinea([
+            periodo, // 1 período
+            cuo, // 2 CUO
+            correlativoAsiento, // 3 correlativo del asiento
+            accountCode, // 4 cuenta contable
+            '', // 5 unidad de operación
+            '', // 6 centro de costos
+            'PEN', // 7 moneda
+            '', // 8 tipo de documento del emisor
+            '', // 9 número de documento del emisor
+            '', // 10 tipo de comprobante
+            '', // 11 serie
+            '', // 12 número
+            fechaContable, // 13 fecha contable
+            '', // 14 fecha de vencimiento
+            '', // 15 fecha de la operación
+            entry.glosa || '', // 16 glosa
+            '', // 17 glosa referencial
+            debitVal.toFixed(2), // 18 debe
+            creditVal.toFixed(2), // 19 haber
+            '', // 20 dato estructurado
+            '1', // 21 estado de la operación
+          ]),
+        );
       });
     });
 
-    const content = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
+    this.exigirFormato(lines, String(dto.bookCode));
 
     return {
       fileName,
       recordsCount: lines.length,
       totalDebit: Math.round(totalDebit * 100) / 100,
       totalCredit: Math.round(totalCredit * 100) / 100,
-      content,
+      content: lines.length > 0 ? lines.join('\r\n') + '\r\n' : '',
     };
+  }
+
+  /**
+   * Un archivo con filas de distinto número de columnas lo rechaza SUNAT sin
+   * decir en qué línea: se corta acá, con el número de línea.
+   */
+  private exigirFormato(lines: readonly string[], bookCode: string): void {
+    const issues = validarEstructura(lines);
+    if (issues.length > 0) {
+      throw new BadRequestException(
+        `El libro ${bookCode} tiene una fila con formato inconsistente: ${issues[0].message}`,
+      );
+    }
+  }
+
+  /** Fecha `DD/MM/YYYY` como la espera el PLE. */
+  private fecha(valor: Date | string | undefined): string {
+    if (!valor) return '';
+    const d = valor instanceof Date ? valor : new Date(valor);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
   }
 }

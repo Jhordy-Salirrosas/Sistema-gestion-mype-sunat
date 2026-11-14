@@ -448,7 +448,7 @@ export class InvoiceAccountingBridgeService {
     const mappings = await this.prisma.accountingMapping?.findMany({ where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true } }) ?? [];
     const roles = new Map(mappings.map(m => [m.role_code, m.account_code]));
     const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
-    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO');
+    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA');
     if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); reverso pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
@@ -508,7 +508,7 @@ export class InvoiceAccountingBridgeService {
     })) ?? [];
     const porOrden = new Map<number, string>(reglasCosto.map((r: any) => [Number(r.line_order), String(r.account_code)]));
     const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
-    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO');
+    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA');
     if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); costo pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({

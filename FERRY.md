@@ -2,7 +2,7 @@
 
 Rama única `fix/m1-arreglos-auditorias`, desde `fix/m1-pulidos` `10483de7954cdbd41f2436010e09ea1a3669846f`. Sin PR nuevo, despliegue, migraciones ni emisiones reales. Pruebas con dobles.
 
-Base frontend reproducida: `CarlosSoles/Fronted-sistema-mype-sunat` `3e4497367363c70d7c774c1d9dc0b65b221a120f` + el ferry completo de esa cabeza de pulidos. Main remoto verificado: `5b9edeece1cc05faae1fc44ddddc5009781b4440`; su avance de cierre de caja no intersecta ninguno de los 55 archivos transportados. Las suites se miden contra la base reproducida sobre pulidos.
+Base frontend vigente de validación: `CarlosSoles/Fronted-sistema-mype-sunat` main `ebf5e34f2821ee773d7ff23af432443ff2cfe8b8`, con los 55 archivos del ferry superpuestos. El avance desde la base histórica `3e4497367363c70d7c774c1d9dc0b65b221a120f` no intersecta ninguna ruta transportada. Los conteos anteriores se conservan como registro histórico; el cierre de la fusión con dev figura al final.
 
 ## Veredictos
 
@@ -212,3 +212,22 @@ El ferry compuesto contiene ahora 55 archivos frontend más FERRY.md, 56 entrada
 Suites completas verdes, incluidas las integraciones de YA_EN_COLA y de anulación RC; back mantiene 4 suites / 38 pruebas omitidas y 12 snapshots aprobados. Incremento: 35 pruebas back y 4 front. Las únicas expectativas antiguas ajustadas fijaban el conjunto de motivos sin el 10 en back/front; 08 permanece excluido. Lint y builds completos back/front OK. El build final se ejecutó después de las suites, sin regeneración Prisma concurrente con Jest.
 
 Estado final: menores aplicados en 37de84ea; exclusión BC01/BD01 de RA en 58b3d533; YA_EN_COLA en 70dd9fd7; este bloque completa 10 restringido y la anulación RC. 08 queda solo documentado conforme al alcance. Se entrega un único commit adicional del bloque pendiente, sin duplicar los bloques ya aplicados ni abrir otro PR. El ferry tiene 55 archivos frontend más FERRY.md (56 entradas SHA-256 verificadas). Su aplicación al repo frontend y despliegue siguen a cargo del tren de revisión. Sin migraciones nuevas ni emisiones reales.
+
+
+## Fusión con dev para PR #388 — 2026-11-14
+
+Se fusiona dev `bf60df93c2f3434225e7d89acf90b4436c31f7fb` sobre la cabeza `c4e4a3c920afbabb415f220711ee8c5968476ecc`. El único conflicto textual, en invoiceSummaryService.ts, conserva la exclusión BC01/BD01 de RA y la restricción contable de período cerrado/PLE. Esa restricción se comparte con la anulación RC de notas, con ocho regresiones adicionales. La cola conserva tanto SIRE como la resolución DLQ y YA_EN_COLA. Los módulos de Contabilidad y sus módulos relacionados permanecen idénticos a dev.
+
+El ferry no cambia ningún archivo frontend. La base de validación vigente es main `ebf5e34f2821ee773d7ff23af432443ff2cfe8b8`, sin intersección entre sus avances y las 55 rutas transportadas.
+
+
+### Validación de la fusión
+
+| Capa | Cierre anterior c4e4a3c9 | Fusión con dev actual |
+| --- | --- | --- |
+| Back, PostgreSQL local | 368 suites / 3653 pruebas | 401 suites / 4034 pruebas |
+| Front | 179 archivos / 1391 pruebas | 182 archivos / 1404 pruebas |
+
+Suites completas verdes. Back mantiene 4 suites y 38 pruebas omitidas y 12 snapshots aprobados. El incremento incorpora las pruebas de dev y ocho regresiones de esta resolución; front incorpora las pruebas del main vigente, sin modificar archivos transportados. Las seis suites dirigidas previas pasaron 127 pruebas. Lint backend y builds backend/frontend OK; los builds se ejecutaron después de finalizar ambas suites.
+
+El manifiesto conserva 56 entradas: 55 archivos frontend sin cambios y FERRY.md actualizado. No hay migraciones nuevas, emisiones reales ni PR nuevo.

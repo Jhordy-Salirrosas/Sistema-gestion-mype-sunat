@@ -7,8 +7,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { PrismaService } from '../../../src/database/prismaService';
-import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
 import type { QueueService } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
+import type { ISireConfigurationRepositoryPort } from '../../../src/modules/sire/domain/ports/sireConfigurationRepositoryPort';
 import { SirePeriodsJobConsumer } from '../../../src/modules/sire/infrastructure/queue/sirePeriodsJobConsumer';
 import {
   RetryableSireSunatError,
@@ -26,7 +26,6 @@ describe('SirePeriodsJobConsumer', () => {
     companyId: 'company-id',
     ruc: '20100070970',
     bookCode: '140000' as const,
-    encryptedSolCredentials: 'encrypted-fake-sol-credentials',
   };
   const request = {
     id: job.messageId,
@@ -48,19 +47,16 @@ describe('SirePeriodsJobConsumer', () => {
   const sireClient = {
     getPeriods: jest.fn(),
   } as unknown as SireReadOnlyPeriodsClient;
-  const credentialCipher = {
-    decrypt: jest.fn(() =>
-      JSON.stringify({
-        solUser: 'FAKEUSER',
-        solPassword: 'fake-sol-password',
-      }),
-    ),
-  } as unknown as SolCredentialCipherPort;
+  const configurationRepository = {
+    findByCompanyId: jest.fn(),
+    isConfigured: jest.fn(),
+    save: jest.fn(),
+  } as unknown as ISireConfigurationRepositoryPort;
   const consumer = new SirePeriodsJobConsumer(
     queue,
     prisma,
     sireClient,
-    credentialCipher,
+    configurationRepository,
   );
 
   beforeEach(() => {
@@ -74,6 +70,12 @@ describe('SirePeriodsJobConsumer', () => {
     });
     (sireClient.getPeriods as jest.Mock).mockResolvedValue({
       periodos: ['202601'],
+    });
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValue({
+      solUser: 'FAKEUSER',
+      solPassword: 'fake-sol-password',
+      clientId: 'fake-client-id',
+      clientSecret: 'fake-client-secret',
     });
   });
 
@@ -101,6 +103,7 @@ describe('SirePeriodsJobConsumer', () => {
       'FAKEUSER',
       'fake-sol-password',
       job.bookCode,
+      { clientId: 'fake-client-id', clientSecret: 'fake-client-secret' },
     );
     expect(prisma.sirePeriodQuery.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -109,17 +112,18 @@ describe('SirePeriodsJobConsumer', () => {
     );
   });
 
-  it('decrypts credentials only inside the worker and persists the successful result', async () => {
+  it('resolves the credentials of the company and persists the successful result', async () => {
     await consumer.process(job);
 
-    expect(credentialCipher.decrypt).toHaveBeenCalledWith(
-      job.encryptedSolCredentials,
+    expect(configurationRepository.findByCompanyId).toHaveBeenCalledWith(
+      job.companyId,
     );
     expect(sireClient.getPeriods).toHaveBeenCalledWith(
       job.ruc,
       'FAKEUSER',
       'fake-sol-password',
       job.bookCode,
+      { clientId: 'fake-client-id', clientSecret: 'fake-client-secret' },
     );
     expect(prisma.sirePeriodQuery.update).toHaveBeenLastCalledWith({
       where: { id: job.messageId },
@@ -132,13 +136,23 @@ describe('SirePeriodsJobConsumer', () => {
     });
   });
 
-  it('trims whitespace around the decrypted SOL username before requesting periods', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
-      JSON.stringify({
-        solUser: '  SIREAPII  ',
-        solPassword: 'fake-sol-password',
-      }),
-    );
+  it('never travels the credentials in the queued payload', async () => {
+    await consumer.process(job);
+
+    expect(job).not.toHaveProperty('encryptedSolCredentials');
+    expect(Object.keys(job)).toEqual([
+      'messageId',
+      'companyId',
+      'ruc',
+      'bookCode',
+    ]);
+  });
+
+  it('trims whitespace around the configured SOL username before requesting periods', async () => {
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce({
+      solUser: '  SIREAPII  ',
+      solPassword: 'fake-sol-password',
+    });
 
     await consumer.process(job);
 
@@ -147,16 +161,34 @@ describe('SirePeriodsJobConsumer', () => {
       'SIREAPII',
       'fake-sol-password',
       job.bookCode,
+      { clientId: undefined, clientSecret: undefined },
+    );
+  });
+
+  it('falls back to the environment credentials when the company has none of its own', async () => {
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce({
+      solUser: 'FAKEUSER',
+      solPassword: 'fake-sol-password',
+    });
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).toHaveBeenCalledWith(
+      job.ruc,
+      'FAKEUSER',
+      'fake-sol-password',
+      job.bookCode,
+      { clientId: undefined, clientSecret: undefined },
     );
   });
 
   it('never logs credentials, token material or diagnostic fragments', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
-      JSON.stringify({
-        solUser: '  SIREAPII  ',
-        solPassword: 'fake-sol-password',
-      }),
-    );
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce({
+      solUser: '  SIREAPII  ',
+      solPassword: 'fake-sol-password',
+      clientId: 'fake-client-id',
+      clientSecret: 'fake-client-secret',
+    });
 
     await consumer.process(job);
 
@@ -168,6 +200,7 @@ describe('SirePeriodsJobConsumer', () => {
     expect(loggedMessages).toContain('Iniciando consulta de períodos SIRE');
     expect(loggedMessages).toContain('completada con éxito');
     expect(loggedMessages).not.toContain('fake-sol-password');
+    expect(loggedMessages).not.toContain('fake-client-secret');
     expect(loggedMessages).not.toContain('SIREAPII');
     expect(loggedMessages).not.toContain('20100070970SIREAPII');
     expect(loggedMessages).not.toMatch(/chars=/);
@@ -326,9 +359,48 @@ describe('SirePeriodsJobConsumer', () => {
     );
   });
 
-  it('marks the request failed when the credentials cannot be decrypted', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockImplementationOnce(() => {
-      throw new Error('clave de cifrado inválida');
+  it('marks the request failed when the company has no SIRE configuration', async () => {
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce(
+      null,
+    );
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+  });
+
+  it('marks the request failed when the configuration cannot be read', async () => {
+    (configurationRepository.findByCompanyId as jest.Mock).mockRejectedValueOnce(
+      new Error('Connection terminated unexpectedly'),
+    );
+
+    await consumer.process(job);
+
+    expect(sireClient.getPeriods).not.toHaveBeenCalled();
+    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          error_code: 'CREDENTIALS_UNAVAILABLE',
+        }),
+      }),
+    );
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('No se pudo leer la configuración SIRE'),
+    );
+  });
+
+  it('marks the request failed when the configuration has no SOL user', async () => {
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce({
+      solPassword: 'fake-sol-password',
     });
 
     await consumer.process(job);
@@ -344,41 +416,10 @@ describe('SirePeriodsJobConsumer', () => {
     );
   });
 
-  it('marks the request failed when the decrypted content is not JSON', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce('no es json');
-
-    await consumer.process(job);
-
-    expect(sireClient.getPeriods).not.toHaveBeenCalled();
-    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'FAILED',
-          error_code: 'CREDENTIALS_UNAVAILABLE',
-        }),
-      }),
-    );
-  });
-
-  it('marks the request failed when the decrypted content is null', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce('null');
-
-    await consumer.process(job);
-
-    expect(sireClient.getPeriods).not.toHaveBeenCalled();
-    expect(prisma.sirePeriodQuery.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          error_code: 'CREDENTIALS_UNAVAILABLE',
-        }),
-      }),
-    );
-  });
-
-  it('marks the request failed when the decrypted content has no SOL user', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
-      JSON.stringify({ solPassword: 'fake-sol-password' }),
-    );
+  it('marks the request failed when the configuration has no SOL password', async () => {
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce({
+      solUser: 'FAKEUSER',
+    });
 
     await consumer.process(job);
 
@@ -394,9 +435,10 @@ describe('SirePeriodsJobConsumer', () => {
   });
 
   it('marks the request failed when the SOL user is only whitespace', async () => {
-    (credentialCipher.decrypt as jest.Mock).mockReturnValueOnce(
-      JSON.stringify({ solUser: '   ', solPassword: 'fake-sol-password' }),
-    );
+    (configurationRepository.findByCompanyId as jest.Mock).mockResolvedValueOnce({
+      solUser: '   ',
+      solPassword: 'fake-sol-password',
+    });
 
     await consumer.process(job);
 
