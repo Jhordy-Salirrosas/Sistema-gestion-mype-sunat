@@ -337,6 +337,14 @@ export class InvoiceQueryService {
     }
 
     const decision = clasificarReintentoMasivo(fila);
+    // Un segundo clic tras publicar no solicita otro envío: informa el trabajo ya vivo.
+    // La incertidumbre se conserva y sigue bloqueando cuando no existe ese trabajo.
+    if (decision.resultado === 'OMITIDO_INCERTIDUMBRE' &&
+        ['EN_COLA', 'PENDIENTE', 'ERROR_RED', 'ENVIADO'].includes(fila.estado) &&
+        await this.queue.hasLiveInvoiceJob(fila.id)) {
+      return { id: fila.id, estado: fila.estado, encolado: false, resultadoCola: 'YA_EN_COLA',
+        mensaje: 'Ya existe un trabajo pendiente o activo; no se duplicó.' };
+    }
     if (decision.resultado !== 'ELEGIBLE') return {
       id: fila.id, estado: fila.estado, encolado: false,
       codigo: fila.estado === 'RECHAZADO' && decision.resultado !== 'OMITIDO_BLOQUEO_LOCAL' ? 'INVOICE_REJECTED_FINAL' : decision.resultado,

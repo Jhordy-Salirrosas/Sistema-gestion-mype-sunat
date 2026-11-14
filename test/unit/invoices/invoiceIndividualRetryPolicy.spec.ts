@@ -7,7 +7,7 @@ const evento = (codigo_error: string, mensaje_error: string, estado_nuevo = 'ERR
 const fila = (extra = {}) => ({ id: 'i', serie: 'F001', correlativo: 1, estado: 'ERROR_RED', transport_uncertain: false, cdr_sunat: null, history: [], ...extra });
 function harness(row: ReturnType<typeof fila>) {
   const db = { invoice: { findFirst: jest.fn(async () => row), findUnique: jest.fn(async () => row), updateMany: jest.fn() }, auditLog: { create: jest.fn() }, transactionHistory: { create: jest.fn() } };
-  const queue = { reenqueueInvoiceIfIdle: jest.fn(async (_id, _company, permitido) => ({ estado: await permitido() ? 'ENCOLADO' : 'ESTADO_NO_PERMITIDO' })) };
+  const queue = { hasLiveInvoiceJob: jest.fn(async () => false), reenqueueInvoiceIfIdle: jest.fn(async (_id, _company, permitido) => ({ estado: await permitido() ? 'ENCOLADO' : 'ESTADO_NO_PERMITIDO' })) };
   return { db, queue, service: new InvoiceQueryService(db as never, queue as never) };
 }
 it.each([
@@ -51,4 +51,31 @@ it.each([
 it('una consulta aislada no acredita ni vuelve incierto el transporte', () => {
   expect(resumirTransporte([evento('M1_TRANSPORT_UNCERTAIN', 'Consulta fallida')])).toMatchObject({ envioAcreditado: false, incertidumbrePendiente: false });
   expect(resumirTransporte([evento('M1_TRANSPORT_STARTED', 'Inicio'), evento('M1_TRANSPORT_UNCERTAIN', 'Consulta fallida')])).toMatchObject({ envioAcreditado: true, incertidumbrePendiente: true });
+});
+
+it.each(['EN_COLA', 'PENDIENTE', 'ERROR_RED', 'ENVIADO'])('un trabajo vivo precede a la guarda de incertidumbre en %s sin publicar ni cambiar datos', async estado => {
+  const h = harness(fila({ estado, transport_uncertain: true }));
+  h.queue.hasLiveInvoiceJob.mockResolvedValue(true);
+  expect(await h.service.reintentarCdr('c', 'i')).toMatchObject({ encolado: false, resultadoCola: 'YA_EN_COLA' });
+  expect(h.queue.hasLiveInvoiceJob).toHaveBeenCalledWith('i');
+  expect(h.queue.reenqueueInvoiceIfIdle).not.toHaveBeenCalled();
+  expect(h.db.invoice.updateMany).not.toHaveBeenCalled();
+  expect(h.db.auditLog.create).not.toHaveBeenCalled(); expect(h.db.transactionHistory.create).not.toHaveBeenCalled();
+});
+it.each(['EN_COLA', 'PENDIENTE', 'ERROR_RED', 'ENVIADO'])('sin trabajo vivo, %s conserva la exclusión por incertidumbre', async estado => {
+  const h = harness(fila({ estado, transport_uncertain: true }));
+  expect(await h.service.reintentarCdr('c', 'i')).toMatchObject({ encolado: false, codigo: 'OMITIDO_INCERTIDUMBRE', resultadoCola: 'ESTADO_NO_PERMITIDO' });
+  expect(h.queue.reenqueueInvoiceIfIdle).not.toHaveBeenCalled(); expect(h.db.invoice.updateMany).not.toHaveBeenCalled();
+});
+it.each(['ACEPTADO', 'OBSERVADO', 'RECHAZADO', 'ANULADO', 'PROCESANDO'])('no altera la clasificación ni consulta trabajos para %s', async estado => {
+  const h = harness(fila({ estado, transport_uncertain: true }));
+  h.queue.hasLiveInvoiceJob.mockResolvedValue(true);
+  expect(await h.service.reintentarCdr('c', 'i')).toMatchObject({ encolado: false, resultadoCola: 'ESTADO_NO_PERMITIDO' });
+  expect(h.queue.hasLiveInvoiceJob).not.toHaveBeenCalled(); expect(h.queue.reenqueueInvoiceIfIdle).not.toHaveBeenCalled();
+});
+it('un trabajo vivo no sustituye la exclusión por bloqueo local', async () => {
+  const h = harness(fila({ history: [evento('M1_PREPARATION_DATOS_INVALIDOS', '{}')] }));
+  h.queue.hasLiveInvoiceJob.mockResolvedValue(true);
+  expect(await h.service.reintentarCdr('c', 'i')).toMatchObject({ codigo: 'OMITIDO_BLOQUEO_LOCAL', resultadoCola: 'ESTADO_NO_PERMITIDO' });
+  expect(h.queue.hasLiveInvoiceJob).not.toHaveBeenCalled(); expect(h.queue.reenqueueInvoiceIfIdle).not.toHaveBeenCalled();
 });

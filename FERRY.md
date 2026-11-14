@@ -131,3 +131,27 @@ El ferry compuesto contiene ahora 48 archivos frontend más FERRY.md, con 49 ent
 Suite completa del front verde, cinco pruebas adicionales. Tras corregir una opción no admitida por los tipos de la consulta de elementos en las pruebas, se repitieron las 14 pruebas del Monitor afectado y el build completo (tsc -b + vite), ambos aprobados. Esa corrección conserva el comportamiento predeterminado de coincidencia del nombre del botón. El back conserva su build y su última suite de la adenda anterior; no se vuelven a ejecutar al no cambiar código ni dependencias del servidor. Conserva 17 suites / 93 pruebas omitidas y 12 snapshots aprobados.
 
 Ferry: 48 archivos frontend coincidentes con el checkout validado, más FERRY.md; 49 entradas SHA-256 verificadas. Un único commit adicional para los tres ítems menores en la misma rama. Sin PR, migraciones ni emisiones reales.
+
+## Corrección CI del PR #388 — YA_EN_COLA
+
+Base 37de84ea. La integración de rescate DLQ se reprodujo fallando en el segundo clic: el marcador de incertidumbre persistido por el primer rescate ocultaba el trabajo ya publicado. Antes de aplicar esa exclusión, el individual comprueba trabajos vivos en EN_COLA/PENDIENTE/ERROR_RED/ENVIADO. Con un job created/retry/active responde YA_EN_COLA y encolado=false sin modificar ni publicar nada. Sin job vivo conserva la exclusión. Bloqueos locales, estados finales/PROCESANDO y clasificación masiva permanecen iguales.
+
+Archivos de la corrección:
+
+- src/modules/invoices/application/services/invoiceQueryService.ts
+- test/unit/invoices/invoiceIndividualRetryPolicy.spec.ts
+- test/integration/invoices/pulidoDlq.integration.spec.ts
+- docs/m1/auditoria-solucion.md
+- FERRY.md
+- SHA256SUMS
+
+Se añaden 14 pruebas unitarias y se refuerza la integración para conservar la incertidumbre y comprobar un único trabajo. El front no cambia; sus 48 archivos transportados se conservan exactamente. La suite back se ejecuta con TEST_DATABASE_URL en una base local nueva, aplicando solo las migraciones existentes; no se crean migraciones ni se modifica una base compartida.
+
+## Validación final de la corrección CI #388
+
+| Capa | Última ejecución anterior | Ejecución de cierre |
+| --- | --- | --- |
+| Back | 352 suites / 3549 pruebas; 17 suites / 93 pruebas omitidas | 365 suites / 3618 pruebas; 4 suites / 38 pruebas omitidas |
+| Front | 179 archivos / 1387 pruebas | 179 archivos / 1387 pruebas |
+
+Ambas suites completas aprobadas. Back conserva 12 snapshots. El incremento back se descompone en 14 pruebas nuevas y 55 pruebas previamente omitidas que ahora se ejecutan al habilitar PostgreSQL; no son 69 pruebas nuevas. Los conteos corresponden al checkout de esta rama. La regresión de DLQ que fallaba en CI está incluida y aprobada. Lint y builds completos back/front OK, posteriores a las suites para evitar regeneración concurrente de Prisma. Los 48 archivos front no cambian; el manifiesto conserva 49 entradas (incluido FERRY.md), verificadas. Un commit de corrección en la misma rama, sin abrir PR ni realizar emisiones reales.

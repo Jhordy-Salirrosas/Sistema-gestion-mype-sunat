@@ -3859,3 +3859,23 @@ Los tres ítems siguen siendo menores y están construidos; ninguno de esta aden
 Suite completa del front verde, cinco pruebas adicionales. Tras corregir una opción no admitida por los tipos de la consulta de elementos en las pruebas, se repitieron las 14 pruebas del Monitor afectado y el build completo (tsc -b + vite), ambos aprobados. Esa corrección conserva el comportamiento predeterminado de coincidencia del nombre del botón. El back conserva su build y su última suite de la adenda anterior; no se vuelven a ejecutar al no cambiar código ni dependencias del servidor. Conserva 17 suites / 93 pruebas omitidas y 12 snapshots aprobados.
 
 Ferry: 48 archivos frontend coincidentes con el checkout validado, más FERRY.md; 49 entradas SHA-256 verificadas. Un único commit adicional para los tres ítems menores en la misma rama. Sin PR, migraciones ni emisiones reales.
+
+
+## Corrección CI del PR #388 — precedencia de YA_EN_COLA (2026-11-14, America/Lima)
+
+Base: `fix/m1-arreglos-auditorias` `37de84ea624c15f8531f52dae57e931785121a8b`. Se revisó el [fallo de CI](https://github.com/Jhordy-Salirrosas/Sistema-gestion-mype-sunat/actions/runs/43561547645) y se reprodujo el mismo resultado en `pulidoDlq.integration.spec.ts` sobre esta cabeza: tras rescatar la DLQ una vez, el segundo clic esperaba YA_EN_COLA pero recibía ESTADO_NO_PERMITIDO. El primer rescate había persistido transport_uncertain=true antes de publicar; la clasificación impedía reconocer el trabajo creado por ese mismo rescate.
+
+Corrección mínima en `InvoiceQueryService.reintentarCdr`: antes de aplicar la exclusión por incertidumbre, para EN_COLA/PENDIENTE/ERROR_RED/ENVIADO se comprueba si existe un job vivo (created/retry/active) mediante la lectura existente `hasLiveInvoiceJob`. Si existe, responde YA_EN_COLA, encolado=false, sin publicar, borrar trabajos, modificar el documento, limpiar incertidumbre ni escribir auditoría de otro intento. Sin job vivo, permanece la exclusión por incertidumbre. El resto de la clasificación masiva, bloqueos locales, estados finales/PROCESANDO y relectura previa a publicar conservan su comportamiento. La consulta se hace después de verificar pertenencia del comprobante a la empresa.
+
+Regresión: el test de integración conserva el segundo clic, comprueba un solo job publicado y confirma que la incertidumbre permanece true. Se añaden 14 casos unitarios para estados reintentables con/sin job vivo, estados excluidos y bloqueo local. Verificación dirigida con PostgreSQL local: 5 suites / 111 pruebas aprobadas, incluida la integración que fallaba. No se modifica código frontend ni el contenido de sus 48 archivos transportados.
+
+Para la suite completa se creó una base exclusiva `m1_ci388_test` en el contenedor local de pruebas, con TEST_DATABASE_URL local. Se aplicaron las 56 migraciones existentes del repositorio únicamente a esa base nueva: no se crean migraciones ni se interviene una base compartida. SUNAT permanece sustituido por dobles en las pruebas de transporte. Lint backend aprobado, con avisos preexistentes fuera de estos archivos. Los builds se ejecutan después de terminar las suites, sin regenerar Prisma mientras Jest lo utiliza.
+
+### Cierre de la corrección CI #388
+
+| Capa | Última ejecución anterior | Ejecución de cierre |
+| --- | --- | --- |
+| Back | 352 suites / 3549 pruebas; 17 suites / 93 pruebas omitidas | 365 suites / 3618 pruebas; 4 suites / 38 pruebas omitidas |
+| Front | 179 archivos / 1387 pruebas | 179 archivos / 1387 pruebas |
+
+Ambas suites completas aprobadas. Back conserva 12 snapshots. El incremento back se descompone en 14 pruebas nuevas y 55 pruebas previamente omitidas que ahora se ejecutan al habilitar PostgreSQL; no son 69 pruebas nuevas. Los conteos corresponden al checkout de esta rama. La regresión de DLQ que fallaba en CI está incluida y aprobada. Lint y builds completos back/front OK, posteriores a las suites para evitar regeneración concurrente de Prisma. Los 48 archivos front no cambian; el manifiesto conserva 49 entradas (incluido FERRY.md), verificadas. Un commit de corrección en la misma rama, sin abrir PR ni realizar emisiones reales.
