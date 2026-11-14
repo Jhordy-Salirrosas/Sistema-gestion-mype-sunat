@@ -19,7 +19,7 @@ export function clasificarReintentoMasivo(fila: Fila): DetalleReintentoMasivo {
   if (fila.transport_uncertain === true) return {...base,resultado:'OMITIDO_INCERTIDUMBRE',motivo:'Incertidumbre de transporte: consultar SUNAT; no reenviar.'};
   const resultado=presentarResultado(fila.estado,aCdr(fila.cdr_sunat),fila.history ?? [],fila.transport_uncertain);
   if (resultado?.origen === 'SUNAT' && fila.estado === 'RECHAZADO') return {...base,resultado:'OMITIDO_RECHAZO_DEFINITIVO',motivo:'Rechazo definitivo de SUNAT: no se reabre ni se reenvía.'};
-  const ultimoError=(fila.history ?? []).find(e=>e.codigo_error && e.codigo_error!=='M1_NOTE_DESCRIPTION_COMPLETED');
+  const ultimoError=(fila.history ?? []).find(e=>e.codigo_error && !['M1_NOTE_DESCRIPTION_COMPLETED','M1_DETRACTION_DEPOSIT'].includes(e.codigo_error));
   const localSinDetalle=!resultado && ultimoError?.codigo_error?.startsWith('M1_PREPARATION_');
   if (resultado?.origen === 'VALIDACION_LOCAL' || (resultado?.origen === 'PREPARACION_LOCAL' && resultado.recuperable !== true) || localSinDetalle) {
     return {...base,resultado:'OMITIDO_BLOQUEO_LOCAL',motivo:'Bloqueo local: corregir los datos o verificar la causa antes de reintentar.'};

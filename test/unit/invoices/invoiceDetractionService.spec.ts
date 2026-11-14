@@ -1,7 +1,9 @@
+import { Prisma } from '../../../src/generated/client/client';
 import { BadRequestException } from '@nestjs/common';
 import { InvoiceDetractionService } from '../../../src/modules/invoices/application/services/invoiceDetractionService';
 
 function transactional(prisma: any) {
+ prisma.invoiceDetractionDeposit = { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(async ({data}: any) => ({...data, id: 'deposit', created_at: new Date('2026-11-01')})), update: jest.fn(async ({data}: any) => ({...data, id: 'old', created_at: new Date('2026-11-01')})) };
  prisma.$queryRaw = jest.fn(); prisma.transactionHistory = { create: jest.fn() }; prisma.$transaction = async (fn: any) => fn(prisma); return prisma;
 }
 
@@ -39,7 +41,7 @@ describe('depósitos: precisión y fecha estrictas', () => {
   });
   it.each(['2024-02-29', '2020-01-01', '2099-12-31'])('admite fecha válida sin nueva restricción temporal %s', async date => {
     await service.registerDeposit('c1', 'i1', { amount: 1.23, date, constancia: ' 001 ' });
-    expect(update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { detraccion_deposited_at: new Date(`${date}T00:00:00Z`), detraccion_deposited_amount: 1.23, detraccion_constancia: '001' } });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { detraccion_deposited_at: new Date(`${date}T00:00:00Z`), detraccion_deposited_amount: new Prisma.Decimal(1.23), detraccion_constancia: '001' } });
   });
 });
 
@@ -54,7 +56,8 @@ describe('depósitos: precisión y fecha estrictas', () => {
 
  it('registra valores anteriores/nuevos y actor sin cambiar estado fiscal', async () => {
   const prisma = transactional({ invoice: { findFirst: jest.fn().mockResolvedValue({ id: 'i', estado: 'ACEPTADO', payload_ubl: { montoDetraccion: 118 }, detraccion_deposited_at: new Date('2026-11-01'), detraccion_deposited_amount: 10, detraccion_constancia: 'ABC' }), update: jest.fn().mockResolvedValue({ id: 'i' }) } });
-  await new InvoiceDetractionService(prisma).registerDeposit('c', 'i', { amount: 20, date: '2026-11-02', constancia: '002' }, 'usuario');
+  prisma.invoiceDetractionDeposit.findMany.mockResolvedValue([{ id: 'old', date: new Date('2026-11-01'), amount: 10, constancia: 'ABC', created_at: new Date('2026-11-01') }]);
+  await new InvoiceDetractionService(prisma).registerDeposit('c', 'i', { amount: 20, date: '2026-11-02', constancia: '002' }, 'usuario', 'old');
   const event = prisma.transactionHistory.create.mock.calls[0][0].data;
   expect(event).toMatchObject({ company_id: 'c', invoice_id: 'i', intento: 0, estado_anterior: 'ACEPTADO', estado_nuevo: 'ACEPTADO', codigo_error: 'M1_DETRACTION_DEPOSIT' });
   expect(JSON.parse(event.mensaje_error)).toMatchObject({ actor: 'usuario', anterior: { monto: 10, constancia: 'ABC' }, nuevo: { monto: 20, constancia: '002' } });

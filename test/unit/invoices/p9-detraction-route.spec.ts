@@ -22,5 +22,7 @@ it('GET literal y POST de detracciones funcionan con el orden real del módulo',
   expect(findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({company_id:'c',estado:{in:['ACEPTADO','OBSERVADO']}})}));
   await request(app.getHttpServer()).post('/api/v1/invoices/detractions/a').send({amount:12}).expect(200);
   expect(registerDeposit).toHaveBeenCalledWith('c','a',{amount:12},'usuario');
+  await request(app.getHttpServer()).put('/api/v1/invoices/detractions/a/deposits/m1').send({amount:10}).expect(200);
+  expect(registerDeposit).toHaveBeenLastCalledWith('c','a',{amount:10},'usuario','m1');
  } finally {await app.close();}
 });
