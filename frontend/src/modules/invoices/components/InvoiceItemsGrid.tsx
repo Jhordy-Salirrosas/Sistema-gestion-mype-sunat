@@ -18,7 +18,6 @@ import { Fragment, useState } from 'react';
 import { Button, PageText } from '@/components/ui';
 import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
-  UNIDADES_MEDIDA,
   calcularItem,
   cantidadValida,
   type ItemBorrador,
@@ -202,20 +201,8 @@ export const InvoiceItemsGrid = ({
                     )}
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Unidad</span>
-                    <select
-                      aria-label={`Unidad de la línea ${i + 1}`}
-                      className={CLASE_CELDA}
-                      value={item.unidad}
-                      disabled={Boolean(item.unidadHeredada)}
-                      title={item.unidadHeredada ? 'La unidad se configura en el producto' : undefined}
-                      onChange={(e) => onCambiar(i, { unidad: e.target.value })}
-                    >
-                      {UNIDADES_MEDIDA.map((u) => (
-                        <option key={u.codigo} value={u.codigo}>
-                          {u.codigo}
-                        </option>
-                      ))}
-                    </select>
+                    <input aria-label={`Unidad de la línea ${i + 1}`} className={CLASE_CELDA}
+                      value={item.unidad} readOnly title="Unidad registrada del producto" />
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Cantidad</span>
                     <input
