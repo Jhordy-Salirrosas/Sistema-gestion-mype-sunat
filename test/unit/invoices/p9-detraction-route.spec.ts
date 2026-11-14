@@ -13,7 +13,7 @@ it('GET literal y POST de detracciones funcionan con el orden real del módulo',
  const service=new InvoiceDetractionService({invoice:{findMany}} as never);
  const registerDeposit=jest.spyOn(service,'registerDeposit').mockResolvedValue({id:'a'} as never);
  const module=await Test.createTestingModule({controllers,providers:tokens.map(provide=>({provide,useValue:provide===InvoiceQueryService?{detalle}:provide===InvoiceDetractionService?service:{}}))})
- .overrideGuard(AuthGuard).useValue({canActivate:(ctx:any)=>{ctx.switchToHttp().getRequest().user={companyId:'c'};return true;}}).overrideGuard(RolesGuard).useValue({canActivate:()=>true}).compile();
+ .overrideGuard(AuthGuard).useValue({canActivate:(ctx:any)=>{ctx.switchToHttp().getRequest().user={companyId:'c',sub:'usuario'};return true;}}).overrideGuard(RolesGuard).useValue({canActivate:()=>true}).compile();
  const app=module.createNestApplication();await app.init();
  try {
   const r=await request(app.getHttpServer()).get('/api/v1/invoices/detractions?period=2026-11').expect(200);
@@ -21,6 +21,6 @@ it('GET literal y POST de detracciones funcionan con el orden real del módulo',
   expect(detalle).not.toHaveBeenCalled();
   expect(findMany).toHaveBeenCalledWith(expect.objectContaining({where:expect.objectContaining({company_id:'c',estado:{in:['ACEPTADO','OBSERVADO']}})}));
   await request(app.getHttpServer()).post('/api/v1/invoices/detractions/a').send({amount:12}).expect(200);
-  expect(registerDeposit).toHaveBeenCalledWith('c','a',{amount:12});
+  expect(registerDeposit).toHaveBeenCalledWith('c','a',{amount:12},'usuario');
  } finally {await app.close();}
 });

@@ -1,5 +1,12 @@
 import { transporteAcreditado, type EvidenciaTransporteVista } from './invoiceTransportPresentation';
 function mensajeHistorial(codigo: string | null, mensaje: string | null): string | null {
+ if (codigo === 'M1_DETRACTION_DEPOSIT') {
+  try {
+   const data = JSON.parse(mensaje ?? '{}');
+   const valores = (v: { fecha: string | null; monto: number | null; constancia: string | null } | null) => v ? `fecha ${v.fecha?.slice(0, 10) ?? '—'}, monto ${v.monto ?? '—'}, constancia ${v.constancia ?? '—'}` : 'sin depósito';
+   return `${data.accion}. Usuario: ${data.actor}. Anterior: ${valores(data.anterior)}. Nuevo: ${valores(data.nuevo)}.`;
+  } catch { return mensaje; }
+ }
  if (codigo !== 'M1_FORCE_RESEND_AUTHORIZED') return mensaje;
  try { const data = JSON.parse(mensaje ?? '{}'); return `Reenvío forzado por decisión registrada. Usuario: ${data.usuarioId}; motivo: ${data.motivo}`; } catch { return mensaje; }
 }

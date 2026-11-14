@@ -23,3 +23,7 @@ El ferry de este encargo se compone sobre el main frontend indicado; reemplaza e
 ## Punto 1 — constancia numérica
 
 Back y formulario admiten vacío o dígitos ASCII, conservando ceros iniciales; recortan espacios exteriores. Texto no numérico se rechaza con «La constancia debe contener solo dígitos o quedar vacía.». Las lecturas no se modifican. Pruebas dirigidas: back 22 pruebas, front 18 pruebas. El ferry contiene únicamente los archivos de este encargo, sobre el main frontend confirmado.
+
+## Punto 2 — historial del depósito
+
+El guardado bloquea la factura de la empresa autenticada y escribe el depósito y un evento `M1_DETRACTION_DEPOSIT` en una sola transacción. El evento conserva el estado fiscal y registra actor, fecha, monto y constancia anteriores/nuevos; el detalle lo presenta con texto legible en su historial existente. No se crea tabla de auditoría. El controlador exige actor autenticado. Pruebas dirigidas: 3 suites / 26 pruebas, incluyendo la ruta real y el formato mostrado por el detalle.

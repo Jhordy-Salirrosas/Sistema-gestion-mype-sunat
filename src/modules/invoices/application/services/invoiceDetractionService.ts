@@ -28,11 +28,13 @@ export class InvoiceDetractionService {
     }).filter((f) => f.detraction > 0);
   }
 
-  async registerDeposit(companyId: string, id: string, dto: { amount?: number; date?: string; constancia?: string }) {
+  async registerDeposit(companyId: string, id: string, dto: { amount?: number; date?: string; constancia?: string }, actor = 'no informado') {
     if (dto.constancia != null && typeof dto.constancia !== 'string') throw new BadRequestException('La constancia debe contener solo dígitos o quedar vacía.');
     const constancia = dto.constancia?.trim() || null;
     if (constancia && !/^[0-9]+$/.test(constancia)) throw new BadRequestException('La constancia debe contener solo dígitos o quedar vacía.');
-    const factura = await this.prisma.invoice.findFirst({ where: { id, company_id: companyId } });
+    return this.prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE`;
+    const factura = await tx.invoice.findFirst({ where: { id, company_id: companyId } });
     if (!factura) throw new NotFoundException('Comprobante no encontrado.');
     if (factura.estado === 'ANULADO') throw new BadRequestException('El comprobante está anulado.');
     const { monto_detraccion } = importesPersistidos(factura.payload_ubl);
@@ -41,8 +43,16 @@ export class InvoiceDetractionService {
     if (!Number.isFinite(monto) || !(monto > 0) || new Prisma.Decimal(monto).decimalPlaces() > 2 || monto > monto_detraccion) throw new BadRequestException(`El depósito debe tener como máximo 2 decimales y estar entre 0.01 y ${monto_detraccion.toFixed(2)}.`);
     const fecha = dto.date !== undefined ? new Date(fechaIso(dto.date, 'depósito')) : new Date();
     if (Number.isNaN(fecha.getTime())) throw new BadRequestException('Fecha de depósito inválida.');
-    return this.prisma.invoice.update({
+    const updated = await tx.invoice.update({
       where: { id }, data: { detraccion_deposited_at: fecha, detraccion_deposited_amount: monto, detraccion_constancia: constancia },
+    });
+    await tx.transactionHistory.create({ data: { company_id: companyId, invoice_id: id, intento: 0,
+      estado_anterior: factura.estado, estado_nuevo: factura.estado, codigo_error: 'M1_DETRACTION_DEPOSIT',
+      mensaje_error: JSON.stringify({ version: 1, accion: 'Depósito de detracción registrado', actor,
+        anterior: { fecha: factura.detraccion_deposited_at?.toISOString() ?? null, monto: factura.detraccion_deposited_amount == null ? null : Number(factura.detraccion_deposited_amount), constancia: factura.detraccion_constancia ?? null },
+        nuevo: { fecha: fecha.toISOString(), monto, constancia } }) } });
+    return updated;
     });
   }
 }
+
