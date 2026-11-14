@@ -22,6 +22,19 @@ export class GenerateClosingEntryUseCase {
     });
     if (entradas.length === 0) throw new BadRequestException(`No hay asientos en ${year}.`);
 
+    // Cerrar sobre un ejercicio con asientos descuadrados produce un resultado
+    // que "cuadra" por construcción y esconde el descuadre original.
+    const descuadrado = entradas.find((entrada) => {
+      const debe = entrada.lines.reduce((s: number, l: any) => s + Number(l.debit_amount), 0);
+      const haber = entrada.lines.reduce((s: number, l: any) => s + Number(l.credit_amount), 0);
+      return entrada.lines.length < 2 || Math.abs(debe - haber) > 0.01;
+    });
+    if (descuadrado) {
+      throw new BadRequestException(
+        `No se puede cerrar ${year}: el asiento ${descuadrado.entry_number} del período ${descuadrado.period} está descuadrado o sin líneas. Corríjalo antes de cerrar.`,
+      );
+    }
+
     const cuentas = new Map<string, { name: string; debit: number; credit: number }>();
     for (const entrada of entradas) {
       for (const linea of entrada.lines) {
