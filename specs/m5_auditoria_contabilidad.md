@@ -214,6 +214,9 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
   una base en memoria: abrir el año, contabilizar venta, costo, compra y gasto, comprobar que el
   balance de comprobación cuadra, cerrar el período, rechazar asientos tardíos, generar el asiento de
   cierre, cerrar el año, no duplicar el cierre al repetirlo y abrir el año siguiente.
+- **Cuenta de cierre configurable**: el asiento de cierre usa la subcuenta de la regla `CIERRE`
+  (línea 1) si existe y, si no, `59`. Así el contador puede fijar `591`/`592` sin tocar código; el
+  resultado de la operación informa `cuentaCierre`.
 
 **A3 — errores contables silenciados en Compras**
 
@@ -231,7 +234,8 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
   reversión de la baja; no se tocó esa lógica.
 - **Pendiente de decisión**: revertir automáticamente los cobros asociados a una venta anulada. Hoy
   el cobro se anula por su propio endpoint; hacerlo en cascada cambia el flujo de tesorería y conviene
-  acordarlo antes.
+  acordarlo antes. Mientras tanto la auditoría **sí los detecta**: informa los cobros vivos sobre
+  comprobantes anulados, que es el estado que deja la cartera y la tesorería descuadradas.
 
 **A5 — numeración de asientos ante emisiones simultáneas**
 
@@ -244,7 +248,7 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 214 pruebas (128 nuevas: reglas, auditoría,
+**Pruebas**: el módulo de contabilidad pasa de 86 a 218 pruebas (132 nuevas: reglas, auditoría,
 tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 24 en compras, 10 en
 el frontend de contabilidad (1 328 en total).
 

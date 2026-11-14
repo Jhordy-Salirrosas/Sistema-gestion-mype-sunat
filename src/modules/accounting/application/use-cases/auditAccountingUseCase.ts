@@ -61,6 +61,16 @@ export interface AuditPurchaseIssue {
   detalle: string;
 }
 
+/** Cobro registrado sobre un comprobante que ya está anulado. */
+export interface AuditCollectionIssue {
+  id: string;
+  comprobante: string;
+  cliente: string;
+  fecha: string;
+  monto: number;
+  detalle: string;
+}
+
 export interface AccountingAuditReport {
   companyId: string;
   period: string | null;
@@ -91,6 +101,9 @@ export interface AccountingAuditReport {
     truncado: boolean;
     sinAsiento: AuditPurchaseIssue[];
   };
+  cobros: {
+    deComprobantesAnulados: AuditCollectionIssue[];
+  };
   resumen: { errors: number; warnings: number };
 }
 
@@ -98,6 +111,7 @@ export interface AccountingAuditReport {
 const MAX_ASIENTOS = 5000;
 const MAX_COMPROBANTES = 2000;
 const MAX_COMPRAS = 2000;
+const MAX_COBROS = 2000;
 
 const numeroDe = (serie: string, correlativo: number): string =>
   `${serie}-${String(correlativo).padStart(8, '0')}`;
@@ -370,11 +384,55 @@ export class AuditAccountingUseCase {
         detalle: 'compra registrada sin asiento contable',
       }));
 
+    // Cobros vivos sobre comprobantes ya anulados: si la venta se dio de baja
+    // y el dinero sigue registrado como cobrado, la cartera y la tesorería
+    // mienten. No se revierte nada automáticamente; se informa para que el
+    // usuario decida (anular el cobro o emitir la devolución).
+    const anuladas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, estado: 'ANULADO' },
+      select: { id: true, serie: true, correlativo: true },
+      orderBy: [{ fecha_emision: 'desc' }],
+      take: MAX_COMPROBANTES,
+    });
+    const idsAnuladas = anuladas.map((c) => c.id);
+    const cobrosDeAnuladas = idsAnuladas.length
+      ? await this.prisma.collection.findMany({
+          where: {
+            company_id: companyId,
+            invoice_id: { in: idsAnuladas },
+            status: { not: 'ANULADO' },
+          },
+          select: {
+            id: true,
+            invoice_id: true,
+            invoice_number: true,
+            customer_name: true,
+            amount: true,
+            collection_date: true,
+          },
+          orderBy: [{ collection_date: 'desc' }],
+          take: MAX_COBROS,
+        })
+      : [];
+
+    const numeroPorComprobante = new Map(
+      anuladas.map((c) => [c.id, `${c.serie}-${String(c.correlativo).padStart(8, '0')}`]),
+    );
+    const cobrosHuerfanos: AuditCollectionIssue[] = cobrosDeAnuladas.map((c) => ({
+      id: c.id,
+      comprobante: numeroPorComprobante.get(c.invoice_id ?? '') ?? c.invoice_number ?? '',
+      cliente: c.customer_name,
+      fecha: new Date(c.collection_date).toISOString().slice(0, 10),
+      monto: Number(c.amount),
+      detalle: 'cobro registrado sobre un comprobante anulado',
+    }));
+
     const erroresConfiguracion = issuesReglas.filter((i) => i.severity === 'ERROR').length;
     const avisosConfiguracion = issuesReglas.filter((i) => i.severity === 'WARN').length;
     const erroresDatos =
       descuadrados.length + sinLineas.length + duplicados.length + conCuentaInvalida.length;
-    const avisosDatos = sinAsiento.length + sinCosto.length + comprasSinAsiento.length;
+    const avisosDatos =
+      sinAsiento.length + sinCosto.length + comprasSinAsiento.length + cobrosHuerfanos.length;
     const resumen = {
       errors: erroresConfiguracion + erroresDatos,
       warnings: avisosConfiguracion + avisosDatos,
@@ -412,6 +470,9 @@ export class AuditAccountingUseCase {
         revisadas: compras.length,
         truncado: compras.length === MAX_COMPRAS,
         sinAsiento: comprasSinAsiento,
+      },
+      cobros: {
+        deComprobantesAnulados: cobrosHuerfanos,
       },
       resumen,
     };

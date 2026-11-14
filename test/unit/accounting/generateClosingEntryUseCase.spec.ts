@@ -35,4 +35,53 @@ describe('GenerateClosingEntryUseCase', () => {
     const useCase = new GenerateClosingEntryUseCase(prisma as never, { execute: jest.fn() } as never);
     await expect(useCase.execute('c1', 2026)).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('usa la subcuenta configurada en la regla CIERRE cuando existe', async () => {
+    const prisma = {
+      accountingEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([
+          { lines: [
+            { account_code: '70121', account_name: 'Ventas', debit_amount: 0, credit_amount: 1000 },
+            { account_code: '60111', account_name: 'Compras', debit_amount: 600, credit_amount: 0 },
+          ] },
+        ]),
+      },
+      accountingRule: {
+        findFirst: jest.fn().mockResolvedValue({
+          account_code: '5911',
+          description: 'Utilidades acumuladas',
+        }),
+      },
+    };
+    const generar = { execute: jest.fn().mockResolvedValue({ id: 'entry-1' }) };
+
+    const resultado = await new GenerateClosingEntryUseCase(prisma as never, generar as never).execute('c1', 2026);
+
+    expect(resultado.cuentaCierre).toBe('5911');
+    expect(generar.execute).toHaveBeenCalledWith(expect.objectContaining({
+      lines: expect.arrayContaining([
+        expect.objectContaining({ accountCode: '5911', accountName: 'Utilidades acumuladas' }),
+      ]),
+    }));
+  });
+
+  it('sin regla CIERRE cierra contra 59', async () => {
+    const prisma = {
+      accountingEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([
+          { lines: [
+            { account_code: '70121', account_name: 'Ventas', debit_amount: 0, credit_amount: 100 },
+          ] },
+        ]),
+      },
+      accountingRule: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const generar = { execute: jest.fn().mockResolvedValue({ id: 'entry-1' }) };
+
+    const resultado = await new GenerateClosingEntryUseCase(prisma as never, generar as never).execute('c1', 2026);
+
+    expect(resultado.cuentaCierre).toBe('59');
+  });
 });

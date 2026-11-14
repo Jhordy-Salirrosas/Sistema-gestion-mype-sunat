@@ -51,6 +51,7 @@ const crearPrisma = (over: Record<string, any> = {}) => ({
   invoice: { findMany: jest.fn().mockResolvedValue([]) },
   inventoryMovement: { findMany: jest.fn().mockResolvedValue([]) },
   nationalPurchase: { findMany: jest.fn().mockResolvedValue([]) },
+  collection: { findMany: jest.fn().mockResolvedValue([]) },
   ...over,
 });
 
@@ -274,6 +275,38 @@ describe('AuditAccountingUseCase', () => {
       const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
       expect(reporte.compras.revisadas).toBe(0);
       expect(reporte.compras.sinAsiento).toEqual([]);
+    });
+  });
+
+  describe('cobros de comprobantes anulados', () => {
+    it('lista los cobros vivos de una venta anulada', async () => {
+      const prisma = crearPrisma();
+      prisma.invoice.findMany
+        .mockResolvedValueOnce([]) // comprobantes aceptados
+        .mockResolvedValueOnce([{ id: 'inv-anulada', serie: 'F001', correlativo: 5 }]);
+      prisma.collection.findMany.mockResolvedValue([{
+        id: 'cob-1',
+        invoice_id: 'inv-anulada',
+        invoice_number: 'F001-00000005',
+        customer_name: 'Cliente SAC',
+        amount: 118,
+        collection_date: new Date('2026-11-09T00:00:00Z'),
+      }]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+
+      expect(reporte.cobros.deComprobantesAnulados).toHaveLength(1);
+      expect(reporte.cobros.deComprobantesAnulados[0]).toMatchObject({
+        comprobante: 'F001-00000005',
+        cliente: 'Cliente SAC',
+        monto: 118,
+      });
+    });
+
+    it('no consulta cobros cuando no hay comprobantes anulados', async () => {
+      const prisma = crearPrisma();
+      await new AuditAccountingUseCase(prisma as never).execute('c1');
+      expect(prisma.collection.findMany).not.toHaveBeenCalled();
     });
   });
 });
