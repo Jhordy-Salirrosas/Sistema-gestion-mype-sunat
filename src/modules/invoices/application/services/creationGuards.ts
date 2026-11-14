@@ -70,6 +70,35 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
   };
 }
 
+/** Valida el cupo de crédito del cliente antes de emitir una venta al crédito. */
+export async function validarLimiteCredito(tx: Prisma.TransactionClient, companyId: string, dto: EmitirComprobanteDto, total: number): Promise<void> {
+  if (dto.forma_pago !== 'Credito' || !['01', '03'].includes(dto.tipo_comprobante)) return;
+  if (!dto.customer_identity_type || !dto.customer_identity_number) return;
+  const cliente = await tx.businessPartner.findFirst({
+    where: { company_id: companyId, doc_type: dto.customer_identity_type, doc_number: dto.customer_identity_number, is_active: true },
+    select: { credit_limit: true, has_credit: true },
+  });
+  if (!cliente || cliente.credit_limit === null) return;
+  const limite = Number(cliente.credit_limit);
+  const facturas = await tx.invoice.findMany({
+    where: { company_id: companyId, customer_identity_type: dto.customer_identity_type,
+      customer_identity_number: dto.customer_identity_number, tipo_comprobante: { in: ['01', '03'] },
+      estado: { in: ESTADOS_NOTABLES as never } },
+    select: { id: true, monto_total: true },
+  });
+  const ids = facturas.map((f) => f.id);
+  const [cobros, notas] = await Promise.all([
+    ids.length ? tx.collection.aggregate({ where: { company_id: companyId, invoice_id: { in: ids }, status: { not: 'ANULADO' } }, _sum: { amount: true } }) : Promise.resolve({ _sum: { amount: 0 } }),
+    ids.length ? tx.invoice.aggregate({ where: { company_id: companyId, tipo_comprobante: '07', referenced_invoice_id: { in: ids }, estado: { in: ESTADOS_NOTABLES as never } }, _sum: { monto_total: true } }) : Promise.resolve({ _sum: { monto_total: 0 } }),
+  ]);
+  const facturado = facturas.reduce((sum, f) => sum + Number(f.monto_total), 0);
+  const usado = facturado - Number(cobros._sum.amount ?? 0) - Number(notas._sum.monto_total ?? 0);
+  const disponible = Math.max(0, Math.round((limite - usado) * 100) / 100);
+  if (Math.round((usado + total) * 100) / 100 > limite + 0.005) {
+    throw new BadRequestException(`Límite de crédito excedido. Disponible: S/ ${disponible.toFixed(2)}.`);
+  }
+}
+
 export async function prepareCreation(tx: Prisma.TransactionClient, input: EmitirComprobanteDto,
   companyId: string): Promise<EmitirComprobanteDto> {
   const dto = structuredClone(input);
@@ -207,6 +236,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   const liquidado = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0);
   if (esNota) validarImporteNota(liquidado.importes.total);
   if (!esNota && !(liquidado.importes.total > 0) && !esDocumentoIntegramenteGratuito(dto.tipo_comprobante, liquidado.dto.payload_ubl.lineas)) throw new BadRequestException('El total cero solo se admite en documentos íntegramente gratuitos con referencias positivas');
+  await validarLimiteCredito(tx, companyId, dto, liquidado.importes.total);
   if (liquidado.importes.detraccion > 0) {
     const empresa = await tx.company.findUnique({ where: { id: companyId }, select: { detraction_account: true } });
     dto.cuenta_banco_nacion = validarCuentaSpot(dto, liquidado.importes.detraccion, empresa?.detraction_account) ?? undefined;
