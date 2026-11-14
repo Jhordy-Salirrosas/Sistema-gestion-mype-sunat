@@ -90,6 +90,19 @@ La primera inserta las subcuentas 1011, 1012, 1013 y 1043 en `accounting_account
 - Si el entorno usa `node scripts/apply-all-migrations.js` en lugar de `migrate deploy`, no hay que
   tocar nada: ese script recorre las carpetas en orden alfabético y las dos nuevas ya quedan al final.
 - `gen_random_uuid()` (usado en la primera migración) es nativo desde PostgreSQL 13.
+- **Nuevo**: `npm run verify:accounting` revisa, ya contra la base, que el catálogo esté cargado y que
+  reglas y mapeos apunten a cuentas existentes, activas y de posteo. Sale con código 1 si algo falla,
+  así que sirve como paso de despliegue:
+
+  ```bash
+  npx prisma migrate deploy
+  npm run seed          # idempotente: hace upsert del catálogo y de las reglas
+  npm run verify:accounting
+  ```
+
+  > Ojo: re-ejecutar la semilla **sobrescribe las reglas por empresa** con las de fábrica, incluidas
+  > las que alguien haya personalizado. Está en el comportamiento previo, pero con el cambio de
+  > `6111`/`7599` conviene saberlo antes de correrla en producción.
 
 ## Riesgos
 

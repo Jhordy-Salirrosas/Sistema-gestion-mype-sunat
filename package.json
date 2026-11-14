@@ -30,6 +30,7 @@
     "seed:inventory": "npx tsx prisma/seeds/inventory.seed.ts",
     "migrate:sol-credentials": "node -r dotenv/config scripts/migrateSolCredentials.mjs",
     "check:secrets": "node scripts/check-secrets.js",
+    "verify:accounting": "node -r dotenv/config scripts/verify-accounting-catalog.js",
     "smoke:readonly": "node scripts/smoke-readonly.js",
     "smoke:deploy": "node scripts/smoke-deploy.js",
     "e2e:readonly": "node scripts/e2e-readonly.js",
