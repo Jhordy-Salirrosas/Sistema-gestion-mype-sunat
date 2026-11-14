@@ -13,13 +13,15 @@ import { normalizarAfectacionProducto } from '../lib/invoiceItems';
  * para poder probarla sin montar React.
  */
 import { useInvoiceDuplicate } from './useInvoiceDuplicate';
+import { InvoiceIntegerInput } from './InvoiceIntegerInput';
 import { InvoiceMoneyInput } from './InvoiceMoneyInput';
 import { Fragment, useState } from 'react';
 import { Button, PageText } from '@/components/ui';
 import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
   calcularItem,
-  cantidadValida,
+  cantidadValidaParaUnidad,
+  unidadDiscreta,
   type ItemBorrador,
 } from '../lib/invoiceItems';
 import { CODIGOS_DETRACCION } from '../lib/invoiceDetraccion';
@@ -205,10 +207,16 @@ export const InvoiceItemsGrid = ({
                       value={item.unidad} readOnly title="Unidad registrada del producto" />
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">Cantidad</span>
+                    {!esNota && unidadDiscreta(item.unidad) ? <InvoiceIntegerInput
+                      aria-label={`Cantidad de la línea ${i + 1}`} data-line-field="cantidad" data-line-invalid={Boolean(errores.cantidad)}
+                      aria-describedby={visible('cantidad') ? `${item.clave}-cantidad-error` : undefined}
+                      aria-invalid={Boolean(errores.cantidad) || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
+                      className={`${CLASE_CELDA} text-right`} value={item.cantidad}
+                      onValue={cantidad => onCambiar(i, { cantidad })} /> : (
                     <input
                       aria-label={`Cantidad de la línea ${i + 1}`} data-line-field="cantidad" data-line-invalid={Boolean(errores.cantidad)} aria-describedby={visible('cantidad') ? `${item.clave}-cantidad-error` : undefined}
                       max={cantidadesMaximas?.[i]}
-                      aria-invalid={!cantidadValida(item.cantidad) || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
+                      aria-invalid={!cantidadValidaParaUnidad(item.cantidad, item.unidad, esNota) || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
                       type="number"
                       min="0.001"
                       step="0.001"
@@ -218,6 +226,7 @@ export const InvoiceItemsGrid = ({
                         onCambiar(i, { cantidad: Number(e.target.value) })
                       }
                     />
+                    )}
                     {visible('cantidad') && <p id={`${item.clave}-cantidad-error`} role="alert" className="text-xs text-destructive">{errores.cantidad}</p>}
                     {cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i] && <p role="alert" className="text-xs text-destructive">Supera las unidades disponibles del origen (máximo {cantidadesMaximas[i]}).</p>}
                   </td>

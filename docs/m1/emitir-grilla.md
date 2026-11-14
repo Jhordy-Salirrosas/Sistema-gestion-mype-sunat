@@ -37,3 +37,5 @@ Los puntos 4 y 8 continúan por su cambio visual explícito; no se introduce una
 3. Construido: código y descripción siempre de solo lectura, sin callbacks de edición; campos multilínea ajustables al contenido para conservar textos largos visibles. Pruebas dirigidas: 3 archivos / 16 pruebas aprobadas.
 
 4. Construido el cambio de presentación: unidad registrada como dato fijo, sin desplegable. Sin cambio de regla del back, ya existente. Prueba dirigida: 1 archivo / 1 prueba aprobada.
+
+5. Construido: entrada entera para NIU/BG/BX/PK/SET, normalización de ceros y rechazo de decimal completo sin truncamiento. Validación previa al POST y guarda transaccional para 01/03. ZZ, medidas y agrupaciones conservan tres decimales; notas conservan reglas históricas. Pruebas dirigidas: front 1 archivo / 19 pruebas; back 2 suites / 115 pruebas aprobadas (incluidas las regresiones de servicios).

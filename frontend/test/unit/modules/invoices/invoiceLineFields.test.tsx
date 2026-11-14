@@ -28,9 +28,9 @@ it('marca valor al editar y mantiene los mensajes asociados a cada campo',()=>{
  rerender(<InvoiceItemsGrid items={[{...item,valorUnitario:0}]} {...callbacks}/>);
  expect(screen.getByText('El valor unitario de una línea onerosa debe ser mayor que cero.')).toBeTruthy();
  fireEvent.blur(screen.getByLabelText('Cantidad de la línea 1'));
- expect(screen.getByText('La cantidad debe ser positiva y tener como máximo 3 decimales.')).toBeTruthy();
+ expect(screen.getByText('La cantidad debe ser entera y positiva para esta unidad.')).toBeTruthy();
  rerender(<InvoiceItemsGrid items={[{...item,cantidad:1}]} {...callbacks}/>);
- expect(screen.queryByText('La cantidad debe ser positiva y tener como máximo 3 decimales.')).toBeNull();
+ expect(screen.queryByText('La cantidad debe ser entera y positiva para esta unidad.')).toBeNull();
 });
 it('admite cero en notas onerosas, exige referencia gratuita y cantidad válida',()=>{
  const item={...itemVacio('a'),descripcion:'Producto'};
