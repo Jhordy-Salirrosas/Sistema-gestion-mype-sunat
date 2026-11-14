@@ -3757,3 +3757,7 @@ Verificación de la corrección: suite completa backend 349 suites / 3510 prueba
 3. Confirmado en código: `sendToDlq`/`moveToDlq` dejan trabajos `sunat-invoice-dlq` con el estado del intento agotado; la recuperación del CDR no elimina esos trabajos. `listDlq`, alertas y proyección de membresía los siguen contando; el Monitor impide reintentar estados finales. No se han inspeccionado trabajos de producción. Se implementará una acción explícita Resolver DLQ en el Monitor: solo ACEPTADO con CDR código 0, misma empresa, elimina exclusivamente trabajos DLQ pendientes de ese documento. No toca Invoice ni publica jobs. Los puentes pendientes conservan su acción independiente.
 4a. Confirmado: 08 y 10 son oficiales en `noteReasonGuard.ts`, pero no están habilitados en `noteCatalogs.ts` ni en el front. Solo diagnóstico; no se habilitan.
 4b. Confirmado: `vaEnBaja` solo filtra tipo 01/07/08 y no distingue serie/origen de las notas. La documentación oficial de SUNAT sitúa la baja de notas vinculadas a boletas en el resumen diario, no en RA. Solo diagnóstico; no se modifica RA/RC en este paquete. Fuentes y requisitos se detallarán en el cierre.
+
+### Punto 1 — implementación
+
+`invoiceNoteReason.ts` selecciona el catálogo por tipo. Listado y detalle usan el mismo formateador, incluidos Monitor/auditoría y notas. Se fijan los seis cruces 07/08 × 01/02/03 en ambos mapeadores. Verificación dirigida: 1 archivo / 44 pruebas aprobadas.
