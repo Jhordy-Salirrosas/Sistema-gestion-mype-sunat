@@ -1,7 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { IAccountingRepositoryPort } from '../domain/ports/accountingRepositoryPort';
 import { AccountingEntryEntity } from '../domain/entities/accountingEntryEntity';
 import { PrismaService } from '../../../database/prismaService';
+
+/** Reintentos de numeración ante una colisión con otra emisión concurrente. */
+const MAX_INTENTOS_NUMERO = 3;
+
+/** `meta.target` de un P2002 de Prisma, normalizado a texto. */
+const objetivoDelConflicto = (error: unknown): string =>
+  String((error as { meta?: { target?: unknown } })?.meta?.target ?? '');
 
 @Injectable()
 export class PrismaAccountingRepository implements IAccountingRepositoryPort {
@@ -41,42 +48,93 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     const totalCredit = entry.lines.reduce((sum, line) => sum + (line.creditAmount || 0), 0);
     const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
 
-    try {
-      const persisted = await this.prisma.accountingEntry.create({
-        data: {
-          company_id: entry.companyId,
+    const datos = {
+      company_id: entry.companyId,
+      period: entry.period,
+      entry_date: entry.entryDate,
+      glosa: entry.glosa,
+      source_module: entry.sourceModule,
+      journal_code: entry.journalCode,
+      source_reference_id: entry.sourceReferenceId,
+      idempotency_key: entry.idempotencyKey ?? null,
+      total_debit: totalDebit,
+      total_credit: totalCredit,
+      is_balanced: isBalanced,
+      lines: {
+        create: entry.lines.map((l) => ({
+          line_order: l.lineOrder,
+          account_code: l.accountCode,
+          account_name: l.accountName,
+          debit_amount: l.debitAmount,
+          credit_amount: l.creditAmount,
+        })),
+      },
+    };
+
+    // El número de asiento se calcula con un `findFirst + 1` fuera de
+    // transacción: dos emisiones simultáneas del mismo período pueden calcular
+    // el mismo número y la segunda choca contra el índice único. En vez de
+    // devolver un error de base, se recalcula el número y se reintenta.
+    let numero = Number(entry.entryNumber);
+
+    for (let intento = 1; intento <= MAX_INTENTOS_NUMERO; intento += 1) {
+      try {
+        const persistido = await this.prisma.accountingEntry.create({
+          data: { ...datos, entry_number: numero },
+        });
+        this.logger.debug(`Asiento ${persistido.id} guardado (número ${numero})`);
+        return new AccountingEntryEntity({
+          id: persistido.id,
+          companyId: entry.companyId,
           period: entry.period,
-          entry_number: Number(entry.entryNumber),
-          entry_date: entry.entryDate,
+          entryNumber: numero,
+          entryDate: entry.entryDate,
           glosa: entry.glosa,
-          source_module: entry.sourceModule,
-          journal_code: entry.journalCode,
-          source_reference_id: entry.sourceReferenceId,
-          idempotency_key: entry.idempotencyKey ?? null,
-          total_debit: totalDebit,
-          total_credit: totalCredit,
-          is_balanced: isBalanced,
-          lines: {
-            create: entry.lines.map((l) => ({
-              line_order: l.lineOrder,
-              account_code: l.accountCode,
-              account_name: l.accountName,
-              debit_amount: l.debitAmount,
-              credit_amount: l.creditAmount,
-            })),
-          },
-        },
-      });
-      this.logger.debug(`Asiento ${persisted.id} guardado`);
-      return new AccountingEntryEntity({
-        ...entry,
-        id: persisted.id,
-        lines: [...entry.lines],
-      });
-    } catch (error) {
-      console.error('❌ ERROR AL GUARDAR EN SUPABASE:', error);
-      throw error;
+          sourceModule: entry.sourceModule,
+          journalCode: entry.journalCode,
+          sourceReferenceId: entry.sourceReferenceId,
+          idempotencyKey: entry.idempotencyKey,
+          status: entry.status,
+          lines: [...entry.lines],
+        });
+      } catch (error) {
+        const conflicto = (error as { code?: string }).code === 'P2002';
+        const objetivo = objetivoDelConflicto(error);
+
+        // Un reintento del mismo envío no debe fallar ni duplicar: si ya existe
+        // un asiento con esa clave de idempotencia, ese es el resultado.
+        if (conflicto && objetivo.includes('idempotency_key') && entry.idempotencyKey) {
+          const existente = await this.findByIdempotencyKey(entry.companyId, entry.idempotencyKey);
+          if (existente) {
+            this.logger.warn(
+              `Asiento ya existente para la clave ${entry.idempotencyKey}; se devuelve el original`,
+            );
+            return existente;
+          }
+        }
+
+        const choqueDeNumero = conflicto && (objetivo === '' || objetivo.includes('entry_number'));
+        if (!choqueDeNumero) {
+          this.logger.error(`❌ ERROR AL GUARDAR EN SUPABASE: ${(error as Error).message}`);
+          throw error;
+        }
+
+        if (intento === MAX_INTENTOS_NUMERO) {
+          throw new BadRequestException(
+            `No se pudo numerar el asiento del período ${entry.period} tras ${MAX_INTENTOS_NUMERO} intentos por emisiones simultáneas; reintente el registro.`,
+          );
+        }
+
+        const siguiente = await this.getNextEntryNumber(entry.companyId, entry.period);
+        this.logger.warn(
+          `Colisión en el número ${numero} del período ${entry.period}; reintento con ${siguiente}`,
+        );
+        numero = siguiente;
+      }
     }
+
+    // Inalcanzable: el bucle lanza en el último intento.
+    throw new BadRequestException('No se pudo guardar el asiento contable.');
   }
 
   async findByIdempotencyKey(companyId: string, key: string): Promise<AccountingEntryEntity | null> {
