@@ -5,7 +5,7 @@ import { RetencionMaestro } from '@/modules/invoices/components/RetencionMaestro
 import { liquidarComprobante, calcularRetencion } from '@/modules/invoices/lib/invoiceRetentions';
 import { calcularFlujo } from '@/modules/invoices/lib/invoiceFlujoPago';
 import { borradorAPayloadEmision } from '@/modules/invoices/lib/invoiceEmitPayload';
-import { borradorInicial } from '@/modules/invoices/lib/invoiceEmitDraft';
+import { borradorConLinea as borradorInicial } from '../../../fixtures/invoiceEmissionProduct';
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async () => ({ data: [] })) } }));
 afterEach(cleanup);
 it('SPOT y retención no reducen dos veces el neto; sin SPOT efectivo se conserva retención', () => {

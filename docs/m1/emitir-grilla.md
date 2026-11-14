@@ -45,3 +45,18 @@ Los puntos 4 y 8 continúan por su cambio visual explícito; no se introduce una
 7. Construido: ICBPER usa entrada entera no negativa; rechaza decimales, signos y exponentes al ingresar y no los redondea. Cero es válido; una entrada vacía conserva la validación de obligatoriedad. Pruebas dirigidas compartidas de entrada: 2 archivos / 20 pruebas aprobadas.
 
 8. Construido el cambio de presentación: afectación/tributo como dato fijo, incluidos los códigos 10/20/30/40; Gratuita conserva activación, motivo fiscal y restauración del precio original. Sin cambio de regla del back, ya existente. Pruebas dirigidas: 1 archivo / 8 pruebas aprobadas.
+
+9. Construido: retirado el botón duplicado de bolsas. El selector conservado lleva al campo ICBPER de la línea elegida, sin incrementar bolsas ni crear líneas. Se mantiene la cantidad por línea y la guarda de boletas gratuitas. Verificación dirigida final de grilla/selector: 2 archivos / 6 pruebas aprobadas. Las preparaciones de regresiones ahora seleccionan productos o construyen explícitamente sus fixtures tributarios; no modifican lógica del maestro ni paneles de detalle.
+
+## Cierre y validación
+
+| Capa | Base | Cierre |
+| --- | --- | --- |
+| Back | 387 suites / 3977 pruebas aprobadas | 387 suites / 3995 pruebas aprobadas |
+| Front | 182 archivos / 1404 pruebas aprobadas | 186 archivos / 1429 pruebas aprobadas |
+
+Incremento neto: 18 pruebas back y 25 front. Back mantiene 18 suites / 95 pruebas omitidas por configuración y 12 snapshots aprobados en ambas corridas. No se habilitaron las integraciones opcionales con base externa ni conexiones SUNAT reales. Back: `NODE_OPTIONS=--max-old-space-size=4096 npm test -- --maxWorkers=2 --workerIdleMemoryLimit=512MB`; front: `npm test -- --maxWorkers=2`. Suite completa final sin fallos. Build back (`prisma generate` + `nest build`) y front (`tsc -b` + `vite build`) aprobados, después de terminar la suite correspondiente. Lint back aprobado, con tres advertencias preexistentes fuera del cambio. `git diff --check` aprobado en ambas capas.
+
+Chromium comprobó dos líneas con descripción extensa, once celdas por línea y todos sus campos/acciones dentro del contenedor. No hubo errores JavaScript ni desbordamiento horizontal: viewport 1440/1280 → grilla 880 px; 1024/768 → 720 px; 480 → 432 px. Con 256 px reservados lateralmente en escritorio, y además contenedores estrechos de 480, 420 y 360 px, `scrollWidth == clientWidth`. La cantidad de columnas se adapta al ancho real del contenedor mediante `auto-fit`. Tras ese ajuste final se repitieron las seis pruebas dirigidas de presentación/selector, el barrido de Chromium y el build. Se comprobaron normalización 03→3, rechazo de 3.002 en NIU y 2.333 en bolsas, fracciones ZZ, campos fijos y foco del selector de bolsas. Montaje visual temporal excluido del ferry.
+
+Ferry compuesto: **92 archivos frontend + FERRY.md, 93 entradas SHA-256**. Conserva todas las rutas heredadas y añade código/pruebas de emisión. El manifiesto íntegro es `SHA256SUMS`; no se incluye a sí mismo. Los 92 archivos coinciden byte por byte con el checkout frontend validado sobre `8393ea1c72`. Ninguna ruta transportada intersecta el avance remoto observado hasta `0993a9ac6c`. Verificar con `sha256sum -c SHA256SUMS` y aplicar `frontend/.` sobre la raíz del repo front. Una rama del back, diez commits (fase 0 y puntos 1–9), sin PR, despliegue, migraciones ni emisiones reales.

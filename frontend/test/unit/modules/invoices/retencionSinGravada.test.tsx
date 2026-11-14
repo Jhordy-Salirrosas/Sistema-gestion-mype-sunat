@@ -1,3 +1,4 @@
+import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
@@ -6,7 +7,7 @@ import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { liquidarComprobante, calcularRetencion } from '@/modules/invoices/lib/invoiceRetentions';
-import { borradorInicial } from '@/modules/invoices/lib/invoiceEmitDraft';
+import { borradorConLinea as borradorInicial } from '../../../fixtures/invoiceEmissionProduct';
 import { calcularFlujo } from '@/modules/invoices/lib/invoiceFlujoPago';
 import { InvoiceEmitResumen } from '@/modules/invoices/components/InvoiceEmitResumen';
 import type { AfectacionIgv } from '@/modules/invoices/lib/invoiceTaxes';
@@ -39,17 +40,16 @@ it('gratuita con ICBPER superior al umbral no genera retención', () => {
 });
 
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async (url: string) => ({ data: url === '/invoices/config' ? { series: seriesConfiguradasPrueba } : [] })) } }));
-vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => []) }));
-it('la página real deja de mostrar retención sin gravada y la conserva en gravada pura', () => {
+vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => ['10','20'].map(afectacion=>({sku:afectacion==='10'?'GRA':'EXO',descripcion:'Producto',unidad:'NIU',valorUnitario:1000,precioUnitario:afectacion==='10'?1180:1000,afectacion,stock:100,vendible:true}))) }));
+it('la página real deja de mostrar retención sin gravada y la conserva en gravada pura', async () => {
   const q = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   render(<QueryClientProvider client={q}><MemoryRouter><InvoiceEmissionPage /></MemoryRouter></QueryClientProvider>);
-  fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '1000' } });
-  fireEvent.change(screen.getByLabelText('Afectación de la línea 1'), { target: { value: 'EXONERADA' } });
+  await seleccionarProductoPrueba('EXO');
   fireEvent.click(screen.getByRole('checkbox', { name: /Agente de Retención/ }));
   expect(screen.queryByText('Retención IGV (3 %)')).toBeNull();
-  fireEvent.change(screen.getByLabelText('Afectación de la línea 1'), { target: { value: 'GRAVADA' } });
+  fireEvent.click(screen.getByRole('button',{name:'Eliminar la línea 1'})); await seleccionarProductoPrueba('GRA');
   expect(screen.getByText('Retención IGV (3 %)')).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Afectación de la línea 1'), { target: { value: 'EXONERADA' } });
+  fireEvent.click(screen.getByRole('button',{name:'Eliminar la línea 1'})); await seleccionarProductoPrueba('EXO');
   expect(screen.queryByText('Retención IGV (3 %)')).toBeNull(); q.clear();
 });
 it.each(['EXONERADA', 'INAFECTA', 'GRATUITA'] as const)('la fábrica de comprobantes también excluye retención en %s', afectacion => {

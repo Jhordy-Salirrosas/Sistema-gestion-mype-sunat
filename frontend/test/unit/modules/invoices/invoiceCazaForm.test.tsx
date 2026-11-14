@@ -1,3 +1,4 @@
+import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
 import { hoyEnLima } from '@/modules/invoices/lib/invoiceFecha';
 import { beforeEach as billingBeforeEach } from 'vitest';
 import { useAuthStore as billingAuth } from '@/stores/authStore';
@@ -15,7 +16,7 @@ import { admiteNota, comprobantesElegibles } from '@/modules/invoices/lib/invoic
 import type { ReactNode } from 'react';
 
 vi.mock('@/modules/invoices/services/invoicesApi', () => ({ invoicesApi: { getSaldoNota: vi.fn(), getInvoiceById: vi.fn(), emitirComprobante: vi.fn() } }));
-vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => []) }));
+vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => [{sku:'SERV',descripcion:'Servicio',unidad:'NIU',valorUnitario:100,precioUnitario:118,afectacion:'10',stock:100,vendible:true}]) }));
 vi.mock('@/modules/invoices/components/RetencionMaestro', () => ({ RetencionMaestro: () => null }));
 // APIs de puntero ausentes en jsdom, usadas por el Select real de Radix.
 Object.assign(HTMLElement.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {}, scrollIntoView: () => {} });
@@ -61,33 +62,31 @@ describe('F1 notas sobre aceptados', () => {
 it('F2 separa y restaura el borrador de cada tipo durante cambios de formulario', async () => {
   const user = userEvent.setup(); montar(modal('01'));
   fireEvent.change(screen.getByLabelText('RUC / DNI del cliente'), { target: { value: '20100070970' } });
-  fireEvent.change(screen.getByLabelText('Descripción de la línea 1'), { target: { value: 'Línea exclusiva factura' } });
+  await seleccionarProductoPrueba(); fireEvent.change(screen.getByLabelText('Cantidad de la línea 1'), { target: { value: '2' } });
   const elegir = async (nombre: string) => { await user.click(screen.getByLabelText('Tipo de comprobante')); await user.click(await screen.findByRole('option', { name: nombre })); };
   await elegir('07 - Nota de Crédito');
   expect((screen.getByLabelText('RUC / DNI del cliente') as HTMLInputElement).value).toBe('');
-  expect((screen.getByLabelText('Descripción de la línea 1') as HTMLInputElement).value).toBe('');
-  fireEvent.change(screen.getByLabelText('Descripción de la línea 1'), { target: { value: 'Línea exclusiva nota' } });
+  expect(screen.queryByLabelText('Descripción de la línea 1')).toBeNull();
+  await seleccionarProductoPrueba(); fireEvent.change(screen.getByLabelText('Cantidad de la línea 1'), { target: { value: '3' } });
   await elegir('01 - Factura');
-  expect((screen.getByLabelText('Descripción de la línea 1') as HTMLInputElement).value).toBe('Línea exclusiva factura');
+  expect((screen.getByLabelText('Cantidad de la línea 1') as HTMLInputElement).value).toBe('2');
   await elegir('07 - Nota de Crédito');
-  expect((screen.getByLabelText('Descripción de la línea 1') as HTMLInputElement).value).toBe('Línea exclusiva nota');
+  expect((screen.getByLabelText('Cantidad de la línea 1') as HTMLInputElement).value).toBe('3');
 });
-it.each(['modal', 'pagina'])('F6 avisa al intentar borrar la única línea en %s', (tipo) => {
+it.each(['modal', 'pagina'])('F6 permite retirar la última línea y volver al catálogo en %s', async (tipo) => {
   montar(tipo === 'modal' ? modal('01') : <InvoiceEmissionPage />);
-  fireEvent.click(screen.getByRole('button', { name: 'Eliminar la línea 1' }));
-  expect(screen.getByText('Debe quedar al menos una línea').textContent).toContain('Debe quedar al menos una línea');
-  expect(screen.getByLabelText('Descripción de la línea 1')).toBeTruthy();
+  await seleccionarProductoPrueba(); fireEvent.click(screen.getByRole('button', { name: 'Eliminar la línea 1' }));
+  expect(screen.queryByLabelText('Descripción de la línea 1')).toBeNull();
 });
 it.each(['modal', 'pagina'])('F7 limpia un intento fallido al corregir el formulario en %s', async (tipo) => {
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue({ response: { data: { message: 'RUC rechazado' } }, message: 'RUC rechazado' });
   montar(tipo === 'modal' ? modal('01') : <InvoiceEmissionPage />);
   fireEvent.change(screen.getByLabelText(tipo === 'modal' ? 'RUC / DNI del cliente' : 'RUC del cliente'), { target: { value: '20100070970' } });
   fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
-  fireEvent.change(screen.getByLabelText('Descripción de la línea 1'), { target: { value: 'Servicio' } });
-  fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '100' } });
+  await seleccionarProductoPrueba();
   fireEvent.click(screen.getByRole('button', { name: tipo === 'modal' ? 'Emitir Factura' : 'Emitir comprobante' }));
   await screen.findByText('No se emitió');
-  fireEvent.change(screen.getByLabelText('Descripción de la línea 1'), { target: { value: 'Servicio corregido' } });
+  fireEvent.change(screen.getByLabelText('Cantidad de la línea 1'), { target: { value: '2' } });
   await waitFor(() => expect(screen.queryByText('No se emitió')).toBeNull());
 });
 

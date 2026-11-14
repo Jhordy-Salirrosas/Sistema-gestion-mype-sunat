@@ -15,7 +15,7 @@ import { normalizarAfectacionProducto } from '../lib/invoiceItems';
 import { useInvoiceDuplicate } from './useInvoiceDuplicate';
 import { InvoiceIntegerInput } from './InvoiceIntegerInput';
 import { InvoiceMoneyInput } from './InvoiceMoneyInput';
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { Button, PageText } from '@/components/ui';
 import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
@@ -42,7 +42,7 @@ interface InvoiceItemsGridProps {
   onCambiar: (indice: number, parcial: Partial<ItemBorrador>) => void;
   onEliminar: (indice: number) => void;
   onAgregar?: () => void;
-  onAgregarBolsa: (indice: number) => void;
+  onAgregarBolsa?: (indice: number) => void;
   /**
    * TA-61: productos del almacén para el buscador.
    *
@@ -66,13 +66,13 @@ export const InvoiceItemsGrid = ({
   mostrarErrores = false,
   onCambiar,
   onEliminar,
-  onAgregarBolsa,
   productos = [],
   onAgregarConProducto,
   admiteDescuento = true,
   cantidadesMaximas,
   esNota = false, catalogoEstado = 'listo',
 }: InvoiceItemsGridProps) => {
+  const grillaRef = useRef<HTMLDivElement>(null);
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set());
   const marcarCampo = (clave: string, target: EventTarget) => {
     const campo = (target as HTMLElement).dataset.lineField;
@@ -94,7 +94,7 @@ export const InvoiceItemsGrid = ({
   const revision = revisarGrilla(items, productos, { nota: esNota, estado: catalogoEstado });
 
   return (
-    <div className="min-w-0 space-y-2 sm:col-span-2">
+    <div ref={grillaRef} className="min-w-0 space-y-2 sm:col-span-2">
       {duplicado.dialogo}
       <div className="flex items-center justify-between">
         <PageText variant="label">Detalle del comprobante</PageText>
@@ -159,7 +159,7 @@ export const InvoiceItemsGrid = ({
                 <Fragment key={item.clave}>
                 <tr
                   onChangeCapture={e => marcarCampo(item.clave, e.target)} onBlurCapture={e => marcarCampo(item.clave, e.target)}
-                  className={`grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-3 ${
+                  className={`grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2 rounded-lg border p-3 ${
                     conError ? 'bg-destructive/5' : ''
                   }`}
                 >
@@ -250,7 +250,7 @@ export const InvoiceItemsGrid = ({
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">ICBPER</span>
                     <InvoiceIntegerInput
                       disabled={bolsasBloqueadas}
-                      aria-label={`ICBPER de la línea ${i + 1}`}
+                      data-invoice-bags aria-label={`ICBPER de la línea ${i + 1}`}
                       aria-invalid={Boolean(errorBolsas(item))}
                       className={`${CLASE_CELDA} text-right`}
                       value={cantidadBolsasDe(item)}
@@ -322,13 +322,16 @@ export const InvoiceItemsGrid = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs">Producto para bolsas<select aria-label="Producto para bolsas" value={items[indiceBolsas]?.clave ?? ''} onChange={e => setProductoBolsas(e.target.value)}>
+        <label className="min-w-0 max-w-full text-xs">Producto para bolsas<select className="max-w-full" aria-label="Producto para bolsas" value={items[indiceBolsas]?.clave ?? ''} onChange={e => {
+          setProductoBolsas(e.target.value);
+          const indice = items.findIndex(item => item.clave === e.target.value);
+          const campo = grillaRef.current?.querySelectorAll<HTMLInputElement>('[data-invoice-bags]')[indice];
+          campo?.focus(); campo?.scrollIntoView?.({ block: 'nearest' });
+        }}>
           {indiceBolsas < 0 && <option value="">Seleccione un producto en la grilla</option>}
           {items.filter(item => item.codigo.trim()).map(item => <option key={item.clave} value={item.clave}>{item.codigo} · {item.descripcion}</option>)}
         </select></label>
-        <Button type="button" variant="outline" size="sm" disabled={bolsasBloqueadas || indiceBolsas < 0 || Boolean(errorBolsas(items[indiceBolsas]))} onClick={() => onAgregarBolsa(indiceBolsas)}>
-          + Bolsa plástica (ICBPER)
-        </Button>
+
       </div>
 
       {bolsasBloqueadas && <div><p role="alert" className="text-xs text-destructive">{BOLETA_GRATUITA_BOLSAS}</p><Button type="button" variant="outline" size="sm" onClick={() => items.forEach((_, i) => onCambiar(i, { cantidadBolsas: 0, icbper: 0 }))}>Retirar bolsas de la boleta</Button></div>}
@@ -341,7 +344,7 @@ export const InvoiceItemsGrid = ({
           {revision.errores === 1
             ? 'Hay 1 línea que supera el stock disponible.'
             : `Hay ${revision.errores} líneas que superan el stock disponible.`}{' '}
-          No se puede emitir así: el almacén tiene que respaldar la cantidad.
+          La emisión requiere existencias suficientes para las cantidades indicadas.
         </p>
       )}
       {revision.errores === 0 && revision.validadas > 0 && (

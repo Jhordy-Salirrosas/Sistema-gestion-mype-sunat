@@ -26,8 +26,8 @@ it.each([['07','01'],['07','13'],['08','02']] as const)('nota %s/%s mantiene fec
  expect(r.fecha).toBe('2026-11-12');expect(r.clienteDoc).toBe(origin.clienteRuc);expect(r.clienteRazonSocial).toBe(origin.clienteRazonSocial);
  expect(r.formaPago).toBe(motivo==='13'?'Credito':'Contado');expect(r.cuotas).toHaveLength(motivo==='13'?1:0);
 });
-it.each(['01','03','07','08'] as const)('borrador %s comienza con una sola línea vacía',tipo=>{
- const b=borradorInicial(tipo,'2026-11-12');expect(b.items).toHaveLength(1);expect(b.items[0]).toMatchObject({codigo:'',descripcion:'',valorUnitario:0});
+it.each(['01','03','07','08'] as const)('borrador %s comienza sin líneas libres',tipo=>{
+ const b=borradorInicial(tipo,'2026-11-12');expect(b.items).toHaveLength(0);
 });
 it.each(['EXONERADA','INAFECTA','GRAVADA','GRATUITA'] as const)('cambiar afectación a %s conserva referencia y corrige precio',afectacion=>{
  const line={...itemVacio('i'),codigo:'P',descripcion:'Producto',cantidad:1,valorUnitario:100,precioUnitario:118};
@@ -93,8 +93,7 @@ it.each(['01','03'])('bolsas de documento gratuito %s: control visible y guarda 
  const items=[{...itemVacio('x'),codigo:'P',descripcion:'Producto gratuito',afectacion:'GRATUITA' as const,codigoAfectacion:'11',valorUnitario:100,precioUnitario:0,cantidadBolsas:1,icbper:.5}];
  const agregar=vi.fn(), cambiar=vi.fn();render(<InvoiceItemsGrid tipo={tipo} items={items} onCambiar={cambiar} onEliminar={vi.fn()} onAgregar={vi.fn()} onAgregarBolsa={agregar}/>);
  const bloqueada=tipo==='03';expect((screen.getByLabelText('ICBPER de la línea 1') as HTMLInputElement).disabled).toBe(bloqueada);
- const button=screen.getByRole('button',{name:/Bolsa plástica/}) as HTMLButtonElement;expect(button.disabled).toBe(bloqueada);
- fireEvent.click(button);expect(agregar).toHaveBeenCalledTimes(bloqueada?0:1);
+ expect(screen.queryByRole('button',{name:/Bolsa plástica/})).toBeNull();expect(agregar).not.toHaveBeenCalled();
  if(bloqueada){fireEvent.click(screen.getByRole('button',{name:'Retirar bolsas de la boleta'}));expect(cambiar).toHaveBeenCalledWith(0,{cantidadBolsas:0,icbper:0});}
  expect(Boolean(screen.queryByText(/Una boleta íntegramente gratuita no admite bolsas/))).toBe(bloqueada);
  const error=problemasContenidoEmision({tipo,items,clienteRazonSocial:'Cliente'}).join();expect(error.includes('no admite bolsas')).toBe(bloqueada);

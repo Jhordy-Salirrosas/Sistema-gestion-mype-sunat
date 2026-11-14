@@ -1,8 +1,10 @@
+vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => [{sku:'SERV',descripcion:'Servicio',unidad:'NIU',valorUnitario:1000,precioUnitario:1180,afectacion:'10',stock:100,vendible:true}]) }));
+import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
 import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { borradorInicial } from '@/modules/invoices/lib/invoiceEmitDraft';
+import { borradorConLinea as borradorInicial } from '../../../fixtures/invoiceEmissionProduct';
 import { calcularFlujo } from '@/modules/invoices/components/InvoiceEmitModal';
 import { InvoiceEmitResumen } from '@/modules/invoices/components/InvoiceEmitResumen';
 import { calcularDetraccion, calcularRetencion, liquidarComprobante } from '@/modules/invoices/lib/invoiceRetentions';
@@ -16,7 +18,7 @@ afterEach(cleanup);
 const base = borradorInicial('01', '2026-11-06');
 const items = [{ ...base.items[0], valorUnitario: 1000, codigoDetraccion: '027' }];
 
-it('comprobante al crédito con SPOT excluye retención y usa céntimos en las cuotas', () => {
+it('comprobante al crédito con SPOT excluye retención y usa céntimos en las cuotas', async () => {
   const borrador = { ...base, items, codigoDetraccion: '027', agenteRetencion: true, formaPago: 'Credito' as const };
   const flujo = calcularFlujo(borrador);
   expect(calcularDetraccion(1180, 0.04)).toBe(47.2);
@@ -25,13 +27,13 @@ it('comprobante al crédito con SPOT excluye retención y usa céntimos en las c
   expect(validarCronograma([{ monto: 566.4, vencimiento: '2026-12-06' }, { monto: 566.4, vencimiento: '2027-01-06' }], flujo.neto, borrador.fecha).cuadra).toBe(true);
 });
 
-it('SPOT sin retención conserva 47.20 en el comprobante y 1132.80 de neto', () => {
+it('SPOT sin retención conserva 47.20 en el comprobante y 1132.80 de neto', async () => {
   const flujo = calcularFlujo({ ...base, items, codigoDetraccion: '027', agenteRetencion: false });
   expect(flujo).toMatchObject({ importeTotal: 1180, detraccion: 47.2, neto: 1132.8 });
   expect(montoDetraccionPara(1180, '027')).toBe(47.2);
 });
 
-it('en contado presenta el monto del comprobante y el depósito redondeado por separado', () => {
+it('en contado presenta el monto del comprobante y el depósito redondeado por separado', async () => {
   const borrador = { ...base, items, codigoDetraccion: '027', formaPago: 'Contado' as const };
   const liquidacion = liquidarComprobante([{ base: 1000, afectacion: 'GRAVADA' }], { detraccionPorcentaje: 0.04 });
   expect(liquidacion).toMatchObject({ importeTotal: 1180, montoDetraccion: 47.2, netoPendientePago: 1132.8 });
@@ -40,7 +42,7 @@ it('en contado presenta el monto del comprobante y el depósito redondeado por s
   expect(screen.getByText(/Depósito.*Banco de la Nación.*47\.00/)).toBeTruthy();
 });
 
-it('usa solo líneas sujetas y acepta al enviar cuotas que suman el neto real', () => {
+it('usa solo líneas sujetas y acepta al enviar cuotas que suman el neto real', async () => {
   const borrador = { ...base, codigoDetraccion: '', agenteRetencion: true, formaPago: 'Credito' as const,
     items: [{ ...base.items[0], valorUnitario: 500, codigoDetraccion: '027' },
       { ...base.items[0], clave: 'segunda', valorUnitario: 500, codigoDetraccion: undefined }],
@@ -50,10 +52,10 @@ it('usa solo líneas sujetas y acepta al enviar cuotas que suman el neto real', 
   expect(borradorAPayloadEmision(borrador).items.map((item) => item.codigoDetraccion)).toEqual(['027', undefined]);
 });
 
-it('en el modal reparte cuotas según arena/piedra e impide retención simultánea', () => {
+it('en el modal reparte cuotas según arena/piedra e impide retención simultánea', async () => {
   const query = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={query}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha="2026-11-06" existentes={[]} clienteConCredito onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
-  fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '1000' } });
+  await seleccionarProductoPrueba();
   fireEvent.change(screen.getByLabelText('Detracción de la línea 1'), { target: { value: '009' } });
   const retencion = screen.getByRole('checkbox', { name: /Agente de Retención/ }) as HTMLInputElement;
   expect(retencion.disabled).toBe(true); expect(retencion.checked).toBe(false);

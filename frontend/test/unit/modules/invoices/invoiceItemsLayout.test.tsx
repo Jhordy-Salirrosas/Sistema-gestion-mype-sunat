@@ -17,7 +17,7 @@ describe('presentación del detalle de líneas', () => {
     expect(region.className).not.toContain('overflow-x');
     expect(region.tabIndex).toBe(0);
     expect(table.className).not.toContain('min-w-');
-    expect(screen.getByLabelText('Cantidad de la línea 1').closest('tr')?.className).toContain('grid-cols-1');
+    expect(screen.getByLabelText('Cantidad de la línea 1').closest('tr')?.className).toContain('auto-fit');
     expect(table.querySelectorAll('tbody td > span:first-child')).toHaveLength(11);
     expect(table.querySelectorAll('thead')).toHaveLength(1);
     expect(table.querySelectorAll('tbody')).toHaveLength(1);
