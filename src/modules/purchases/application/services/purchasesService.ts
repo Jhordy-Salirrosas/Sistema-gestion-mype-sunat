@@ -37,7 +37,7 @@ export class PurchasesService {
   ) {}
 
   async listPurchases(companyId: string) {
-    return this.prisma.nationalPurchase.findMany({
+    const nationalPurchases = await this.prisma.nationalPurchase.findMany({
       where: { company_id: companyId },
       include: {
         items: true,
@@ -45,6 +45,60 @@ export class PurchasesService {
       orderBy: { issue_date: 'desc' },
       take: 200,
     });
+
+    const importOrders = await this.prisma.importOrder.findMany({
+      where: { company_id: companyId },
+      include: {
+        items: true,
+      },
+      orderBy: { issue_date: 'desc' },
+      take: 100,
+    });
+
+    const mappedImportOrders = importOrders.map((ord: any) => ({
+      id: ord.id,
+      company_id: ord.company_id,
+      purchase_number: ord.order_number,
+      supplier_id: ord.supplier_id,
+      supplier_doc_type: '0',
+      supplier_doc_number: ord.supplier_tax_id || ord.supplier_country || 'EXTERIOR',
+      supplier_name: ord.supplier_name,
+      document_type_code: '00',
+      document_serial: 'IMP',
+      document_number: ord.order_number.replace(/^.*-/, ''),
+      issue_date: ord.issue_date,
+      accounting_date: ord.issue_date,
+      currency_code: ord.currency_code || 'USD',
+      exchange_rate: 1,
+      warehouse_code: ord.port_of_destination || 'CALLAO',
+      net_amount: ord.total_fob,
+      igv_amount: 0,
+      total_amount: Number(ord.total_cif) > 0 ? ord.total_cif : ord.total_fob,
+      paid_amount: 0,
+      status: ord.status === 'APROBADA' ? 'REGISTRADA' : ord.status,
+      reception_status: ord.current_stage_index >= 12 ? 'RECIBIDA' : 'PENDIENTE',
+      notes: `[PEDIDO EXTERIOR - ${ord.incoterm}] ${ord.notes || ''}`.trim(),
+      responsible: ord.responsible || 'Comercio Exterior',
+      created_at: ord.created_at,
+      items: (ord.items || []).map((it: any) => ({
+        id: it.id,
+        purchase_id: ord.id,
+        product_id: it.product_code || it.id,
+        sku: it.product_code || 'IMP-ITEM',
+        description: it.description,
+        unit_code: it.unit_code || 'NIU',
+        quantity: it.quantity,
+        received_quantity: ord.current_stage_index >= 12 ? it.quantity : 0,
+        unit_cost: it.unit_price_fob,
+        subtotal: it.total_fob,
+        igv_amount: 0,
+        total_amount: it.total_fob,
+      })),
+    }));
+
+    const combined = [...nationalPurchases, ...mappedImportOrders];
+    combined.sort((a: any, b: any) => new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime());
+    return combined;
   }
 
   async getPurchaseById(companyId: string, id: string) {
@@ -56,11 +110,62 @@ export class PurchasesService {
       },
     });
 
-    if (!purchase) {
-      throw new NotFoundException(`Compra nacional con id ${id} no encontrada.`);
+    if (purchase) {
+      return purchase;
     }
 
-    return purchase;
+    const importOrder = await this.prisma.importOrder.findFirst({
+      where: { id, company_id: companyId },
+      include: {
+        items: true,
+        documents: true,
+      },
+    });
+
+    if (importOrder) {
+      return {
+        id: importOrder.id,
+        company_id: importOrder.company_id,
+        purchase_number: importOrder.order_number,
+        supplier_id: importOrder.supplier_id,
+        supplier_doc_type: '0',
+        supplier_doc_number: importOrder.supplier_tax_id || importOrder.supplier_country || 'EXTERIOR',
+        supplier_name: importOrder.supplier_name,
+        document_type_code: '00',
+        document_serial: 'IMP',
+        document_number: importOrder.order_number.replace(/^.*-/, ''),
+        issue_date: importOrder.issue_date,
+        accounting_date: importOrder.issue_date,
+        currency_code: importOrder.currency_code || 'USD',
+        exchange_rate: 1,
+        warehouse_code: importOrder.port_of_destination || 'CALLAO',
+        net_amount: importOrder.total_fob,
+        igv_amount: 0,
+        total_amount: Number(importOrder.total_cif) > 0 ? importOrder.total_cif : importOrder.total_fob,
+        paid_amount: 0,
+        status: importOrder.status === 'APROBADA' ? 'REGISTRADA' : importOrder.status,
+        reception_status: importOrder.current_stage_index >= 12 ? 'RECIBIDA' : 'PENDIENTE',
+        notes: `[PEDIDO EXTERIOR - ${importOrder.incoterm}] ${importOrder.notes || ''}`.trim(),
+        responsible: importOrder.responsible || 'Comercio Exterior',
+        created_at: importOrder.created_at,
+        items: (importOrder.items || []).map((it: any) => ({
+          id: it.id,
+          purchase_id: importOrder.id,
+          product_id: it.product_code || it.id,
+          sku: it.product_code || 'IMP-ITEM',
+          description: it.description,
+          unit_code: it.unit_code || 'NIU',
+          quantity: it.quantity,
+          received_quantity: importOrder.current_stage_index >= 12 ? it.quantity : 0,
+          unit_cost: it.unit_price_fob,
+          subtotal: it.total_fob,
+          igv_amount: 0,
+          total_amount: it.total_fob,
+        })),
+      };
+    }
+
+    throw new NotFoundException(`Compra con id ${id} no encontrada.`);
   }
 
   async createPurchase(companyId: string, dto: CreatePurchaseDto) {
@@ -132,8 +237,11 @@ export class PurchasesService {
           where: { company_id: companyId, sku },
         });
         if (!product) throw new NotFoundException(`Producto con SKU ${sku} no encontrado.`);
-        if (!product.is_inventory) {
-          throw new BadRequestException(`El ítem ${sku} (${product.description}) es un servicio y no mueve inventario.`);
+        
+        // Tratamiento contable y operativo de servicios vs mercaderías (NIC 2)
+        const isService = Boolean(product.is_service);
+        if (!product.is_inventory && !isService) {
+          throw new BadRequestException(`El ítem ${sku} no es inventariable ni está habilitado como servicio facturable.`);
         }
         const quantity = Number(item.quantity);
         const unitCostNet = Number(item.unitCost);
@@ -150,15 +258,19 @@ export class PurchasesService {
           product_id: product.id,
           sku,
           description: product.description,
-          unit_code: product.sunat_unit_code ?? 'NIU',
+          unit_code: product.sunat_unit_code ?? (isService ? 'ZZ' : 'NIU'),
           quantity,
           unit_cost: r4(unitCostNet),
           subtotal,
           igv_amount: itemIgv,
           total_amount: itemTotal,
-          received_quantity: 0,
+          // Un servicio no mueve inventario físico en almacén; se marca recibido al momento
+          received_quantity: isService ? quantity : 0,
         });
       }
+
+      const allItemsAreServices = preparedItems.every((it) => it.received_quantity === it.quantity);
+      const receptionStatus = allItemsAreServices ? 'RECIBIDA' : 'PENDIENTE';
 
       const purchase = await tx.nationalPurchase.create({
         data: {
@@ -179,13 +291,55 @@ export class PurchasesService {
           igv_amount: r2(totalIgv),
           total_amount: r2(totalAmount),
           status: 'REGISTRADA',
-          reception_status: 'PENDIENTE',
+          reception_status: receptionStatus,
           notes: dto.notes,
           responsible: dto.responsible,
           items: { create: preparedItems },
         },
         include: { items: true },
       });
+
+      // Sincronización automática con Aduanas: Si se asocia a un expediente de importación
+      if (dto.shipmentId?.trim()) {
+        const cleanShipmentId = dto.shipmentId.trim();
+        const shipment = await tx.customsShipment.findFirst({
+          where: {
+            company_id: companyId,
+            OR: [
+              { id: cleanShipmentId },
+              { shipment_number: cleanShipmentId },
+            ],
+          },
+        });
+        if (shipment) {
+          const firstSku = preparedItems[0]?.sku || '';
+          const expenseConcept = firstSku.includes('AGENCIA')
+            ? 'AGENCIA'
+            : firstSku.includes('ALM')
+            ? 'ALMACENAJE'
+            : firstSku.includes('FLETE')
+            ? 'TRANSPORTE_LOCAL'
+            : 'GASTO_OPERATIVO';
+
+          await tx.localExpenseInvoice.create({
+            data: {
+              shipment_id: shipment.id,
+              purchase_id: purchase.id,
+              supplier_ruc: supplierDoc,
+              supplier_name: supplierName,
+              expense_concept: expenseConcept,
+              invoice_serial_number: `${docSerial}-${docNumber}`,
+              issue_date: issueDate,
+              net_amount_pen: r2(totalNet),
+              igv_amount_pen: r2(totalIgv),
+              total_amount_pen: r2(totalAmount),
+              spot_detraction_rate: 0.0,
+              is_capitalizable: true,
+              proration_method: 'VALOR_FOB',
+            },
+          });
+        }
+      }
 
       return purchase;
     });

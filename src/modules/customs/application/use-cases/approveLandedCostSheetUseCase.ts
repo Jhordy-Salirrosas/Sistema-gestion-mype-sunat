@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   LANDED_COST_REPOSITORY_PORT,
@@ -15,6 +16,7 @@ import {
 import { ApproveLandedCostDto } from '../dto/approveLandedCostDto';
 import { ImportCostApprovedEvent } from '../../domain/events/ImportCostApprovedEvent';
 import { LandedCostStatus } from '../../domain/enums/landedCostStatus.enum';
+import { CalculateLandedCostUseCase } from './calculateLandedCostUseCase';
 
 @Injectable()
 export class ApproveLandedCostSheetUseCase {
@@ -23,14 +25,31 @@ export class ApproveLandedCostSheetUseCase {
     private readonly landedCostRepository: ILandedCostRepositoryPort,
     @Inject(CUSTOMS_EVENT_PUBLISHER_PORT)
     private readonly eventPublisher: ICustomsEventPublisherPort,
+    @Optional()
+    private readonly calculateLandedCostUseCase?: CalculateLandedCostUseCase,
   ) {}
 
   async execute(dto: ApproveLandedCostDto, companyId: string): Promise<any> {
     // 1. Obtener la hoja de costos del expediente
-    const sheet = await this.landedCostRepository.findLandedCostSheetByShipmentId(
+    let sheet = await this.landedCostRepository.findLandedCostSheetByShipmentId(
       dto.shipmentId,
       companyId,
     );
+
+    if (!sheet && this.calculateLandedCostUseCase) {
+      try {
+        await this.calculateLandedCostUseCase.execute(
+          { shipment_id: dto.shipmentId, approved_by_accountant: false },
+          companyId,
+        );
+        sheet = await this.landedCostRepository.findLandedCostSheetByShipmentId(
+          dto.shipmentId,
+          companyId,
+        );
+      } catch {
+        // En caso falle el auto-cálculo, se manejará en la validación inferior
+      }
+    }
 
     if (!sheet) {
       throw new NotFoundException(
@@ -68,8 +87,9 @@ export class ApproveLandedCostSheetUseCase {
     }
 
     // 3. Persistir actualización de aprobación
+    const targetShipmentId = sheet.shipment_id || sheet.shipment?.id || dto.shipmentId;
     const updatedSheet = await this.landedCostRepository.saveLandedCostSheet({
-      shipmentId: dto.shipmentId,
+      shipmentId: targetShipmentId,
       totalCifPen: Number(sheet.total_cif_pen),
       totalDutiesPen: Number(sheet.total_duties_pen),
       totalLocalExpensesPen: Number(sheet.total_local_expenses_pen),
@@ -91,7 +111,7 @@ export class ApproveLandedCostSheetUseCase {
         companyId,
         landedCostSheetId: sheet.id ?? `sheet-${dto.shipmentId}`,
         version: sheet.version ?? 1,
-        shipmentId: dto.shipmentId,
+        shipmentId: sheet.shipment?.shipment_number ?? sheet.shipment_id ?? dto.shipmentId,
         declarationId: dto.declarationId ?? (declarations[0]?.id || null),
         duaNumber: declarations[0]?.dua_number ?? null,
         approvedAt: new Date(),

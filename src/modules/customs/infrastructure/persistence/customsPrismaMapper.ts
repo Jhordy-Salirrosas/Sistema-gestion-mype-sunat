@@ -93,19 +93,27 @@ export class CustomsPrismaMapper {
     cif_value_pen: unknown;
     total_customs_taxes_pen: unknown;
     status: string;
-    _count: { items: number };
+    _count?: { items: number };
     created_at: Date;
+    shipment_id?: string | null;
+    channel?: string | null;
+    fob_value_usd?: unknown;
+    items?: PrismaCustomsItemRow[];
   }): CustomsDeclarationSummary {
     return {
       id: row.id,
+      shipmentId: row.shipment_id ?? null,
       duaNumber: row.dua_number,
       customsAgencyCode: row.customs_agency_code,
+      channel: row.channel ?? null,
       numerationDate: row.numeration_date,
+      fobValueUsd: Number(row.fob_value_usd ?? 0),
       cifValueUsd: Number(row.cif_value_usd),
       cifValuePen: Number(row.cif_value_pen),
       totalCustomsTaxesPen: Number(row.total_customs_taxes_pen),
       status: row.status,
-      itemsCount: row._count.items,
+      itemsCount: row._count?.items ?? row.items?.length ?? 0,
+      items: row.items ? row.items.map((it) => this.toDomainItem(it)) : [],
       createdAt: row.created_at,
     };
   }

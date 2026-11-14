@@ -72,7 +72,12 @@ describe('PrismaLandedCostRepository', () => {
     const result = await repository.findLocalExpensesByShipmentId('ship-1');
     expect(result.length).toBe(1);
     expect(prismaMock.localExpenseInvoice.findMany).toHaveBeenCalledWith({
-      where: { shipment_id: 'ship-1' },
+      where: {
+        OR: [
+          { shipment_id: 'ship-1' },
+          { shipment: { shipment_number: 'ship-1' } },
+        ],
+      },
       orderBy: { issue_date: 'asc' },
     });
   });
@@ -129,15 +134,20 @@ describe('PrismaLandedCostRepository', () => {
   });
 
   it('debe buscar hoja de costeo por shipmentId con relaciones anidadas', async () => {
-    prismaMock.landedCostSheet.findUnique.mockResolvedValue({
+    prismaMock.landedCostSheet.findFirst = jest.fn().mockResolvedValue({
       id: 'sheet-1',
       shipment_id: 'ship-1',
     });
 
     const result = await repository.findLandedCostSheetByShipmentId('ship-1');
     expect(result?.id).toBe('sheet-1');
-    expect(prismaMock.landedCostSheet.findUnique).toHaveBeenCalledWith({
-      where: { shipment_id: 'ship-1' },
+    expect(prismaMock.landedCostSheet.findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { shipment_id: 'ship-1' },
+          { shipment: { shipment_number: 'ship-1' } },
+        ],
+      },
       include: expect.objectContaining({
         shipment: expect.any(Object),
       }),
