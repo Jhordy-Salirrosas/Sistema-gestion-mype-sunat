@@ -224,6 +224,9 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - **Cuenta de cierre configurable**: el asiento de cierre usa la subcuenta de la regla `CIERRE`
   (línea 1) si existe y, si no, `59`. Así el contador puede fijar `591`/`592` sin tocar código; el
   resultado de la operación informa `cuentaCierre`.
+- **No se cierra un ejercicio descuadrado**: si algún asiento del año tiene menos de dos líneas o no
+  cuadra, el cierre se niega con el número y el período del primero que falla. Cerrar sobre datos
+  descuadrados produce un resultado que "cuadra" por construcción y esconde el problema original.
 
 **A3 — errores contables silenciados en Compras**
 
@@ -255,7 +258,7 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 221 pruebas (135 nuevas: reglas, auditoría,
+**Pruebas**: el módulo de contabilidad pasa de 86 a 223 pruebas (137 nuevas: reglas, auditoría,
 tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 24 en compras, 10 en
 el frontend de contabilidad (1 326 en total).
 
