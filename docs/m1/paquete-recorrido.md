@@ -35,3 +35,7 @@ Listado (incluida búsqueda) y detalle agregan `primary_contact` y `primary_addr
 ## Punto 5
 
 La ficha agrega Activar/Inactivar tercero mediante el PUT existente con `isActive`; respeta readOnly, deshabilita mientras guarda, presenta el error del servidor y refresca ficha/listado. El selector previo del formulario se conserva. Pruebas dirigidas: 1 archivo / 3 pruebas verdes (ambas transiciones, solo lectura y fallo).
+
+## Punto 6
+
+La excepción frontend requiere identidad original explícita y coincidencia exacta de tipo/número; no omite validaciones de nombre, correo u otros campos. Alta, identidad distinta o ausencia de original mantienen la validación completa. El formulario sigue sin enviar identidad en PUT. El servidor ya soporta este comportamiento: se añade regresión del tercero histórico de nueve dígitos y del rechazo de un alta equivalente, sin cambiar su contrato de actualización. Pruebas dirigidas verdes en ambas capas.

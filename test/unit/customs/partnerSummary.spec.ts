@@ -11,3 +11,10 @@ it('detalle proyecta el mismo primer registro y conserva colecciones/cabecera',a
  const service=new MasterDataService({businessPartner:{findFirst:jest.fn().mockResolvedValue(row)}} as never);
  expect(await service.getPartner('empresa','p')).toEqual({...row,primary_contact:row.contacts[0],primary_address:row.addresses[0]});
 });
+it('actualiza un tercero con identidad histórica inválida sin revalidarla ni modificarla',async()=>{
+ const update=jest.fn().mockResolvedValue({id:'p',legal_name:'Empresa editada'});
+ const service=new MasterDataService({businessPartner:{findFirst:jest.fn().mockResolvedValue({id:'p',doc_type:'6',doc_number:'204813697'}),update}} as never);
+ await service.updatePartner('empresa','p',{legalName:'Empresa editada'});
+ expect(update).toHaveBeenCalledWith({where:{id:'p'},data:{legal_name:'Empresa editada'}});
+ await expect(service.createPartner('empresa',{docType:'6',docNumber:'204813697',legalName:'Empresa nueva'})).rejects.toThrow('Documento inválido');
+});

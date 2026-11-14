@@ -71,7 +71,7 @@ export function PartnerFormDialog({ onClose, onSaved, partner, initialRole = 'PR
     ]);
   };
 
-  const errorValidacion = errorDatosTercero(form, Boolean(partner));
+  const errorValidacion = errorDatosTercero(form, Boolean(partner), partner ? { docType: partner.doc_type, docNumber: partner.doc_number } : undefined);
   const save = useMutation({
     mutationFn: async (addRole: boolean) => {
       if (addRole && existing && requiredRole) {
