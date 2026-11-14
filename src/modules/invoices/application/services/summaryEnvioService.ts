@@ -1,3 +1,4 @@
+import { esAnulacionRc } from './summaryCancellation';
 import { BadRequestException, HttpException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { SignatureService } from '../../../sunat/signature.service';
@@ -42,6 +43,7 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
         if (received) { await this.store.finalizar(row, received.contenido, received.status); continue; }
         if (row.state === 'POLLING' && row.ticket) { await this.despacho.programarSondeo({ ...this.job(row), ticketConsulta: row.ticket }); continue; }
         if (row.state === 'RESERVED') {
+          if (row.kind === 'RC' && esAnulacionRc(row.members)) { await this.enviarAnulacionNotas(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: m.motivo })), true); continue; }
           if (row.kind === 'RC') { await this.enviarResumenDiario(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: '' }))); continue; }
           await this.enviarComunicacionBaja(row.company_id, row.reference_date, membersOf(row).map(m => ({ id: m.id, motivo: m.motivo ?? 'Anulación de la operación' })));
           continue;
@@ -79,10 +81,14 @@ export class SummaryEnvioService implements OnModuleInit, OnModuleDestroy {
       return { enviado: false, identificador: '', jobId: null, incluidos: 0, motivo: d.mensaje };
     }
   }
-  private async prepararBaja(companyId: string, fecha: string, selection: SeleccionBaja[], kind: 'RA' | 'RC' = 'RA'): Promise<ResultadoEnvioAgregado> {
+  async enviarAnulacionNotas(companyId: string, fecha: string, input: unknown, noOtorgado: boolean): Promise<ResultadoEnvioAgregado> {
+    if (noOtorgado !== true) throw new BadRequestException('Confirme que las notas no fueron otorgadas al receptor');
+    return this.prepararBaja(companyId, fecha, seleccionBaja(input), 'RC', true);
+  }
+  private async prepararBaja(companyId: string, fecha: string, selection: SeleccionBaja[], kind: 'RA' | 'RC' = 'RA', anular = false): Promise<ResultadoEnvioAgregado> {
     const context = await this.issuerConfig.resolve(companyId);
     const { row, vista } = await this.store.reservar(companyId, kind, fecha, selection, context,
-      (tx, n, excludeId) => kind === 'RA' ? this.resumenes.vistaComunicacionBaja(companyId, fecha, n, selection, tx, excludeId) : this.resumenes.vistaResumenDiario(companyId, fecha, n, selection, tx, excludeId));
+      (tx, n, excludeId) => anular ? this.resumenes.vistaAnulacionNotas(companyId, fecha, n, selection, tx, excludeId) : kind === 'RA' ? this.resumenes.vistaComunicacionBaja(companyId, fecha, n, selection, tx, excludeId) : this.resumenes.vistaResumenDiario(companyId, fecha, n, selection, tx, excludeId), anular);
     const result = { enviado: false, identificador: row.identifier, jobId: row.job_id, incluidos: membersOf(row).length, motivo: null as string | null };
     if (['SENDING', 'POLLING', 'UNCERTAIN', 'ACCEPTED', 'REJECTED', 'REVIEW'].includes(row.state)) return { ...result, motivo: `Envío ya reservado: ${row.state}; consulte el Monitor` };
     if (row.state === 'QUEUED') return { ...result, enviado: true };

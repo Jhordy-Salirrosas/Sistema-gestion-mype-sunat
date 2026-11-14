@@ -14,3 +14,10 @@ export function validarMotivoNota(tipo: string, codigo: string | undefined): voi
 export function validarImporteNota(total: number): void {
   if (!Number.isFinite(total) || total <= 0) throw new BadRequestException({ code: 'NOTA_IMPORTE_INVALIDO', message: 'El importe total de la nota debe ser mayor que cero.' });
 }
+
+/** Alcance 10: ajuste monetario sobre el origen, con sustento explícito; sin rectificación aislada de IGV. */
+export function validarSustentoOtros(tipo: string, codigo: string | undefined, descripcion?: string): void {
+  if (tipo === '07' && codigo === '10' && (!descripcion?.trim() || descripcion.trim().toLocaleLowerCase('es') === 'otros conceptos')) {
+    throw new BadRequestException({ code: 'NOTA_SUSTENTO_REQUERIDO', message: 'Describa el ajuste y su sustento para Otros conceptos. No se admite corregir únicamente el IGV.' });
+  }
+}

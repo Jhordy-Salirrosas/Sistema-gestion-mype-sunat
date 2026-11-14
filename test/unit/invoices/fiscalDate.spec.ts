@@ -44,7 +44,7 @@ it('conserva fechas explícitas y representa días históricos sin convertirlos 
 });
 it('RA diferido nocturno conserva el día histórico y vence a medianoche de Lima', async () => {
   jest.useFakeTimers().setSystemTime(new Date('2026-11-13T04:59:00Z'));
-  const db = { invoice: { findMany: jest.fn(async () => [{ id: 'i', fecha_emision: new Date('2026-11-05T00:00:00Z') }]) } };
+  const db = { invoice: { findMany: jest.fn(async () => [{ id: 'i', tipo_comprobante: '01', serie: 'F001', fecha_emision: new Date('2026-11-05T00:00:00Z') }]) } };
   const row = { company_id: 'c', members: [{ id: 'i' }] };
   await expect(validarPlazoDespachoRa(db as never, row as never)).resolves.toBeUndefined();
   jest.setSystemTime(new Date('2026-11-13T05:00:00Z'));

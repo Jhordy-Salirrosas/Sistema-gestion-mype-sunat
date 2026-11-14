@@ -1,3 +1,5 @@
+import { InvoiceLastUpdated } from '../components/InvoiceLastUpdated';
+import { ETIQUETA_TIPO } from '../lib/invoiceResumenes';
 import { InvoiceSendAgeAlert } from '../components/InvoiceSendAgeAlert';
 import { InvoiceBatchRetry } from '../components/InvoiceBatchRetry';
 import { cargarPaginasMonitor } from '../lib/invoiceMonitorData';
@@ -81,6 +83,7 @@ export default function InvoiceMonitorPage() {
   const [avisoPuente, setAvisoPuente] = useState<string | null>(null);
   const [filtroEstado, setFiltroEstado] = useState('TODOS');
   const visibles = enVuelo.filter((inv) => filtroEstado === 'TODOS' || (filtroEstado === 'DLQ' ? contieneDlq(inv) : filtroEstado === 'INCERTIDUMBRE_TRANSPORTE' ? ['ERROR_RED', 'INCERTIDUMBRE_TRANSPORTE'].includes(estadoDeMonitor(inv)) : estadoDeMonitor(inv) === filtroEstado));
+  const [actualizado, setActualizado] = useState<Date | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reintentando, setReintentando] = useState<string | null>(null);
@@ -112,6 +115,7 @@ export default function InvoiceMonitorPage() {
         for (const inv of pagina) vistos.set(inv.id, inv);
       }
       setEnVuelo([...vistos.values()]);
+      setActualizado(new Date());
     } catch (e: unknown) {
       setError(
         extractApiErrorMessage(e, 'No se pudo leer el estado de la cola.'),
@@ -139,6 +143,17 @@ export default function InvoiceMonitorPage() {
     try { const r = await invoicesApi.reprocesarPuente(id); setAvisoPuente(r.completo ? 'Puente completado.' : `Puente pendiente: ${r.errores.join(' ')}`); await cargar(); }
     catch (e) { setAvisoPuente(extractApiErrorMessage(e, 'No se pudo reprocesar el puente.')); }
     finally { setReintentando(null); }
+  };
+
+  const resolverDlq = async (id: string) => {
+    setReintentando(id); setAvisoPuente(null);
+    try {
+      const resultado = await invoicesApi.resolverDlq(id);
+      setAvisoPuente(resultado.mensaje);
+      await cargar();
+    } catch (e) {
+      setAvisoPuente(extractApiErrorMessage(e, 'No se pudo resolver la DLQ.'));
+    } finally { setReintentando(null); }
   };
 
   const reintentar = async (id: string) => {
@@ -176,6 +191,7 @@ export default function InvoiceMonitorPage() {
           {cargando ? 'Consultando…' : 'Actualizar'}
         </Button>
       </PageHeader>
+      <InvoiceLastUpdated fecha={actualizado} seccion="la cola" />
 
       <InvoiceBatchRetry onComplete={() => void cargar()} />
 
@@ -252,7 +268,7 @@ export default function InvoiceMonitorPage() {
       {alertas.antiguedad && <InvoiceSendAgeAlert alerta={alertas.antiguedad} />}
       </>) : !error ? <div role="status">Cargando estado del monitor…</div> : null}
 
-      {alertas && <Card flush>
+      {alertas && <Card flush className="min-w-0">
         <CardHeader>
           <CardTitle className="text-base">
             Comprobantes en vuelo ({visibles.length})
@@ -265,13 +281,13 @@ export default function InvoiceMonitorPage() {
             {[...ESTADOS_EN_VUELO.filter(e => e !== 'ERROR_RED'), 'DLQ', 'INCERTIDUMBRE_TRANSPORTE', 'PREPARACION_LOCAL', 'PUENTE_PENDIENTE'].map((estado) => <option key={estado} value={estado}>{['ERROR_RED', 'INCERTIDUMBRE_TRANSPORTE'].includes(estado) ? 'Incertidumbre de transporte' : estado === 'PREPARACION_LOCAL' ? 'Bloqueado en preparación local' : estado === 'PUENTE_PENDIENTE' ? 'Puente pendiente' : estado}</option>)}
           </select>
         </label>
-        <Table>
+        <Table className="table-fixed [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere]">
           <TableHeader>
             <TableRow>
-              <TableHead>Comprobante</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead align="center">Acción</TableHead>
+              <TableHead className="w-[22%]">Comprobante</TableHead>
+              <TableHead className="w-[30%]">Cliente</TableHead>
+              <TableHead className="w-[28%]">Estado</TableHead>
+              <TableHead align="center" className="w-[20%]">Acción</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -286,7 +302,7 @@ export default function InvoiceMonitorPage() {
             ) : (
               visibles.map((inv) => (
                 <TableRow key={inv.id}>
-                  <TableCell>{inv.numero}</TableCell>
+                  <TableCell>{inv.numero}{inv.tipoComprobante && <PageText variant="caption">{ETIQUETA_TIPO[inv.tipoComprobante] ?? inv.tipoComprobante} ({inv.tipoComprobante})</PageText>}</TableCell>
                   <TableCell>
                     <PageText variant="label">
                       {inv.clienteRazonSocial}
@@ -297,6 +313,7 @@ export default function InvoiceMonitorPage() {
                   </TableCell>
                   <TableCell>
                     <Badge
+                      className="h-auto min-h-5 max-w-full whitespace-normal [overflow-wrap:anywhere]"
                       variant={
                         (estadoDeMonitor(inv) === 'ERROR_RED' || estadoDeMonitor(inv) === 'DLQ')
                           ? 'destructive'
@@ -305,13 +322,19 @@ export default function InvoiceMonitorPage() {
                     >
                       {['ERROR_RED', 'INCERTIDUMBRE_TRANSPORTE'].includes(estadoDeMonitor(inv)) ? 'Incertidumbre de transporte' : estadoDeMonitor(inv) === 'PREPARACION_LOCAL' ? 'Bloqueado en preparación local' : estadoDeMonitor(inv) === 'PUENTE_PENDIENTE' ? `${inv.estadoBackend} con puente pendiente` : estadoDeMonitor(inv)}
                     </Badge>
+                    {['TRANSPORTE_INCIERTO', 'PREPARACION_LOCAL', 'BRIDGE_PENDING'].includes(inv.resultadoPresentacion?.origen ?? '') && <p className="text-xs text-muted-foreground">{inv.resultadoPresentacion?.motivo}</p>}
                   </TableCell>
                   <TableCell align="center">
+                    {inv.enDlq === true && inv.estadoBackend === 'ACEPTADO' && inv.cdrCodigo === '0' && (
+                      <InvoiceWriteButton className="h-auto min-h-7 max-w-full whitespace-normal" variant="outline" size="sm" disabled={reintentando === inv.id} onClick={() => void resolverDlq(inv.id)}>
+                        Resolver DLQ
+                      </InvoiceWriteButton>
+                    )}
                     {/* El servidor concilia antes de autorizar cualquier reenvío. */}
-                    {estadoDeMonitor(inv) === 'PUENTE_PENDIENTE' && <InvoiceWriteButton disabled={reintentando === inv.id} onClick={() => void reprocesar(inv.id)}>Reprocesar puente</InvoiceWriteButton>}
-                    {['TRANSPORTE_INCIERTO', 'PREPARACION_LOCAL', 'BRIDGE_PENDING'].includes(inv.resultadoPresentacion?.origen ?? '') && <p className="text-xs text-muted-foreground">{inv.resultadoPresentacion?.motivo}</p>}
+                    {estadoDeMonitor(inv) === 'PUENTE_PENDIENTE' && <InvoiceWriteButton className="h-auto min-h-8 max-w-full whitespace-normal" disabled={reintentando === inv.id} onClick={() => void reprocesar(inv.id)}>Reprocesar puente</InvoiceWriteButton>}
                     {['ERROR_RED', 'DLQ', 'INCERTIDUMBRE_TRANSPORTE', 'PREPARACION_LOCAL'].includes(estadoDeMonitor(inv)) && !['ACEPTADO', 'OBSERVADO', 'ANULADO'].includes(inv.estadoBackend ?? '') && (
                       <InvoiceWriteButton
+                        className="h-auto min-h-7 max-w-full whitespace-normal"
                         variant="outline"
                         size="sm"
                         disabled={reintentando === inv.id}

@@ -25,8 +25,10 @@ export function presentarResultado(estado: string, cdr: { codigo: string | null;
       motivo: ultima?.mensaje_error ?? 'Incertidumbre de transporte: no hay resultado concluyente; consultar antes de reenviar.' };
   }
   if (['ACEPTADO','OBSERVADO'].includes(estado) && omisionesPendientes(history).length) return { origen: 'BRIDGE_PENDING', codigo: BRIDGE_OMITTED, motivo: `${estado} con puente pendiente: descarga omitida por clasificación como servicio. SKU: ${omisionesPendientes(history).join(', ')}.` };
-  if (estado === 'ANULADO' && history.some(e => e.codigo_error === 'M1_RA_REVERSAL_DONE')) return { origen: 'RA_REVERSAL_DONE', codigo: 'M1_RA_REVERSAL_DONE', motivo: 'ANULADO con reversión local completada.' };
-  if (estado === 'ANULADO' && history.some(e => e.codigo_error === 'M1_RA_REVERSAL_PENDING') && !history.some(e => e.codigo_error === 'M1_RA_REVERSAL_DONE')) return { origen: 'RA_REVERSAL_PENDING', codigo: 'M1_RA_REVERSAL_PENDING', motivo: 'ANULADO con reversión pendiente. La RA fue aceptada; faltan efectos locales del puente.' };
+  const rc = history.some(e => e.codigo_error?.startsWith('M1_RC_REVERSAL_'));
+  const prefijoReversion = rc ? 'M1_RC' : 'M1_RA';
+  if (estado === 'ANULADO' && history.some(e => e.codigo_error === `${prefijoReversion}_REVERSAL_DONE`)) return { origen: 'RA_REVERSAL_DONE', codigo: `${prefijoReversion}_REVERSAL_DONE`, motivo: 'ANULADO con reversión local completada.' };
+  if (estado === 'ANULADO' && history.some(e => e.codigo_error === `${prefijoReversion}_REVERSAL_PENDING`)) return { origen: 'RA_REVERSAL_PENDING', codigo: `${prefijoReversion}_REVERSAL_PENDING`, motivo: `ANULADO con reversión pendiente. ${rc ? 'El RC fue aceptado' : 'La RA fue aceptada'}; faltan efectos locales del puente.` };
   if (estado === 'ERROR_RED') {
     const evento = history.map((e, i) => ({ e, i })).sort((a, b) =>
       (b.e.created_at?.getTime() ?? b.i) - (a.e.created_at?.getTime() ?? a.i))

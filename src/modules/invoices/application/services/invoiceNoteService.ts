@@ -1,4 +1,4 @@
-import { validarMotivoNota } from './noteReasonGuard';
+import { validarMotivoNota, validarSustentoOtros } from './noteReasonGuard';
 import { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS, esMotivoCreditoTotal } from './noteCatalogs';
 export { CATALOGO_09_MOTIVOS, CATALOGO_10_MOTIVOS } from './noteCatalogs';
 export type { MotivoCredito, MotivoDebito } from './noteCatalogs';
@@ -76,6 +76,7 @@ export class InvoiceNoteService {
     solicitud: SolicitudNota,
   ): Promise<NotaAutorizada> {
     validarMotivoNota('07', solicitud.motivoCodigo);
+    validarSustentoOtros('07', solicitud.motivoCodigo, solicitud.sustento);
     const motivo = CATALOGO_09_MOTIVOS.find(m => m.codigo === solicitud.motivoCodigo)!;
 
     const saldo = await this.saldos.calcular(

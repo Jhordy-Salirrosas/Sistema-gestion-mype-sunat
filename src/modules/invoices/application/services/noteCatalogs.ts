@@ -27,6 +27,7 @@ export const CATALOGO_09_MOTIVOS: readonly MotivoCredito[] = [
   { codigo: '06', descripcion: 'Devolución total', total: true },
   { codigo: '07', descripcion: 'Devolución por ítem', total: false },
   { codigo: '09', descripcion: 'Disminución en el valor', total: false },
+  { codigo: '10', descripcion: 'Otros conceptos', total: false },
   { codigo: '13', descripcion: 'Ajustes de montos y/o fechas de pago al crédito', total: false },
 ];
 

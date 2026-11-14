@@ -1,3 +1,4 @@
+import { validarNotaAnulacionRc } from './summaryCancellation';
 import { redondearMoneda as r2 } from '../../money';
 /**
  * Comunicación de baja (RA) y resumen diario de boletas (RC) — TA-67.
@@ -58,9 +59,12 @@ export interface ComprobanteAgregado {
   igv: number;
   /** Documento que la nota modifica; obligatorio en 07 y 08. */
   documentoAfectado?: string;
+  tipoDocumentoAfectado?: string | null;
   /** Estado del comprobante ante SUNAT: solo lo aceptado puede darse de baja. */
   motivoBaja?: string;
   fiscal?: SummaryFiscal;
+  condicion?: '3';
+  fechaAceptacion?: string;
 }
 
 /** Datos del emisor y del envío del resumen. */
@@ -129,6 +133,7 @@ export const ESTADOS_YA_INFORMADOS: readonly string[] = [
  * con su motivo en lugar de que desaparezca sin explicación.
  */
 export const excluidoDelResumen = (c: ComprobanteAgregado): boolean =>
+  c.condicion === '3' ? !['ACEPTADO', 'OBSERVADO'].includes(c.estado) :
   ['RECHAZADO', 'ANULADO'].includes(c.estado) ||
   ESTADOS_YA_INFORMADOS.includes(c.estado);
 
@@ -230,8 +235,10 @@ export const validarPlazoResumen = (
 export const TIPOS_EN_BAJA: readonly string[] = ['01', '07', '08'];
 
 /** ¿El comprobante puede ir en una comunicación de baja? */
-export const vaEnBaja = (c: ComprobanteAgregado): boolean =>
-  TIPOS_EN_BAJA.includes(c.tipoComprobante);
+export const vaEnBaja = (c: Pick<ComprobanteAgregado, 'tipoComprobante' | 'serie' | 'documentoAfectado' | 'tipoDocumentoAfectado'>): boolean =>
+  TIPOS_EN_BAJA.includes(c.tipoComprobante) &&
+  !(['07', '08'].includes(c.tipoComprobante) &&
+    (/^B/i.test(c.serie.trim()) || /^B/i.test(c.documentoAfectado?.trim() ?? '') || c.tipoDocumentoAfectado === '03'));
 
 /**
  * Valida la regla 2308 para un conjunto de bajas.
@@ -247,10 +254,13 @@ export const validarTiposEnBaja = (
 
   const c = fuera[0];
   const esBoleta = c.tipoComprobante === '03';
+  const esNota = ['07', '08'].includes(c.tipoComprobante);
 
   throw new BadRequestException({
     code: 'BAJA_TIPO_INVALIDO',
-    message: esBoleta
+    message: esNota
+      ? `La nota ${c.serie}-${c.correlativo} vinculada a boleta no admite RA: su baja corresponde al resumen diario (RC).`
+      : esBoleta
       ? `La boleta ${c.serie}-${c.correlativo} no se puede dar de baja con una ` +
         'comunicación RA (regla 2308): las boletas se anulan en el resumen ' +
         'diario, restándolas en un resumen posterior.'
@@ -272,7 +282,7 @@ const lineaResumen = (c: ComprobanteAgregado, index: number): string => {
       <cbc:ID>${esc(c.serie)}-${String(c.correlativo).padStart(8, '0')}</cbc:ID>
       <cac:AccountingCustomerParty><cbc:CustomerAssignedAccountID>${esc(c.numDocCliente)}</cbc:CustomerAssignedAccountID><cbc:AdditionalAccountID>${esc(c.tipoDocCliente)}</cbc:AdditionalAccountID></cac:AccountingCustomerParty>${c.documentoAfectado ? `
       <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${esc(c.documentoAfectado)}</cbc:ID><cbc:DocumentTypeCode>03</cbc:DocumentTypeCode></cac:InvoiceDocumentReference></cac:BillingReference>` : ''}
-      <cac:Status><cbc:ConditionCode>1</cbc:ConditionCode></cac:Status>
+      <cac:Status><cbc:ConditionCode>${c.condicion ?? '1'}</cbc:ConditionCode></cac:Status>
       <sac:TotalAmount currencyID="PEN">${money(c.total)}</sac:TotalAmount>
 ${c.fiscal.pagos.map(p => `      <sac:BillingPayment><cbc:PaidAmount currencyID="PEN">${money(p.monto)}</cbc:PaidAmount><cbc:InstructionID>${p.codigo}</cbc:InstructionID></sac:BillingPayment>`).join('\n')}
 ${c.fiscal.tributos.map(t => `      <cac:TaxTotal><cbc:TaxAmount currencyID="PEN">${money(t.impuesto)}</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxAmount currencyID="PEN">${money(t.impuesto)}</cbc:TaxAmount><cac:TaxCategory><cac:TaxScheme><cbc:ID>${t.codigo}</cbc:ID><cbc:Name>${names[t.codigo][0]}</cbc:Name><cbc:TaxTypeCode>${names[t.codigo][1]}</cbc:TaxTypeCode></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>`).join('\n')}
@@ -301,6 +311,10 @@ export const construirResumenDiario = (
     });
   }
 
+  if (comprobantes.some(c => c.condicion === '3')) {
+    if (!comprobantes.every(c => c.condicion === '3')) throw new BadRequestException('RC_ANULACION_MIXTA: no mezcle altas y anulaciones');
+    for (const c of comprobantes) validarNotaAnulacionRc(c, cabecera.fechaGeneracion);
+  }
   const incluidos = comprobantes.filter((c) => !excluidoDelResumen(c));
 
   if (incluidos.length === 0) {
