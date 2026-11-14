@@ -132,6 +132,9 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     if (!esNota && !esAfectacionGratuita(afectacion) && !new Prisma.Decimal(producto.sale_price!).equals(l.precioUnitario!)) {
       throw new BadRequestException(`El precio de venta de ${l.codigo} cambió o no coincide con el configurado; actualice el catálogo`);
     }
+    if (!esNota && ['NIU', 'BG', 'BX', 'PK', 'SET'].includes(unidad.trim().toUpperCase()) && !Number.isSafeInteger(l.cantidad)) {
+      throw new BadRequestException('La cantidad debe ser entera y positiva para esta unidad');
+    }
     l.afectacion = afectacion;
     l.unidad = unidad;
   }

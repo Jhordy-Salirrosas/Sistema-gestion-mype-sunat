@@ -226,3 +226,23 @@ it('fija emisión y retención antes de una guarda que cruza medianoche, sin mut
     expect(h.tx.partnerTaxStatus.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ valid_from: { lte: new Date('2026-11-12T00:00:00Z') } }) }));
   } finally { jest.useRealTimers(); }
 });
+
+it.each(['NIU', 'BG', 'BX', 'PK', 'SET'])('emisión %s exige enteros y acepta cantidades positivas', async unidad => {
+  const h = harness(); h.product.sunat_unit_code = unidad;
+  const dto = base(); dto.items[0].cantidad = 3.002;
+  await expect(h.run(dto)).rejects.toThrow('entera y positiva');
+  dto.items[0].cantidad = 3;
+  await expect(h.run(dto)).resolves.toMatchObject({ items: [expect.objectContaining({ cantidad: 3, unidad })] });
+});
+it.each(['ZZ', 'KGM', 'GRM', 'MTR', 'MTK', 'MTQ', 'LTR', 'GLL', 'TNE', 'DZN', 'CEN', 'MIL'])('conserva fracciones válidas para %s', async unidad => {
+  const h = harness(); h.product.sunat_unit_code = unidad;
+  const dto = base(); dto.items[0].cantidad = 3.002;
+  await expect(h.run(dto)).resolves.toMatchObject({ items: [expect.objectContaining({ cantidad: 3.002, unidad })] });
+});
+it('boleta también rechaza fracciones NIU y notas conservan cantidad histórica', async () => {
+  const h = harness();
+  const dto = base(); dto.items[0].cantidad = 3.002;
+  await expect(h.run({ ...dto, tipo_comprobante: '03', serie: 'B001' })).rejects.toThrow('entera y positiva');
+  dto.items[0].cantidad = 0.5;
+  await expect(h.run({ ...note(), codigo_motivo_nota: '07', items: dto.items })).resolves.toMatchObject({ items: [expect.objectContaining({ cantidad: 0.5 })] });
+});
