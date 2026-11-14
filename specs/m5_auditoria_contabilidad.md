@@ -95,12 +95,19 @@ emisiones concurrentes del mismo período calculan el mismo número y la segunda
 `@@unique([company_id, period, entry_number])` con un error de base, no con un reintento. Pasa a
 ser visible ahora que la emisión es concurrente (cola + reintentos).
 
-### A6. Códigos de cuenta inválidos en el mapeador
+### A6. Códigos de cuenta inválidos en el mapeador ✅ corregido
 
-- `accountingController.getAccountingMappings` propone `61111` para `COMPRA/VARIACION_EXISTENCIA`:
-  **no existe** en el catálogo (el usuario ya lo había advertido).
-- `TRANSFERENCIA/ALMACEN_DESTINO` propone `20111.02`: **no existe** y además lleva punto, formato que
-  el PCGE no usa y que rompe el PLE.
+- `accountingController.getAccountingMappings` proponía `61111` para `COMPRA/VARIACION_EXISTENCIA`:
+  **no existe** en el catálogo (el usuario ya lo había advertido). Ahora propone `6111`.
+- `TRANSFERENCIA/ALMACEN_DESTINO` proponía `20111.02` y `TRANSFERENCIA/ALMACEN_ORIGEN` `20111.01`:
+  **no existen** y además llevan punto, formato que el PCGE no usa y que rompe el PLE. Ahora ambos
+  usan `20111` (el único costo del catálogo) con la descripción que aclara que el detalle por almacén
+  no está en el PCGE.
+- **Rol desalineado**: el mapeador guardaba `INVENTARIO_SALIDA` y el puente de ventas buscaba
+  `INVENTARIO`, así que el mapeo configurado se ignoraba en silencio. El mapeador ya propone
+  `INVENTARIO` y el puente acepta también el valor histórico.
+- La auditoría revisa ahora los **mapeos guardados** (`GET /accounting/audit` → `mapeos`) y reporta
+  las cuentas inexistentes o de mayor, que antes se ignoraban sin aviso.
 
 ### B1. Sin distribución de gastos ni cobros
 
@@ -248,7 +255,7 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 218 pruebas (132 nuevas: reglas, auditoría,
+**Pruebas**: el módulo de contabilidad pasa de 86 a 221 pruebas (135 nuevas: reglas, auditoría,
 tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 24 en compras, 10 en
 el frontend de contabilidad (1 326 en total).
 

@@ -52,6 +52,7 @@ const crearPrisma = (over: Record<string, any> = {}) => ({
   inventoryMovement: { findMany: jest.fn().mockResolvedValue([]) },
   nationalPurchase: { findMany: jest.fn().mockResolvedValue([]) },
   collection: { findMany: jest.fn().mockResolvedValue([]) },
+  accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
   ...over,
 });
 
@@ -307,6 +308,44 @@ describe('AuditAccountingUseCase', () => {
       const prisma = crearPrisma();
       await new AuditAccountingUseCase(prisma as never).execute('c1');
       expect(prisma.collection.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mapeos contables', () => {
+    it('detecta un mapeo con cuenta inexistente', async () => {
+      const prisma = crearPrisma();
+      prisma.accountingMapping.findMany.mockResolvedValue([
+        { process_code: 'COMPRA', role_code: 'VARIACION_EXISTENCIA', account_code: '61111', is_active: true },
+      ]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+
+      expect(reporte.mapeos.total).toBe(1);
+      expect(reporte.mapeos.issues[0].code).toBe('CUENTA_NO_EXISTE');
+      expect(reporte.mapeos.issues[0].message).toContain('COMPRA/VARIACION_EXISTENCIA');
+    });
+
+    it('detecta un mapeo con cuenta de mayor', async () => {
+      const prisma = crearPrisma();
+      prisma.accountingMapping.findMany.mockResolvedValue([
+        { process_code: 'VENTA', role_code: 'INVENTARIO', account_code: '101', is_active: true },
+      ]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+
+      expect(reporte.mapeos.issues[0].code).toBe('CUENTA_MADRE');
+    });
+
+    it('no reporta mapeos correctos ni inactivos', async () => {
+      const prisma = crearPrisma();
+      prisma.accountingMapping.findMany.mockResolvedValue([
+        { process_code: 'VENTA', role_code: 'CXC', account_code: '12121', is_active: true },
+        { process_code: 'VENTA', role_code: 'VIEJO', account_code: '99999', is_active: false },
+      ]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+
+      expect(reporte.mapeos.issues).toEqual([]);
     });
   });
 });

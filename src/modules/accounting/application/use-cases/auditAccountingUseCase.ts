@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import {
+  checkAccountCode,
   checkEntryLines,
   checkRules,
+  cuentasConHijos,
   type CatalogAccount,
   type IntegrityIssue,
 } from '../../domain/rules/catalogIntegrityRule';
@@ -82,6 +84,10 @@ export interface AccountingAuditReport {
     total: number;
     issues: IntegrityIssue[];
   };
+  mapeos: {
+    total: number;
+    issues: IntegrityIssue[];
+  };
   asientos: {
     revisados: number;
     truncado: boolean;
@@ -128,7 +134,7 @@ export class AuditAccountingUseCase {
     if (period !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
       throw new BadRequestException('El período debe tener formato YYYY-MM');
     }
-    const [cuentas, reglas] = await Promise.all([
+    const [cuentas, reglas, mapeos] = await Promise.all([
       this.prisma.accountingAccount.findMany({
         select: { code: true, name: true, parent_code: true, is_active: true },
       }),
@@ -136,6 +142,10 @@ export class AuditAccountingUseCase {
         where: { company_id: companyId, is_active: true },
         orderBy: [{ process_code: 'asc' }, { line_order: 'asc' }],
       }),
+      this.prisma.accountingMapping?.findMany?.({
+        where: { company_id: companyId },
+        select: { process_code: true, role_code: true, account_code: true, is_active: true },
+      }) ?? Promise.resolve([]),
     ]);
 
     const catalogo: CatalogAccount[] = cuentas.map((c) => ({
@@ -156,6 +166,22 @@ export class AuditAccountingUseCase {
         is_active: r.is_active,
       })),
     );
+
+    // Los mapeos (proceso/rol → cuenta) también pueden apuntar a cuentas
+    // inexistentes o agregadas: el puente de ventas los usa como respaldo del
+    // costo, y un mapeo inválido se ignora en silencio.
+    const agregadas = cuentasConHijos(catalogo);
+    const issuesMapeos: IntegrityIssue[] = [];
+    for (const mapeo of mapeos) {
+      if (mapeo.is_active === false) continue;
+      const issue = checkAccountCode(
+        catalogo,
+        mapeo.account_code,
+        { process: `${mapeo.process_code}/${mapeo.role_code}` },
+        agregadas,
+      );
+      if (issue) issuesMapeos.push(issue);
+    }
 
     const asientos = await this.prisma.accountingEntry.findMany({
       where: { company_id: companyId, ...(period ? { period } : {}) },
@@ -427,8 +453,12 @@ export class AuditAccountingUseCase {
       detalle: 'cobro registrado sobre un comprobante anulado',
     }));
 
-    const erroresConfiguracion = issuesReglas.filter((i) => i.severity === 'ERROR').length;
-    const avisosConfiguracion = issuesReglas.filter((i) => i.severity === 'WARN').length;
+    const erroresConfiguracion =
+      issuesReglas.filter((i) => i.severity === 'ERROR').length +
+      issuesMapeos.filter((i) => i.severity === 'ERROR').length;
+    const avisosConfiguracion =
+      issuesReglas.filter((i) => i.severity === 'WARN').length +
+      issuesMapeos.filter((i) => i.severity === 'WARN').length;
     const erroresDatos =
       descuadrados.length + sinLineas.length + duplicados.length + conCuentaInvalida.length;
     const avisosDatos =
@@ -451,6 +481,10 @@ export class AuditAccountingUseCase {
         procesos: [...new Set(reglas.map((r) => r.process_code))].sort(),
         total: reglas.length,
         issues: issuesReglas,
+      },
+      mapeos: {
+        total: mapeos.length,
+        issues: issuesMapeos,
       },
       asientos: {
         revisados: asientos.length,
