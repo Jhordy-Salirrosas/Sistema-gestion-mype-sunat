@@ -3618,3 +3618,9 @@ Verificación dirigida: 6 pruebas backend y 5 pruebas nuevas front aprobadas; su
 ### Paquete — punto 2: detenido
 
 No hay cambio productivo ni pruebas que legitimen los importes incorrectos actuales. El caso exonerada S/1000 + inafecta S/500 sigue siendo un defecto pendiente: sin SPOT, el código actual retiene S/45 por no discriminar la base. El ejemplo gravada S/1000 + IGV S/180 + exonerada S/500 plantea además el conflicto de comprobante mixto comprendido en retenciones descrito en fase 0. La decisión pendiente es separar los documentos gravados/no gravados y definir el alcance del cálculo al momento del pago; no basta cambiar silenciosamente el umbral dentro del mismo documento mixto. La evidencia normativa se limita a las fuentes oficiales enlazadas en fase 0. No se usa R.S. 203-2003 como sustento del régimen de retenciones.
+
+### Paquete — punto 3: fecha por tipo
+
+La validación y el mínimo del calendario reciben el tipo elegido: factura 01 permite tres días calendario y explica el error 2108; boleta 03 conserva siete días y su mensaje heredado íntegro. Las firmas conservan los parámetros existentes y añaden tipo al final, de modo que los consumidores anteriores siguen funcionando. Se conectan la página real, el modal y su campo de fecha. Las notas mantienen su validación previa de siete días: este punto no cambia reglas de notas ni el backend. Hoy en America/Lima, máximo de fecha y regla futura se conservan.
+
+Archivos front: invoiceEmitFecha.ts, InvoiceEmissionPage.tsx, InvoiceEmitModal.tsx, InvoiceEmitCampos.tsx y paqueteFechaTipo.test.tsx. Pruebas dirigidas: 21 aprobadas, incluidas cinco nuevas por tipo, bordes de tres/siete días y cambio real del mínimo al elegir boleta/factura. Referencias oficiales y precisión sobre la etiqueta 2957 registradas en fase 0.

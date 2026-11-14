@@ -266,7 +266,7 @@ export default function InvoiceEmissionPage() {
   }, [tipo, clienteSeleccionado, clienteDoc, clienteRazonSocial, clienteDireccion, items, descuentoGlobal, agenteRetencion, correccionRetencion, formaPago, cuotas, medioPagoDetraccion, fechaEmision]);
 
   /** Motivo por el que la fecha de emisión no sirve, o `null` (D9). */
-  const problemaFecha = problemaDeFechaEmision(fechaEmision);
+  const problemaFecha = problemaDeFechaEmision(fechaEmision, undefined, tipo);
 
   /**
    * Cambia la fecha y arrastra el cronograma.
@@ -562,7 +562,7 @@ export default function InvoiceEmissionPage() {
                   <Input
                     id="fecha-emision"
                     type="date"
-                    min={minimoDeFechaEmision()}
+                    min={minimoDeFechaEmision(undefined, tipo)}
                     max={topeDeFechaEmision()}
                     value={fechaEmision}
                     onChange={(e) => cambiarFecha(e.target.value)}
