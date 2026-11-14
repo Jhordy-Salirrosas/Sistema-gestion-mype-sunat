@@ -314,6 +314,7 @@ model NationalPurchase {
   issue_date          DateTime
   accounting_date     DateTime               @default(now())
   currency_code       String                 @default("PEN")
+  prices_include_igv  Boolean                @default(false)
   exchange_rate       Decimal?               @db.Decimal(14, 6)
   warehouse_code      String                 @default("ALM-01")
 

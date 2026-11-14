@@ -46,6 +46,8 @@ import { CATALOGO_59_MEDIOS_PAGO, type MedioPagoDetraccion } from '../../domain/
 
 /** Tipos que pueden emitirse desde la pantalla. */
 export const TIPOS_EMISION_PANTALLA = ['01', '03', '07', '08'] as const;
+export const MEDIOS_PAGO_VENTA = ['EFECTIVO', 'YAPE', 'PLIN', 'TARJETA', 'TRANSFERENCIA', 'DEPOSITO', 'CHEQUE'] as const;
+export type MedioPagoVenta = (typeof MEDIOS_PAGO_VENTA)[number];
 export type TipoEmisionPantalla = (typeof TIPOS_EMISION_PANTALLA)[number];
 
 /** Afectaciones del Catálogo 07 admitidas en la grilla. */
@@ -229,6 +231,11 @@ export class EmitirComprobanteDto {
   @IsOptional()
   @IsIn(['Contado', 'Credito'])
   forma_pago?: 'Contado' | 'Credito';
+
+  /** Medio de pago cuando la condición es contado. */
+  @IsOptional()
+  @IsIn(MEDIOS_PAGO_VENTA as unknown as string[])
+  medio_pago?: MedioPagoVenta;
 
   /**
    * Cronograma de la venta al crédito.
