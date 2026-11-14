@@ -3640,3 +3640,9 @@ Archivos: src/modules/customs/application/services/masterDataService.ts, test/un
 ### Paquete — punto 6: estado vacío existente
 
 Sin cambio productivo: una prueba del PartnersPage real con masterDataApi confirma que una búsqueda en Facturación muestra «Cargando terceros...» mientras su promesa está pendiente, y al responder el GET con [] termina mostrando «No hay terceros registrados.» sin indicador de carga. Verifica también el filtro CLIENTE y el texto q enviados. Archivo: frontend/test/unit/modules/invoices/paqueteBusquedaVacia.test.tsx; una prueba aprobada. No se reproduce la premisa en 04c137fc y se detiene la corrección de lógica para no alterar un comportamiento ya presente. Una solicitud real que nunca termina exige evidencia de red/sesión para diagnosticarla; no se afirma una causa externa con estas pruebas.
+
+### Paquete — punto 7: etiquetas de condiciones de pago
+
+Un único formateador traduce CONTADO, 15_DIAS, 30_DIAS, 45_DIAS, 60_DIAS y CARTA_CREDITO a etiquetas humanas. Lo reutilizan tabla, ficha y opciones del alta; los valores de las opciones y del payload no cambian. Conserva términos personalizados y textos de ausencia según la vista, sin resolver propiedades heredadas del objeto como etiquetas.
+
+Archivos front: src/modules/customs/lib/paymentTerms.ts, pages/PartnersPage.tsx, components/PartnerDetailDrawer.tsx, components/PartnerFormDialog.tsx y test/unit/modules/invoices/paquetePaymentTerms.test.tsx. Trece pruebas nuevas aprobadas; junto con clientesRoute.test.tsx, 32 pruebas aprobadas. El contexto compartido mantiene permisos y acciones previas.
