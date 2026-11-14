@@ -164,9 +164,10 @@ export const InvoiceCdrModal = ({
    */
   const digest = extraerDigestValue(xmlReal ?? null);
 
-  const trama = digest && emisor
+  const rucQr = detalle?.rucEmisor ?? emisor?.ruc;
+  const trama = digest && rucQr
     ? generarTramaQrSunat({
-        rucEmisor: emisor.ruc,
+        rucEmisor: rucQr,
         tipo: c.tipo,
         serie: c.serie,
         correlativo: c.correlativo,

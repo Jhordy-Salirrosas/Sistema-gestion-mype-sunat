@@ -11,9 +11,16 @@ El documento `docs/m1/paquete-recorrido.md` registra los siete veredictos, decis
 - `src/modules/invoices/components/InvoiceCdrModal.tsx`
 - `src/modules/invoices/components/InvoiceForcedResend.tsx`
 - `src/modules/invoices/hooks/useInvoiceDetailRefresh.ts`
+- `src/modules/invoices/lib/invoiceCreditAndRules.ts`
+- `src/modules/invoices/lib/invoiceMapper.ts`
 - `src/modules/invoices/lib/invoiceQueueEvents.ts`
 - `src/modules/invoices/services/invoicesApi.ts`
+- `src/modules/invoices/types/invoice.types.ts`
+- `test/unit/modules/invoices/invoiceCazaQr.test.ts`
 - `test/unit/modules/invoices/invoiceDetailRefresh.test.tsx`
+- `test/unit/modules/invoices/invoiceNormativeRules.test.ts`
 - `test/unit/modules/invoices/invoiceQueueEvents.test.ts`
+- `test/unit/modules/invoices/invoiceTramaQrDigest.test.ts`
+- `test/unit/modules/invoices/p9-close.test.tsx`
 
-7 archivos frontend y FERRY.md: 8 entradas SHA-256. No se incluye el hash del manifiesto en sí mismo.
+14 archivos frontend y FERRY.md: 15 entradas SHA-256. No se incluye el hash del manifiesto en sí mismo.

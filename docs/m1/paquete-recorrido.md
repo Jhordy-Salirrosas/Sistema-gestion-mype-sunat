@@ -23,3 +23,7 @@ Panel con contención de ancho, texto con corte de palabras largas, motivo en bl
 ## Punto 2
 
 El modal usa el detalle actualizado completo, incluido estado, CDR, historial e información fiscal. Las acciones existentes notifican por identificador al detalle abierto. Tras encolado o trabajo ya en cola, el seguimiento hace como máximo 12 lecturas, separadas 1.5 s y con límite absoluto de 20 s; se detiene ante estado final y al cerrar/cambiar de comprobante. No crea otro botón de reintento ni dispara envíos. Las respuestas tardías se descartan. La lectura de seguimiento omite el fallback offline; otras consultas conservan su caché. El XML se relee al cambiar estado/hash. Pruebas dirigidas: 4 archivos / 10 pruebas verdes, incluidos cierre, límite y aceptación.
+
+## Punto 3
+
+Trama alineada con invoiceQrService del backend: diez campos, correlativo de ocho dígitos, fecha ISO y digest Base64 íntegro (solo se retiran espacios de formato), sin barra final adicional. El detalle prefiere el RUC histórico devuelto por el servidor al de configuración actual. El generador compartido conserva coherencia con el PDF rápido frontend. Se ajustan las expectativas que fijaban el formato anterior. Pruebas dirigidas: 5 archivos / 66 pruebas verdes.
