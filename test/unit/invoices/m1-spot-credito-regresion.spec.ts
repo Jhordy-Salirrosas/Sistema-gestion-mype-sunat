@@ -8,8 +8,9 @@ const issuer = { ruc: '20000000001', razonSocial: 'Obviously Fake Issuer', codig
 function datos(total: number, cuota: number, retencion = false): EmitirComprobanteDto {
  return { tipo_comprobante: '01', serie: 'F001', fecha_emision: '2026-11-11', forma_pago: 'Credito', customer_identity_type: '6', customer_identity_number: '20100070970', customer_legal_name: 'Cliente prueba', medio_pago_detraccion: '001', cuenta_banco_nacion: '00019123456', agente_retencion: retencion, cuotas: [{ monto: cuota, vencimiento: '2026-12-11' }], items: [{ codigo: 'ARE', descripcion: 'Arena', cantidad: 1, precioUnitario: total, unidad: 'MTQ', afectacion: '10', codigoDetraccion: '009' }] };
 }
-it.each([[1180, 1062, false], [730.17, 657.15, false], [1180, 1026.6, true]] as const)('SPOT crédito total %s cuotas %s retención %s', async (total, cuota, retencion) => {
+it.each([[1180, 1062, false], [730.17, 657.15, false], [1180, 1062, true]] as const)('SPOT crédito total %s cuotas %s retención %s', async (total, cuota, retencion) => {
  const payload = traducirEmision(datos(total, cuota, retencion), issuer, 1).dto.payload_ubl;
+ expect(payload.montoRetencion).toBeUndefined();
  const xml = new UblGeneratorService().generateInvoiceXml(payload as never);
  expect(xml).toContain(`<cbc:PayableAmount currencyID="PEN">${total.toFixed(2)}</cbc:PayableAmount>`);
  const terminos = xml.match(/<cac:PaymentTerms>[\s\S]*?<\/cac:PaymentTerms>/g)!.filter(t => t.includes('FormaPago'));

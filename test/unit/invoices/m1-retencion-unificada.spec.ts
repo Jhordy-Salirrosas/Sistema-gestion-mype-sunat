@@ -35,13 +35,13 @@ it('valida y escribe el crédito por el neto después de la retención', () => {
   expect(balanceAsiento(asiento).cuadra).toBe(true);
 });
 
-it('conserva la detracción existente y valida cuotas por el neto con ambos descuentos', () => {
+it('conserva la detracción existente y excluye retención del neto y las cuotas', () => {
   const r = traducirEmision({ tipo_comprobante: '01', serie: 'F001', customer_legal_name: 'Cliente',
     agente_retencion: true, forma_pago: 'Credito', fecha_emision: '2026-11-01', cuenta_banco_nacion: '00123456789', medio_pago_detraccion: '003',
-    cuotas: [{ monto: 548.7, vencimiento: '2026-12-01' }, { monto: 548.7, vencimiento: '2027-01-01' }],
+    cuotas: [{ monto: 566.4, vencimiento: '2026-12-01' }, { monto: 566.4, vencimiento: '2027-01-01' }],
     items: [{ descripcion: 'Flete', cantidad: 1, valorUnitario: 1000, afectacion: '10', codigoDetraccion: '027' }] },
   { ruc: '20100070970', razonSocial: 'Empresa' }, 1);
-  expect(r.importes).toMatchObject({ total: 1180, detraccion: 47.2, retencion: 35.4, importePagar: 1097.4 });
+  expect(r.importes).toMatchObject({ total: 1180, detraccion: 47.2, retencion: 0, importePagar: 1132.8 });
   const xml = new UblGeneratorService().generateInvoiceXml(r.dto.payload_ubl as never);
-  expect(xml).toContain('<cbc:Amount currencyID="PEN">1097.40</cbc:Amount>');
+  expect(xml).toContain('<cbc:Amount currencyID="PEN">1132.80</cbc:Amount>');
 });
