@@ -79,6 +79,8 @@ model Collection {
   distributions   CollectionDistribution[]
 
   @@index([company_id, collection_date])
+  /// Cobros de una factura: la cartera y la auditoría filtran por este par.
+  @@index([company_id, invoice_id])
   @@map("collections")
 }
 
@@ -187,6 +189,9 @@ model AccountingEntry {
   @@unique([company_id, period, entry_number])
   @@unique([company_id, idempotency_key])
   @@index([company_id, period, entry_date])
+  /// Búsqueda por documento de origen: la usan el puente de ventas en cada
+  /// emisión y la auditoría para saber qué comprobantes ya tienen asiento.
+  @@index([company_id, source_module, source_reference_id])
   @@map("accounting_entries")
 }
 
