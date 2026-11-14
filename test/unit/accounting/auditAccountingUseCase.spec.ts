@@ -53,6 +53,7 @@ const crearPrisma = (over: Record<string, any> = {}) => ({
   nationalPurchase: { findMany: jest.fn().mockResolvedValue([]) },
   collection: { findMany: jest.fn().mockResolvedValue([]) },
   accountingMapping: { findMany: jest.fn().mockResolvedValue([]) },
+  expense: { findMany: jest.fn().mockResolvedValue([]) },
   ...over,
 });
 
@@ -346,6 +347,51 @@ describe('AuditAccountingUseCase', () => {
       const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
 
       expect(reporte.mapeos.issues).toEqual([]);
+    });
+  });
+
+  describe('gastos sin asiento', () => {
+    const gasto = (over: Record<string, unknown> = {}) => ({
+      id: 'g1',
+      description: 'Luz del mes',
+      supplier_name: 'Luz del Sur',
+      total_amount: 118,
+      expense_date: new Date('2026-11-10T00:00:00Z'),
+      document_number: 'F001-1',
+      status: 'REGISTRADO',
+      ...over,
+    });
+
+    it('lista los gastos registrados sin asiento', async () => {
+      const prisma = crearPrisma();
+      prisma.accountingEntry.findMany
+        .mockResolvedValueOnce([]) // asientos del período
+        .mockResolvedValueOnce([]) // comprobantes
+        .mockResolvedValueOnce([]) // compras
+        .mockResolvedValueOnce([]); // gastos
+      prisma.expense.findMany.mockResolvedValue([gasto()]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1', '2026-11');
+
+      expect(reporte.gastos.sinAsiento).toHaveLength(1);
+      expect(reporte.gastos.sinAsiento[0]).toMatchObject({
+        descripcion: 'Luz del mes',
+        proveedor: 'Luz del Sur',
+        total: 118,
+      });
+    });
+
+    it('no reporta el gasto cuando su asiento ya existe', async () => {
+      const prisma = crearPrisma();
+      // Sin comprobantes ni compras, la segunda consulta es la de gastos.
+      prisma.accountingEntry.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ source_reference_id: 'g1' }]);
+      prisma.expense.findMany.mockResolvedValue([gasto()]);
+
+      const reporte = await new AuditAccountingUseCase(prisma as never).execute('c1');
+
+      expect(reporte.gastos.sinAsiento).toHaveLength(0);
     });
   });
 });

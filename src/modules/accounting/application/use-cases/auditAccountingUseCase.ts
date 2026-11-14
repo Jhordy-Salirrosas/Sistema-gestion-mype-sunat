@@ -73,6 +73,17 @@ export interface AuditCollectionIssue {
   detalle: string;
 }
 
+/** Gasto registrado sin asiento contable. */
+export interface AuditExpenseIssue {
+  id: string;
+  descripcion: string;
+  proveedor: string;
+  documento: string;
+  fecha: string;
+  total: number;
+  detalle: string;
+}
+
 export interface AccountingAuditReport {
   companyId: string;
   period: string | null;
@@ -107,6 +118,11 @@ export interface AccountingAuditReport {
     truncado: boolean;
     sinAsiento: AuditPurchaseIssue[];
   };
+  gastos: {
+    revisados: number;
+    truncado: boolean;
+    sinAsiento: AuditExpenseIssue[];
+  };
   cobros: {
     deComprobantesAnulados: AuditCollectionIssue[];
   };
@@ -117,6 +133,7 @@ export interface AccountingAuditReport {
 const MAX_ASIENTOS = 5000;
 const MAX_COMPROBANTES = 2000;
 const MAX_COMPRAS = 2000;
+const MAX_GASTOS = 2000;
 const MAX_COBROS = 2000;
 
 const numeroDe = (serie: string, correlativo: number): string =>
@@ -455,6 +472,51 @@ export class AuditAccountingUseCase {
       detalle: 'cobro registrado sobre un comprobante anulado',
     }));
 
+    // Gastos registrados sin asiento: mismo caso que compras, y ya existe
+    // `POST /expenses/:id/post` para reintentarlo.
+    const gastos = await this.prisma.expense.findMany({
+      where: {
+        company_id: companyId,
+        status: { not: 'ANULADO' },
+        ...(rango ? { expense_date: rango } : {}),
+      },
+      select: {
+        id: true,
+        description: true,
+        supplier_name: true,
+        total_amount: true,
+        expense_date: true,
+        document_number: true,
+      },
+      orderBy: [{ expense_date: 'desc' }],
+      take: MAX_GASTOS,
+    });
+
+    const asientosDeGastos = gastos.length
+      ? await this.prisma.accountingEntry.findMany({
+          where: {
+            company_id: companyId,
+            source_module: 'EXPENSES',
+            source_reference_id: { in: gastos.map((g) => g.id) },
+          },
+          select: { source_reference_id: true },
+        })
+      : [];
+    const gastosConAsiento = new Set(
+      asientosDeGastos.map((a) => a.source_reference_id).filter((v): v is string => Boolean(v)),
+    );
+    const gastosSinAsiento: AuditExpenseIssue[] = gastos
+      .filter((g) => !gastosConAsiento.has(g.id))
+      .map((g) => ({
+        id: g.id,
+        descripcion: g.description,
+        proveedor: g.supplier_name,
+        documento: g.document_number ?? '',
+        fecha: new Date(g.expense_date).toISOString().slice(0, 10),
+        total: Number(g.total_amount),
+        detalle: 'gasto registrado sin asiento contable',
+      }));
+
     const erroresConfiguracion =
       issuesReglas.filter((i) => i.severity === 'ERROR').length +
       issuesMapeos.filter((i) => i.severity === 'ERROR').length;
@@ -464,7 +526,11 @@ export class AuditAccountingUseCase {
     const erroresDatos =
       descuadrados.length + sinLineas.length + duplicados.length + conCuentaInvalida.length;
     const avisosDatos =
-      sinAsiento.length + sinCosto.length + comprasSinAsiento.length + cobrosHuerfanos.length;
+      sinAsiento.length +
+      sinCosto.length +
+      comprasSinAsiento.length +
+      gastosSinAsiento.length +
+      cobrosHuerfanos.length;
     const resumen = {
       errors: erroresConfiguracion + erroresDatos,
       warnings: avisosConfiguracion + avisosDatos,
@@ -506,6 +572,11 @@ export class AuditAccountingUseCase {
         revisadas: compras.length,
         truncado: compras.length === MAX_COMPRAS,
         sinAsiento: comprasSinAsiento,
+      },
+      gastos: {
+        revisados: gastos.length,
+        truncado: gastos.length === MAX_GASTOS,
+        sinAsiento: gastosSinAsiento,
       },
       cobros: {
         deComprobantesAnulados: cobrosHuerfanos,

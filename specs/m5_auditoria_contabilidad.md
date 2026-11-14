@@ -193,8 +193,9 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - **Trabaja en seco por defecto**: solo con `{ "dryRun": false }` escribe. Tope de 500 por lote.
 - No inventa costos ni cuentas: si el comprobante no tiene costo valorizado en el Kardex, el puente
   lo reporta como pendiente y no crea un asiento de costo.
-- La auditoría también detecta **compras registradas sin asiento** (antes solo miraba ventas) y
-  `POST /api/v1/purchases/:id/post-accounting` reintenta el asiento de compra sin duplicarlo.
+- La auditoría también detecta **compras y gastos registrados sin asiento** (antes solo miraba ventas) y
+  `POST /api/v1/purchases/:id/post-accounting` / `POST /api/v1/expenses/:id/post` reintentan el
+  asiento sin duplicarlo.
 
 **Tarea 6 — estructura de los libros PLE**
 
@@ -258,7 +259,7 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 - Página `/accounting/auditoria`: muestra los hallazgos de reglas, asientos y comprobantes, y permite
   simular y ejecutar la regularización de pendientes (en seco primero).
 
-**Pruebas**: el módulo de contabilidad pasa de 86 a 223 pruebas (137 nuevas: reglas, auditoría,
+**Pruebas**: el módulo de contabilidad pasa de 86 a 225 pruebas (139 nuevas: reglas, auditoría,
 tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 24 en compras, 10 en
 el frontend de contabilidad (1 326 en total).
 
