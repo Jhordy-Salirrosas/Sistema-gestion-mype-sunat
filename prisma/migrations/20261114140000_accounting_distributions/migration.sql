@@ -16,9 +16,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS "expense_distributions_expense_id_account_code
 CREATE INDEX IF NOT EXISTS "expense_distributions_company_id_account_code_idx"
   ON "expense_distributions"("company_id","account_code");
 
-ALTER TABLE "expense_distributions"
-  ADD CONSTRAINT "expense_distributions_expense_id_fkey"
-  FOREIGN KEY ("expense_id") REFERENCES "expenses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- Idempotente: si la tabla ya existe, la migración no falla al recrear la clave.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'expense_distributions_expense_id_fkey') THEN
+    ALTER TABLE "expense_distributions"
+      ADD CONSTRAINT "expense_distributions_expense_id_fkey"
+      FOREIGN KEY ("expense_id") REFERENCES "expenses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "collection_distributions" (
   "id" TEXT NOT NULL,
@@ -36,6 +42,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS "collection_distributions_collection_id_accoun
 CREATE INDEX IF NOT EXISTS "collection_distributions_company_id_account_code_idx"
   ON "collection_distributions"("company_id","account_code");
 
-ALTER TABLE "collection_distributions"
-  ADD CONSTRAINT "collection_distributions_collection_id_fkey"
-  FOREIGN KEY ("collection_id") REFERENCES "collections"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'collection_distributions_collection_id_fkey') THEN
+    ALTER TABLE "collection_distributions"
+      ADD CONSTRAINT "collection_distributions_collection_id_fkey"
+      FOREIGN KEY ("collection_id") REFERENCES "collections"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;

@@ -21,9 +21,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS "company_treasury_accounts_company_id_code_key
 CREATE INDEX IF NOT EXISTS "company_treasury_accounts_company_id_is_active_idx"
   ON "company_treasury_accounts"("company_id","is_active");
 
-ALTER TABLE "company_treasury_accounts"
-  ADD CONSTRAINT "company_treasury_accounts_company_id_fkey"
-  FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- Idempotente: si la tabla ya existe (por ejemplo se creó a mano en producción
+-- antes de desplegar), esta migración no falla y Prisma la puede registrar.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'company_treasury_accounts_company_id_fkey') THEN
+    ALTER TABLE "company_treasury_accounts"
+      ADD CONSTRAINT "company_treasury_accounts_company_id_fkey"
+      FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Subcuentas que el catálogo base no traía y que el módulo necesita para que
 -- tesorería pueda elegir caja o banco. El PCGE 2019 deja la apertura de
