@@ -253,18 +253,13 @@ export const InvoiceItemsGrid = ({
                     {item.descuento?.codigo === '01' && <p className="text-xs text-amber-700">El asiento automático utiliza la cuenta 74. Podría quedar pendiente de revisión si la cuenta no está activa en el plan de la empresa o los importes no concuerdan.</p>}
                   </td>
                   <td className="block min-w-0 space-y-1 break-words"><span className="block font-medium text-muted-foreground">ICBPER</span>
-                    <input
+                    <InvoiceIntegerInput
                       disabled={bolsasBloqueadas}
                       aria-label={`ICBPER de la línea ${i + 1}`}
-                      type="number"
-                      min="0"
-                      step="1"
                       aria-invalid={Boolean(errorBolsas(item))}
                       className={`${CLASE_CELDA} text-right`}
                       value={cantidadBolsasDe(item)}
-                      onChange={(e) =>
-                        onCambiar(i, { cantidadBolsas: e.target.value === '' ? NaN : Number(e.target.value) })
-                      }
+                      onValue={cantidadBolsas => onCambiar(i, { cantidadBolsas })}
                     />
                     <span className="text-[10px]">Cantidad de bolsas · S/ 0.50 c/u</span>
                     {errorBolsas(item) && <p role="alert" className="text-xs text-destructive">{errorBolsas(item)}</p>}
