@@ -250,7 +250,7 @@ corregida en código a `12121`. La documentación arrastra el defecto corregido.
 
 **Pruebas**: el módulo de contabilidad pasa de 86 a 218 pruebas (132 nuevas: reglas, auditoría,
 tesorería, distribución, PLE, cierre, concurrencia y mayor con subcuentas), más 24 en compras, 10 en
-el frontend de contabilidad (1 328 en total).
+el frontend de contabilidad (1 326 en total).
 
 ## 5. Pendiente (tareas 4 y 6) y por qué
 
