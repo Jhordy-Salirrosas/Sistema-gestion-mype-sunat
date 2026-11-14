@@ -29,6 +29,9 @@ describe('MasterDataController', () => {
       deleteDocumentType: jest.fn().mockResolvedValue({ code: 'BL' }),
       listAccountingMappings: jest.fn().mockResolvedValue([]),
       upsertAccountingMapping: jest.fn().mockResolvedValue({ id: 'map-1' }),
+      listCustomsServices: jest.fn().mockResolvedValue([]),
+      upsertCustomsService: jest.fn().mockResolvedValue({ id: 'srv-1' }),
+      deleteCustomsService: jest.fn().mockResolvedValue({ success: true }),
     };
 
     controller = new MasterDataController(mockService);
@@ -45,6 +48,9 @@ describe('MasterDataController', () => {
     expect(() => controller.addBankAccount(undefined, '1', {} as any)).toThrow(UnauthorizedException);
     expect(() => controller.listAccountingMappings(undefined)).toThrow(UnauthorizedException);
     expect(() => controller.upsertAccountingMapping(undefined, {} as any)).toThrow(UnauthorizedException);
+    expect(() => controller.listCustomsServices(undefined)).toThrow(UnauthorizedException);
+    expect(() => controller.upsertCustomsService(undefined, {} as any)).toThrow(UnauthorizedException);
+    expect(() => controller.deleteCustomsService(undefined, 'SRV-1')).toThrow(UnauthorizedException);
   });
 
   it('delega correctamente en MasterDataService cuando se envía companyId', async () => {
@@ -79,9 +85,16 @@ describe('MasterDataController', () => {
     await controller.listAccountingMappings(comp);
     await controller.upsertAccountingMapping(comp, { processCode: 'ADUANAS', roleCode: 'FOB', accountCode: '6011' });
 
+    await controller.listCustomsServices(comp);
+    await controller.upsertCustomsService(comp, { sku: 'SRV-TEST', name: 'Test', defaultCost: 100 });
+    await controller.deleteCustomsService(comp, 'SRV-TEST');
+
     expect(mockService.listCurrencies).toHaveBeenCalled();
     expect(mockService.listPartners).toHaveBeenCalledWith(comp, 'supplier', 'tech');
     expect(mockService.upsertAccountingMapping).toHaveBeenCalled();
+    expect(mockService.listCustomsServices).toHaveBeenCalledWith(comp);
+    expect(mockService.upsertCustomsService).toHaveBeenCalledWith(comp, { sku: 'SRV-TEST', name: 'Test', defaultCost: 100 });
+    expect(mockService.deleteCustomsService).toHaveBeenCalledWith(comp, 'SRV-TEST');
   });
 });
 

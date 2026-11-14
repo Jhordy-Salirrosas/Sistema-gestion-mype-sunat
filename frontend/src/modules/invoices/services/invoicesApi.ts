@@ -1,3 +1,4 @@
+import { notifyInvoiceQueued } from '../lib/invoiceQueueEvents';
 import type { CantidadNota } from '../lib/invoiceNoteQuantities';
 import type { SeleccionBaja, AgregadoFiscal } from '../types/invoiceAggregate.types';
 import { apiClient } from '@/lib/axios';
@@ -144,13 +145,9 @@ export const invoicesApi = {
     return forzarRed ? leerRed() : cachedGet(`invoices:${JSON.stringify(params)}`, leerRed);
   },
 
-  getInvoiceById: async (id: string): Promise<Invoice> => {
-    return cachedGet(`invoice:${id}`, async () => {
-      const response = await apiClient.get<ComprobanteDetalleBackend>(
-        `/invoices/${id}`,
-      );
-      return aInvoiceDetalle(response.data);
-    });
+  getInvoiceById: async (id: string, fresh = false): Promise<Invoice> => {
+    const read = async () => aInvoiceDetalle((await apiClient.get<ComprobanteDetalleBackend>(`/invoices/${id}`)).data);
+    return fresh ? read() : cachedGet(`invoice:${id}`, read);
   },
 
   createInvoice: async (dto: CreateInvoiceDto, idempotencyKey: string): Promise<Invoice> => {
@@ -192,13 +189,15 @@ export const invoicesApi = {
 
   retryCdr: async (
     id: string,
-  ): Promise<{ id: string; estado: string; encolado: boolean; mensaje: string }> => {
+  ): Promise<{ id: string; estado: string; encolado: boolean; mensaje: string; resultadoCola?: string }> => {
     const response = await apiClient.post<{
       id: string;
       estado: string;
       encolado: boolean;
+      resultadoCola?: string;
       mensaje: string;
     }>(`/invoices/${id}/retry-cdr`);
+    if (response.data.encolado || response.data.resultadoCola === 'YA_EN_COLA') notifyInvoiceQueued(id);
     return response.data;
   },
 

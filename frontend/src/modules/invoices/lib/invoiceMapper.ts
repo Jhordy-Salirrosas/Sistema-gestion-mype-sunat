@@ -312,6 +312,7 @@ export const aInvoiceDetalle = (fila: ComprobanteDetalleBackend): Invoice => {
   return {
     ...base,
     tieneCdr: fila.cdr != null,
+    rucEmisor: fila.ruc_emisor,
     lineasOrigen: fila.lineas_origen ?? [],
     historial: (fila.historial ?? []).map((evento) => ({ id: evento.id, fecha: evento.created_at, mensaje: evento.mensaje_error })),
     igv,

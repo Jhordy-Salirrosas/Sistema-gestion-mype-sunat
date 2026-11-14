@@ -35,7 +35,10 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
   async findLocalExpensesByShipmentId(shipmentId: string, companyId?: string): Promise<any[]> {
     return this.prisma.localExpenseInvoice.findMany({
       where: {
-        shipment_id: shipmentId,
+        OR: [
+          { shipment_id: shipmentId },
+          { shipment: { shipment_number: shipmentId } },
+        ],
         ...(companyId ? { shipment: { company_id: companyId } } : {}),
       },
       orderBy: { issue_date: 'asc' },
@@ -96,8 +99,14 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
   }
 
   async findLandedCostSheetByShipmentId(shipmentId: string, companyId?: string): Promise<any | null> {
-    const sheet = await this.prisma.landedCostSheet.findUnique({
-      where: { shipment_id: shipmentId },
+    const sheet = await this.prisma.landedCostSheet.findFirst({
+      where: {
+        OR: [
+          { shipment_id: shipmentId },
+          { shipment: { shipment_number: shipmentId } },
+        ],
+        ...(companyId ? { shipment: { company_id: companyId } } : {}),
+      },
       include: {
         shipment: {
           include: {
@@ -116,6 +125,40 @@ export class PrismaLandedCostRepository implements ILandedCostRepositoryPort {
       return null;
     }
 
-    return sheet;
+    if (!sheet) return null;
+
+    const items = sheet.shipment?.declarations?.[0]?.items ?? [];
+    const series_breakdown = items.map((it: any) => ({
+      series_id: it.id,
+      series_order: it.series_order ?? it.item_order ?? 1,
+      product_code: it.product_code ?? it.hs_code,
+      commercial_description: it.commercial_description,
+      physical_quantity: Number(it.quantity),
+      cif_pen: Number(it.allocated_cif_pen ?? 0),
+      ad_valorem_pen: Number(it.allocated_duties_pen ?? 0),
+      allocated_local_expenses_pen: Number(it.allocated_local_cost_pen ?? 0),
+      total_landed_cost_pen: Number(
+        (
+          Number(it.final_landed_cost_unit_pen || it.landed_cost_unit_pen || 0) *
+          Number(it.quantity)
+        ).toFixed(2),
+      ),
+      final_landed_cost_unit_pen: Number(
+        it.final_landed_cost_unit_pen || it.landed_cost_unit_pen || 0,
+      ),
+      destination_type: it.destination_type ?? 'MERCADERIA',
+    }));
+
+    return {
+      ...sheet,
+      shipmentId: sheet.shipment_id,
+      totalInventoryCostPen: Number(sheet.total_inventory_cost_pen),
+      itemsProration: series_breakdown.map((s: any) => ({
+        itemId: s.series_id,
+        allocatedLocalCostPen: s.allocated_local_expenses_pen,
+        finalLandedCostUnitPen: s.final_landed_cost_unit_pen,
+      })),
+      series_breakdown,
+    };
   }
 }

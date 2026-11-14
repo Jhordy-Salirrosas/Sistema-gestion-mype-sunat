@@ -393,3 +393,40 @@ export class UpdateExchangeRateDto {
   @IsString()
   source?: string;
 }
+
+export class UpsertCustomsServiceDto {
+  @IsString()
+  @IsNotEmpty()
+  sku!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  description!: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  sunatUnitCode?: string;
+
+  @IsOptional()
+  @IsString()
+  taxAffectation?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  costPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  salePrice?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+

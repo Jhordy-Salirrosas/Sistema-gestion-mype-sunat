@@ -42,7 +42,7 @@ it.each(['TRANSPORTE_INCIERTO','PREPARACION_LOCAL'])('DLQ no pierde pertenencia 
  expect(contieneDlq({enDlq:false} as never)).toBe(false);
 });
 it('QR espeja fecha, correlativo sin padding, saneamiento de hash y separador final',()=>{
- expect(generarTramaQrSunat({rucEmisor:'20601234567',tipo:'01',serie:'F001',correlativo:7,igv:18,total:118,fecha:'2026-11-12',tipoDocCliente:'6',numDocCliente:'20100070970',hashCpe:'DI G\nEST=='})).toBe('20601234567|01|F001|7|18.00|118.00|12-11-2026|6|20100070970|DIGEST|');
+ expect(generarTramaQrSunat({rucEmisor:'20601234567',tipo:'01',serie:'F001',correlativo:7,igv:18,total:118,fecha:'2026-11-12',tipoDocCliente:'6',numDocCliente:'20100070970',hashCpe:'DI G\nEST=='})).toBe('20601234567|01|F001|00000007|18.00|118.00|2026-11-12|6|20100070970|DIGEST==');
 });
 it.each(['ADMIN','OPERADOR_FACTURACION','OPERATOR','AUDITOR','CONTADOR','OPERADOR_ADUANAS',undefined])('controles de envío respetan rol %s',role=>{
  useAuthStore.setState({user:role?{id:'u',email:'fake@example.invalid',role:role as Role}:null});const click=vi.fn();
@@ -100,7 +100,7 @@ it.each(['01','03'])('bolsas de documento gratuito %s: control visible y guarda 
  expect(problemasContenidoEmision({tipo,items:items.map(i=>({...i,cantidadBolsas:0,icbper:0})),clienteRazonSocial:'Cliente'})).toEqual([]);
 });
 it('QR conserva fecha sin estructura y admite digest ausente',()=>{
- expect(generarTramaQrSunat({rucEmisor:'20601234567',tipo:'01',serie:'F001',correlativo:1,igv:0,total:0,fecha:'sinfecha',tipoDocCliente:'6',numDocCliente:'20100070970'} as never)).toContain('|sinfecha|6|20100070970||');
+ expect(generarTramaQrSunat({rucEmisor:'20601234567',tipo:'01',serie:'F001',correlativo:1,igv:0,total:0,fecha:'sinfecha',tipoDocCliente:'6',numDocCliente:'20100070970'} as never)).toContain('|sinfecha|6|20100070970|');
 });
 it('motivo 13 sin un origen disponible conserva forma de pago explícita del borrador',()=>{
  const b={...borradorInicial('07','2026-11-12'),motivoCodigo:'13',formaPago:'Contado' as const};expect(vincularDocumentoAfectado(b,[]).borrador.formaPago).toBe('Contado');

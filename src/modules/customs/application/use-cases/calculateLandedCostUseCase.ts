@@ -89,8 +89,9 @@ export class CalculateLandedCostUseCase {
 
     // 5. Persistir hoja de liquidación y actualizar costos unitarios de los ítems
     const isApproved = Boolean(dto.approved_by_accountant);
+    const targetShipmentId = shipment.id || dto.shipment_id;
     const savedSheet = await this.landedCostRepository.saveLandedCostSheet({
-      shipmentId: dto.shipment_id,
+      shipmentId: targetShipmentId,
       totalCifPen: prorationResult.totalCifPen,
       totalDutiesPen: prorationResult.totalDutiesPen,
       totalLocalExpensesPen: prorationResult.totalLocalExpensesPen,
@@ -106,7 +107,7 @@ export class CalculateLandedCostUseCase {
 
     // 6. Registrar evento en la bitácora
     await this.shipmentRepository.addEvent({
-      shipmentId: dto.shipment_id,
+      shipmentId: targetShipmentId,
       eventType: 'COSTEO_LANDED_COST',
       eventTimestamp: new Date(),
       registeredBy: 'CONTABILIDAD',
@@ -114,9 +115,28 @@ export class CalculateLandedCostUseCase {
       eventValue: `Total Inventario: S/ ${prorationResult.totalInventoryCostPen.toFixed(2)} | Gastos Locales: S/ ${prorationResult.totalLocalExpensesPen.toFixed(2)}`,
     });
 
+    const series_breakdown = prorationResult.items.map((p, idx) => {
+      const orig = declaration.items?.find((it: any) => it.id === p.itemId);
+      return {
+        series_id: p.itemId,
+        series_order: orig?.series_order ?? orig?.item_order ?? idx + 1,
+        product_code: p.itemCode,
+        commercial_description: orig?.commercial_description ?? 'Mercancía nacionalizada',
+        physical_quantity: p.quantity,
+        cif_pen: p.cifPen,
+        ad_valorem_pen: p.adValoremPen,
+        allocated_local_expenses_pen: p.totalAllocatedLocalExpensesPen,
+        total_landed_cost_pen: p.totalInventoryCostPen,
+        final_landed_cost_unit_pen: p.unitLandedCostPen,
+        destination_type: orig?.destination_type ?? 'MERCADERIA',
+      };
+    });
+
     return {
+      ...savedSheet,
       sheet: savedSheet,
       proration: prorationResult,
+      series_breakdown,
     };
   }
 }

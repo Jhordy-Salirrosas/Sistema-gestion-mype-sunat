@@ -67,7 +67,10 @@ describe('PrismaCustomsShipmentRepository', () => {
     const result = await repository.findShipmentById('ship-1', 'comp-1');
     expect(result?.id).toBe('ship-1');
     expect(prismaMock.customsShipment.findFirst).toHaveBeenCalledWith({
-      where: { id: 'ship-1', company_id: 'comp-1' },
+      where: {
+        company_id: 'comp-1',
+        OR: [{ id: 'ship-1' }, { shipment_number: 'ship-1' }],
+      },
       include: expect.objectContaining({
         supplier: true,
         customs_broker: true,

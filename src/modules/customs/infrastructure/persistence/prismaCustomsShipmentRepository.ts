@@ -50,7 +50,10 @@ export class PrismaCustomsShipmentRepository implements ICustomsShipmentReposito
 
   async findShipmentById(id: string, companyId: string): Promise<any | null> {
     return this.prisma.customsShipment.findFirst({
-      where: { id, company_id: companyId },
+      where: {
+        company_id: companyId,
+        OR: [{ id }, { shipment_number: id }],
+      },
       include: {
         supplier: true,
         customs_broker: true,

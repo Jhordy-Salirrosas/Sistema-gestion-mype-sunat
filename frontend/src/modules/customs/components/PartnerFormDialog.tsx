@@ -1,3 +1,4 @@
+import { resumenTercero } from '../lib/partnerSummary';
 import { etiquetaCondicionPago } from '../lib/paymentTerms';
 import { useRucAutofill } from '@/modules/invoices/hooks/useRucAutofill';
 import { errorDatosTercero } from '../libPartnerValidation';
@@ -36,7 +37,7 @@ export function PartnerFormDialog({ onClose, onSaved, partner, initialRole = 'PR
     docNumber: partner?.doc_number ?? initialDocument,
     legalName: partner?.legal_name ?? initialName,
     tradeName: partner?.trade_name ?? '', countryCode: partner?.country_code ?? 'PE',
-    address: partner?.address ?? '', email: partner?.email ?? '', phone: partner?.phone ?? '',
+    address: partner ? resumenTercero(partner).address : '', email: partner ? resumenTercero(partner).email : '', phone: partner ? resumenTercero(partner).phone : '',
     paymentTerms: partner?.payment_terms ?? 'CONTADO', currencyCode: partner?.currency_code ?? 'PEN',
     hasCredit: typeof partner?.has_credit === 'boolean' ? partner.has_credit : Boolean(partner?.payment_terms && partner.payment_terms !== 'CONTADO'),
     allowsDiscount: typeof partner?.allows_discount === 'boolean' ? partner.allows_discount : false,
@@ -70,7 +71,7 @@ export function PartnerFormDialog({ onClose, onSaved, partner, initialRole = 'PR
     ]);
   };
 
-  const errorValidacion = errorDatosTercero(form, Boolean(partner));
+  const errorValidacion = errorDatosTercero(form, Boolean(partner), partner ? { docType: partner.doc_type, docNumber: partner.doc_number } : undefined);
   const save = useMutation({
     mutationFn: async (addRole: boolean) => {
       if (addRole && existing && requiredRole) {

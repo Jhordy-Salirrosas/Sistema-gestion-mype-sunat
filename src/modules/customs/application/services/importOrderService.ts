@@ -218,6 +218,23 @@ export class ImportOrderService {
       },
     });
 
+    if (dto.documentUrl) {
+      const docName = dto.documentFileName || `Proforma_${dto.proformaNumber || orderNumber}.pdf`;
+      await this.prisma.importOrderDocument.create({
+        data: {
+          order_id: order.id,
+          stage_index: 1,
+          stage_name: initialStageName,
+          document_type: 'PROFORMA',
+          document_number: dto.proformaNumber || orderNumber,
+          storage_url: dto.documentUrl,
+          file_name: docName,
+          file_hash: crypto.createHash('sha256').update(`${order.id}-${dto.documentUrl}-${Date.now()}`).digest('hex'),
+          uploaded_by: dto.responsible ?? 'Operador Comercio Exterior',
+        },
+      });
+    }
+
     return this.mapOrderResponse(order);
   }
 
@@ -462,7 +479,7 @@ export class ImportOrderService {
           shipment_id: createdShipment.id,
           event_type: 'EXPEDIENTE_GENERADO',
           event_timestamp: new Date(),
-          registered_by: dto.userName,
+          registered_by: dto.userName ?? 'Operador Comercio Exterior',
           reference_code: order.order_number,
           event_value: `Generado automáticamente desde la Orden de Importación ${order.order_number}`,
         },
@@ -475,7 +492,7 @@ export class ImportOrderService {
         stage_index: dto.nextStageIndex,
         stage_name: stageName,
         status: 'COMPLETADO',
-        user_name: dto.userName,
+        user_name: dto.userName ?? 'Operador Comercio Exterior',
         evidence_notes: dto.evidenceNotes,
         document_url: dto.documentUrl,
       },
