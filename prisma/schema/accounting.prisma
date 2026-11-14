@@ -32,8 +32,30 @@ model Expense {
   status           String   @default("REGISTRADO")
   created_at       DateTime @default(now())
 
+  distributions    ExpenseDistribution[]
+
   @@index([company_id, expense_date])
   @@map("expenses")
+}
+
+/// Reparto de la base de un gasto entre varias cuentas contables.
+///
+/// La base se reparte en importes exactos (o porcentajes que suman 100) y el
+/// asiento carga cada cuenta con su parte; el IGV y la cuenta por pagar siguen
+/// saliendo de las reglas del proceso GASTO.
+model ExpenseDistribution {
+  id           String   @id @default(uuid())
+  expense_id   String
+  expense      Expense  @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  company_id   String
+  account_code String
+  amount       Decimal  @db.Decimal(14, 2)
+  percentage   Decimal  @db.Decimal(5, 2)
+  created_at   DateTime @default(now())
+
+  @@unique([expense_id, account_code])
+  @@index([company_id, account_code])
+  @@map("expense_distributions")
 }
 
 
@@ -54,8 +76,28 @@ model Collection {
   status          String   @default("REGISTRADO")
   created_at      DateTime @default(now())
 
+  distributions   CollectionDistribution[]
+
   @@index([company_id, collection_date])
+  /// Cobros de una factura: la cartera y la auditoría filtran por este par.
+  @@index([company_id, invoice_id])
   @@map("collections")
+}
+
+/// Reparto del importe de un cobro entre varias cuentas por cobrar.
+model CollectionDistribution {
+  id           String     @id @default(uuid())
+  collection_id String
+  collection   Collection @relation(fields: [collection_id], references: [id], onDelete: Cascade)
+  company_id   String
+  account_code String
+  amount       Decimal    @db.Decimal(14, 2)
+  percentage   Decimal    @db.Decimal(5, 2)
+  created_at   DateTime   @default(now())
+
+  @@unique([collection_id, account_code])
+  @@index([company_id, account_code])
+  @@map("collection_distributions")
 }
 
 /// Ejercicio fiscal por empresa. Agrupa los períodos mensuales.
@@ -147,6 +189,9 @@ model AccountingEntry {
   @@unique([company_id, period, entry_number])
   @@unique([company_id, idempotency_key])
   @@index([company_id, period, entry_date])
+  /// Búsqueda por documento de origen: la usan el puente de ventas en cada
+  /// emisión y la auditoría para saber qué comprobantes ya tienen asiento.
+  @@index([company_id, source_module, source_reference_id])
   @@map("accounting_entries")
 }
 
@@ -163,6 +208,31 @@ model AccountingLine {
   @@index([entry_id, line_order])
   @@index([account_code])
   @@map("accounting_lines")
+}
+
+/// Cuenta de tesorería de la empresa: alias operativo sobre una subcuenta PCGE.
+///
+/// El catálogo `accounting_accounts` es el PCGE oficial y es global; la empresa
+/// necesita, además, saber **cuáles** de esas subcuentas usa y con qué nombre
+/// operativo ("BCP cuenta corriente", "Caja chica taller"). Sin esta tabla el
+/// código tenía que adivinar con `'101'` o `'1041'` según el medio de pago.
+model CompanyTreasuryAccount {
+  id         String   @id @default(uuid())
+  company_id String
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  /// Subcuenta PCGE usada en el asiento (ej. 1041).
+  code       String
+  /// Nombre operativo que ve el usuario (ej. "BCP cuenta corriente").
+  name       String
+  /// CAJA | BANCO. Determina el filtro por medio de pago en tesorería.
+  kind       String   @default("BANCO")
+  currency   String   @default("PEN")
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  @@unique([company_id, code])
+  @@index([company_id, is_active])
+  @@map("company_treasury_accounts")
 }
 
 model PleBook {

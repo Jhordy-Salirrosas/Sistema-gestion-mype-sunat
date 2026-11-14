@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
+import { clavesDuplicadas, validarRucEmisor } from '../../domain/rules/pleStructureRule';
 
 export interface PleIssue {
   document: string;
@@ -25,12 +26,14 @@ export class ValidateTaxPleUseCase {
 
   async execute(companyId: string, companyRuc: string, year: number, month: number, bookCode: '080100' | '140100'): Promise<PleValidationResult> {
     const ruc = companyRuc?.replace(/[\r\n\t ]/g, '') ?? '';
-    if (!/^\d{11}$/.test(ruc)) throw new BadRequestException('RUC inválido para PLE.');
+    const problemaRuc = validarRucEmisor(ruc);
+    if (problemaRuc) throw new BadRequestException(problemaRuc);
     if (!Number.isInteger(year) || year < 2000 || year > 2100) throw new BadRequestException('Año inválido.');
     if (!Number.isInteger(month) || month < 1 || month > 12) throw new BadRequestException('Mes inválido.');
     const desde = new Date(Date.UTC(year, month - 1, 1));
     const hasta = new Date(Date.UTC(year, month, 0, 23, 59, 59));
     const issues: PleIssue[] = [];
+    const claves: string[] = [];
     let records = 0;
 
     if (bookCode === '140100') {
@@ -41,6 +44,7 @@ export class ValidateTaxPleUseCase {
       records = ventas.length;
       for (const v of ventas) {
         const doc = `${v.serie}-${String(v.correlativo).padStart(8, '0')}`;
+        claves.push(`${v.tipo_comprobante}-${v.serie}-${v.correlativo}`);
         this.validarDocumento(issues, doc, v.customer_identity_type, v.customer_identity_number, v.customer_legal_name);
         const total = redondear(Number(v.taxable_operations) + Number(v.total_igv) + Number(v.exempt_operations) + Number(v.unaffected_operations));
         if (Math.abs(total - Number(v.monto_total)) > 0.1) {
@@ -61,6 +65,7 @@ export class ValidateTaxPleUseCase {
       records = compras.length;
       for (const c of compras) {
         const doc = `${c.document_serial}-${c.document_number}`;
+        claves.push(`${c.document_type_code}-${c.document_serial}-${c.document_number}`);
         this.validarDocumento(issues, doc, c.supplier_doc_type, c.supplier_doc_number, c.supplier_name);
         const total = redondear(Number(c.net_amount) + Number(c.igv_amount));
         if (Math.abs(total - Number(c.total_amount)) > 0.1) {
@@ -73,6 +78,16 @@ export class ValidateTaxPleUseCase {
           issues.push({ document: doc, field: 'documento', message: 'Serie o número de documento vacío.', severity: 'error' });
         }
       }
+    }
+
+    // Un comprobante repetido duplica el crédito o el débito fiscal del período.
+    for (const repetido of clavesDuplicadas(claves)) {
+      issues.push({
+        document: repetido,
+        field: 'comprobante',
+        message: `El comprobante ${repetido} aparece más de una vez en el libro.`,
+        severity: 'error',
+      });
     }
 
     const errors = issues.filter((i) => i.severity === 'error').length;

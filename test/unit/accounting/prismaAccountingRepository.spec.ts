@@ -72,8 +72,7 @@ describe('PrismaAccountingRepository', () => {
     });
   });
 
-  describe('findByIdempotencyKey', () => {
-    it('devuelve el asiento existente con sus líneas', async () => {
+  describe('findByIdempotencyKey', () => {    it('devuelve el asiento existente con sus líneas', async () => {
       prismaMock.accountingEntry.findFirst.mockResolvedValue({
         id: 'entry-1',
         company_id: 'company-1',
@@ -108,6 +107,57 @@ describe('PrismaAccountingRepository', () => {
     it('devuelve null si la clave no existe', async () => {
       prismaMock.accountingEntry.findFirst.mockResolvedValue(null);
       await expect(repository.findByIdempotencyKey('company-1', 'no-existe')).resolves.toBeNull();
+    });
+  });
+
+  describe('findLedgerMovementsByAccounts', () => {
+    const asiento = (codigos: string[]) => ({
+      id: 'e1',
+      entry_number: 1,
+      entry_date: new Date('2026-11-05'),
+      glosa: 'Cobro',
+      source_module: 'COLLECTIONS',
+      lines: codigos.map((code, i) => ({
+        line_order: i + 1,
+        account_code: code,
+        account_name: code,
+        debit_amount: 100,
+        credit_amount: 0,
+      })),
+    });
+
+    it('devuelve solo las líneas de las cuentas pedidas', async () => {
+      prismaMock.accountingEntry.findMany.mockResolvedValue([asiento(['1041', '1042', '12121'])]);
+
+      const r = await repository.findLedgerMovementsByAccounts('c1', '2026-11', ['1041', '1042']);
+
+      expect(r.map((m) => m.accountCode)).toEqual(['1041', '1042']);
+      expect(r).toHaveLength(2);
+    });
+
+    it('no consulta si no hay cuentas', async () => {
+      await expect(repository.findLedgerMovementsByAccounts('c1', '2026-11', [])).resolves.toEqual([]);
+      expect(prismaMock.accountingEntry.findMany).not.toHaveBeenCalled();
+    });
+
+    it('delega findLedgerMovements en la versión multcuenta', async () => {
+      prismaMock.accountingEntry.findMany.mockResolvedValue([asiento(['12121'])]);
+      const r = await repository.findLedgerMovements('c1', '2026-11', '12121');
+      expect(r).toHaveLength(1);
+    });
+
+    it('suma el saldo de apertura de todas las cuentas', async () => {
+      prismaMock.accountingEntry.findMany.mockResolvedValue([
+        { ...asiento(['1041', '1042']), lines: [
+          { account_code: '1041', debit_amount: 100, credit_amount: 0 },
+          { account_code: '1042', debit_amount: 0, credit_amount: 40 },
+          { account_code: '12121', debit_amount: 500, credit_amount: 0 },
+        ] },
+      ]);
+
+      const saldo = await repository.findLedgerOpeningBalanceByAccounts('c1', '2026-11', ['1041', '1042']);
+
+      expect(saldo).toBe(60);
     });
   });
 });

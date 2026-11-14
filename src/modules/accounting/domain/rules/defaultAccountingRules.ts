@@ -15,7 +15,9 @@ export const DEFAULT_ACCOUNTING_RULES = [
   ['COMPRA', '*', 2, '40111', 'DEBE', 'IGV', 'IGV crédito fiscal'],
   ['COMPRA', '*', 3, '42121', 'HABER', 'TOTAL', 'Cuentas por pagar comerciales'],
   ['RECEPCION', '*', 1, '20111', 'DEBE', 'BASE', 'Ingreso a almacén'],
-  ['RECEPCION', '*', 2, '611', 'HABER', 'BASE', 'Variación de existencias'],
+  // 611 es la cuenta de mayor: las líneas viven en 6111. Postear en 611 deja
+  // el mayor de mercaderías sin detalle y el PLE con una cuenta agregada.
+  ['RECEPCION', '*', 2, '6111', 'HABER', 'BASE', 'Variación de existencias'],
   ['PAGO', '*', 1, '42121', 'DEBE', 'MONTO_PAGADO', 'Pago a proveedor'],
   ['PAGO', '*', 2, '1041', 'HABER', 'MONTO_PAGADO', 'Cuenta corriente'],
   ['GASTO', '*', 1, '63111', 'DEBE', 'BASE', 'Gastos de servicios'],
@@ -25,5 +27,5 @@ export const DEFAULT_ACCOUNTING_RULES = [
   ['COBRO', '*', 2, '12121', 'HABER', 'MONTO_PAGADO', 'Cuentas por cobrar'],
   ['AJUSTE', '*', 1, '659', 'DEBE', 'COSTO', 'Pérdida por ajuste'],
   ['AJUSTE', '*', 2, '20111', 'HABER', 'COSTO', 'Mercaderías'],
-  ['AJUSTE', '*', 3, '759', 'HABER', 'COSTO', 'Sobrantes de inventario'],
+  ['AJUSTE', '*', 3, '7599', 'HABER', 'COSTO', 'Sobrantes de inventario'],
 ] as const;

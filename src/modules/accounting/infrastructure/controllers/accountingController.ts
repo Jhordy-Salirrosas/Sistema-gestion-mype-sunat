@@ -39,6 +39,12 @@ import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../application/use-cases/getIncomeStatementUseCase';
 import { GetBalanceSheetUseCase } from '../../application/use-cases/getBalanceSheetUseCase';
+import { AuditAccountingUseCase } from '../../application/use-cases/auditAccountingUseCase';
+import { TreasuryAccountsService } from '../../application/services/treasuryAccountsService';
+import {
+  CreateTreasuryAccountDto,
+  UpdateTreasuryAccountDto,
+} from '../../application/dto/treasuryAccountDto';
 import { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 
 @Controller('api/v1/accounting')
@@ -65,6 +71,8 @@ export class AccountingController {
     private readonly getIncomeStatementUseCase: GetIncomeStatementUseCase,
     private readonly getBalanceSheetUseCase: GetBalanceSheetUseCase,
     private readonly prisma: PrismaService,
+    private readonly auditAccountingUseCase: AuditAccountingUseCase,
+    private readonly treasuryAccounts: TreasuryAccountsService,
   ) {}
 
   /**
@@ -259,6 +267,58 @@ export class AccountingController {
   }
 
   // ==========================================
+  // Cuentas de tesorería (subcuentas de caja y banco)
+  // ==========================================
+  /**
+   * Subcuentas PCGE que la empresa usa como caja o banco, con su alias.
+   * Es la fuente que alimenta el selector de tesorería de cobros y pagos.
+   */
+  @Get('treasury-accounts')
+  listTreasuryAccounts(@CurrentCompany() currentCompanyId?: string) {
+    return this.treasuryAccounts.list(this.empresaDelToken(currentCompanyId));
+  }
+
+  @Post('treasury-accounts')
+  @HttpCode(HttpStatus.CREATED)
+  createTreasuryAccount(
+    @Body() dto: CreateTreasuryAccountDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.treasuryAccounts.create(this.empresaDelToken(currentCompanyId), dto);
+  }
+
+  @Put('treasury-accounts/:id')
+  updateTreasuryAccount(
+    @Param('id') id: string,
+    @Body() dto: UpdateTreasuryAccountDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.treasuryAccounts.update(this.empresaDelToken(currentCompanyId), id, dto);
+  }
+
+  // ==========================================
+  // GET: Auditoría contable (solo lectura)
+  // ==========================================
+  /**
+   * Diagnóstico del módulo: reglas inválidas o incompletas, asientos
+   * descuadrados/duplicados y comprobantes aceptados sin asiento o sin costo.
+   *
+   * No corrige nada; el contador decide. `period` acota asientos y
+   * comprobantes a un mes `YYYY-MM`; sin período se revisa todo el histórico
+   * (con los topes de filas que informa la respuesta).
+   */
+  @Get('audit')
+  async audit(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+  ) {
+    return this.auditAccountingUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+    );
+  }
+
+  // ==========================================
   // POST: Generar la trama oficial PLE para SUNAT
   // ==========================================
   @Post('ple/export')
@@ -351,13 +411,13 @@ export class AccountingController {
       { process_code: 'VENTA', role_code: 'IGV', account_code: '40111', description: 'IGV - Cuenta propia (Haber)' },
       { process_code: 'VENTA', role_code: 'INGRESO', account_code: '70121', description: 'Ventas de mercaderías (Haber)' },
       { process_code: 'VENTA', role_code: 'COSTO_VENTA', account_code: '69111', description: 'Costo de ventas mercaderías (Debe)' },
-      { process_code: 'VENTA', role_code: 'INVENTARIO_SALIDA', account_code: '20111', description: 'Salida de mercaderías al costo (Haber)' },
+      { process_code: 'VENTA', role_code: 'INVENTARIO', account_code: '20111', description: 'Salida de mercaderías al costo (Haber)' },
 
       { process_code: 'COMPRA', role_code: 'GASTO_COMPRA', account_code: '60111', description: 'Mercaderías manufacturadas (Debe)' },
       { process_code: 'COMPRA', role_code: 'IGV_CREDITO', account_code: '40111', description: 'IGV - Crédito fiscal (Debe)' },
       { process_code: 'COMPRA', role_code: 'CXP', account_code: '42121', description: 'Facturas por pagar emitidas (Haber)' },
       { process_code: 'COMPRA', role_code: 'DESTINO_INVENTARIO', account_code: '20111', description: 'Mercaderías en almacén (Debe)' },
-      { process_code: 'COMPRA', role_code: 'VARIACION_EXISTENCIA', account_code: '61111', description: 'Variación de mercaderías (Haber)' },
+      { process_code: 'COMPRA', role_code: 'VARIACION_EXISTENCIA', account_code: '6111', description: 'Variación de mercaderías (Haber)' },
 
       { process_code: 'IMPORTACION', role_code: 'TRANSITO', account_code: '28111', description: 'Existencias por recibir (Tránsito) (Debe)' },
       { process_code: 'IMPORTACION', role_code: 'CXP_EXTERIOR', account_code: '42122', description: 'Proveedores del exterior (Haber)' },
@@ -367,8 +427,8 @@ export class AccountingController {
       { process_code: 'IMPORTACION', role_code: 'PERCEPCION_IGV', account_code: '40113', description: 'Percepción IGV aduanera (Debe)' },
       { process_code: 'IMPORTACION', role_code: 'INGRESO_ALMACEN', account_code: '20111', description: 'Mercaderías al costo Landed Cost (Debe/Haber)' },
 
-      { process_code: 'TRANSFERENCIA', role_code: 'ALMACEN_DESTINO', account_code: '20111.02', description: 'Mercaderías Almacén 02 (Debe)' },
-      { process_code: 'TRANSFERENCIA', role_code: 'ALMACEN_ORIGEN', account_code: '20111.01', description: 'Mercaderías Almacén 01 (Haber)' },
+      { process_code: 'TRANSFERENCIA', role_code: 'ALMACEN_DESTINO', account_code: '20111', description: 'Mercaderías al costo (Debe) · el detalle por almacén no está en el PCGE' },
+      { process_code: 'TRANSFERENCIA', role_code: 'ALMACEN_ORIGEN', account_code: '20111', description: 'Mercaderías al costo (Haber) · el detalle por almacén no está en el PCGE' },
 
       { process_code: 'NOTA_CREDITO', role_code: 'REVERSO_VENTA', account_code: '70121', description: 'Reverso Venta de mercaderías (Debe)' },
       { process_code: 'NOTA_CREDITO', role_code: 'REVERSO_IGV', account_code: '40111', description: 'Reverso IGV - Cuenta propia (Debe)' },
