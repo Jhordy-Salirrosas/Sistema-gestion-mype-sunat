@@ -120,6 +120,14 @@ export class CreateImportOrderDto {
 
   @IsString()
   @IsOptional()
+  documentUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  documentFileName?: string;
+
+  @IsString()
+  @IsOptional()
   notes?: string;
 
   @IsString()
