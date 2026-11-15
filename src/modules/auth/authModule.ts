@@ -19,6 +19,7 @@ import { RolesGuard } from './infrastructure/guards/rolesGuard';
 import { SOL_CREDENTIAL_CIPHER } from './domain/ports/solCredentialCipherPort';
 import { SolCredentialCipher } from './infrastructure/security/solCredentialCipher';
 import { WarehouseAccessService } from './application/services/warehouseAccessService';
+import { ModulePermissionsService } from './application/services/modulePermissionsService';
 
 @Module({
   imports: [PrismaModule],
@@ -51,6 +52,7 @@ import { WarehouseAccessService } from './application/services/warehouseAccessSe
         ),
     },
     WarehouseAccessService,
+    ModulePermissionsService,
     AuthGuard,
     RolesGuard,
   ],
@@ -63,11 +65,13 @@ import { WarehouseAccessService } from './application/services/warehouseAccessSe
     UpdateProfileUseCase,
     ChangePasswordUseCase,
     WarehouseAccessService,
+    ModulePermissionsService,
     TOKEN_SERVICE_PORT,
     HASHER_PORT,
     USER_REPOSITORY_PORT,
     SOL_CREDENTIAL_CIPHER,
     WarehouseAccessService,
+    ModulePermissionsService,
     AuthGuard,
     RolesGuard,
   ],
