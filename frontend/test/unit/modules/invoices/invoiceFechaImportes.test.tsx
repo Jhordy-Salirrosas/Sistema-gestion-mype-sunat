@@ -11,14 +11,14 @@ afterEach(cleanup);
 it('cambiar solo la fecha conserva el valor unitario y la liquidación', async () => {
   render(<MemoryRouter><InvoiceEmissionPage /></MemoryRouter>);
   await seleccionarProductoPrueba();
-  const valor = screen.getByLabelText('Valor unitario de la línea 1') as HTMLInputElement;
-  expect(valor.value).toBe('1000.00');
+  const valor = screen.getByLabelText('Valor unitario de la línea 1');
+  expect(valor.textContent).toBe('1000.00');
   expect(screen.getByText('S/ 1180.00')).toBeTruthy();
   const fecha = screen.getByLabelText('Fecha de emisión') as HTMLInputElement;
   const original = fecha.value;
   fireEvent.change(fecha, { target: { value: '2026-11-03' } });
   fireEvent.change(fecha, { target: { value: original } });
-  expect(valor.value).toBe('1000.00');
+  expect(valor.textContent).toBe('1000.00');
   expect(screen.getByText('S/ 1180.00')).toBeTruthy();
 });
 

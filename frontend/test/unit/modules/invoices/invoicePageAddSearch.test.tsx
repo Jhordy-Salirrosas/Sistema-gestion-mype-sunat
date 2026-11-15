@@ -29,8 +29,8 @@ it.each(['01','03'])('ruta %s: solo la selección del catálogo crea una línea'
  expect(screen.queryByRole('button',{name:/Añadir ítem/})).toBeNull();
  for(let n=0;n<3;n++){await user.click(search);await user.keyboard('{Alt>}l{/Alt}');expect(document.activeElement).toBe(search);expect(screen.queryByLabelText('Descripción de la línea 1')).toBeNull();}
  await user.keyboard('CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
- const code=screen.getByLabelText('Código de la línea 1') as HTMLInputElement;
- expect(code.readOnly).toBe(true);expect(code.value).toBe('CEM-001');
+ const code=screen.getByLabelText('Código de la línea 1');
+ expect(code.tagName).toBe('SPAN');expect(code.textContent).toBe('CEM-001');
  await user.click(search);await user.keyboard('{Alt>}l{/Alt}');expect(screen.queryByLabelText('Descripción de la línea 2')).toBeNull();
  await user.click(screen.getByRole('button',{name:'Eliminar la línea 1'}));expect(screen.queryByLabelText('Código de la línea 1')).toBeNull();
 });
@@ -42,7 +42,7 @@ it.each(['pagina','modal'])('%s: Alt+L solo enfoca búsqueda con líneas selecci
  expect(screen.queryByLabelText('Descripción de la línea 2')).toBeNull();
  await user.keyboard('CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
  await user.click(screen.getByRole('button',{name:'Mantener separada'}));
- expect((screen.getByLabelText('Código de la línea 2') as HTMLInputElement).value).toBe('CEM-001');
+ expect(screen.getByLabelText('Código de la línea 2').textContent).toBe('CEM-001');
 });
 it.each(['cargando','error','vacio'] as const)('catálogo %s tiene explicación visible y recibe el foco al añadir',async mode=>{
  fixture.mode=mode;mount();const user=userEvent.setup();
@@ -58,7 +58,7 @@ it.each(['pagina','modal'])('%s: elegir otra línea cuando no hay fila vacía a�
  await user.type(search,'CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
  await user.type(search,'CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
  await user.click(screen.getByRole('button',{name:'Mantener separada'}));
- expect((screen.getByLabelText('Código de la línea 1') as HTMLInputElement).value).toBe('CEM-001');
- expect((screen.getByLabelText('Código de la línea 2') as HTMLInputElement).value).toBe('CEM-001');
+ expect(screen.getByLabelText('Código de la línea 1').textContent).toBe('CEM-001');
+ expect(screen.getByLabelText('Código de la línea 2').textContent).toBe('CEM-001');
  expect(screen.queryByLabelText('Descripción de la línea 3')).toBeNull();
 });

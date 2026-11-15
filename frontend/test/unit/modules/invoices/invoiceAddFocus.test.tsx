@@ -20,8 +20,8 @@ it('el atajo enfoca buscador sin alta vacía y elegir producto bloquea el SKU',a
  expect(screen.queryByLabelText('Descripción de la línea 2')).toBeNull();
  fireEvent.change(buscador,{target:{value:'PRO'}});
  fireEvent.click(screen.getByRole('button',{name:/PRO-1/}));
- await waitFor(()=>expect((screen.getByLabelText('Código de la línea 1') as HTMLInputElement).readOnly).toBe(true));
- expect((screen.getByLabelText('Código de la línea 1') as HTMLInputElement).value).toBe('PRO-1');
+ await waitFor(()=>expect(screen.getByLabelText('Código de la línea 1').tagName).toBe('SPAN'));
+ expect(screen.getByLabelText('Código de la línea 1').textContent).toBe('PRO-1');
  expect(screen.queryByLabelText('Descripción de la línea 2')).toBeNull();
  fireEvent.keyDown(buscador,{altKey:true,key:'l',code:'KeyL'});
  expect(document.activeElement).toBe(buscador);
@@ -33,8 +33,8 @@ it('el atajo enfoca buscador sin alta vacía y elegir producto bloquea el SKU',a
 it('código y descripción son de solo lectura con explicación para sustituir producto',()=>{
  const elegido=itemDesdeProducto(producto,'b');
  render(<InvoiceItemsGrid items={[itemVacio('a'),elegido]} onCambiar={vi.fn()} onEliminar={vi.fn()} onAgregar={vi.fn()} onAgregarBolsa={vi.fn()}/>);
- expect((screen.getByLabelText('Código de la línea 1') as HTMLInputElement).readOnly).toBe(true);
- expect((screen.getByLabelText('Descripción de la línea 2') as HTMLTextAreaElement).readOnly).toBe(true);
- expect((screen.getByLabelText('Código de la línea 2') as HTMLInputElement).readOnly).toBe(true);
+ expect(screen.getByLabelText('Código de la línea 1').tagName).toBe('SPAN');
+ expect(screen.getByLabelText('Descripción de la línea 2').tagName).toBe('SPAN');
+ expect(screen.getByLabelText('Código de la línea 2').tagName).toBe('SPAN');
  expect(screen.getByLabelText('Código de la línea 2').title).toContain('elija otro producto');
 });

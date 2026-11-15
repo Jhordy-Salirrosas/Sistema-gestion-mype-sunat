@@ -1,5 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {render,screen,fireEvent,cleanup} from '@testing-library/react';
+import {render,screen,cleanup} from '@testing-library/react';
 import {useState} from 'react';
 import {InvoiceItemsGrid} from '@/modules/invoices/components/InvoiceItemsGrid';
 import {actualizarItem,calcularItem,itemDesdeProducto} from '@/modules/invoices/lib/invoiceItems';
@@ -11,7 +11,7 @@ afterEach(cleanup);
 it.each(['catálogo','nota'])('valor de %s es fijo y conserva base, precio, total y payload',origen=>{
  const initial=origen==='catálogo'?product():lineasParaNota([{codigo:'CEM-001',descripcion:'Cemento',unidad:'NIU',cantidad:1,afectacion:'10',valor_unitario:100,precio_unitario:118}] as never)![0];
  function Form(){const[items,set]=useState([initial]);const b={...borradorInicial('01','2026-11-11'),items};return <><InvoiceItemsGrid items={items} onCambiar={(i,p)=>set(v=>actualizarItem(v,i,p) as typeof v)} onAgregar={vi.fn()} onAgregarBolsa={vi.fn()} onEliminar={vi.fn()} esNota={origen==='nota'}/><output aria-label="Total">{calcularItem(items[0]).total}</output><output aria-label="Precio enviado">{borradorAPayloadEmision(b).items[0].precioUnitario}</output></>;}
- render(<Form/>);expect((screen.getByLabelText('Valor unitario de la línea 1') as HTMLInputElement).value).toBe('100.00');fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'),{target:{value:'150'}});expect((screen.getByLabelText('Valor unitario de la línea 1') as HTMLInputElement).readOnly).toBe(true);expect(screen.getByLabelText('Total').textContent).toBe('118');expect(screen.getByLabelText('Precio enviado').textContent).toBe('118');
+ render(<Form/>);expect(screen.getByLabelText('Valor unitario de la línea 1').textContent).toBe('100.00');expect(screen.getByLabelText('Valor unitario de la línea 1').tagName).toBe('SPAN');expect(screen.getByLabelText('Total').textContent).toBe('118');expect(screen.getByLabelText('Precio enviado').textContent).toBe('118');
 });
 it.each(['20','30'])('naturaleza %s conserva precio igual a base',aff=>{const item=actualizarItem([product(aff)],0,{valorUnitario:150})[0];expect(item.precioUnitario).toBe(150);expect(calcularItem(item).total).toBe(150);});
 it('referencia gratuita editable mantiene el precio cero e ICBPER',()=>{const item={...product(),afectacion:'GRATUITA' as const,codigoAfectacion:'11',precioUnitario:0,icbper:1};const updated=actualizarItem([item],0,{valorUnitario:150})[0];expect(updated).toMatchObject({valorUnitario:150,precioUnitario:0});expect(calcularItem(updated).total).toBe(1);});

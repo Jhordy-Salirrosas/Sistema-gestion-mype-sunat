@@ -38,7 +38,7 @@ it.each(['modal', 'pagina'])('%s: 409 conserva todos los datos y reintentar cons
   const { onEmitir, emitir } = await montar(via);
   emitir();
   await screen.findByText(/Conflicto de emisión \(409\)/);
-  const datos = () => ['Razón social / nombre', 'Descripción de la línea 1', 'Valor unitario de la línea 1'].map(label => (screen.getByLabelText(label) as HTMLInputElement).value);
+  const datos = () => [(screen.getByLabelText('Razón social / nombre') as HTMLInputElement).value, screen.getByLabelText('Descripción de la línea 1').textContent, screen.getByLabelText('Valor unitario de la línea 1').textContent];
   expect(datos()).toEqual(['Cliente de prueba', 'Servicio', '100.00']);
   expect(onEmitir).not.toHaveBeenCalled();
   expect(enqueueInvoiceEmission).not.toHaveBeenCalled();
