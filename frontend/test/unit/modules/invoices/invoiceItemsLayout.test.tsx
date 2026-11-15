@@ -9,26 +9,25 @@ afterEach(cleanup);
 const props = () => ({ onCambiar: vi.fn(), onEliminar: vi.fn(), onAgregar: vi.fn(), onAgregarBolsa: vi.fn() });
 
 describe('presentación del detalle de líneas', () => {
-  it('distribuye los campos con etiquetas visibles en bloques adaptables', () => {
+  it('distribuye los campos en tabla compacta >=1024px y tarjeta densa <1024px', () => {
     render(<InvoiceItemsGrid items={[itemVacio('a')]} {...props()} />);
     const region = screen.getByRole('region', { name: 'Líneas del comprobante' });
     const table = screen.getByRole('table');
     expect(region.contains(table)).toBe(true);
-    expect(region.className).not.toContain('overflow-x');
+    expect(region.className).toContain('overflow-x-hidden');
     expect(region.tabIndex).toBe(0);
-    expect(table.className).not.toContain('min-w-');
-    expect(screen.getByLabelText('Cantidad de la línea 1').closest('tr')?.className).toContain('auto-fit');
-    expect(table.querySelectorAll('tbody td > span:first-child')).toHaveLength(11);
+    expect(table.className).toContain('lg:table');
+    expect(screen.getByLabelText('Cantidad de la línea 1').closest('tr')?.className).toContain('lg:table-row');
     expect(table.querySelectorAll('thead')).toHaveLength(1);
     expect(table.querySelectorAll('tbody')).toHaveLength(1);
-    expect(screen.getByLabelText('Valor unitario de la línea 1').closest('tr')?.className).toContain('grid');
+    expect(screen.getByLabelText('Valor unitario de la línea 1').tagName).toBe('SPAN');
   });
 
   it('coloca el aviso de valor cero bajo su fila y abarca todas las columnas', () => {
     render(<InvoiceItemsGrid items={[itemVacio('a'), { ...itemVacio('b'), valorUnitario: 20 }]} {...props()} />);
     const aviso = screen.getByText(/El valor unitario de una línea onerosa debe ser mayor que cero/);
     const celda = aviso.closest('td');
-    expect(celda?.colSpan).toBe(11);
+    expect(celda?.colSpan).toBe(10);
     expect(celda?.querySelector('input')).toBeNull();
     expect(celda?.parentElement?.previousElementSibling?.contains(screen.getByLabelText('Valor unitario de la línea 1'))).toBe(true);
     expect(screen.getByLabelText('Valor unitario de la línea 2').closest('tr')?.contains(aviso)).toBe(false);
@@ -38,9 +37,9 @@ describe('presentación del detalle de líneas', () => {
     const callbacks = props();
     render(<InvoiceItemsGrid items={[{ ...itemVacio('a'), afectacion: 'GRATUITA' }]} {...callbacks} />);
     expect(screen.queryByText(/El valor unitario de una línea onerosa debe ser mayor que cero/)).toBeNull();
-    expect(screen.getByRole('option', { name: 'Sin descuento' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Sin desc.' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '21 - Exonerado - Transferencia gratuita' })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Valor unitario de la línea 1'), { target: { value: '25' } });
+    expect(screen.getByLabelText('Valor unitario de la línea 1').tagName).toBe('SPAN');
     expect(callbacks.onCambiar).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar la línea 1' }));
     expect(callbacks.onEliminar).toHaveBeenCalledWith(0);
@@ -48,7 +47,7 @@ describe('presentación del detalle de líneas', () => {
   it('explicita valor sin IGV y conserva la conversión inversa del precio final', () => {
     render(<InvoiceItemsGrid items={[itemVacio('a')]} {...props()} />);
     expect(screen.getByRole('columnheader', { name: /Valor unitario \(sin IGV\)/i })).toBeTruthy();
-    expect(screen.getAllByText(/Valor unitario.*sin IGV/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Valor unitario de la línea 1').getAttribute('title')).toMatch(/sin IGV/i);
 
     expect(valorUnitarioDesdePrecioConIgv(118, 'GRAVADA')).toBe(100);
     expect(valorUnitarioDesdePrecioConIgv(50, 'EXONERADA')).toBe(50);

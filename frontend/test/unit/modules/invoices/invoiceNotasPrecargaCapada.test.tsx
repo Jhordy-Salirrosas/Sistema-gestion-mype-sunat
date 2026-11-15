@@ -61,7 +61,7 @@ it('un detalle tardío no sobrescribe una edición posterior del usuario',async(
  let resolver!: (v:unknown)=>void;const detalle=new Promise(resolve=>{resolver=resolve;});const h=montar({detalle});
  await waitFor(()=>expect(apiClient.get).toHaveBeenCalledWith(`/invoices/${h.id}`));
  await seleccionarProductoPrueba();
- await act(async()=>{resolver(h.detalle);});await waitFor(()=>expect((screen.getByLabelText('Descripción de la línea 1') as HTMLInputElement).value).toBe('Servicio elegido'));
+ await act(async()=>{resolver(h.detalle);});await waitFor(()=>expect(screen.getByLabelText('Descripción de la línea 1').textContent).toBe('Servicio elegido'));
  expect(screen.getAllByLabelText(/Cantidad de la línea/)).toHaveLength(1);
 });
 it('un refresco de saldo no vuelve a precargar ni borra cantidades ya editadas',async()=>{
