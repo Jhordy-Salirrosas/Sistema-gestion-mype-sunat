@@ -61,6 +61,7 @@ model Company {
   inventory_movements   InventoryMovement[]
   inventory_obligations InventoryBookObligationDecision[]
   national_purchases    NationalPurchase[]
+  purchase_orders       PurchaseOrder[]
   sales_quotes          SalesQuote[]
   cash_closures         CashClosure[]
   sire_proposals        SireProposal[]
