@@ -19,6 +19,7 @@ describe('AuthController', () => {
   let mockGetProfileUseCase: jest.Mocked<GetProfileUseCase>;
   let mockUpdateProfileUseCase: jest.Mocked<UpdateProfileUseCase>;
   let mockWarehouseAccess: any;
+  let mockModulePermissions: any;
   let mockChangePasswordUseCase: jest.Mocked<ChangePasswordUseCase>;
 
   const mockUserPayload: TokenPayload = {
@@ -44,6 +45,7 @@ describe('AuthController', () => {
     mockUpdateProfileUseCase = { execute: jest.fn() } as unknown as jest.Mocked<UpdateProfileUseCase>;
     mockChangePasswordUseCase = { execute: jest.fn() } as unknown as jest.Mocked<ChangePasswordUseCase>;
     mockWarehouseAccess = { listAllowed: jest.fn(), listUsers: jest.fn(), setUserWarehouses: jest.fn(), updateUser: jest.fn() } as any;
+    mockModulePermissions = { list: jest.fn(), forRole: jest.fn(), replace: jest.fn() } as any;
 
     controller = new AuthController(
       mockRegisterUseCase,
@@ -54,6 +56,7 @@ describe('AuthController', () => {
       mockUpdateProfileUseCase,
       mockChangePasswordUseCase,
       mockWarehouseAccess,
+      mockModulePermissions,
     );
   });
 
@@ -301,5 +304,14 @@ describe('AuthController', () => {
     await expect(controller.updateUser({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any, 'u1', { role: 'ADMIN' })).rejects.toThrow(ForbiddenException);
     await expect(controller.users({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any)).rejects.toThrow(ForbiddenException);
     await expect(controller.setUserWarehouses({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any, 'u1', { warehouseCodes: [] })).rejects.toThrow(ForbiddenException);
+  });
+
+  it('gestiona permisos por módulo solo como ADMIN', async () => {
+    mockModulePermissions.forRole.mockResolvedValue([{ role: 'ADMIN', moduleCode: 'M1' }]);
+    await expect(controller.myModulePermissions({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any)).resolves.toEqual([{ role: 'ADMIN', moduleCode: 'M1' }]);
+    mockModulePermissions.list.mockResolvedValue([{ role: 'ADMIN', moduleCode: 'M1' }]);
+    await expect(controller.modulePermissionsList({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any)).resolves.toEqual([{ role: 'ADMIN', moduleCode: 'M1' }]);
+    await expect(controller.saveModulePermissions({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any, [])).resolves.toBeUndefined();
+    await expect(controller.modulePermissionsList({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any)).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
