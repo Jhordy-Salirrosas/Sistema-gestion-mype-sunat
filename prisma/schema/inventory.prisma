@@ -298,6 +298,60 @@ enum ReceptionStatus {
   RECIBIDA
 }
 
+enum PurchaseOrderStatus {
+  BORRADOR
+  APROBADA
+  ANULADA
+  CONVERTIDA
+}
+
+model PurchaseOrder {
+  id                  String              @id @default(uuid())
+  company_id          String
+  company             Company             @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  order_number        String
+  supplier_id         String?
+  supplier_doc_number String
+  supplier_name       String
+  warehouse_code      String              @default("ALM-01")
+  issue_date          DateTime
+  expected_date       DateTime?
+  currency_code       String              @default("PEN")
+  prices_include_igv  Boolean             @default(false)
+  net_amount          Decimal             @db.Decimal(14, 2)
+  igv_amount          Decimal             @db.Decimal(14, 2)
+  total_amount        Decimal             @db.Decimal(14, 2)
+  status              PurchaseOrderStatus @default(BORRADOR)
+  notes               String?
+  created_by          String?
+  converted_purchase_id String?
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+  items               PurchaseOrderItem[]
+
+  @@unique([company_id, order_number])
+  @@index([company_id, issue_date])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String        @id @default(uuid())
+  order_id    String
+  order       PurchaseOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product_id  String
+  sku         String
+  description String
+  unit_code   String        @default("NIU")
+  quantity    Decimal       @db.Decimal(12, 4)
+  unit_cost   Decimal       @db.Decimal(14, 4)
+  subtotal    Decimal       @db.Decimal(14, 2)
+  igv_amount  Decimal       @db.Decimal(14, 2)
+  total_amount Decimal      @db.Decimal(14, 2)
+
+  @@index([order_id])
+  @@map("purchase_order_items")
+}
+
 model NationalPurchase {
   id                  String                 @id @default(uuid())
   company_id          String
