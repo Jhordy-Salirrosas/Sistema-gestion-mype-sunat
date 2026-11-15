@@ -54,6 +54,12 @@ export class PurchasesController {
     return this.purchasesService.listPayments(requirePurchaseCompanyId(companyId), id);
   }
 
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancelPurchase(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    return this.purchasesService.cancelPurchase(requirePurchaseCompanyId(companyId), id);
+  }
+
   @Post(':id/pay')
   @HttpCode(HttpStatus.OK)
   async payPurchase(

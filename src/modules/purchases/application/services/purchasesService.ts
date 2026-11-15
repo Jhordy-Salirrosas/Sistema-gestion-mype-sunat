@@ -622,6 +622,42 @@ export class PurchasesService {
   }
 
   /** Registra un pago total o parcial y su asiento CxP contra caja/banco. */
+  async cancelPurchase(companyId: string, id: string) {
+    const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id, company_id: companyId }, include: { items: true } });
+    if (!purchase) throw new NotFoundException('Compra no encontrada.');
+    if (purchase.status === 'ANULADA') throw new BadRequestException('La compra ya está anulada.');
+    if (Number(purchase.paid_amount ?? 0) > 0) throw new BadRequestException('No se puede anular una compra con pagos registrados.');
+    if (purchase.reception_status !== 'PENDIENTE') throw new BadRequestException('No se puede anular una compra con mercadería recibida.');
+
+    if (this.accounting) {
+      const existente = await this.prisma.accountingEntry.findFirst({
+        where: { company_id: companyId, source_module: 'PURCHASES', source_reference_id: purchase.purchase_number },
+      });
+      if (existente) {
+        const reglas = await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'COMPRA', is_active: true }, orderBy: { line_order: 'asc' } });
+        const porOrden = new Map<number, string>(reglas.map((r) => [Number(r.line_order), String(r.account_code)]));
+        if (![1, 2, 3].every((n) => porOrden.has(n))) throw new BadRequestException('Las reglas COMPRA están incompletas para revertir el asiento.');
+        const fecha = new Date();
+        await this.accounting.execute({
+          companyId,
+          period: `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`,
+          entryDate: fecha.toISOString(),
+          glosa: `Anulación compra ${purchase.document_serial}-${purchase.document_number} · ${purchase.supplier_name}`,
+          sourceModule: 'PURCHASES_CANCEL',
+          journalCode: 'COM',
+          sourceReferenceId: `${purchase.purchase_number}:ANULACION`,
+          lines: [
+            { lineOrder: 1, accountCode: porOrden.get(3)!, accountName: 'Cuentas por pagar', debitAmount: Number(purchase.total_amount), creditAmount: 0 },
+            { lineOrder: 2, accountCode: porOrden.get(1)!, accountName: 'Compras', debitAmount: 0, creditAmount: Number(purchase.net_amount) },
+            { lineOrder: 3, accountCode: porOrden.get(2)!, accountName: 'IGV crédito fiscal', debitAmount: 0, creditAmount: Number(purchase.igv_amount) },
+          ],
+        });
+      }
+    }
+    const actualizada = await this.prisma.nationalPurchase.update({ where: { id }, data: { status: 'ANULADA' }, include: { items: true } });
+    return mapPurchaseRecord(actualizada, { includeExtended: true, includeItemsCount: true });
+  }
+
   async payPurchase(companyId: string, id: string, dto: PayPurchaseDto) {
     const purchase = await this.prisma.nationalPurchase.findFirst({
       where: { id, company_id: companyId },
