@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { WarehouseAccessService } from '../../../src/modules/auth/application/services/warehouseAccessService';
 
 const user = (over: Record<string, any> = {}) => ({ sub: 'u1', companyId: 'c1', role: 'OPERADOR_FACTURACION', ...over });
@@ -15,7 +15,9 @@ function setup() {
     },
     user: {
       findMany: jest.fn().mockResolvedValue([{ id: 'u1', email: 'u@mype.pe', full_name: 'Usuario', role: 'OPERADOR_FACTURACION', is_active: true, warehouse_access: [{ warehouse: { warehouse_code: 'ALM-01' } }] }]),
-      findFirst: jest.fn().mockResolvedValue({ id: 'u1' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'u1', role: 'OPERADOR_FACTURACION', is_active: true }),
+      count: jest.fn().mockResolvedValue(2),
+      update: jest.fn(async ({ data }: any) => ({ id: 'u1', role: data.role ?? 'OPERADOR_FACTURACION', is_active: data.is_active ?? true })),
     },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
@@ -54,5 +56,14 @@ describe('WarehouseAccessService', () => {
     prisma.inventoryWarehouse.findMany.mockResolvedValueOnce([{ id: 'w1', warehouse_code: 'ALM-01' }]);
     await expect(service.setUserWarehouses('c1', 'u1', ['ALM-01'])).resolves.toEqual({ userId: 'u1', warehouseCodes: ['ALM-01'] });
     expect(prisma.userWarehouse.deleteMany).toHaveBeenCalledWith({ where: { user_id: 'u1' } });
+  });
+
+  it('actualiza rol/estado y protege al último admin', async () => {
+    const { prisma, service } = setup();
+    await expect(service.updateUser('c1', 'u1', 'actor', { role: 'CONTADOR' })).resolves.toMatchObject({ role: 'CONTADOR' });
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'u1', role: 'ADMIN', is_active: true });
+    prisma.user.count.mockResolvedValueOnce(1);
+    await expect(service.updateUser('c1', 'u1', 'actor', { role: 'CONTADOR' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.updateUser('c1', 'u1', 'u1', { isActive: false })).rejects.toBeInstanceOf(BadRequestException);
   });
 });

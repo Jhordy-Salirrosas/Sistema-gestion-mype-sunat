@@ -43,7 +43,7 @@ describe('AuthController', () => {
     mockGetProfileUseCase = { execute: jest.fn() } as unknown as jest.Mocked<GetProfileUseCase>;
     mockUpdateProfileUseCase = { execute: jest.fn() } as unknown as jest.Mocked<UpdateProfileUseCase>;
     mockChangePasswordUseCase = { execute: jest.fn() } as unknown as jest.Mocked<ChangePasswordUseCase>;
-    mockWarehouseAccess = { listAllowed: jest.fn(), listUsers: jest.fn(), setUserWarehouses: jest.fn() } as any;
+    mockWarehouseAccess = { listAllowed: jest.fn(), listUsers: jest.fn(), setUserWarehouses: jest.fn(), updateUser: jest.fn() } as any;
 
     controller = new AuthController(
       mockRegisterUseCase,
@@ -296,6 +296,9 @@ describe('AuthController', () => {
     mockWarehouseAccess.listUsers.mockResolvedValue([{ id: 'u1' }]);
     await expect(controller.users({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any)).resolves.toEqual([{ id: 'u1' }]);
     await expect(controller.setUserWarehouses({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any, 'u1', { warehouseCodes: ['ALM-01'] })).resolves.toBeUndefined();
+    mockWarehouseAccess.updateUser.mockResolvedValue({ id: 'u1', role: 'CONTADOR', isActive: true });
+    await expect(controller.updateUser({ sub: 'u', role: 'ADMIN', companyId: 'c' } as any, 'u1', { role: 'CONTADOR' })).resolves.toMatchObject({ role: 'CONTADOR' });
+    await expect(controller.updateUser({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any, 'u1', { role: 'ADMIN' })).rejects.toThrow(ForbiddenException);
     await expect(controller.users({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any)).rejects.toThrow(ForbiddenException);
     await expect(controller.setUserWarehouses({ sub: 'u', role: 'CONTADOR', companyId: 'c' } as any, 'u1', { warehouseCodes: [] })).rejects.toThrow(ForbiddenException);
   });
