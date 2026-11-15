@@ -70,8 +70,6 @@ import { ModulePermissionsService } from './application/services/modulePermissio
     HASHER_PORT,
     USER_REPOSITORY_PORT,
     SOL_CREDENTIAL_CIPHER,
-    WarehouseAccessService,
-    ModulePermissionsService,
     AuthGuard,
     RolesGuard,
   ],
