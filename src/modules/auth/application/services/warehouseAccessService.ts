@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import type { TokenPayload } from '../../domain/ports/tokenServicePort';
 
@@ -53,6 +53,20 @@ export class WarehouseAccessService {
       id: u.id, email: u.email, fullName: u.full_name, role: u.role, isActive: u.is_active,
       warehouseCodes: u.warehouse_access.map((a) => a.warehouse.warehouse_code),
     }));
+  }
+
+  async updateUser(companyId: string, userId: string, actorId: string, dto: { role?: string; isActive?: boolean }) {
+    const usuario = await this.prisma.user.findFirst({ where: { id: userId, company_id: companyId } });
+    if (!usuario) throw new NotFoundException('Usuario no encontrado.');
+    if (usuario.id === actorId && (dto.role !== undefined && dto.role !== usuario.role || dto.isActive === false)) {
+      throw new BadRequestException('No puede cambiar su propio rol ni desactivar su cuenta.');
+    }
+    if (usuario.role === 'ADMIN' && (dto.role && dto.role !== 'ADMIN' || dto.isActive === false)) {
+      const admins = await this.prisma.user.count({ where: { company_id: companyId, role: 'ADMIN', is_active: true } });
+      if (admins <= 1) throw new BadRequestException('Debe existir al menos un administrador activo.');
+    }
+    const actualizado = await this.prisma.user.update({ where: { id: userId }, data: { ...(dto.role ? { role: dto.role as never } : {}), ...(dto.isActive !== undefined ? { is_active: dto.isActive } : {}) } });
+    return { id: actualizado.id, role: actualizado.role, isActive: actualizado.is_active };
   }
 
   async setUserWarehouses(companyId: string, userId: string, codes: string[]) {

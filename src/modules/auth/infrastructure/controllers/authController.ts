@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Post,
   Put,
+  Patch,
   Req,
   Param,
   ForbiddenException,
@@ -39,6 +40,7 @@ import { AuthGuard } from '../guards/authGuard';
 import { CurrentUser } from '../decorators/currentUserDecorator';
 import { WarehouseAccessService } from '../../application/services/warehouseAccessService';
 import { SetUserWarehousesDto } from '../../application/dto/setUserWarehousesDto';
+import { UpdateUserDto } from '../../application/dto/updateUserDto';
 import type { TokenPayload } from '../../domain/ports/tokenServicePort';
 import {
   clearRefreshTokenCookie,
@@ -128,6 +130,13 @@ export class AuthController {
   async users(@CurrentUser() user: TokenPayload) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar usuarios.');
     return this.warehouseAccess.listUsers(user.companyId);
+  }
+
+  @Patch('users/:id')
+  @UseGuards(AuthGuard)
+  async updateUser(@CurrentUser() user: TokenPayload, @Param('id') id: string, @Body() dto: UpdateUserDto) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar usuarios.');
+    return this.warehouseAccess.updateUser(user.companyId, id, user.sub, dto);
   }
 
   @Put('users/:id/warehouses')
