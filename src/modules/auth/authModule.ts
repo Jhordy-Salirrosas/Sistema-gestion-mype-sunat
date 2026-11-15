@@ -20,6 +20,8 @@ import { SOL_CREDENTIAL_CIPHER } from './domain/ports/solCredentialCipherPort';
 import { SolCredentialCipher } from './infrastructure/security/solCredentialCipher';
 import { WarehouseAccessService } from './application/services/warehouseAccessService';
 import { ModulePermissionsService } from './application/services/modulePermissionsService';
+import { ModuleWriteInterceptor } from './infrastructure/interceptors/moduleWriteInterceptor';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 
 @Module({
   imports: [PrismaModule],
@@ -53,6 +55,7 @@ import { ModulePermissionsService } from './application/services/modulePermissio
     },
     WarehouseAccessService,
     ModulePermissionsService,
+    { provide: APP_INTERCEPTOR, useClass: ModuleWriteInterceptor },
     AuthGuard,
     RolesGuard,
   ],
