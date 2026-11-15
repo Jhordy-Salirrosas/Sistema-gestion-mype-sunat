@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 
 export const MODULES = [
@@ -46,6 +46,14 @@ export class ModulePermissionsService {
     const rows = await this.prisma.roleModulePermission.findMany({ where: { company_id: companyId, role: role as never } });
     const byCode = new Map(rows.map((r) => [r.module_code, map(r)]));
     return MODULES.map((m) => byCode.get(m.code) ?? { role, moduleCode: m.code, ...this.roleDefault(role, m.code) });
+  }
+
+  async assertWrite(companyId: string, role: string, moduleCode: string) {
+    if (role === 'ADMIN') return;
+    const rows = await this.forRole(companyId, role);
+    if (!rows.find((r) => r.moduleCode === moduleCode)?.canWrite) {
+      throw new ForbiddenException(`No tiene permiso de escritura en el módulo ${moduleCode}.`);
+    }
   }
 
   async replace(companyId: string, rows: Array<{ role: string; moduleCode: string; canView: boolean; canWrite: boolean }>) {

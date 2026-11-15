@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ModulePermissionsService } from '../../../src/modules/auth/application/services/modulePermissionsService';
 
 function setup() {
@@ -33,5 +33,12 @@ describe('ModulePermissionsService', () => {
     await expect(service.replace('c1', [{ role: 'CONTADOR', moduleCode: 'M7', canView: true, canWrite: true }])).resolves.toHaveLength(50);
     expect(prisma.roleModulePermission.upsert).toHaveBeenCalled();
     await expect(service.replace('c1', [{ role: 'NO_EXISTE', moduleCode: 'M1', canView: true, canWrite: true }])).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('valida escritura y bloquea el módulo sin permiso', async () => {
+    const { service } = setup();
+    await expect(service.assertWrite('c1', 'CONTADOR', 'M7')).resolves.toBeUndefined();
+    await expect(service.assertWrite('c1', 'CONTADOR', 'M1')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.assertWrite('c1', 'ADMIN', 'M1')).resolves.toBeUndefined();
   });
 });
