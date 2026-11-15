@@ -32,6 +32,7 @@ export function mapPurchaseRecord(
     documentNumber: purchase.document_number,
     issueDate: purchase.issue_date,
     createdAt: purchase.created_at,
+    pricesIncludeIgv: purchase.prices_include_igv === true,
     warehouseCode: purchase.warehouse_code,
     ...(includeExtended
       ? {

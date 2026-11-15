@@ -40,16 +40,16 @@ it('nota 400 muestra el motivo del servidor, conserva identidad y la misma clave
  const q=new QueryClient({defaultOptions:{queries:{retry:false}}});qs.push(q);const onEmitir=vi.fn();
  render(<QueryClientProvider client={q}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="07" fecha="2026-11-11" existentes={[factura]} onEmitir={onEmitir} onCerrar={vi.fn()} /></QueryClientProvider>);
  fireEvent.change(screen.getByLabelText('Documento afectado'),{target:{value:'F001-00000069'}});
- await waitFor(()=>expect((screen.getByLabelText('Descripción de la línea 1') as HTMLInputElement).value).toBe('Cemento real'));
+ await waitFor(()=>expect(screen.getByLabelText('Descripción de la línea 1').textContent).toBe('Cemento real'));
  fireEvent.change(screen.getByLabelText('Motivo de la nota'),{target:{value:'06'}});
  // La cantidad local está completa; el 400 puede surgir por un cambio concurrente posterior al refresco.
- expect((screen.getByLabelText('Descripción de la línea 1') as HTMLTextAreaElement).readOnly).toBe(true);
+ expect(screen.getByLabelText('Descripción de la línea 1').tagName).toBe('SPAN');
  const boton=screen.getByRole('button',{name:'Emitir Nota de Crédito'}) as HTMLButtonElement;
  await waitFor(()=>expect(boton.disabled).toBe(false));fireEvent.click(boton);
  expect(await screen.findByText(/No se pudo emitir el comprobante: NOTA_DEVOLUCION_TOTAL_INCOMPLETA/)).toBeTruthy();
  expect(screen.queryByText(/Request failed with status code/)).toBeNull();expect(onEmitir).not.toHaveBeenCalled();
  expect((screen.getByLabelText('Cantidad de la línea 1') as HTMLInputElement).value).toBe('1');
- expect((screen.getByLabelText('Descripción de la línea 1') as HTMLInputElement).value).toBe('Cemento real');
+ expect(screen.getByLabelText('Descripción de la línea 1').textContent).toBe('Cemento real');
  const primero=vi.mocked(apiClient.post).mock.calls[0];
  await waitFor(()=>expect(boton.disabled).toBe(false));fireEvent.click(boton);
  await waitFor(()=>expect(apiClient.post).toHaveBeenCalledTimes(2));
