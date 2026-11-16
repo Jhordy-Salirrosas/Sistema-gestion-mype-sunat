@@ -34,7 +34,7 @@ describe('SalesQuotesService', () => {
 
   it('crea cotización con IGV y total', async () => {
     const { prisma, service } = setup();
-    const q = await service.create('c1', { customerName: 'Cliente', items: [{ description: 'Producto', quantity: 2, unitPrice: 118 }] });
+    const q = await service.create('c1', { customerDocType: '0', customerName: 'Cliente', items: [{ description: 'Producto', quantity: 2, unitPrice: 118 }] });
     expect(q.totalAmount).toBe(236);
     expect(prisma.salesQuote.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ subtotal: 200, igv_amount: 36, total_amount: 236 }) }));
   });
@@ -54,7 +54,7 @@ describe('SalesQuotesService', () => {
 
   it('crea pedidos con prefijo PED y filtra por tipo', async () => {
     const { prisma, service } = setup();
-    await service.create('c1', { kind: 'PEDIDO', customerName: 'Cliente', items: [{ description: 'Producto', quantity: 1, unitPrice: 118 }] });
+    await service.create('c1', { kind: 'PEDIDO', customerDocType: '0', customerName: 'Cliente', items: [{ description: 'Producto', quantity: 1, unitPrice: 118 }] });
     expect(prisma.salesQuote.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ kind: 'PEDIDO', quote_number: expect.stringMatching(/^PED-/) }) }));
     await service.list('c1', 'PEDIDO');
     expect(prisma.salesQuote.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ kind: 'PEDIDO' }) }));
