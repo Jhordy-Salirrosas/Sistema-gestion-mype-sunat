@@ -1,3 +1,4 @@
+import { cuevaAuthTestImports, cuevaSecurityPrisma } from '../../fixtures/cuevaSecurityPrisma';
 import { PrismaService } from '../../../src/database/prismaService';
 import { InvoiceCommercialDefaultsService } from '../../../src/modules/invoices/application/services/invoiceCommercialDefaultsService';
 import { InvoiceCommercialDefaultsController } from '../../../src/modules/invoices/infrastructure/controllers/invoiceCommercialDefaultsController';
@@ -22,8 +23,8 @@ const url = process.env.TEST_DATABASE_URL;
       const c = await db.company.create({data:{ruc:prefix+Date.now().toString().slice(-9),legal_name:'Empresa local',sol_user:'FAKE',sol_pass_encrypted:'fake'}});
       if (prefix === '20') id = c.id; else otra = c.id;
     }
-    const module = await Test.createTestingModule({controllers:[InvoiceCommercialDefaultsController],providers:[InvoiceCommercialDefaultsService,
-      {provide:PrismaService,useValue:db}, {provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'local-admin',companyId:id,role})}},AuthGuard,RolesGuard]}).compile();
+    const module = await Test.createTestingModule({imports:cuevaAuthTestImports,controllers:[InvoiceCommercialDefaultsController],providers:[InvoiceCommercialDefaultsService,
+      {provide:PrismaService,useValue:db}, {provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'local-admin',companyId:id,role})}},AuthGuard,RolesGuard]}).overrideProvider(PrismaService).useValue(cuevaSecurityPrisma(()=>({sub:'local-admin',companyId:id,role}),db)).compile();
     app = module.createNestApplication(); app.useLogger(false); await app.init();
   });
   afterAll(async () => { if(app) await app.close(); if(db) { await db.company.deleteMany({where:{id:{in:[id,otra].filter(Boolean)}}}); await db.$disconnect(); } if(old===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=old; });
