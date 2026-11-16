@@ -210,3 +210,32 @@ Incremento: 7 archivos y 48 pruebas de back; 2 archivos y 21 pruebas de front. B
 Ferry: **72 archivos, 31 de código y 41 de pruebas/soporte**, sin dependencias nuevas. SHA256SUMS contiene 73 entradas (frontend/ y FERRY.md); el delta coincide byte por byte con el checkout front autorizado. El inventario sustituye el espejo heredado: sus eliminaciones en el diff del back no son borrados que deban aplicarse al front. FERRY.md detalla APIs, aplicación y prerrequisitos. No contiene harnesses, builds, node_modules, capturas ni archivos de entorno.
 
 Solo se construyeron las partes 1–4; no hay PRs, merges, despliegue, corte ni habilitación. Rama de revisión: feat/roles-administrables.
+
+## Corrección de CI del PR #412 — corrida #995
+
+La corrida 43894307817 (#995), sobre el merge de prueba de GitHub, registró
+2 suites fallidas, 430 aprobadas y 10 omitidas; 3 pruebas fallidas, 4261
+aprobadas y 63 omitidas (442 archivos y 4327 pruebas inventariadas).
+Las suites fallidas fueron `batch-retry.integration.spec.ts` (2 pruebas:
+ActionPermissionsService ausente en RootTestModule) y
+`outbox.integration.spec.ts` (1 prueba: el actor sintético no existe en el
+catálogo de pertenencia y recibe 401).
+
+Se incorporan los providers compartidos de permisos efectivos y pertenencia
+para estas pruebas de transporte. Batch-retry completa también los claims del
+actor y registra CapabilityGuard. Outbox conserva el JWT firmado, los guards,
+la base real y todas las aserciones originales. No cambia autorización de
+producción ni se desactiva ningún guard.
+
+Reproducción local con PostgreSQL efímero 17, migraciones oficiales aplicadas
+solo en el contenedor local, TEST_DATABASE_URL y RUN_INTEGRATION_TESTS=required;
+Jest con --runInBand --coverage y selección explícita de ambas suites:
+
+| Estado | Archivos | Pruebas aprobadas | Fallidas | Omitidas |
+| --- | --- | --- | --- | --- |
+| Antes | 2 (2 fallidos) | 2 | 3 | 0 |
+| Después | 2 (2 aprobados) | 5 | 0 | 0 |
+
+Los resultados están registrados en ci995-before.json y ci995-after.json del
+workspace de ejecución. La versión local de PostgreSQL difiere de la 16 del
+servicio de CI; las suites usan persistencia y pg-boss reales en ambos casos.
