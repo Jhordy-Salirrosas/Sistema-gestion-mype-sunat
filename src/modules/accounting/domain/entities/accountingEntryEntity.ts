@@ -19,6 +19,8 @@ export interface AccountingEntryProps {
   idempotencyKey?: string;
   lines: AccountingLine[];
   status?: 'BORRADOR' | 'ASENTADO' | 'ANULADO';
+  /** Momento en que se registró el asiento (distinto de la fecha contable). */
+  createdAt?: Date;
 }
 
 export class AccountingEntryEntity {
@@ -34,6 +36,7 @@ export class AccountingEntryEntity {
   public readonly idempotencyKey?: string;
   public readonly lines: ReadonlyArray<AccountingLine>;
   public readonly status: 'BORRADOR' | 'ASENTADO' | 'ANULADO';
+  public readonly createdAt?: Date;
 
   constructor(props: AccountingEntryProps) {
     this.id = props.id;
@@ -48,6 +51,7 @@ export class AccountingEntryEntity {
     this.idempotencyKey = props.idempotencyKey;
     this.lines = Object.freeze([...props.lines]);
     this.status = props.status ?? 'ASENTADO';
+    this.createdAt = props.createdAt;
   }
 
   getTotalDebit(): number {
