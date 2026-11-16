@@ -1,3 +1,4 @@
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { InvoicesModule } from '../../../src/modules/invoices/invoicesModule';
@@ -11,7 +12,7 @@ it('GET y POST reales respetan el orden del módulo, el rol ADMIN y el tenant de
  const tokens=[...new Set(controllers.flatMap((c:any)=>[...(Reflect.getMetadata('design:paramtypes',c) ?? []), ...(Reflect.getMetadata('self:paramtypes',c) ?? []).map((p:any)=>p.param)]))];
  const ejecutar=jest.fn(async(_tenant:string,previa=false)=>({fase:previa?'PREVIA':'EJECUTADA',elegibles:previa?1:0,encolados:previa?0:1,omitidos_incertidumbre:1,omitidos_rechazo_definitivo:1,omitidos_bloqueo_local:1,en_curso:0,ya_en_cola:0,omitidos_estado:0,no_confirmados:0,documentos:[]}));
  const detalle=jest.fn();
- const module=await Test.createTestingModule({controllers,providers:[
+ const module=await Test.createTestingModule({controllers,providers:[defaultActionPermissionsProvider,
   ...tokens.map(provide=>({provide,useValue:provide===InvoiceBatchRetryService?{ejecutar}:provide===InvoiceQueryService?{detalle}:{}})),
   {provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:(t:string)=>t==='admin'?{companyId:'tenant-token',role:'ADMIN'}:t==='auditor'?{companyId:'tenant-token',role:'AUDITOR'}:t==='operador'?{companyId:'tenant-token',role:'OPERADOR_FACTURACION'}:null}},AuthGuard,RolesGuard,
  ]}).compile();const app=module.createNestApplication();await app.init();

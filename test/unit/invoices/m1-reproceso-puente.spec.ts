@@ -1,3 +1,4 @@
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { InvoiceBridgeCoordinatorService } from '../../../src/modules/invoices/application/services/invoiceBridgeCoordinatorService';
 import { InvoiceAccountingBridgeService } from '../../../src/modules/invoices/application/services/invoiceAccountingBridgeService';
 import { RegisterManualMovementUseCase } from '../../../src/modules/inventory/application/use-cases/registerManualMovementUseCase';
@@ -259,6 +260,7 @@ it('el controlador exige autenticación/ADMIN y toma la empresa del token, sin p
   const module = await Test.createTestingModule({
     controllers: [InvoiceBridgeReprocessController],
     providers: [
+      defaultActionPermissionsProvider,
       { provide: InvoiceBridgeCoordinatorService, useValue: h.servicio },
       {
         provide: TOKEN_SERVICE_PORT,

@@ -46,6 +46,7 @@ model Company {
 
   users                 User[]
   module_permissions    RoleModulePermission[]
+  action_permissions    RoleActionPermission[]
   series                InvoiceSeries[]
   invoices              Invoice[]
   declarations          CustomsDeclaration[]
@@ -132,6 +133,20 @@ model RoleModulePermission {
   @@unique([company_id, role, module_code])
   @@index([company_id, role])
   @@map("role_module_permissions")
+}
+
+model RoleActionPermission {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  role        Role
+  action_code String
+  allowed     Boolean  @default(false)
+  updated_at  DateTime @updatedAt
+
+  @@unique([company_id, role, action_code])
+  @@index([company_id, role])
+  @@map("role_action_permissions")
 }
 
 model UserWarehouse {

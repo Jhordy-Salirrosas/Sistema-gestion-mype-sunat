@@ -1,3 +1,5 @@
+import { fechaFiscalLima } from '../../../src/modules/invoices/fiscalDate';
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { Reflector } from '@nestjs/core';
@@ -27,10 +29,10 @@ it('el auditor conserva lectura y vista previa de baja',()=>{
   expect(guard.canActivate({getHandler:()=>handler,getClass:()=>InvoiceQueryController,switchToHttp:()=>({getRequest:()=>({user:{role:'AUDITOR'}})})} as never)).toBe(true);
  }
 });
-const dto={tipo_comprobante:'01',serie:'F001',fecha_emision:'2026-11-12',forma_pago:'Contado',customer_identity_type:'6',customer_identity_number:'20100070970',customer_legal_name:'Cliente ficticio',items:[{descripcion:'Bien ficticio',cantidad:1,unidad:'NIU',afectacion:'10',precioUnitario:118}]};
+const dto={tipo_comprobante:'01',serie:'F001',fecha_emision:fechaFiscalLima(),forma_pago:'Contado',customer_identity_type:'6',customer_identity_number:'20100070970',customer_legal_name:'Cliente ficticio',items:[{descripcion:'Bien ficticio',cantidad:1,unidad:'NIU',afectacion:'10',precioUnitario:118}]};
 it.each(['ADMIN','OPERADOR_FACTURACION','AUDITOR'])('HTTP ambas creaciones para %s',async role=>{
  const service={emitir:jest.fn(async()=>({id:'fake',estado:'EN_COLA'})),create:jest.fn(async()=>({id:'fake',estado:'EN_COLA'}))};
- const module=await Test.createTestingModule({controllers:[InvoicesController],providers:[{provide:AtomicInvoiceCreationService,useValue:service},{provide:WarehouseAccessService,useValue:{assertWarehouse:jest.fn()}},{provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'test',companyId:'fake',role})}}]}).compile();
+ const module=await Test.createTestingModule({controllers:[InvoicesController],providers:[defaultActionPermissionsProvider,{provide:AtomicInvoiceCreationService,useValue:service},{provide:WarehouseAccessService,useValue:{assertWarehouse:jest.fn()}},{provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'test',companyId:'fake',role})}}]}).compile();
  const app=module.createNestApplication();app.useLogger(false);app.useGlobalPipes(new ValidationPipe({transform:true,whitelist:true,forbidNonWhitelisted:true}));await app.init();
  try {
   const fiscal=traducirEmision(dto as never,issuer8d,1).dto;
@@ -44,7 +46,7 @@ it.each(['ADMIN','OPERADOR_FACTURACION','AUDITOR'])('HTTP notas de crédito/déb
  const calls={autorizarCredito:jest.fn(async()=>({ok:true})),autorizarDebito:jest.fn(async()=>({ok:true}))};
  const tokens=Reflect.getMetadata('design:paramtypes',InvoiceQueryController) as Function[];
  const providers=tokens.map(provide=>({provide,useValue:calls}));
- const module=await Test.createTestingModule({controllers:[InvoiceQueryController],providers:[...providers,{provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'test',companyId:'fake',role})}}]}).compile();
+ const module=await Test.createTestingModule({controllers:[InvoiceQueryController],providers:[defaultActionPermissionsProvider,...providers,{provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'test',companyId:'fake',role})}}]}).compile();
  const app=module.createNestApplication();app.useLogger(false);await app.init();
  try{
   for(const suffix of ['notas-credito','notas-debito'])await request(app.getHttpServer()).post('/api/v1/invoices/fake/'+suffix).set('Authorization','Bearer fake').send({motivo:'06'}).expect(role==='AUDITOR'?403:201);

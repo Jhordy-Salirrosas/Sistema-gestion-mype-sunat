@@ -41,4 +41,16 @@ Los tres últimos defaults reflejan los `@Roles` actuales de los controladores d
 
 ## Implementación y validación por parte
 
-Pendiente tras registrar la nueva línea base. Se mantendrá un commit por P1, P2 y P3, sin PRs ni merges. Las migraciones Prisma y sus copias SQL manuales se entregarán en el repositorio y no se aplicarán a bases compartidas.
+La línea base se registró antes de construir. Se mantiene un commit por P1, P2 y P3, sin PRs ni merges. Las migraciones Prisma y sus copias SQL manuales se entregarán en el repositorio y no se aplicarán a bases compartidas.
+
+### P1 construido — permisos por acción
+
+`RoleActionPermission` se relaciona con Company y usa la clave única company_id/role/action_code, allowed y updated_at. Catálogo cerrado de las cuatro acciones anteriores; un rol desconocido no obtiene permisos. Las filas persistidas prevalecen sobre los defaults, incluida una denegación explícita para ADMIN. Se conservan los `@Roles`: conceder una acción a un rol fuera de ellos no habilita la operación.
+
+Administración: GET `/api/v1/auth/action-permissions/me` devuelve las cuatro acciones efectivas del rol autenticado. GET `/api/v1/auth/action-permissions` devuelve las veinte combinaciones y PUT recibe un arreglo de `{role, actionCode, allowed}`; ambos requieren ADMIN y toman la empresa del token. PUT actualiza las filas enviadas, sin borrar otras; rechaza rol/acción desconocidos, allowed no booleano y combinaciones duplicadas antes de escribir. Un company_id ajeno en el cuerpo no modifica la empresa efectiva. Ejemplo: `[{"role":"OPERADOR_FACTURACION","actionCode":"INVOICE_EDIT_ISSUE_DATE","allowed":true}]`.
+
+Enforcement: `ActionPermissionsGuard`, con metadatos en los controladores reales, se ejecuta además de AuthGuard/RolesGuard. En ambas rutas de emisión comprueba fecha_emision explícita contra `fechaFiscalLima()`; una fecha distinta sin permiso produce 403 con code `ACTION_PERMISSION_DENIED` y action identificada antes de crear, reservar o encolar. Omitir fecha o indicar hoy no consulta esa acción. Se mantienen las validaciones anteriores: el DTO fiscal de POST `/invoices` sigue requiriendo fecha y coherencia con el payload, por lo que omitirla allí puede seguir produciendo 400 por contrato, sin exigir el permiso. La fecha fiscal explícita se compara por su día literal, sin convertirla a UTC. No se cambian validaciones de notas, saldos, stock ni almacenes.
+
+Migración: `prisma/migrations/20261116110000_role_action_permissions/migration.sql`; copia idéntica `scripts/manual/role-action-permissions.sql`. Instrucciones en `scripts/manual/README-roles-permisos.md`. Se ejecutó el SQL solo sobre un PostgreSQL efímero local, creado con el esquema de la nueva base; no se aplicó a ninguna base compartida.
+
+Validación P1: 6 suites / 48 pruebas dirigidas aprobadas (36 nuevas y 12 regresiones existentes). Incluyen HTTP real de Nest con los controladores y guards de producción, defaults y overrides por empresa, denegación/grant conservando roles, ambas rutas de emisión, fechas en el límite de medianoche de Lima y PostgreSQL real con unicidad concurrente. Build oficial del back aprobado.
