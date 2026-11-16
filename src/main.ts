@@ -4,6 +4,34 @@ import { AppModule } from './appModule';
 import { HttpExceptionFilter } from './common/filters';
 import { httpsOnlyMiddleware } from './common/middleware/httpsOnlyMiddleware';
 
+/** Misma validación de entrada en producción y en las regresiones HTTP. */
+export function applyGlobalValidation(app: import('@nestjs/common').INestApplication) {
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      validationError: { target: false, value: false },
+      exceptionFactory: (errors) => {
+        const formattedErrors = errors.map((error) => {
+          const rule = Object.keys(error.constraints || {})[0];
+          const message = error.constraints
+            ? error.constraints[rule]
+            : 'Dato inválido';
+
+          return {
+            field: error.property,
+            rule: rule,
+            message: message,
+          };
+        });
+
+        return new BadRequestException(formattedErrors);
+      },
+    }),
+  );
+}
+
 export async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   if (process.env.NODE_ENV === 'production') {
@@ -52,30 +80,7 @@ export async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      validationError: { target: false, value: false },
-      exceptionFactory: (errors) => {
-        const formattedErrors = errors.map((error) => {
-          const rule = Object.keys(error.constraints || {})[0];
-          const message = error.constraints
-            ? error.constraints[rule]
-            : 'Dato inválido';
-
-          return {
-            field: error.property,
-            rule: rule,
-            message: message,
-          };
-        });
-
-        return new BadRequestException(formattedErrors);
-      },
-    }),
-  );
+  applyGlobalValidation(app);
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');

@@ -60,13 +60,14 @@ jobs:
       - name: Install Python validation dependencies
         run: python3 -m pip install -r scripts/m1/requirements.txt
 
+      # Compilar antes de Jest: las regresiones HTTP ejecutan el build ES2023.
+      - name: Run Build
+        run: npm run build
+
       - name: Run Tests with Coverage (Jest)
         run: npm test -- --coverage --coverageDirectory=coverage
         env:
           TEST_DATABASE_URL: postgresql://postgres:test@localhost:5435/ta13_test
-
-      - name: Run Build
-        run: npm run build
 
       - name: SonarCloud Quality Gate Scan
         uses: SonarSource/sonarqube-scan-action@v5.0.0
