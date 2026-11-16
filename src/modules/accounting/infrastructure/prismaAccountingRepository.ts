@@ -182,6 +182,8 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           sourceModule: e.source_module,
           journalCode: e.journal_code ?? 'OPV',
           sourceReferenceId: e.source_reference_id ?? undefined,
+          status: e.status,
+          createdAt: e.created_at,
           lines: e.lines.map((l: any) => ({
             lineOrder: l.line_order ?? l.lineOrder,
             accountCode: l.account_code ?? l.accountCode,
