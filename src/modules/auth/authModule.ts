@@ -20,6 +20,9 @@ import { SOL_CREDENTIAL_CIPHER } from './domain/ports/solCredentialCipherPort';
 import { SolCredentialCipher } from './infrastructure/security/solCredentialCipher';
 import { WarehouseAccessService } from './application/services/warehouseAccessService';
 import { ModulePermissionsService } from './application/services/modulePermissionsService';
+import { CreateUserService } from './application/services/createUserService';
+import { ActionPermissionsService } from './application/services/actionPermissionsService';
+import { ActionPermissionsGuard } from './infrastructure/guards/actionPermissionsGuard';
 import { ModuleWriteInterceptor } from './infrastructure/interceptors/moduleWriteInterceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 
@@ -55,6 +58,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     },
     WarehouseAccessService,
     ModulePermissionsService,
+    ActionPermissionsService,
+    CreateUserService,
+    ActionPermissionsGuard,
     { provide: APP_INTERCEPTOR, useClass: ModuleWriteInterceptor },
     AuthGuard,
     RolesGuard,
@@ -69,6 +75,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     ChangePasswordUseCase,
     WarehouseAccessService,
     ModulePermissionsService,
+    ActionPermissionsService,
+    CreateUserService,
+    ActionPermissionsGuard,
     TOKEN_SERVICE_PORT,
     HASHER_PORT,
     USER_REPOSITORY_PORT,

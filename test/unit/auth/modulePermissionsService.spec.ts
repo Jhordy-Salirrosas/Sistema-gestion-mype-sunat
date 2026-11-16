@@ -42,3 +42,13 @@ describe('ModulePermissionsService', () => {
     await expect(service.assertWrite('c1', 'ADMIN', 'M1')).resolves.toBeUndefined();
   });
 });
+
+it('can_view es independiente de can_write y respeta una denegación persistida de ADMIN',async()=>{
+ const {service,prisma}=setup();
+ prisma.roleModulePermission.findMany.mockResolvedValue([{role:'ADMIN',module_code:'M1',can_view:false,can_write:true}]);
+ await expect(service.assertView('c1','ADMIN','M1')).rejects.toBeInstanceOf(ForbiddenException);
+ await expect(service.assertWrite('c1','ADMIN','M1')).resolves.toBeUndefined();
+ prisma.roleModulePermission.findMany.mockResolvedValue([]);
+ await expect(service.assertView('c1','AUDITOR','M1')).resolves.toBeUndefined();
+ await expect(service.assertView('c1','OPERADOR_FACTURACION','M4')).rejects.toBeInstanceOf(ForbiddenException);
+});

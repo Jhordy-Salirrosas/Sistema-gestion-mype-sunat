@@ -1,3 +1,4 @@
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
 import { InvoicesModule } from '../../../src/modules/invoices/invoicesModule';
@@ -12,7 +13,7 @@ it('GET literal y POST de detracciones funcionan con el orden real del módulo',
  const findMany=jest.fn(async()=>[{id:'a',serie:'F001',correlativo:1,fecha_emision:new Date('2026-11-01'),monto_total:118,payload_ubl:{montoDetraccion:12},detraccion_deposited_at:null,detraccion_deposited_amount:0,customer_legal_name:null},{id:'b',serie:'F001',correlativo:2,fecha_emision:new Date('2026-11-02'),monto_total:118,payload_ubl:{},detraccion_deposited_amount:0}]);
  const service=new InvoiceDetractionService({invoice:{findMany}} as never);
  const registerDeposit=jest.spyOn(service,'registerDeposit').mockResolvedValue({id:'a'} as never);
- const module=await Test.createTestingModule({controllers,providers:tokens.map(provide=>({provide,useValue:provide===InvoiceQueryService?{detalle}:provide===InvoiceDetractionService?service:{}}))})
+ const module=await Test.createTestingModule({controllers,providers:[defaultActionPermissionsProvider,...tokens.map(provide=>({provide,useValue:provide===InvoiceQueryService?{detalle}:provide===InvoiceDetractionService?service:{}}))]})
  .overrideGuard(AuthGuard).useValue({canActivate:(ctx:any)=>{ctx.switchToHttp().getRequest().user={companyId:'c',sub:'usuario'};return true;}}).overrideGuard(RolesGuard).useValue({canActivate:()=>true}).compile();
  const app=module.createNestApplication();await app.init();
  try {
