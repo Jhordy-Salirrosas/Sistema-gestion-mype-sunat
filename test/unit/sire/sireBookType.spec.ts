@@ -15,6 +15,9 @@ describe('sireBookType', () => {
 
     it('falls back to RCE for an unknown book', () => {
       expect(toDomainBookType('OTRO' as never)).toBe('RCE');
+      expect(toDomainBookType(undefined as never)).toBe('RCE');
+      expect(toDomainBookType(null as never)).toBe('RCE');
+      expect(toDomainBookType('' as never)).toBe('RCE');
     });
   });
 
@@ -29,6 +32,9 @@ describe('sireBookType', () => {
 
     it('falls back to the purchases book for an unknown domain book', () => {
       expect(toApiBookType('OTRO' as never)).toBe('RCE_COMPRAS');
+      expect(toApiBookType(undefined as never)).toBe('RCE_COMPRAS');
+      expect(toApiBookType(null as never)).toBe('RCE_COMPRAS');
+      expect(toApiBookType('' as never)).toBe('RCE_COMPRAS');
     });
   });
 

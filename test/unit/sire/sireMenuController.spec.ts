@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { INTERCEPTORS_METADATA } from '@nestjs/common/constants';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import type { IUserRepositoryPort } from '../../../src/modules/auth/domain/ports/userRepositoryPort';
@@ -109,6 +111,44 @@ describe('SireMenuController', () => {
     await expect(
       controller.importar({}, undefined, USUARIO),
     ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.importar(
+        {},
+        { originalname: 'LE.zip', mimetype: 'application/zip', buffer: undefined as never },
+        USUARIO,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects all endpoints when session has no company', async () => {
+    const { controller } = crearController();
+    const userSinEmpresa = { ...USUARIO, companyId: undefined as never };
+
+    await expect(controller.estadoImportacion('m1', undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.estadoImportacion('m1', userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.estadoImportacion('m1')).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(controller.conciliacion({ periodo: '202401' }, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.conciliacion({ periodo: '202401' }, userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.conciliacion({ periodo: '202401' })).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(controller.resumen({ periodo: '202401' }, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.resumen({ periodo: '202401' }, userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.resumen({ periodo: '202401' })).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(controller.reportar({ periodo: '202401', libro: 'RVIE_VENTAS' }, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.reportar({ periodo: '202401', libro: 'RVIE_VENTAS' }, userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.reportar({ periodo: '202401', libro: 'RVIE_VENTAS' })).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(controller.estadoReporte('m2', undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.estadoReporte('m2', userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.estadoReporte('m2')).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(controller.historial({}, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.historial({}, userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.historial({})).rejects.toBeInstanceOf(UnauthorizedException);
+
+    await expect(controller.importar({}, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('reconciles the requested period scoped to the session company', async () => {
@@ -171,6 +211,89 @@ describe('SireMenuController', () => {
       'company-id',
       '202401',
       20,
+    );
+  });
+
+  it('reconciles without a book so the use case applies its default', async () => {
+    const { controller, conciliar } = crearController();
+
+    await controller.conciliacion({ periodo: '202401' }, USUARIO);
+
+    expect(conciliar.execute).toHaveBeenCalledWith(
+      'company-id',
+      '202401',
+      null,
+    );
+  });
+
+  it('returns the unified history without period or limit', async () => {
+    const { controller, historial } = crearController();
+
+    await controller.historial({}, USUARIO);
+
+    expect(historial.execute).toHaveBeenCalledWith(
+      'company-id',
+      null,
+      null,
+    );
+  });
+
+  it('fails the import when the company of the session does not exist', async () => {
+    const { controller, users, importar } = crearController();
+    (users.findCompanyById as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      controller.importar(
+        {},
+        {
+          originalname: `LE${RUC}-RCE-202401.zip`,
+          mimetype: 'application/octet-stream',
+          buffer: Buffer.from('contenido'),
+        },
+        USUARIO,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(importar.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('Filtro de extensiones del archivo SIRE', () => {
+  function obtenerFileFilter(): (
+    request: unknown,
+    file: { originalname: string },
+    callback: (error: Error | null, acceptFile: boolean) => void,
+  ) => void {
+    const interceptors = Reflect.getMetadata(
+      INTERCEPTORS_METADATA,
+      SireMenuController.prototype.importar,
+    );
+    const MixinInterceptor = interceptors[0] as new () => {
+      multer: { fileFilter: unknown };
+    };
+
+    return (new MixinInterceptor() as { multer: { fileFilter: never } }).multer
+      .fileFilter as never;
+  }
+
+  it('accepts the allowed extensions in a case-insensitive way', () => {
+    const fileFilter = obtenerFileFilter();
+    const callback = jest.fn();
+
+    fileFilter({}, { originalname: `LE${RUC}-RCE-202401.ZIP` }, callback);
+
+    expect(callback).toHaveBeenCalledWith(null, true);
+  });
+
+  it('rejects a file with an extension that is not allowed', () => {
+    const fileFilter = obtenerFileFilter();
+    const callback = jest.fn();
+
+    fileFilter({}, { originalname: 'propuesta.exe' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.any(BadRequestException),
+      false,
     );
   });
 });

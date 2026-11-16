@@ -111,6 +111,9 @@ describe('SireReadOnlyPeriodsController', () => {
     await expect(controller.getPeriods(dto, undefined)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+    await expect(controller.getPeriods(dto)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
     expect(users.findCompanyById).not.toHaveBeenCalled();
   });
 
@@ -288,6 +291,15 @@ describe('SireReadOnlyPeriodsController', () => {
   it('rejects a status query without an authenticated tenant', async () => {
     await expect(
       controller.getStatus('c5a31a3d-460a-46e7-9a3e-9057a31d0098', undefined),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      controller.getStatus('c5a31a3d-460a-46e7-9a3e-9057a31d0098', {
+        ...user,
+        companyId: undefined as unknown as string,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      controller.getStatus('c5a31a3d-460a-46e7-9a3e-9057a31d0098'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.sirePeriodQuery.findFirst).not.toHaveBeenCalled();
   });

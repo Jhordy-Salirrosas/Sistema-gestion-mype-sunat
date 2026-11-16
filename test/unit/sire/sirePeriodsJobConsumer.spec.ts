@@ -128,6 +128,7 @@ describe('SirePeriodsJobConsumer', () => {
     expect(prisma.sirePeriodQuery.update).toHaveBeenLastCalledWith({
       where: { id: job.messageId },
       data: expect.objectContaining({
+        company_id: job.companyId,
         status: 'COMPLETED',
         result: '{"periodos":["202601"]}',
         error_code: null,

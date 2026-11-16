@@ -1,4 +1,8 @@
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { SireFileStoragePort } from '../../../src/modules/sire/domain/ports/sireFileStoragePort';
 import { ImportarPropuestaSireUseCase } from '../../../src/modules/sire/application/use-cases/importarPropuestaSireUseCase';
 import {
@@ -234,6 +238,34 @@ describe('ConciliarPeriodoSireUseCase', () => {
     );
   });
 
+  it('defaults the book to RVIE_VENTAS when the request does not send one', async () => {
+    const repository = crearRepository();
+
+    const resultado = await new ConciliarPeriodoSireUseCase(
+      repository,
+    ).execute(COMPANY_ID, '202401', null);
+
+    expect(repository.listarImportaciones).toHaveBeenCalledWith(
+      COMPANY_ID,
+      '202401',
+      undefined,
+    );
+    expect(resultado.libro).toBe('RVIE_VENTAS');
+    expect(resultado.resumen.totalComprobantes).toBe(
+      resultado.comprobantes.length,
+    );
+
+    const resultadoUndefined = await new ConciliarPeriodoSireUseCase(
+      repository,
+    ).execute(COMPANY_ID, '202401', undefined as never);
+    expect(resultadoUndefined.libro).toBe('RVIE_VENTAS');
+
+    const resultadoVentas = await new ConciliarPeriodoSireUseCase(
+      repository,
+    ).execute(COMPANY_ID, '202401', 'RVIE_VENTAS');
+    expect(resultadoVentas.libro).toBe('RVIE_VENTAS');
+  });
+
   it('returns the state of an import for the polling endpoint', async () => {
     const repository = crearRepository();
     (repository.buscarImportacionPorMessageId as jest.Mock).mockResolvedValue({
@@ -259,6 +291,46 @@ describe('ConciliarPeriodoSireUseCase', () => {
     expect(resultado.estado).toBe('COMPLETED');
     expect(resultado.completedAt).toBe('2026-01-05T10:00:05.000Z');
     expect(resultado.message).toBeNull();
+  });
+
+  it('throws NotFoundException when the import does not exist', async () => {
+    const repository = crearRepository();
+    (repository.buscarImportacionPorMessageId as jest.Mock).mockResolvedValue(
+      null,
+    );
+
+    await expect(
+      new ConsultarImportacionSireUseCase(repository).execute(
+        COMPANY_ID,
+        'message-inexistente',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('falls back to the requested message id when the import has none stored', async () => {
+    const repository = crearRepository();
+    (repository.buscarImportacionPorMessageId as jest.Mock).mockResolvedValue({
+      id: 'importacion-id',
+      periodo: '202401',
+      libro: 'RCE_COMPRAS',
+      nombre_archivo: 'LE1.zip',
+      estado: 'PENDING',
+      message_id: null,
+      ruta_archivo: 'ruta',
+      hash_archivo: 'hash',
+      backend_almacen: 'SUPABASE',
+      total_registros: 0,
+      error_code: null,
+      created_at: new Date('2026-01-05T10:00:00.000Z'),
+      completed_at: null,
+    });
+
+    const resultado = await new ConsultarImportacionSireUseCase(
+      repository,
+    ).execute(COMPANY_ID, 'message-id');
+
+    expect(resultado.messageId).toBe('message-id');
+    expect(resultado.completedAt).toBeNull();
   });
 
   it('explains a failed import with a friendly message instead of a raw code', async () => {
