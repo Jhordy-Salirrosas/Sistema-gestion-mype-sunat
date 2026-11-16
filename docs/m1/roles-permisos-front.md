@@ -37,3 +37,7 @@ El back base contiene GET `/auth/action-permissions/me`, GET/PUT `/auth/action-p
 ## Implementación por parte
 
 Pendiente tras registrar esta línea base. Se entregará un commit por P1, P2, P3 y P4 y este commit de fase 0. El ferry reemplazará el inventario heredado por los archivos de este paquete sobre `4abdfc0`, con FERRY.md y SHA256SUMS. Sin PRs ni merges.
+
+### P1 construido — cliente y hook de acciones
+
+`actionPermissionsApi` define las cuatro acciones, tipos role/actionCode/allowed y consume los tres endpoints de acciones del paquete 1. `useActionPermissions` expone acciones efectivas, can(action), ready, carga y error. No presupone acciones de ADMIN: una denegación del servidor manda. Una acción ausente, una respuesta inválida, carga, error o ausencia de usuario no otorgan permiso. La caché se separa por usuario, rol y empresa; la invalidación usa el prefijo action-permissions-me. Pruebas dirigidas: dos archivos / siete pruebas aprobadas.

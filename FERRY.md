@@ -1,17 +1,12 @@
-# Ferry — grilla híbrida del detalle de líneas de emisión
+# Ferry — Semana Cueva, roles y permisos del front
 
-Rama `fix/m1-emitir-grilla-hibrida-ag`, base back `03890af881fea82e45801870a16a6e97ca229391`.
-Cadena front en `CarlosSoles/Fronted-sistema-mype-sunat`: base `d649d6520a1670029984c4cf2d0ca06b64091095` → PR #306 (grilla híbrida) → main `ec515ebc4404d090cbb80fe02bbd0a95af5d8161` → PR #307 (ajuste de columnas) → main `44cad5fad75902b906dc91819ea0ee6fc668fc3d`.
+Rama `feat/roles-permisos-front`, desde back `d5b0bab91921549e15409773f8eff9a5d17039f6`. Base front autorizada `4abdfc0657c3817bb123a452c25ca79ff64e7a3c` de `CarlosSoles/Fronted-sistema-mype-sunat`.
 
-Cambio SOLO de presentación del componente `InvoiceItemsGrid`: desde 1024px, tabla compacta de una fila por línea; por debajo, tarjeta densa por línea. Los campos de solo lectura se renderizan como texto; sin textos de ayuda duplicados ni scroll horizontal. El ajuste posterior pasa la tabla a `table-auto` con `min-w-[110px]` en Descripción para que ninguna columna quede recortada entre 1024 y 1280 px. Sin cambios de campos, validaciones, payload ni atajos.
+Este inventario sustituye al espejo heredado: las versiones previas ya viven en el main front indicado. Copiar `frontend/.` sobre la raíz del checkout front, conservando los demás archivos. No aplicar al front las eliminaciones del espejo que aparecen en el diff del back. Antes de copiar, verificar `sha256sum -c SHA256SUMS`; cada ruta del manifiesto es relativa al back. El manifiesto incluye todo `frontend/` y este FERRY.md, no su propio hash.
 
-## Aplicación
+## API consumida y lugares
 
-1. Verificar `sha256sum -c SHA256SUMS` (inventaría los 12 archivos entregados en su estado final y este documento).
-2. Los archivos ya están integrados en el front (PR #306 y #307); este ferry es el registro en el back y actualiza en el espejo `frontend/` solo esos 12 archivos.
+- P1: `actionPermissionsApi.ts` consume GET `/auth/action-permissions/me`, GET/PUT `/auth/action-permissions`; `useActionPermissions.ts` expone las acciones efectivas, sin defaults de permisos locales, con caché por usuario/rol/empresa y bloqueo durante carga/error.
+- Las siguientes partes se documentarán al completarse.
 
-## Cierre y manifiesto
-
-- Delta final: 12 archivos (1 componente + 11 pruebas adaptadas a leer los campos de solo lectura como texto).
-- Front: 194 archivos / 1462 pruebas aprobadas antes y después de cada PR; builds correctos; CI verde en ambos PR.
-- Certificación en la app servida: descripción y unidad visibles, botón de eliminar visible y funcional, totales correctos, sin scroll horizontal.
+La fase 0 y los conteos están en `docs/m1/roles-permisos-front.md`. Base: 194 archivos, 1460 pruebas aprobadas y dos fallos de fecha preexistentes. Se conservan sin corregir sus fixtures ni su validación; el cierre no admite fallos nuevos. No cambia código del back. Sin PRs ni merges.
