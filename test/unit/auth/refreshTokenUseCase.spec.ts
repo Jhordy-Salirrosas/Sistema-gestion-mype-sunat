@@ -49,7 +49,7 @@ describe('RefreshTokenUseCase', () => {
       hashToken: jest.fn().mockImplementation((raw) => `hash_of_${raw}`),
     };
 
-    useCase = new RefreshTokenUseCase(mockUserRepo, mockTokenService);
+    useCase = new RefreshTokenUseCase(mockUserRepo, mockTokenService, {resolve:jest.fn(async p=>p)} as never);
   });
 
   it('debería rotar el token de refresco y emitir nuevo access token correctamente', async () => {

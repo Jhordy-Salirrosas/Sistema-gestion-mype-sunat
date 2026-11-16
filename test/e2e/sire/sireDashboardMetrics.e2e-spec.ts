@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
@@ -114,7 +115,7 @@ describe('SIRE dashboard metrics HTTP contract', () => {
         SireResilienceMetricsCompatibilityController,
         LegacySireMetricsController,
       ],
-      providers: [
+      providers: [sessionMembershipTestProvider,
         AuthGuard,
         { provide: ReconcileSireUseCase, useValue: { execute: jest.fn() } },
         { provide: IngestSireProposalUseCase, useValue: { execute: jest.fn() } },

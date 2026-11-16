@@ -1,3 +1,4 @@
+import { SessionMembershipService } from '../../application/services/sessionMembershipService';
 import {
   CanActivate,
   ExecutionContext,
@@ -15,9 +16,10 @@ export class AuthGuard implements CanActivate {
   constructor(
     @Inject(TOKEN_SERVICE_PORT)
     private readonly tokenService: TokenServicePort,
+    private readonly membership: SessionMembershipService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers['authorization'];
 
@@ -35,7 +37,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Token de acceso inválido o expirado.');
     }
 
-    request.user = payload;
+    request.user = await this.membership.resolve(payload);
     return true;
   }
 }

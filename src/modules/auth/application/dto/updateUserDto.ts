@@ -1,7 +1,5 @@
-import { IsBoolean, IsIn, IsOptional } from 'class-validator';
-
-export const ROLES_USUARIO = ['ADMIN', 'CONTADOR', 'OPERADOR_FACTURACION', 'OPERADOR_ADUANAS', 'AUDITOR'] as const;
+import { IsBoolean, IsOptional, IsString, Matches } from 'class-validator';
 export class UpdateUserDto {
-  @IsOptional() @IsIn(ROLES_USUARIO as unknown as string[]) role?: typeof ROLES_USUARIO[number];
+  @IsOptional() @IsString() @Matches(/^[A-Z][A-Z0-9_]{0,63}$/) role?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }

@@ -27,8 +27,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
-import { CurrentCompany, Roles } from '../../../../common/decorators';
+import { CapabilityGuard } from '../../../auth/infrastructure/guards/capabilityGuard';
+import { CurrentCompany, RequireCapability } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { CurrentUser } from '../../../auth/infrastructure/decorators/currentUserDecorator';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
@@ -179,8 +179,8 @@ export class InvoiceQueryController {
    * Responde `enviado: false` con su motivo —y no un error— cuando la vista
    * previa trae reglas incumplidas o no hay nada que informar.
    */
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('INVOICE_SUMMARY_SEND')
   @Post('resumenes/diario/enviar')
   @HttpCode(HttpStatus.OK)
   enviarResumen(
@@ -199,8 +199,8 @@ export class InvoiceQueryController {
    * ENVÍA la comunicación de baja (RA): anula ante SUNAT las facturas ya
    * aceptadas de la fecha.
    */
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('INVOICE_SUMMARY_SEND')
   @Post('resumenes/baja/enviar')
   @HttpCode(HttpStatus.OK)
   enviarBaja(
@@ -230,8 +230,8 @@ export class InvoiceQueryController {
     return this.resumenes.vistaAnulacionNotas(companyId, this.fechaDe(fecha), 1, seleccionBaja(body?.lineas));
   }
 
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('INVOICE_SUMMARY_SEND')
   @Post('resumenes/anulacion-notas/enviar')
   @HttpCode(HttpStatus.OK)
   enviarAnulacionNotas(@CurrentCompany() companyId: string, @Query('fecha') fecha?: string, @Body() body?: { lineas?: unknown; noOtorgado?: boolean }) {
@@ -241,8 +241,8 @@ export class InvoiceQueryController {
   @Get('resumenes/envios')
   listarAgregados(@CurrentCompany() companyId: string) { return this.aggregates.listar(companyId); }
 
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_SUNAT_POLL')
+  @UseGuards(CapabilityGuard)
   @Post('resumenes/envios/:id/consultar')
   async consultarAgregado(@CurrentCompany() companyId: string, @Param('id') identifier: string) {
     const row = await this.aggregates.cargar(companyId, identifier);
@@ -298,8 +298,8 @@ export class InvoiceQueryController {
     return this.consultas.detalle(companyId, id);
   }
 
-  @UseGuards(RolesGuard, ActionPermissionsGuard)
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @UseGuards(CapabilityGuard, ActionPermissionsGuard)
+  @RequireCapability('INVOICE_RESOLVE_DLQ')
   @RequireAction('INVOICE_RESOLVE_DLQ')
   @Post(':id/resolver-dlq')
   resolverDlq(@CurrentCompany() companyId: string, @Param('id') id: string) {
@@ -312,8 +312,8 @@ export class InvoiceQueryController {
    * Reencola un comprobante en error para volver a consultar su CDR y
    * registra la acción en la auditoría (criterio 3).
    */
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(CapabilityGuard)
+  @RequireCapability('INVOICE_RETRY_CDR')
   @Post(':id/retry-cdr')
   reintentarCdr(
     @CurrentCompany() companyId: string,
@@ -340,8 +340,8 @@ export class InvoiceQueryController {
    * de emitir. Un importe que supera el saldo responde 409 y no 400: es un
    * conflicto con el estado del comprobante, no un error de formato.
    */
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_NOTES_ISSUE')
+  @UseGuards(CapabilityGuard)
   @Post(':id/notas-credito')
   notaCredito(
     @CurrentCompany() companyId: string,
@@ -360,8 +360,8 @@ export class InvoiceQueryController {
    * Valida el motivo del Catálogo 10 y el importe. Una nota de débito aumenta
    * el importe de la operación, así que no consume el saldo del comprobante.
    */
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_NOTES_ISSUE')
+  @UseGuards(CapabilityGuard)
   @Post(':id/notas-debito')
   notaDebito(
     @CurrentCompany() companyId: string,

@@ -1,5 +1,5 @@
-import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
-import { Roles } from '../../../../common/decorators';
+import { CapabilityGuard } from '../../../auth/infrastructure/guards/capabilityGuard';
+import { RequireCapability } from '../../../../common/decorators';
 import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../../auth/infrastructure/decorators/currentUserDecorator';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -17,8 +17,8 @@ export class InvoiceDetractionController {
     return this.detractions.list(companyId, period);
   }
 
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_DETRACTION_REGISTER')
+  @UseGuards(CapabilityGuard)
   @Post(':id')
   @HttpCode(HttpStatus.OK)
   deposit(@Param('id') id: string, @Body() dto: { amount?: number; date?: string; constancia?: string }, @CurrentCompany() companyId?: string, @CurrentUser() user?: { sub: string }) {
@@ -26,8 +26,8 @@ export class InvoiceDetractionController {
     if (!user?.sub) throw new BadRequestException('Usuario autenticado requerido.');
     return this.detractions.registerDeposit(companyId, id, dto, user.sub);
   }
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_DETRACTION_REGISTER')
+  @UseGuards(CapabilityGuard)
   @Put(':id/deposits/:depositId')
   edit(@Param('id') id: string, @Param('depositId') depositId: string, @Body() dto: { amount?: number; date?: string; constancia?: string }, @CurrentCompany() companyId?: string, @CurrentUser() user?: { sub: string }) {
     if (!companyId) throw new BadRequestException('Identificador de empresa requerido.');

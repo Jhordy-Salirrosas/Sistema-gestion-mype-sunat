@@ -28,6 +28,7 @@ describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
         })),
       } as any,
     };
+    Object.assign(mockPrisma, { companyRole: {createMany:jest.fn()}, roleMenuPermission:{createMany:jest.fn()}, $transaction:jest.fn(cb=>cb(mockPrisma)) });
   });
 
   it('debería registrar de forma idempotente la empresa MYPE demo', async () => {

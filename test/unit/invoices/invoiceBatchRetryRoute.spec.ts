@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -12,10 +13,10 @@ it('GET y POST reales respetan el orden del módulo, el rol ADMIN y el tenant de
  const tokens=[...new Set(controllers.flatMap((c:any)=>[...(Reflect.getMetadata('design:paramtypes',c) ?? []), ...(Reflect.getMetadata('self:paramtypes',c) ?? []).map((p:any)=>p.param)]))];
  const ejecutar=jest.fn(async(_tenant:string,previa=false)=>({fase:previa?'PREVIA':'EJECUTADA',elegibles:previa?1:0,encolados:previa?0:1,omitidos_incertidumbre:1,omitidos_rechazo_definitivo:1,omitidos_bloqueo_local:1,en_curso:0,ya_en_cola:0,omitidos_estado:0,no_confirmados:0,documentos:[]}));
  const detalle=jest.fn();
- const module=await Test.createTestingModule({controllers,providers:[defaultActionPermissionsProvider,
+ const module=await Test.createTestingModule({controllers,providers:[sessionMembershipTestProvider, defaultActionPermissionsProvider,
   ...tokens.map(provide=>({provide,useValue:provide===InvoiceBatchRetryService?{ejecutar}:provide===InvoiceQueryService?{detalle}:{}})),
-  {provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:(t:string)=>t==='admin'?{companyId:'tenant-token',role:'ADMIN'}:t==='auditor'?{companyId:'tenant-token',role:'AUDITOR'}:t==='operador'?{companyId:'tenant-token',role:'OPERADOR_FACTURACION'}:null}},AuthGuard,RolesGuard,
- ]}).compile();const app=module.createNestApplication();await app.init();
+  {provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:(t:string)=>t==='admin'?{sub:'actor-prueba',companyId:'tenant-token',role:'ADMIN'}:t==='auditor'?{sub:'actor-prueba',companyId:'tenant-token',role:'AUDITOR'}:t==='operador'?{sub:'actor-prueba',companyId:'tenant-token',role:'OPERADOR_FACTURACION'}:null}},AuthGuard,RolesGuard,
+ ]}).overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).overrideProvider(defaultActionPermissionsProvider.provide).useValue(defaultActionPermissionsProvider.useFactory()).compile();const app=module.createNestApplication();await app.init();
  try {
   await request(app.getHttpServer()).get('/api/v1/invoices/retry-batch').expect(401);
   for(const role of ['auditor','operador'])for(const method of ['get','post'] as const)await request(app.getHttpServer())[method]('/api/v1/invoices/retry-batch').set('Authorization',`Bearer ${role}`).expect(403);

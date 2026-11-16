@@ -1,3 +1,5 @@
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { Test } from '@nestjs/testing';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -13,7 +15,7 @@ it.each([['1','20'],['2','30']])('conserva paginado válido %s/%s',(page,size)=>
 it('rechaza paginado repetido con 400',()=>{expect(()=>normalizarPaginacion(['1','2'] as never,'20')).toThrow(BadRequestException);});
 it('HTTP series devuelve 400 para entradas previsibles sin invocar persistencia',async()=>{
  const asegurarSerie=jest.fn(async()=>({}));
- const module=await Test.createTestingModule({controllers:[InvoiceConfigController],providers:[{provide:InvoiceConfigService,useValue:{}},{provide:InvoiceSeriesService,useValue:{asegurarSerie}},{provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({role:'ADMIN',companyId:'test'})}}]}).compile();
+ const module=await Test.createTestingModule({controllers:[InvoiceConfigController],providers:[defaultActionPermissionsProvider, sessionMembershipTestProvider, {provide:InvoiceConfigService,useValue:{}},{provide:InvoiceSeriesService,useValue:{asegurarSerie}},{provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({sub:'actor-prueba',role:'ADMIN',companyId:'test'})}}]}).overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).overrideProvider(defaultActionPermissionsProvider.provide).useValue(defaultActionPermissionsProvider.useFactory()).compile();
  const app=module.createNestApplication();app.useLogger(false);app.useGlobalPipes(new ValidationPipe({transform:true,whitelist:true,forbidNonWhitelisted:true}));await app.init();
  try{
   for(const body of [{document_type:'01',series:123},{document_type:1,series:'F001'},{document_type:'01',series:'F001',correlativo_inicial:'1'}]){

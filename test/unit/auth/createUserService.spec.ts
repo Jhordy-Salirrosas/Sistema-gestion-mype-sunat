@@ -1,3 +1,4 @@
+import { withSecurityCatalog } from '../../fixtures/securityCatalogPrisma';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
@@ -8,7 +9,7 @@ const dto={name:'Usuario prueba',email:'nuevo@example.invalid',password:'StrongP
 function setup(){
  const prisma={user:{findFirst:jest.fn(async()=>null),create:jest.fn(async({data})=>({id:'nuevo',...data}))}};
  const hasher={hash:jest.fn(async()=> 'HASH-PRUEBA'),compare:jest.fn()};
- return {prisma,hasher,service:new CreateUserService(prisma as never,hasher)};
+ return {prisma,hasher,service:new CreateUserService(withSecurityCatalog(prisma) as never,hasher)};
 }
 it.each(ROLES)('crea %s en la empresa del ADMIN, activa, normalizada y sin hash en respuesta',async role=>{
  const h=setup();const result=await h.service.create('empresa',{...dto,role,email:' NUEVO@EXAMPLE.INVALID ',name:' Usuario prueba '});
@@ -27,10 +28,12 @@ it('rechaza un correo global ocupado y convierte una colisión concurrente a 409
  await expect(h.service.create('empresa',dto)).rejects.toBeInstanceOf(ConflictException);
 });
 it('no oculta errores de persistencia ajenos a unicidad',async()=>{const h=setup();const error=new Error('base no disponible');h.prisma.user.create.mockRejectedValueOnce(error);await expect(h.service.create('empresa',dto)).rejects.toBe(error);});
-it.each([{email:'no-es-correo'},{name:'  '},{role:'OPERATOR'},{password:'123'},{name:25}])('DTO rechaza datos inválidos %j',patch=>{
+it.each([{email:'no-es-correo'},{name:'  '},{role:'rol con espacios'},{password:'123'},{name:25}])('DTO rechaza datos inválidos %j',patch=>{
  expect(validateSync(plainToInstance(CreateUserDto,{...dto,...patch})).length).toBeGreaterThan(0);
 });
 it('DTO normaliza correo/nombre sin recortar ni alterar la contraseña',()=>{
  const result=plainToInstance(CreateUserDto,{...dto,name:' Usuario ',email:' NUEVO@EXAMPLE.INVALID ',password:' StrongPass123! '});
  expect(result).toMatchObject({name:'Usuario',email:dto.email,password:' StrongPass123! '});
 });
+
+it('el servicio rechaza un code no perteneciente a la empresa aunque tenga sintaxis válida',async()=>{const h=setup();await expect(h.service.create('empresa',{...dto,role:'OPERATOR'})).rejects.toMatchObject({status:400});expect(h.prisma.user.create).not.toHaveBeenCalled();});
