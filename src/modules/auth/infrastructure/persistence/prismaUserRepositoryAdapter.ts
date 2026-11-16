@@ -170,7 +170,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           email: params.user.email,
           password_hash: params.passwordHash,
           full_name: params.user.fullName,
-          role: params.user.role,
+          role: params.user.role as never,
           is_active: params.user.isActive,
         },
       });

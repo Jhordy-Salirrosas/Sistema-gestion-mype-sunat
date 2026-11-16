@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -21,7 +22,7 @@ const url=process.env.TEST_DATABASE_URL;
    const id=randomUUID();ids.push(id);await db.invoice.create({data:{id,company_id:i===4?otra:company,ruc_emisor:'20000000001',tipo_comprobante:'01',serie:'F001',correlativo:i+1,estado,fecha_emision:new Date('2026-11-13'),monto_total:118,payload_ubl:{},transport_uncertain:incierto,...(i===2?{cdr_sunat:{responseCode:'3105',description:'Rechazo de prueba'}}:{})}});
   }
   await db.transactionHistory.create({data:{company_id:company,invoice_id:ids[3],estado_anterior:'PENDIENTE',estado_nuevo:'ERROR_RED',intento:1,codigo_error:'M1_PREPARATION_DATOS_INVALIDOS',mensaje_error:JSON.stringify({recuperable:false,causa:'Datos inválidos'})}});
-  const module=await Test.createTestingModule({controllers:[InvoiceBatchRetryController],providers:[
+  const module=await Test.createTestingModule({controllers:[InvoiceBatchRetryController],providers:[sessionMembershipTestProvider,
     {provide:InvoiceBatchRetryService,useValue:new InvoiceBatchRetryService(db,queue)},
     {provide:TOKEN_SERVICE_PORT,useValue:{verifyToken:()=>({companyId:company,role:'ADMIN'})}},AuthGuard,RolesGuard,
   ]}).compile();

@@ -1,3 +1,4 @@
+import { initializeCompanyRoles } from '../../../src/modules/auth/application/services/roleCatalogService';
 import { randomUUID } from 'node:crypto';
 import { ActionPermissionsService } from '../../../src/modules/auth/application/services/actionPermissionsService';
 import { rolesDatabase } from '../../fixtures/rolesDatabase';
@@ -6,9 +7,9 @@ import type { PrismaService } from '../../../src/database/prismaService';
 (process.env.ROLES_TEST_DATABASE_URL?describe:describe.skip)('permisos por acción con PostgreSQL aislado',()=>{
  let db:PrismaService;let a:string;let b:string;let service:ActionPermissionsService;
  beforeAll(async()=>{db=await rolesDatabase();service=new ActionPermissionsService(db);
-  for(const key of ['a','b']){const id=randomUUID();await db.company.create({data:{id,ruc:('2'+BigInt('0x'+id.replaceAll('-','').slice(0,9)).toString().padStart(10,'0').slice(-10)),legal_name:'Prueba permisos '+key,sol_user:'local',sol_pass_encrypted:'local'}});if(key==='a')a=id;else b=id;}
+  for(const key of ['a','b']){const id=randomUUID();await db.company.create({data:{id,ruc:('2'+BigInt('0x'+id.replaceAll('-','').slice(0,9)).toString().padStart(10,'0').slice(-10)),legal_name:'Prueba permisos '+key,sol_user:'local',sol_pass_encrypted:'local'}});await db.$transaction(tx=>initializeCompanyRoles(tx,id));if(key==='a')a=id;else b=id;}
  });
- afterAll(async()=>{if(db){await db.company.deleteMany({where:{id:{in:[a,b].filter(Boolean)}}});await db.$disconnect();}});
+ afterAll(async()=>{if(db){await db.auditLog.deleteMany({where:{company_id:{in:[a,b].filter(Boolean)}}});await db.roleMenuPermission.deleteMany({where:{company_id:{in:[a,b].filter(Boolean)}}});await db.company.deleteMany({where:{id:{in:[a,b].filter(Boolean)}}});await db.$disconnect();}});
  it('persiste override por empresa y conserva defaults de otra empresa',async()=>{
   await service.replace(a,[{role:'OPERADOR_FACTURACION',actionCode:'INVOICE_EDIT_ISSUE_DATE',allowed:true}]);
   expect((await service.forRole(a,'OPERADOR_FACTURACION')).find(r=>r.actionCode==='INVOICE_EDIT_ISSUE_DATE')?.allowed).toBe(true);

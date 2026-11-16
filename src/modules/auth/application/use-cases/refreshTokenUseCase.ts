@@ -1,3 +1,4 @@
+import { SessionMembershipService } from '../services/sessionMembershipService';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import {
   USER_REPOSITORY_PORT,
@@ -22,6 +23,7 @@ export class RefreshTokenUseCase {
     private readonly userRepository: UserRepositoryPort,
     @Inject(TOKEN_SERVICE_PORT)
     private readonly tokenService: TokenServicePort,
+    private readonly membership: SessionMembershipService,
   ) {}
 
   async execute(rawRefreshToken?: string): Promise<RefreshTokenResponse> {
@@ -53,6 +55,8 @@ export class RefreshTokenUseCase {
       throw new UnauthorizedException('El usuario asociado a la sesión se encuentra inactivo.');
     }
 
+    const session = await this.membership.resolve({ sub:user.id,email:user.email,companyId:user.companyId,role:user.role });
+
     await this.userRepository.revokeRefreshToken(tokenHash);
 
     const newRawRefreshToken = this.tokenService.generateRefreshToken();
@@ -67,7 +71,7 @@ export class RefreshTokenUseCase {
         sub: user.id,
         email: user.email,
         companyId: user.companyId,
-        role: user.role,
+        role: session.role,
       },
       expiresInSeconds,
     );

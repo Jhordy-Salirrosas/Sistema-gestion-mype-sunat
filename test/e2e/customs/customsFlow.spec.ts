@@ -1,3 +1,5 @@
+import { withSecurityCatalog } from '../../fixtures/securityCatalogPrisma';
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
@@ -391,12 +393,12 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
-      .useValue({
+      .useValue(withSecurityCatalog({
         roleModulePermission: { findMany: jest.fn().mockResolvedValue([]) },
         $connect: jest.fn(),
         $disconnect: jest.fn(),
         $transaction: jest.fn(),
-      })
+      }))
       .overrideProvider(QueueService)
       .useValue({
         enqueueInvoiceInTx: jest.fn(),
@@ -411,7 +413,7 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
       .useValue(inMemorySettlementRepo)
       .overrideProvider(LANDED_COST_REPOSITORY_PORT)
       .useValue(inMemoryLandedCostRepo)
-      .compile();
+      .overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).compile();
 
     const tokenService = moduleFixture.get<TokenServicePort>(TOKEN_SERVICE_PORT);
 

@@ -1,3 +1,6 @@
+import { SYSTEM_ROLES } from '../../domain/securityCatalog';
+import { companyRoles, customRolesEnabled, requireCompanyRole, requireAssignableRole } from './roleCatalogService';
+import { auditSecurityChange } from './securityAudit';
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 
@@ -24,58 +27,48 @@ const map = (p: any) => ({ role: p.role, moduleCode: p.module_code, canView: p.c
 @Injectable()
 export class ModulePermissionsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  private defaults(role: string) { return PERMISOS_POR_ROL[role] ?? SIN_ESCRITURA([]); }
-
+  private roleDefault(role: string, code: string) {
+    const d=(PERMISOS_POR_ROL[role]??SIN_ESCRITURA([]))[code]??{view:false,write:false};
+    return {canView:d.view,canWrite:d.write};
+  }
   async list(companyId: string) {
-    const rows = await this.prisma.roleModulePermission.findMany({ where: { company_id: companyId } });
-    const porRol = new Map<string, any>();
-    for (const row of rows) porRol.set(`${row.role}:${row.module_code}`, row);
-    return ROLES.flatMap((role) => MODULES.map((m) => {
-      const row = porRol.get(`${role}:${m.code}`);
-      return row ? map(row) : { role, moduleCode: m.code, ...this.roleDefault(role, m.code) };
+    const roles=await companyRoles(this.prisma,companyId);
+    const rows=await this.prisma.roleModulePermission.findMany({where:{company_id:companyId}});
+    return roles.flatMap(({code:role})=>MODULES.map(m=>{
+      const row=rows.find(r=>r.role===role&&r.module_code===m.code);
+      return row?map(row):{role,moduleCode:m.code,...this.roleDefault(role,m.code)};
     }));
   }
-
-  private roleDefault(role: string, code: string) {
-    const d = this.defaults(role)[code] ?? { view: false, write: false };
-    return { canView: d.view, canWrite: d.write };
+  async forRole(companyId:string,role:string) {
+    await requireCompanyRole(this.prisma,companyId,role);
+    const enabled=(SYSTEM_ROLES as readonly string[]).includes(role)||await customRolesEnabled(this.prisma);
+    if(!enabled)return MODULES.map(m=>({role,moduleCode:m.code,canView:false,canWrite:false}));
+    const rows=await this.prisma.roleModulePermission.findMany({where:{company_id:companyId}});
+    return MODULES.map(m=>{const row=rows.find(r=>r.role===role&&r.module_code===m.code);return row?map(row):{role,moduleCode:m.code,...this.roleDefault(role,m.code)};});
   }
-
-  async forRole(companyId: string, role: string) {
-    const rows = await this.prisma.roleModulePermission.findMany({ where: { company_id: companyId, role: role as never } });
-    const byCode = new Map(rows.map((r) => [r.module_code, map(r)]));
-    return MODULES.map((m) => byCode.get(m.code) ?? { role, moduleCode: m.code, ...this.roleDefault(role, m.code) });
+  async assertWrite(companyId:string,role:string,moduleCode:string) {
+    await requireCompanyRole(this.prisma,companyId,role);
+    if(role==='ADMIN')return;
+    if(!(await this.forRole(companyId,role)).find(r=>r.moduleCode===moduleCode)?.canWrite)throw new ForbiddenException(`No tiene permiso de escritura en el módulo ${moduleCode}.`);
   }
-
-  async assertWrite(companyId: string, role: string, moduleCode: string) {
-    if (role === 'ADMIN') return;
-    const rows = await this.forRole(companyId, role);
-    if (!rows.find((r) => r.moduleCode === moduleCode)?.canWrite) {
-      throw new ForbiddenException(`No tiene permiso de escritura en el módulo ${moduleCode}.`);
-    }
+  async assertView(companyId:string,role:string,moduleCode:string) {
+    if(!(await this.forRole(companyId,role)).find(r=>r.moduleCode===moduleCode)?.canView)throw new ForbiddenException(`No tiene permiso de lectura en el módulo ${moduleCode}.`);
   }
-
-  async assertView(companyId: string, role: string, moduleCode: string) {
-    const rows = await this.forRole(companyId, role);
-    if (!rows.find((row) => row.moduleCode === moduleCode)?.canView) {
-      throw new ForbiddenException(`No tiene permiso de lectura en el módulo ${moduleCode}.`);
-    }
-  }
-
-  async replace(companyId: string, rows: Array<{ role: string; moduleCode: string; canView: boolean; canWrite: boolean }>) {
-    if (!Array.isArray(rows) || rows.some((r) => !ROLES.includes(r.role as never) || !CODES.has(r.moduleCode as never))) {
-      throw new BadRequestException('Matriz de permisos inválida.');
-    }
-    await this.prisma.$transaction(async (tx) => {
-      for (const row of rows) {
-        await tx.roleModulePermission.upsert({
-          where: { company_id_role_module_code: { company_id: companyId, role: row.role as never, module_code: row.moduleCode } },
-          create: { company_id: companyId, role: row.role as never, module_code: row.moduleCode, can_view: row.canView, can_write: row.canWrite },
-          update: { can_view: row.canView, can_write: row.canWrite },
-        });
+  async replace(companyId:string,rows:Array<{role:string;moduleCode:string;canView:boolean;canWrite:boolean}>,actorId:string|null=null) {
+    if(!Array.isArray(rows)||rows.some(r=>!r||typeof r.role!=='string'||!CODES.has(r.moduleCode as never)||typeof r.canView!=='boolean'||typeof r.canWrite!=='boolean')||new Set(rows.map(r=>`${r.role}:${r.moduleCode}`)).size!==rows.length)throw new BadRequestException('Matriz de permisos inválida.');
+    await this.prisma.$transaction(async tx=>{
+      const before=await tx.roleModulePermission.findMany({where:{company_id:companyId}});
+      for(const row of rows){
+        await requireAssignableRole(tx,companyId,row.role);
+        if(row.role==='ADMIN'){
+          const previous=before.find(r=>r.role===row.role&&r.module_code===row.moduleCode);
+          const effective=previous?map(previous):this.roleDefault(row.role,row.moduleCode);
+          if(effective.canView!==row.canView||effective.canWrite!==row.canWrite)throw new ForbiddenException('Los permisos de ADMIN están protegidos.');
+          continue;
+        }
+        await tx.roleModulePermission.upsert({where:{company_id_role_module_code:{company_id:companyId,role:row.role as never,module_code:row.moduleCode}},create:{company_id:companyId,role:row.role as never,module_code:row.moduleCode,can_view:row.canView,can_write:row.canWrite},update:{can_view:row.canView,can_write:row.canWrite}});
       }
-    });
-    return this.list(companyId);
+      await auditSecurityChange(tx,companyId,actorId,'ROLE_MODULE_PERMISSIONS','modules',before,await tx.roleModulePermission.findMany({where:{company_id:companyId}}));
+    });return this.list(companyId);
   }
 }

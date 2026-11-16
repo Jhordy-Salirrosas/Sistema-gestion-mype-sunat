@@ -1,3 +1,5 @@
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import 'reflect-metadata';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, ServiceUnavailableException, type INestApplication } from '@nestjs/common';
@@ -14,10 +16,10 @@ beforeEach(async () => {
     partnerBankAccount: { create: jest.fn(async ({ data }: any) => { const bank = { id: 'banco', ...data }; banks.push(bank); return bank; }) },
   };
   Reflect.defineMetadata('design:paramtypes', [MasterDataService], MasterDataController);
-  const module = await Test.createTestingModule({ controllers: [MasterDataController], providers: [
+  const module = await Test.createTestingModule({ controllers: [MasterDataController], providers:[defaultActionPermissionsProvider, sessionMembershipTestProvider,
     { provide: MasterDataService, useValue: new MasterDataService(db) },
     { provide: TOKEN_SERVICE_PORT, useValue: { verifyToken: (token: string) => token === 'vigente' ? { companyId: 'empresa-a' } : token === 'otro-tenant' ? { companyId: 'empresa-b' } : null } },
-  ] }).compile();
+  ] }).overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).compile();
   app = module.createNestApplication(); app.useLogger(false);
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })); await app.init();
 });

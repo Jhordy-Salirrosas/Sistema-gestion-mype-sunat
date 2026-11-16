@@ -1,7 +1,7 @@
 import { RequireAction } from '../../../auth/infrastructure/decorators/actionPermissionDecorator';
 import { ActionPermissionsGuard } from '../../../auth/infrastructure/guards/actionPermissionsGuard';
-import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
-import { Roles } from '../../../../common/decorators';
+import { CapabilityGuard } from '../../../auth/infrastructure/guards/capabilityGuard';
+import { RequireCapability } from '../../../../common/decorators';
 import {
   Controller,
   Post,
@@ -55,8 +55,8 @@ export class InvoicesController {
    * Devuelve 202 porque el comprobante queda en la cola: el estado real del CDR
    * se consulta después. Es deliberado no responder "aceptado" aquí.
    */
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard, ActionPermissionsGuard)
+  @RequireCapability('INVOICE_EMIT')
+  @UseGuards(CapabilityGuard, ActionPermissionsGuard)
   @RequireAction('INVOICE_EDIT_ISSUE_DATE', true)
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
@@ -85,8 +85,8 @@ export class InvoicesController {
    * Debe declararse ANTES de cualquier `GET /:id` para no quedar capturada por
    * la ruta paramétrica (el orden de las rutas en Nest importa).
    */
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard, ActionPermissionsGuard)
+  @RequireCapability('INVOICE_EMIT')
+  @UseGuards(CapabilityGuard, ActionPermissionsGuard)
   @RequireAction('INVOICE_EDIT_ISSUE_DATE', true)
   @Post('emitir')
   @HttpCode(HttpStatus.CREATED)

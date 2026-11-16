@@ -1,3 +1,5 @@
+import { ActionPermissionsService } from '../../../src/modules/auth/application/services/actionPermissionsService';
+import { withSecurityCatalog } from '../../fixtures/securityCatalogPrisma';
 import { InvoiceForcedResendService, FORCE_AUTH, FORCE_USED } from '../../../src/modules/invoices/application/services/invoiceForcedResendService';
 import { InvoiceRetryService } from '../../../src/modules/resilience/infrastructure/queue/invoiceRetryService';
 import { ResilienceStateService } from '../../../src/modules/resilience/application/resilienceStateService';
@@ -10,7 +12,9 @@ function harness() {
  const prisma = { ...tx, $transaction: jest.fn((fn: any) => { const result = serial.then(() => fn(tx)); serial = result.catch(() => undefined); return result; }) };
  let active = false;
  const queue = { reenqueueInvoiceIfIdle: jest.fn(async (_id, _company, guard) => { expect(history.some(h => h.codigo_error === FORCE_AUTH)).toBe(true); expect(row.transport_uncertain).toBe(true); if (active) return { estado: 'YA_EN_COLA' }; if (!await guard()) return { estado: 'ESTADO_NO_PERMITIDO' }; active = true; return { estado: 'ENCOLADO' }; }) };
- const service = new InvoiceForcedResendService(prisma as never, queue as never);
+ withSecurityCatalog(prisma);
+ (prisma as any).roleActionPermission={findMany:jest.fn(async()=>[])};
+ const service = new InvoiceForcedResendService(prisma as never, queue as never,new ActionPermissionsService(prisma as never));
  const autorizar = (body: unknown = { motivo: 'Decisión explícita de prueba', confirmado: true, decisionId: 'decision-prueba-0001' }, actor = { sub: 'admin', role: 'ADMIN' }, company = 'empresa') => service.autorizar(company, row.id, actor, body);
  return { row, history, tx, prisma, queue, service, autorizar };
 }
@@ -23,7 +27,7 @@ it.each([{}, { motivo: ' ', confirmado: true }, { motivo: 'Motivo' }, { motivo: 
  const h = harness(); await expect(h.autorizar(body)).rejects.toThrow(); expect(h.queue.reenqueueInvoiceIfIdle).not.toHaveBeenCalled();
 });
 it('6I no ADMIN y empresa ajena están protegidos', async () => {
- const h = harness(); await expect(h.autorizar(undefined, { sub: 'op', role: 'OPERADOR_FACTURACION' })).rejects.toThrow('Solo ADMIN');
+ const h = harness(); await expect(h.autorizar(undefined, { sub: 'op', role: 'OPERADOR_FACTURACION' })).rejects.toThrow('No tiene permiso');
  await expect(h.autorizar(undefined, undefined, 'otra')).rejects.toThrow('no encontrado'); expect(h.history).toHaveLength(0);
 });
 it.each(['ACEPTADO','OBSERVADO','RECHAZADO','ANULADO'])('6I protege estado %s', async estado => {

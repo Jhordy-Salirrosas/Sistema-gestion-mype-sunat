@@ -1,6 +1,6 @@
 import { validarSerieNoAgotada } from '../../application/services/invoiceSeriesService';
-import { Roles } from '../../../../common/decorators';
-import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
+import { RequireCapability } from '../../../../common/decorators';
+import { CapabilityGuard } from '../../../auth/infrastructure/guards/capabilityGuard';
 /**
  * Endpoints de configuración de Facturación Electrónica (TA-60, HU-09).
  *
@@ -58,8 +58,8 @@ export class InvoiceConfigController {
   }
 
   @Put('config')
-  @Roles('ADMIN')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_CONFIG_EDIT')
+  @UseGuards(CapabilityGuard)
   actualizarConfiguracion(
     @CurrentCompany() companyId: string,
     @Body() body: unknown,
@@ -80,8 +80,8 @@ export class InvoiceConfigController {
    * papel o en otro sistema, sin reutilizar ninguno.
    */
   @Post('series')
-  @Roles('ADMIN')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_CONFIG_EDIT')
+  @UseGuards(CapabilityGuard)
   @HttpCode(HttpStatus.CREATED)
   async crearSerie(
     @CurrentCompany() companyId: string,

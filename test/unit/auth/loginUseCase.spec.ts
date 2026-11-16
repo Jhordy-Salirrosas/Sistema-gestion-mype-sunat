@@ -45,7 +45,7 @@ describe('LoginUseCase', () => {
       hashToken: jest.fn().mockReturnValue('mocked_refresh_token_hash'),
     };
 
-    useCase = new LoginUseCase(mockUserRepo, mockHasher, mockTokenService);
+    useCase = new LoginUseCase(mockUserRepo, mockHasher, mockTokenService, {resolve:jest.fn(async p=>p)} as never);
   });
 
   it('debería autenticar correctamente con credenciales válidas', async () => {

@@ -1,3 +1,4 @@
+import { withSecurityCatalog } from '../../fixtures/securityCatalogPrisma';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { WarehouseAccessService } from '../../../src/modules/auth/application/services/warehouseAccessService';
 
@@ -21,7 +22,7 @@ function setup() {
     },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
-  return { prisma, service: new WarehouseAccessService(prisma) };
+  return { prisma, service: new WarehouseAccessService(withSecurityCatalog(prisma)) };
 }
 
 describe('WarehouseAccessService', () => {

@@ -147,7 +147,7 @@ export class AuthController {
   @UseGuards(AuthGuard)
   async saveModulePermissions(@CurrentUser() user: TokenPayload, @Body() rows: Array<{ role: string; moduleCode: string; canView: boolean; canWrite: boolean }>) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar permisos.');
-    return this.modulePermissions.replace(user.companyId, rows);
+    return this.modulePermissions.replace(user.companyId, rows, user.sub);
   }
 
   @Get('action-permissions/me')
@@ -167,14 +167,14 @@ export class AuthController {
   @UseGuards(AuthGuard)
   async saveActionPermissions(@CurrentUser() user: TokenPayload, @Body() rows: unknown) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar permisos.');
-    return this.actionPermissions.replace(user.companyId, rows);
+    return this.actionPermissions.replace(user.companyId, rows, user.sub);
   }
 
   @Post('users')
   @UseGuards(AuthGuard)
   async addUser(@CurrentUser() user: TokenPayload, @Body() dto: CreateUserDto) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar usuarios.');
-    return this.createUser.create(user.companyId, dto);
+    return this.createUser.create(user.companyId, dto, user.sub);
   }
 
   @Get('users')

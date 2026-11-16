@@ -1,3 +1,5 @@
+import { withSecurityCatalog } from './securityCatalogPrisma';
+import { sessionMembershipTestProvider } from './sessionMembershipProvider';
 import { ValidationPipe, type Type, type Provider, type NestInterceptor } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../src/database/prismaService';
@@ -27,6 +29,7 @@ export function permissionsPrisma() {
   }),
  },roleModulePermission:{findMany:jest.fn(async({where})=>modules.filter(row=>row.company_id===where.company_id&&(!where.role||row.role===where.role)))}};
  prisma.$transaction=jest.fn(async cb=>cb(prisma));
+ withSecurityCatalog(prisma);
  return {prisma,actions,modules};
 }
 
@@ -41,7 +44,7 @@ export async function permissionsHttpApp(controllers:Type[],prisma:any,overrides
   {provide:PrismaService,useValue:prisma},AuthGuard,RolesGuard,ActionPermissionsGuard,
   ActionPermissionsService,ModulePermissionsService,{provide:TOKEN_SERVICE_PORT,useValue:token},...overrides,
  ])providers.set(typeof p==='function'?p:(p as any).provide,p);
- const module=await Test.createTestingModule({controllers,providers:[...providers.values()]}).compile();
+ const module=await Test.createTestingModule({controllers,providers:[sessionMembershipTestProvider, ...providers.values()]}).compile();
  const app=module.createNestApplication();app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));app.useGlobalInterceptors(...interceptors);await app.init();
  return {app,module};
 }

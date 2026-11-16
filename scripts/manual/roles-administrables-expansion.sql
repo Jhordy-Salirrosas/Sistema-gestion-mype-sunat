@@ -6,6 +6,18 @@ BEGIN
  IF to_regclass('public.users') IS NULL OR to_regclass('public.role_module_permissions') IS NULL OR to_regclass('public.role_action_permissions') IS NULL THEN
   RAISE EXCEPTION 'Faltan tablas del paquete 1; abortar expansión';
  END IF;
+ IF (SELECT count(*) FROM pg_attribute WHERE attrelid IN ('public.users'::regclass,'public.role_module_permissions'::regclass,'public.role_action_permissions'::regclass) AND attname='role' AND NOT attisdropped AND atttypid='public."Role"'::regtype)<>3 THEN
+  RAISE EXCEPTION 'Las tres columnas deben conservar el enum antes de expansión';
+ END IF;
+ IF EXISTS (SELECT 1 FROM (SELECT company_id,role::text code FROM public.users UNION ALL SELECT company_id,role::text FROM public.role_module_permissions UNION ALL SELECT company_id,role::text FROM public.role_action_permissions) r LEFT JOIN public.companies c ON c.id=r.company_id WHERE c.id IS NULL OR r.code NOT IN ('ADMIN','CONTADOR','OPERADOR_FACTURACION','OPERADOR_ADUANAS','AUDITOR')) THEN
+  RAISE EXCEPTION 'Permisos/usuarios huérfanos o códigos de rol no previstos';
+ END IF;
+ IF EXISTS (SELECT 1 FROM public.companies c WHERE c.is_active AND EXISTS (SELECT 1 FROM public.users u WHERE u.company_id=c.id AND u.is_active) AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.company_id=c.id AND u.is_active AND u.role::text='ADMIN')) THEN
+  RAISE EXCEPTION 'Empresa con usuarios activos sin ADMIN activo; revisar antes de expandir';
+ END IF;
+ IF EXISTS (SELECT 1 FROM public.role_action_permissions WHERE action_code NOT IN ('INVOICE_EDIT_ISSUE_DATE','INVOICE_FORCE_RESEND','INVOICE_RESOLVE_DLQ','INVOICE_REPROCESS_BRIDGE')) THEN
+  RAISE EXCEPTION 'Acciones previas fuera del catálogo del paquete 1; revisar equivalencia antes de expandir';
+ END IF;
  IF to_regclass('public.company_roles') IS NOT NULL OR to_regclass('public.permission_menu_catalog') IS NOT NULL OR to_regclass('public.role_menu_permissions') IS NOT NULL THEN
   RAISE EXCEPTION 'El catálogo ya existe; verificar versión y checksum, no sobreescribir';
  END IF;
@@ -18,7 +30,7 @@ BEGIN
 END $$;
 CREATE TABLE public.company_roles (
  company_id text NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
- code text NOT NULL CHECK(length(code) BETWEEN 1 AND 64 AND code ~ '^[A-Z][A-Z0-9_]*$'),
+ code text NOT NULL CHECK(length(code) BETWEEN 1 AND 64 AND code ~ '^[A-Z][A-Z0-9_]*$' AND code NOT IN ('ACCOUNTANT','OPERATOR')),
  name text NOT NULL CHECK(length(btrim(name)) BETWEEN 1 AND 100),
  is_system boolean NOT NULL DEFAULT false,
  PRIMARY KEY(company_id,code)

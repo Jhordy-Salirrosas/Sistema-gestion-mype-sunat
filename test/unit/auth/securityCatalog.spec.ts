@@ -44,3 +44,21 @@ describe('Equivalencia del catálogo anterior (back d28ffc8059, front dcf7864b)'
     expect(capabilityAllowed('ADMIN','DESCONOCIDA',true)).toBe(false);
   });
 });
+
+it('los 19 decoradores reales usan la capacidad de la matriz, sin metadata de roles antigua',()=>{
+ const {CAPABILITY_KEY}=require('../../../src/modules/auth/infrastructure/decorators/capabilityDecorator');
+ for(const row of endpoints.slice(0,19)){
+   const exports=require('../../../'+row.p);
+   const target:any=Object.values(exports).find((value:any)=>typeof value==='function'&&(row.scope==='clase completa'?value.name===row.name:typeof value.prototype?.[row.name]==='function'));
+   expect(target).toBeDefined();const handler=row.scope==='clase completa'?target:target.prototype[row.name];
+   expect(Reflect.getMetadata(CAPABILITY_KEY,handler)).toBe(row.capability);expect(Reflect.getMetadata('roles',handler)).toBeUndefined();
+ }
+});
+
+it('las concesiones posteriores son datos, no un techo por nombre o rol de sistema',()=>{
+ expect(capabilityAllowed('OPERADOR_FACTURACION','INVOICE_FORCE_RESEND',true,false,false)).toBe(false);
+ expect(capabilityAllowed('OPERADOR_FACTURACION','INVOICE_FORCE_RESEND',true,false,true)).toBe(true);
+ expect(capabilityAllowed('CONTADOR','INVOICE_EMIT',true)).toBe(true);
+ expect(capabilityAllowed('ADMIN','INVOICE_FORCE_RESEND',false,false,true)).toBe(false);
+ expect(capabilityAllowed('CONTADOR','INVOICE_CONFIG_EDIT',true)).toBe(false);
+});

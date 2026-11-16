@@ -1,3 +1,6 @@
+import { MenuPermissionsService } from './application/services/menuPermissionsService';
+import { SessionMembershipService } from './application/services/sessionMembershipService';
+import { CapabilityGuard } from './infrastructure/guards/capabilityGuard';
 import { RolesController } from './infrastructure/controllers/rolesController';
 import { RoleCatalogService } from './application/services/roleCatalogService';
 import { Module } from '@nestjs/common';
@@ -58,6 +61,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
         ),
     },
+    SessionMembershipService,
+    CapabilityGuard,
+    MenuPermissionsService,
     RoleCatalogService,
     WarehouseAccessService,
     ModulePermissionsService,
@@ -76,6 +82,9 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     GetProfileUseCase,
     UpdateProfileUseCase,
     ChangePasswordUseCase,
+    SessionMembershipService,
+    CapabilityGuard,
+    MenuPermissionsService,
     RoleCatalogService,
     WarehouseAccessService,
     ModulePermissionsService,
