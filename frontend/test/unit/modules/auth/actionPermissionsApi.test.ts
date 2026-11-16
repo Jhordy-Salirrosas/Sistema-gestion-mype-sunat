@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiClient } from '@/lib/axios';
 import { actionPermissionsApi, type ActionPermission } from '@/modules/auth/services/actionPermissionsApi';
+vi.unmock('@/modules/auth/services/actionPermissionsApi');
 vi.mock('@/lib/axios',()=>({apiClient:{get:vi.fn(),put:vi.fn()}}));
 beforeEach(()=>vi.clearAllMocks());
 it('consulta acciones propias y matriz con los endpoints del paquete 1',async()=>{

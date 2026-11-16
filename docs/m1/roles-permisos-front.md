@@ -41,3 +41,9 @@ Pendiente tras registrar esta línea base. Se entregará un commit por P1, P2, P
 ### P1 construido — cliente y hook de acciones
 
 `actionPermissionsApi` define las cuatro acciones, tipos role/actionCode/allowed y consume los tres endpoints de acciones del paquete 1. `useActionPermissions` expone acciones efectivas, can(action), ready, carga y error. No presupone acciones de ADMIN: una denegación del servidor manda. Una acción ausente, una respuesta inválida, carga, error o ausencia de usuario no otorgan permiso. La caché se separa por usuario, rol y empresa; la invalidación usa el prefijo action-permissions-me. Pruebas dirigidas: dos archivos / siete pruebas aprobadas.
+
+### P2 construido — M1 consume permisos del servidor
+
+`useInvoiceWritePermission` consume `/auth/module-permissions/me` con caché por usuario/rol/empresa; exige escritura M1 y conserva los roles operativos de los endpoints. No usa la matriz local de capacidades. Página y modal de emisión muestran la fecha de solo lectura y su explicación cuando no hay acción; no cambian el borrador, payload ni validación de fecha. Reenvío forzado, resolver DLQ y reprocesar puente suman su acción a las condiciones existentes y bloquean también el manejador. ADMIN conserva sus condiciones previas, pero respeta denegaciones explícitas del servidor.
+
+Los tests antiguos de otros flujos aíslan los hooks de permisos para conservar su intención sin añadir dependencias de red o providers. Los tests nuevos ejecutan los hooks reales contra respuestas simuladas, incluyendo ADMIN denegado, error y concesión. `test/setupPermissions.ts` configura respuestas API para pruebas, no defaults de producción. Los dos archivos de pruebas de fecha preexistentes y la regla fiscal permanecen idénticos a la base. Verificación dirigida: 4 archivos / 19 pruebas aprobadas (P1, P2 y transporte).
