@@ -372,3 +372,38 @@ TEST_DATABASE_URL y RUN_INTEGRATION_TESTS=required. El catálogo y los documento
 ficticios se crean exclusivamente en la base aislada, que se elimina al cerrar.
 No hay cambios de esquema ni migraciones nuevas. No se crean PRs ni merges y
 no se toca información de producción.
+
+## Addendum PR #419 — Cobertura del código fuente
+
+La corrida CI 43967003723 sí ejecutó notasSaldoHttp.integration.spec.ts:
+474 archivos inventariados, 464 aprobados y 10 omitidos; 4513 pruebas aprobadas
+y 63 omitidas. La regresión HTTP figura como PASS. TEST_DATABASE_URL estaba
+configurada y el build se ejecutó antes de Jest; la integración no se omitió.
+
+El problema era de atribución de cobertura: esa regresión carga dist/ para
+reproducir la semántica ES2023. Jest recopila cobertura de src/**/*.ts y Sonar
+consume ese LCOV; ejecutar el artefacto compilado no cubría en dicho informe
+las líneas de src/main.ts. El informe de CI marcaba sin cubrir las líneas
+16–29 de la fábrica de errores. Sonar rechazó únicamente la cobertura nueva
+(30,8 %, mínimo 80 %).
+
+Se agregan ocho pruebas unitarias sobre los módulos fuente existentes:
+transformación válida, rechazo del saldo interno y campos arbitrarios,
+formato de errores y respuesta segura para errores anidados sin constraints;
+además, rechazo de campos indebidos antes de consultar datos y recorrido
+NC/ND desde la entrada al saldo preparado y al payload, sin aceptar un saldo
+falsificado dentro del JSON fiscal.
+
+La corrida dirigida aprueba 99 pruebas de dos archivos. Sus informes cubren
+todas las sentencias y ambas ramas de cada decisión nueva de
+applyGlobalValidation. La regresión HTTP compilada permanece idéntica; no se
+cambia código de producción, umbrales, exclusiones, instrumentación ni opciones
+de validación. Ambas capas se comprueban en la corrida normal de CI: pruebas
+unitarias para el LCOV de src/ y aplicación compilada para la regresión real.
+
+Verificación completa con PostgreSQL local, CI=true y cobertura: 474 archivos
+(464 aprobados, 10 omitidos), 4584 pruebas (4521 aprobadas, 63 omitidas),
+12 snapshots aprobados y ningún fallo. Antes: 474 archivos, 4576 pruebas
+(4513 aprobadas, 63 omitidas); después: ocho pruebas nuevas aprobadas, sin
+nuevas omisiones. Las diez pruebas HTTP siguen aprobadas. Lint aprobado con
+las tres advertencias preexistentes en archivos no modificados.

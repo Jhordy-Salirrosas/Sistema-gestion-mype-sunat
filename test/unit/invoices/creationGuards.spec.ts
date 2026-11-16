@@ -1,3 +1,4 @@
+import { traducirEmision } from '../../../src/modules/invoices/application/services/emitirComprobanteAdapter';
 import { prepareCreation, fiscalToEmission } from '../../../src/modules/invoices/application/services/creationGuards';
 const base = () => ({ tipo_comprobante: '01', serie: 'F001', customer_legal_name: 'Cliente',
   customer_identity_type: '6', customer_identity_number: '20100070970', forma_pago: 'Contado', fecha_emision: '2026-11-07',
@@ -245,4 +246,28 @@ it('boleta también rechaza fracciones NIU y notas conservan cantidad histórica
   await expect(h.run({ ...dto, tipo_comprobante: '03', serie: 'B001' })).rejects.toThrow('entera y positiva');
   dto.items[0].cantidad = 0.5;
   await expect(h.run({ ...note(), codigo_motivo_nota: '07', items: dto.items })).resolves.toMatchObject({ items: [expect.objectContaining({ cantidad: 0.5 })] });
+});
+
+
+it.each(['saldoNotaCalculado', 'campoNoDeclarado'])('la preparación rechaza %s antes de consultar datos', async field => {
+  const h = harness();
+  await expect(h.run({ ...base(), [field]: { antes: 999, importe: 1, restante: 998 } })).rejects.toMatchObject({
+    response: { code: 'EMISSION_INPUT_INVALID', campos: [field] },
+  });
+  expect(h.tx.inventoryWarehouse.findFirst).not.toHaveBeenCalled();
+});
+it.each(['07', '08'])('%s: el saldo solo aparece en la preparación y no se acepta del payload fiscal', async tipo => {
+  const h = harness();
+  const body = { ...note(), tipo_comprobante: tipo, serie: tipo === '07' ? 'FC01' : 'FD01', codigo_motivo_nota: tipo === '07' ? '04' : '02',
+    items: [{ codigo: 'SERV', descripcion: 'Servicio', cantidad: 1, precioUnitario: 35.4 }],
+  };
+  const prepared = await h.run(body);
+  const expected = { antes: 118, importe: 35.4, restante: 82.6 };
+  expect(body).not.toHaveProperty('saldoNotaCalculado');
+  expect(prepared.saldoNotaCalculado).toEqual(expected);
+  const translated = traducirEmision(prepared, { ruc: '20000000001', razonSocial: 'Emisor local' }, 1).dto;
+  expect((translated.payload_ubl as any).m1NoteBalance).toEqual(expected);
+  const external = fiscalToEmission({ ...translated, payload_ubl: { ...translated.payload_ubl as any, m1NoteBalance: { antes: 999, importe: 1, restante: 998 } } });
+  expect(external).not.toHaveProperty('saldoNotaCalculado');
+  expect((await h.run(external)).saldoNotaCalculado).toEqual(expected);
 });
