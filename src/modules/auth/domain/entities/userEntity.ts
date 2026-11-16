@@ -1,9 +1,5 @@
-export type UserRole =
-  | 'ADMIN'
-  | 'CONTADOR'
-  | 'OPERADOR_FACTURACION'
-  | 'OPERADOR_ADUANAS'
-  | 'AUDITOR';
+/** Código estable; pertenencia validada por empresa en el servidor. */
+export type UserRole = string;
 
 export interface UserProps {
   id: string;

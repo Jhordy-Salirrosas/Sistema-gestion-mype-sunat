@@ -1,6 +1,6 @@
 import { resumirTransporte } from '../../application/services/invoiceTransportEvidence';
-import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
-import { Roles } from '../../../../common/decorators';
+import { CapabilityGuard } from '../../../auth/infrastructure/guards/capabilityGuard';
+import { RequireCapability } from '../../../../common/decorators';
 import { detalleErrorConsulta } from '../../../sunat/statusConsultaError';
 import { Controller, HttpCode, HttpException, Logger, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
@@ -15,8 +15,8 @@ export class InvoiceSunatConsultController {
   private readonly logger = new Logger(InvoiceSunatConsultController.name);
   constructor(private readonly prisma: PrismaService, private readonly consulta: SunatStatusConsultaService) {}
 
-  @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @RequireCapability('INVOICE_SUNAT_POLL')
+  @UseGuards(CapabilityGuard)
   @Post(':id/consultar-sunat')
   @HttpCode(200)
   async consultar(@CurrentCompany() companyId: string, @Param('id') id: string) {

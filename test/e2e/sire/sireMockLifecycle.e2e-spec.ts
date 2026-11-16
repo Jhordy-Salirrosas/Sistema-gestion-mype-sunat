@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
@@ -85,7 +86,7 @@ describe('SIRE mock lifecycle HTTP flow', () => {
     const gateway = new MockSireSunatGateway();
     const moduleRef = await Test.createTestingModule({
       controllers: [SireController],
-      providers: [
+      providers: [sessionMembershipTestProvider,
         AuthGuard,
         { provide: TOKEN_SERVICE_PORT, useValue: { verifyToken: jest.fn().mockReturnValue({ sub: 'user', email: 'test@example.test', companyId: 'company-a', role: 'ADMIN' }) } },
         { provide: SIRE_REPOSITORY_PORT, useValue: repository },

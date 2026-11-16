@@ -13,7 +13,7 @@ export class QuoteItemDto {
 }
 export class CreateQuoteDto {
   @IsOptional() @IsIn(QUOTE_KINDS as unknown as string[]) kind?: typeof QUOTE_KINDS[number];
-  @IsOptional() @IsString() customerDocType?: string;
+  @IsOptional() @IsIn(['6', '1', '0']) customerDocType?: string;
   @IsOptional() @IsString() customerDocNumber?: string;
   @IsString() customerName!: string;
   @IsOptional() @IsDateString() validUntil?: string;

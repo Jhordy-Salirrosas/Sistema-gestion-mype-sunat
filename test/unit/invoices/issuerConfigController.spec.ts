@@ -1,3 +1,5 @@
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import type { INestApplication } from '@nestjs/common';
@@ -46,12 +48,12 @@ describe('D1 Config HTTP contract without optional PostgreSQL flag', () => {
     );
     const module = await Test.createTestingModule({
       controllers: [InvoiceConfigController],
-      providers: [
+      providers:[defaultActionPermissionsProvider, sessionMembershipTestProvider,
         { provide: InvoiceConfigService, useValue: config },
         { provide: InvoiceSeriesService, useValue: series },
         { provide: TOKEN_SERVICE_PORT, useValue: jwt },
       ],
-    }).compile();
+    }).overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).compile();
     app = module.createNestApplication();
     await app.init();
   });
@@ -214,11 +216,11 @@ describe('RUC propio del emisor en HTTP', () => {
   beforeAll(async () => {
     h.company.ruc = '20614142503';
     const config = new InvoiceConfigService({ listar: async () => [] } as never, h.certificates as never, h.resolver, h.writer);
-    const module = await Test.createTestingModule({ controllers: [InvoiceConfigController], providers: [
+    const module = await Test.createTestingModule({ controllers: [InvoiceConfigController], providers:[defaultActionPermissionsProvider, sessionMembershipTestProvider,
       { provide: InvoiceConfigService, useValue: config },
       { provide: InvoiceSeriesService, useValue: {} },
       { provide: TOKEN_SERVICE_PORT, useValue: jwt },
-    ] }).compile();
+    ] }).overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).compile();
     app = module.createNestApplication(); await app.init();
   });
   afterAll(async () => { await app.close(); });

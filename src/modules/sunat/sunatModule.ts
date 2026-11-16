@@ -15,6 +15,7 @@ import { resolveEndpoint } from './soap/sunatBillTypes';
 import { AuthModule } from '../auth/authModule';
 import { RucController } from './rucController';
 import { RucConsultaService } from './rucConsultaService';
+import { DniConsultaService } from './dniConsultaService';
 
 /**
  * Modulo SUNAT.
@@ -44,6 +45,7 @@ import { RucConsultaService } from './rucConsultaService';
     CdrPersistenceService,
     SunatStatusConsultaService,
     RucConsultaService,
+    DniConsultaService,
     // TA-58: `useExisting` y no `useClass`, para que el token y el provider
     // apunten a la MISMA instancia. Con `useClass` Nest construye dos objetos
     // y se pierden tanto el cache como el estado del logger.
@@ -90,6 +92,7 @@ import { RucConsultaService } from './rucConsultaService';
     // TA-67: lo usa `SummaryDispatchService` para enviar resúmenes y bajas.
     SunatSummaryClient,
     RucConsultaService,
+    DniConsultaService,
     // TA-58: el consumidor de facturas audita el rechazo de la compuerta XSL
     // con `CdrPersistenceService`, para que la traza sea la misma que la de un
     // rechazo de SUNAT. Se exporta porque `InvoicesModule` lo inyecta.

@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WarehouseAccessService } from '../../../src/modules/auth/application/services/warehouseAccessService';
@@ -37,7 +38,7 @@ describe('InvoicesController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [InvoicesController],
-      providers: [
+      providers: [sessionMembershipTestProvider,
       defaultActionPermissionsProvider,
         { provide: WarehouseAccessService, useValue: { assertWarehouse: jest.fn() } },
         {

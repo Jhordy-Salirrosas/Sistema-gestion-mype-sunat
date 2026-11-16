@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsNotEmpty, IsString, Length, MinLength } from 'class-validator';
-import { ROLES } from '../services/modulePermissionsService';
+import { IsEmail, IsNotEmpty, IsString, Length, Matches, MinLength } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
@@ -19,6 +18,6 @@ export class CreateUserDto {
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres.' })
   password!: string;
 
-  @IsIn(ROLES, { message: 'El rol indicado no es válido.' })
-  role!: typeof ROLES[number];
+  @Matches(/^[A-Z][A-Z0-9_]{0,63}$/, { message: 'El código de rol no es válido.' })
+  role!: string;
 }

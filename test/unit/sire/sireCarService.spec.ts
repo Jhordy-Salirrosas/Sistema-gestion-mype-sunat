@@ -61,6 +61,18 @@ describe('sireCarService', () => {
         });
       }
     });
+
+    it('rechaza un RUC ausente sin lanzar por nulidad', () => {
+      expect.assertions(2);
+      try {
+        rucRecaudadorCar(undefined as unknown as string);
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          code: 'CAR_RECAUDADOR_INVALIDO',
+        });
+      }
+    });
   });
 
   describe('construirCar', () => {
@@ -159,6 +171,48 @@ describe('sireCarService', () => {
       expect(() =>
         construirCar({ ...datos, rucRecaudador: '123' }),
       ).toThrow(BadRequestException);
+    });
+
+    it('rechaza una moneda ausente con el código de moneda inválida', () => {
+      expect.assertions(2);
+      try {
+        construirCar({ ...datos, moneda: undefined as unknown as string });
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          code: 'CAR_MONEDA_INVALIDA',
+        });
+      }
+    });
+
+    it('rechaza un número de operación ausente con el código de operación vacía', () => {
+      expect.assertions(2);
+      try {
+        construirCar({
+          ...datos,
+          numeroOperacion: undefined as unknown as string,
+        });
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          code: 'CAR_OPERACION_VACIA',
+        });
+      }
+    });
+
+    it('rechaza un recaudador ausente con el código de recaudador inválido', () => {
+      expect.assertions(2);
+      try {
+        construirCar({
+          ...datos,
+          rucRecaudador: undefined as unknown as string,
+        });
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          code: 'CAR_RECAUDADOR_INVALIDO',
+        });
+      }
     });
   });
 

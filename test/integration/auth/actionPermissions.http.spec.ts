@@ -1,3 +1,4 @@
+import { ACTIONS } from '../../../src/modules/auth/application/services/actionPermissionsService';
 import request from 'supertest';
 import { AuthController } from '../../../src/modules/auth/infrastructure/controllers/authController';
 import { InvoicesController } from '../../../src/modules/invoices/infrastructure/controllers/invoicesController';
@@ -27,13 +28,13 @@ const emitir=(fecha:any=fechaFiscalLima())=>({tipo_comprobante:'01',serie:'F001'
 const fiscal=()=>({ruc_emisor:'20601234567',tipo_comprobante:'01',serie:'F001',correlativo:1,monto_total:118,fecha_emision:fechaFiscalLima(),payload_ubl:{}});
 it('me entrega cuatro acciones efectivas sin permitir administrar a otro rol',async()=>{
  const response=await request(app.getHttpServer()).get('/api/v1/auth/action-permissions/me').set('Authorization',auth()).expect(200);
- expect(response.body).toHaveLength(4);expect(response.body.find(r=>r.actionCode==='INVOICE_EDIT_ISSUE_DATE').allowed).toBe(false);
+ expect(response.body).toHaveLength(ACTIONS.length);expect(response.body.find(r=>r.actionCode==='INVOICE_EDIT_ISSUE_DATE').allowed).toBe(false);
  await request(app.getHttpServer()).get('/api/v1/auth/action-permissions').set('Authorization',auth()).expect(403);
  await request(app.getHttpServer()).put('/api/v1/auth/action-permissions').set('Authorization',auth()).send([]).expect(403);
  await request(app.getHttpServer()).get('/api/v1/auth/action-permissions/me').expect(401);
 });
 it('ADMIN configura la matriz solo en su empresa y rechaza allowed no booleano',async()=>{
- const response=await request(app.getHttpServer()).get('/api/v1/auth/action-permissions').set('Authorization',auth('admin')).expect(200);expect(response.body).toHaveLength(20);
+ const response=await request(app.getHttpServer()).get('/api/v1/auth/action-permissions').set('Authorization',auth('admin')).expect(200);expect(response.body).toHaveLength(ACTIONS.length*5);
  await request(app.getHttpServer()).put('/api/v1/auth/action-permissions').set('Authorization',auth('admin')).send([{role:'OPERADOR_FACTURACION',actionCode:'INVOICE_EDIT_ISSUE_DATE',allowed:true,company_id:'otra'}]).expect(200);
  expect(db.actions[0].company_id).toBe('empresa');
  const other=await request(app.getHttpServer()).get('/api/v1/auth/action-permissions/me').set('Authorization',auth('other')).expect(200);

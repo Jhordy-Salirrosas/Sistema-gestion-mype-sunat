@@ -128,6 +128,7 @@ export class SirePeriodsJobConsumer implements OnModuleInit {
     await this.prisma.sirePeriodQuery.update({
       where: { id: job.messageId },
       data: {
+        company_id: job.companyId,
         status: 'COMPLETED',
         result: JSON.stringify(periods),
         error_code: null,

@@ -1,3 +1,4 @@
+import { initializeCompanyRoles } from '../../src/modules/auth/application/services/roleCatalogService';
 import { randomBytes, scryptSync } from 'node:crypto';
 import type { PrismaClient } from '../../src/generated/client/client';
 import { SolCredentialCipher } from '../../src/modules/auth/infrastructure/security/solCredentialCipher';
@@ -57,7 +58,8 @@ export async function seedAuth(prisma: PrismaClient) {
     process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
   ).encrypt(DEMO_COMPANY.solPassword);
 
-  const company = await prisma.company.upsert({
+  const company = await prisma.$transaction(async tx => {
+  const company = await tx.company.upsert({
     where: { ruc: DEMO_COMPANY.ruc },
     update: {
       legal_name: DEMO_COMPANY.legalName,
@@ -75,6 +77,10 @@ export async function seedAuth(prisma: PrismaClient) {
       sol_pass_encrypted: solPasswordEncrypted,
       is_active: DEMO_COMPANY.isActive,
     },
+  });
+
+  await initializeCompanyRoles(tx, company.id);
+  return company;
   });
 
   console.log(

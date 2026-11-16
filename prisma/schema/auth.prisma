@@ -44,6 +44,7 @@ model Company {
   created_at            DateTime      @default(now())
   updated_at            DateTime      @updatedAt
 
+  roles                 CompanyRole[]
   users                 User[]
   module_permissions    RoleModulePermission[]
   action_permissions    RoleActionPermission[]
@@ -173,4 +174,36 @@ model RefreshToken {
 
   @@index([user_id, expires_at])
   @@map("refresh_tokens")
+}
+
+// Expansión aditiva: los tres campos de rol existentes permanecen enum hasta el corte.
+model CompanyRole {
+  company_id String
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  code String
+  name String
+  is_system Boolean @default(false)
+  menu_permissions RoleMenuPermission[]
+  @@id([company_id, code])
+  @@map("company_roles")
+}
+model PermissionMenuCatalog {
+  menu_code String @id
+  module_code String
+  path_pattern String @unique
+  parent_menu_code String?
+  parent PermissionMenuCatalog? @relation("MenuTree", fields: [parent_menu_code], references: [menu_code], onDelete: Restrict)
+  children PermissionMenuCatalog[] @relation("MenuTree")
+  permissions RoleMenuPermission[]
+  @@map("permission_menu_catalog")
+}
+model RoleMenuPermission {
+  company_id String
+  role_code String
+  menu_code String
+  can_view Boolean @default(false)
+  role CompanyRole @relation(fields: [company_id, role_code], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+  menu PermissionMenuCatalog @relation(fields: [menu_code], references: [menu_code], onDelete: Restrict)
+  @@id([company_id, role_code, menu_code])
+  @@map("role_menu_permissions")
 }

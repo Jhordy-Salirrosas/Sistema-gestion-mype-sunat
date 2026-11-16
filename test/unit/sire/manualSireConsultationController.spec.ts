@@ -59,6 +59,21 @@ describe('ManualSireConsultationController', () => {
     await expect(controller.consult(dto, undefined)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+    await expect(
+      controller.consult(dto, {
+        ...session,
+        companyId: undefined as unknown as string,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      controller.consult(dto, {
+        ...session,
+        companyId: '',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.consult(dto)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 
   it('rejects a RUC that does not belong to the session company', async () => {

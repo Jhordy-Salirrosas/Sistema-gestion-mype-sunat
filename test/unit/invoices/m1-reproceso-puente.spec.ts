@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
 import { InvoiceBridgeCoordinatorService } from '../../../src/modules/invoices/application/services/invoiceBridgeCoordinatorService';
 import { InvoiceAccountingBridgeService } from '../../../src/modules/invoices/application/services/invoiceAccountingBridgeService';
@@ -259,7 +260,7 @@ it('el controlador exige autenticación/ADMIN y toma la empresa del token, sin p
   const h = escenario();
   const module = await Test.createTestingModule({
     controllers: [InvoiceBridgeReprocessController],
-    providers: [
+    providers: [sessionMembershipTestProvider,
       defaultActionPermissionsProvider,
       { provide: InvoiceBridgeCoordinatorService, useValue: h.servicio },
       {
@@ -267,14 +268,14 @@ it('el controlador exige autenticación/ADMIN y toma la empresa del token, sin p
         useValue: {
           verifyToken: (token: string) =>
             token === 'admin'
-              ? { role: 'ADMIN', companyId: 'empresa' }
+              ? { sub:'actor-prueba',role: 'ADMIN', companyId: 'empresa' }
               : token === 'other'
-                ? { role: 'ADMIN', companyId: 'otra' }
-                : { role: 'CONTADOR', companyId: 'empresa' },
+                ? { sub:'actor-prueba',role: 'ADMIN', companyId: 'otra' }
+                : { sub:'actor-prueba',role: 'CONTADOR', companyId: 'empresa' },
         },
       },
     ],
-  }).compile();
+  }).overrideProvider(sessionMembershipTestProvider.provide).useValue(sessionMembershipTestProvider.useValue).overrideProvider(defaultActionPermissionsProvider.provide).useValue(defaultActionPermissionsProvider.useFactory()).compile();
   const app = module.createNestApplication();
   await app.init();
   try {

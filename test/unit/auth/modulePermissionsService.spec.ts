@@ -1,3 +1,4 @@
+import { withSecurityCatalog } from '../../fixtures/securityCatalogPrisma';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ModulePermissionsService } from '../../../src/modules/auth/application/services/modulePermissionsService';
 
@@ -9,7 +10,7 @@ function setup() {
     },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
-  return { prisma, service: new ModulePermissionsService(prisma) };
+  return { prisma, service: new ModulePermissionsService(withSecurityCatalog(prisma)) };
 }
 
 describe('ModulePermissionsService', () => {

@@ -246,4 +246,55 @@ describe('SireController', () => {
     );
     expect(lifecycle.tickets.poll).toHaveBeenCalledWith('company-1', '202610', 'RCE_COMPRAS');
   });
+
+  it('usa un actor vacío cuando la sesión no trae identificador de usuario', async () => {
+    const user = { companyId: 'company-1' } as never;
+
+    await controller.exclude({ proposalId: 'p-1' }, user);
+    await controller.excludeProposal('p-1', user);
+
+    expect(lifecycle.exclude.execute).toHaveBeenCalledWith(
+      'company-1',
+      'p-1',
+      '',
+    );
+  });
+
+  it('informa SIN_PROPUESTA cuando el periodo preliminar aún no existe', async () => {
+    const user = { sub: 'user-1', companyId: 'company-1' } as never;
+    lifecycle.tickets.getPeriod.mockResolvedValue(undefined as never);
+    lifecycle.tickets.getRecords.mockResolvedValue([] as never);
+
+    const resultado = await controller.getPreliminar(
+      { periodo: '202610', libro: 'RCE' },
+      user,
+    );
+
+    expect(resultado.state).toBe('SIN_PROPUESTA');
+  });
+
+  it('informa SIN_REGISTRO cuando el periodo generado aún no existe', async () => {
+    const user = { sub: 'user-1', companyId: 'company-1' } as never;
+    lifecycle.tickets.getPeriod.mockResolvedValue(undefined as never);
+    lifecycle.tickets.getRecords.mockResolvedValue([] as never);
+
+    const resultado = await controller.getGenerado(
+      { periodo: '202610', libro: 'RCE' },
+      user,
+    );
+
+    expect(resultado.state).toBe('SIN_REGISTRO');
+  });
+
+  it('rechaza el reemplazo sin archivo TXT', async () => {
+    const user = { sub: 'user-1', companyId: 'company-1' } as never;
+
+    await expect(
+      controller.reemplazo(
+        { period: '202610', bookType: 'RCE_COMPRAS' as const },
+        undefined,
+        user,
+      ),
+    ).rejects.toThrow('Falta el archivo TXT.');
+  });
 });

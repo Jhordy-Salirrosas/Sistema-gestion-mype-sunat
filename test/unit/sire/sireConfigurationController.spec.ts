@@ -98,6 +98,24 @@ describe('SireConfigurationController', () => {
     await expect(controller.estado(undefined)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+    await expect(
+      controller.estado({
+        ...user,
+        companyId: undefined as unknown as string,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      controller.estado({
+        ...user,
+        companyId: '',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.estado()).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(
+      controller.guardar({ clientId: 'client-id' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(consultarEstadoUseCase.execute).not.toHaveBeenCalled();
   });
 });

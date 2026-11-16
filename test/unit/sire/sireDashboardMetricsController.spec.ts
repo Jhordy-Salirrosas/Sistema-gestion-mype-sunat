@@ -103,4 +103,88 @@ describe('SIRE dashboard metrics routes', () => {
     );
     expect(metrics.getMetrics).toHaveBeenCalledWith(undefined);
   });
+
+  it('serves the compatibility metrics alias under the SIRE prefix', async () => {
+    const controller = new SireMetricsCompatibilityController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+
+    await expect(controller.getMetrics('company-alias')).resolves.toEqual({
+      recentFailedCalls: 1,
+    });
+    expect(metrics.getMetrics).toHaveBeenCalledWith('company-alias');
+  });
+
+  it('serves the compatibility metrics alias without a session company', async () => {
+    const controller = new SireMetricsCompatibilityController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+
+    await controller.getMetrics(undefined);
+
+    expect(metrics.getMetrics).toHaveBeenCalledWith(undefined);
+  });
+
+  it('serves the resilience metrics alias and its history endpoint', async () => {
+    const controller = new SireResilienceMetricsCompatibilityController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+    const query = {
+      start: '2026-10-29T11:00:00.000Z',
+      end: '2026-10-29T12:00:00.000Z',
+      granularity: 'hour' as const,
+      limit: 100,
+      offset: 0,
+    };
+
+    await controller.getMetrics('company-resilience');
+    await controller.getHistory(query, 'company-resilience');
+
+    expect(metrics.getMetrics).toHaveBeenCalledWith('company-resilience');
+    expect(metrics.getHistory).toHaveBeenCalledWith(
+      'company-resilience',
+      query,
+    );
+  });
+
+  it('serves the legacy metrics alias of the legacy prefix', async () => {
+    const controller = new LegacySireMetricsController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+
+    await controller.getMetrics('company-legacy');
+    expect(metrics.getMetrics).toHaveBeenCalledWith('company-legacy');
+
+    await controller.getMetrics();
+    expect(metrics.getMetrics).toHaveBeenCalledWith(undefined);
+  });
+
+  it('handles omitted companyId across all metrics controllers', async () => {
+    const mainController = new SireDashboardMetricsController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+    const compatController = new SireMetricsCompatibilityController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+    const resilienceController = new SireResilienceMetricsCompatibilityController(
+      metrics as unknown as SireDashboardMetricsService,
+    );
+
+    const query = {
+      start: '2026-10-29T11:00:00.000Z',
+      end: '2026-10-29T12:00:00.000Z',
+      granularity: 'hour' as const,
+      limit: 100,
+      offset: 0,
+    };
+
+    await mainController.getMetrics();
+    await mainController.getHistory(query);
+    await compatController.getMetrics();
+    await resilienceController.getMetrics();
+    await resilienceController.getHistory(query);
+
+    expect(metrics.getMetrics).toHaveBeenCalledWith(undefined);
+    expect(metrics.getHistory).toHaveBeenCalledWith(undefined, query);
+  });
 });

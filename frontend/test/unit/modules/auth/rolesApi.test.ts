@@ -1,0 +1,10 @@
+import { beforeEach,expect,it,vi } from 'vitest';
+import { rolesApi } from '@/modules/auth/services/rolesApi';
+import { permissionsApi } from '@/modules/auth/services/permissionsApi';
+import { apiClient } from '@/lib/axios';
+vi.unmock('@/modules/auth/services/rolesApi');vi.unmock('@/modules/auth/services/permissionsApi');
+vi.mock('@/lib/axios',()=>({apiClient:{get:vi.fn(),put:vi.fn(),patch:vi.fn(),post:vi.fn()}}));
+beforeEach(()=>{vi.resetAllMocks();vi.mocked(apiClient.get).mockResolvedValue({data:[]});vi.mocked(apiClient.patch).mockResolvedValue({data:{code:'ROL',name:'Nuevo nombre',isSystem:false}});vi.mocked(apiClient.put).mockResolvedValue({data:[]});});
+it('consume catálogo, config y snapshot con rutas autenticadas de la API',async()=>{await rolesApi.list();await rolesApi.config();await rolesApi.catalog();await rolesApi.menus();await permissionsApi.mine();expect(vi.mocked(apiClient.get).mock.calls.map(c=>c[0])).toEqual(['/auth/roles','/auth/roles/config','/auth/permission-catalog','/auth/menu-permissions','/auth/permissions/me']);});
+it('renombra enviando solo name y codifica el identificador en la ruta',async()=>{await rolesApi.rename('ROL/PRUEBA','Nuevo nombre');expect(apiClient.patch).toHaveBeenCalledExactlyOnceWith('/auth/roles/ROL%2FPRUEBA',{name:'Nuevo nombre'});});
+it('guarda permisos de menús sin campos de empresa elegibles por el cliente',async()=>{const rows=[{role:'ROL',menuCode:'MENU_SALES',canView:true}];await rolesApi.saveMenus(rows);expect(apiClient.put).toHaveBeenCalledExactlyOnceWith('/auth/menu-permissions',rows);});

@@ -2,6 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../../../database/prismaService';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const rucValido = (ruc: string): boolean => {
+  if (!/^\d{11}$/.test(ruc)) return false;
+  const suma = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2].reduce((s, peso, i) => s + Number(ruc[i]) * peso, 0);
+  const diferencia = 11 - (suma % 11);
+  return Number(ruc[10]) === (diferencia === 10 ? 0 : diferencia === 11 ? 1 : diferencia);
+};
 const map = (q: any) => ({
   id: q.id,
   quoteNumber: q.quote_number,
@@ -45,6 +51,11 @@ export class SalesQuotesService {
 
   async create(companyId: string, dto: { kind?: 'COTIZACION' | 'PEDIDO'; customerDocType?: string; customerDocNumber?: string; customerName: string; validUntil?: string; notes?: string; items: Array<{ sku?: string; description: string; unitCode?: string; quantity: number; unitPrice: number }> }) {
     if (!dto.customerName?.trim()) throw new BadRequestException('El cliente es obligatorio.');
+    const tipoDoc = dto.customerDocType?.trim() || '6';
+    const numeroDoc = dto.customerDocNumber?.trim() || '';
+    if (tipoDoc === '6' && !rucValido(numeroDoc)) throw new BadRequestException('RUC inválido: 11 dígitos y módulo 11.');
+    if (tipoDoc === '1' && !/^\d{8}$/.test(numeroDoc)) throw new BadRequestException('DNI inválido: 8 dígitos.');
+    if (!['6', '1', '0'].includes(tipoDoc)) throw new BadRequestException('Tipo de documento inválido.');
     if (!dto.items?.length) throw new BadRequestException('La cotización necesita al menos un ítem.');
     const items = dto.items.map((item, index) => {
       const quantity = Number(item.quantity);
@@ -65,7 +76,7 @@ export class SalesQuotesService {
     const row = await this.prisma.salesQuote.create({
       data: {
         company_id: companyId, kind, quote_number: `${kind === 'PEDIDO' ? 'PED' : 'COT'}-${Date.now().toString().slice(-9)}`,
-        customer_doc_type: dto.customerDocType?.trim() || '6', customer_doc_number: dto.customerDocNumber?.trim() || null,
+        customer_doc_type: tipoDoc, customer_doc_number: tipoDoc === '0' ? null : numeroDoc,
         customer_name: dto.customerName.trim(), valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
         notes: dto.notes?.trim() || null, subtotal, igv_amount: igv, total_amount: total,
         items: { create: items },
