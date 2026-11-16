@@ -21,7 +21,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
   async findByEmail(email: string): Promise<UserAuthRecord | null> {
     try {
       const raw = await this.prisma.user.findFirst({
-        where: { email },
+        where: { email: email.trim().toLowerCase() },
       });
       if (raw) {
         return {

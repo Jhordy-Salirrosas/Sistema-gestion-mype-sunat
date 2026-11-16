@@ -14,6 +14,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { CreateUserDto } from '../../application/dto/createUserDto';
+import { CreateUserService } from '../../application/services/createUserService';
 import { RegisterDto } from '../../application/dto/registerDto';
 import { LoginDto } from '../../application/dto/loginDto';
 import { UpdateProfileDto } from '../../application/dto/updateProfileDto';
@@ -63,6 +65,7 @@ export class AuthController {
     private readonly warehouseAccess: WarehouseAccessService,
     private readonly modulePermissions: ModulePermissionsService,
     private readonly actionPermissions: ActionPermissionsService,
+    private readonly createUser: CreateUserService,
   ) {}
 
   @Post('register')
@@ -165,6 +168,13 @@ export class AuthController {
   async saveActionPermissions(@CurrentUser() user: TokenPayload, @Body() rows: unknown) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar permisos.');
     return this.actionPermissions.replace(user.companyId, rows);
+  }
+
+  @Post('users')
+  @UseGuards(AuthGuard)
+  async addUser(@CurrentUser() user: TokenPayload, @Body() dto: CreateUserDto) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar usuarios.');
+    return this.createUser.create(user.companyId, dto);
   }
 
   @Get('users')

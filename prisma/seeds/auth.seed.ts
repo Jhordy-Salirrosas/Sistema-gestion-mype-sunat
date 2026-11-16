@@ -82,14 +82,16 @@ export async function seedAuth(prisma: PrismaClient) {
   );
 
   for (const userDef of DEMO_USERS) {
+    const existing = await prisma.user.findUnique({ where: { email: userDef.email } });
+    if (existing && existing.company_id !== company.id) {
+      throw new Error(`El correo demo ${userDef.email} pertenece a otra empresa; no se modifica ese usuario.`);
+    }
     const passwordHash = hashPassword(userDef.password);
 
     const user = await prisma.user.upsert({
       where: {
-        company_id_email: {
-          company_id: company.id,
-          email: userDef.email,
-        },
+        email: userDef.email,
+        company_id: company.id,
       },
       update: {
         full_name: userDef.fullName,
