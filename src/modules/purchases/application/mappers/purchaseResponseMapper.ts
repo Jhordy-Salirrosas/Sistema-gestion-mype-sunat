@@ -46,6 +46,7 @@ export function mapPurchaseRecord(
     ...(includeExtended ? { paidAmount, pendingAmount } : {}),
     status: purchase.status,
     receptionStatus: purchase.reception_status ?? 'RECIBIDA',
+    hasDifferences: purchase.has_differences === true,
     notes: purchase.notes,
     responsible: purchase.responsible,
     ...(includeItemsCount ? { itemsCount: purchase.items.length } : {}),
