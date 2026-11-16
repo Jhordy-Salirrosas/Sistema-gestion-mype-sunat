@@ -1,3 +1,5 @@
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ConfigurationAdminInterceptor } from './common/interceptors/configurationAdminInterceptor';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validate } from './config/env.validation';
@@ -39,6 +41,6 @@ import { SalesModule } from './modules/sales/salesModule';
     SalesModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: ConfigurationAdminInterceptor }],
 })
 export class AppModule {}

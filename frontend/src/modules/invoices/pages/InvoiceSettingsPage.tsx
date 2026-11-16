@@ -1,3 +1,4 @@
+import { ConfigurationHub } from '../components/ConfigurationHub';
 import { SunatConnectionTest } from '../components/SunatConnectionTest';
 import { InvoiceCommercialDefaults } from '../components/InvoiceCommercialDefaults';
 import { Link } from 'react-router-dom';
@@ -53,6 +54,8 @@ export default function InvoiceSettingsPage() {
         </PageText>
       </PageHeader>
 
+      <ConfigurationHub />
+
       {/*
         Si el backend no responde, se dice. Mostrar el formulario vacío haría
         creer que la empresa no tiene series configuradas, que es una
@@ -78,7 +81,7 @@ export default function InvoiceSettingsPage() {
 
       <Link to="/invoices/configuracion/precios">Precios de venta</Link>
       <InvoiceStorageNote aceptados={aceptados} />
-      <InvoiceCommercialDefaults />
+      <div id="facturacion"><InvoiceCommercialDefaults /></div>
       <SunatConnectionTest />
 
       <InvoiceSettingsTab

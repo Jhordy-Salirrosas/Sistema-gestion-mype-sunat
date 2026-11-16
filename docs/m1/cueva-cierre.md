@@ -104,3 +104,24 @@ agrega estilo explícito al botón file-selector-button para que el reset CSS
 no elimine su contraste y superficie de acción. La ayuda indica .pfx/.p12 y
 96 KiB. Se reutiliza FileReader y PUT /invoices/config con cert_base64 y
 cert_password; no hay endpoint, transporte ni validación nuevos.
+
+## P4 — Agrupación de configuración y archivos detenidos
+
+Se construyó la sección Configuración en la ruta administrativa existente
+/invoices/configuracion y GET /configuration/links, protegido por guards
+reales ADMIN. Agrupa empresa/SOL/certificado, series, facturación, roles y
+accesos, importación, SIRE, plan/períodos y reglas contables de compra/venta.
+No existen pantallas independientes de configuración de compras/ventas en
+esta base: se enlazan sus reglas existentes COMPRA/VENTA, sin duplicarlas.
+Los anchors abren la sección correspondiente de las pantallas existentes.
+La UI no consulta ni muestra la agrupación para un rol distinto de ADMIN;
+el endpoint responde 403 aunque se invoque directamente.
+
+**Detenido por la regla de secuencia:** el nuevo ítem global de Sidebar y una
+ruta global separada exigirían modificar Sidebar.tsx, appRoutes.tsx,
+roleNavigation.ts y el catálogo de menús en auth/domain/menuCatalog.ts, todos
+en la entrega de roles. No se sobrescriben ni se agrega un catálogo paralelo.
+También se conserva invoiceConfigController.ts, compartido por emisión y en
+esa entrega: no se bloquean sus lecturas operativas de series/checklist.
+La sección queda accesible desde la configuración administrativa ya existente;
+el menú global queda pendiente de componer después de la fusión de roles.

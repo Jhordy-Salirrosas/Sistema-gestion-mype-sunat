@@ -1,3 +1,4 @@
+import { ConfigurationHubController } from './infrastructure/controllers/configurationHubController';
 import { SunatConnectionTestController } from './infrastructure/controllers/sunatConnectionTestController';
 import { SunatConnectionTestService } from './application/services/sunatConnectionTestService';
 import { InvoiceCommercialDefaultsController } from './infrastructure/controllers/invoiceCommercialDefaultsController';
@@ -82,6 +83,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    ConfigurationHubController,
     SunatConnectionTestController,
     InvoiceCommercialDefaultsController,
     InvoiceBatchRetryController,
