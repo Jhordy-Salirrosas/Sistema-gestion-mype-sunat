@@ -392,6 +392,7 @@ describe('Customs & Landed Cost Suite (E2E) - Caso 100 Laptops de Juan', () => {
     })
       .overrideProvider(PrismaService)
       .useValue({
+        roleModulePermission: { findMany: jest.fn().mockResolvedValue([]) },
         $connect: jest.fn(),
         $disconnect: jest.fn(),
         $transaction: jest.fn(),

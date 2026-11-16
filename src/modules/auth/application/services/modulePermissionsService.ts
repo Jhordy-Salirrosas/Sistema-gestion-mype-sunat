@@ -56,6 +56,13 @@ export class ModulePermissionsService {
     }
   }
 
+  async assertView(companyId: string, role: string, moduleCode: string) {
+    const rows = await this.forRole(companyId, role);
+    if (!rows.find((row) => row.moduleCode === moduleCode)?.canView) {
+      throw new ForbiddenException(`No tiene permiso de lectura en el módulo ${moduleCode}.`);
+    }
+  }
+
   async replace(companyId: string, rows: Array<{ role: string; moduleCode: string; canView: boolean; canWrite: boolean }>) {
     if (!Array.isArray(rows) || rows.some((r) => !ROLES.includes(r.role as never) || !CODES.has(r.moduleCode as never))) {
       throw new BadRequestException('Matriz de permisos inválida.');

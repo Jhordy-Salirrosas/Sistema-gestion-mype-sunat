@@ -54,3 +54,11 @@ Enforcement: `ActionPermissionsGuard`, con metadatos en los controladores reales
 Migración: `prisma/migrations/20261116110000_role_action_permissions/migration.sql`; copia idéntica `scripts/manual/role-action-permissions.sql`. Instrucciones en `scripts/manual/README-roles-permisos.md`. Se ejecutó el SQL solo sobre un PostgreSQL efímero local, creado con el esquema de la nueva base; no se aplicó a ninguna base compartida.
 
 Validación P1: 6 suites / 48 pruebas dirigidas aprobadas (36 nuevas y 12 regresiones existentes). Incluyen HTTP real de Nest con los controladores y guards de producción, defaults y overrides por empresa, denegación/grant conservando roles, ambas rutas de emisión, fechas en el límite de medianoche de Lima y PostgreSQL real con unicidad concurrente. Build oficial del back aprobado.
+
+### P2 construido — lectura en el servidor
+
+El mapa `MODULO_POR_RUTA` conserva exactamente sus doce entradas: inventory/purchases→M8; inventory→M6; purchases y purchase-orders→M8; invoices→M1; customs→M2; sire→M3; accounting/treasury/expenses→M4; sales→M7; warehouses→M6. Los prefijos se comparan por segmento completo y sin query string, manteniendo la prioridad de inventory/purchases. No se agregan prefijos.
+
+GET comprueba `can_view` efectivo antes de ejecutar el handler; HEAD aplica la misma comprobación porque Express puede resolverlo con el handler GET. Un rol con write=true y view=false recibe 403 al leer y conserva la escritura permitida. ADMIN también respeta una denegación de lectura persistida; su excepción anterior de escritura no cambia. Auth y master-data se excluyen expresamente, al igual que health. Resilience/M5, seguridad/auth/M9, UX/M10, dashboards y cualquier prefijo no listado quedan fuera del mapa; su autenticación/guards existentes continúan vigentes. Estas exclusiones también están documentadas en el interceptor.
+
+Validación P2: cuatro suites / 33 pruebas dirigidas aprobadas y ocho regresiones HTTP de P1, sin fallos. Incluyen las doce rutas mapeadas, subruta específica de compras, 403 sin ejecutar el handler, defaults de auditor, overrides por empresa, accesos compartidos, HEAD y PostgreSQL local real. No hay migración en esta parte.

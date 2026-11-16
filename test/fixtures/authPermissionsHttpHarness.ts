@@ -1,4 +1,4 @@
-import { ValidationPipe, type Type, type Provider } from '@nestjs/common';
+import { ValidationPipe, type Type, type Provider, type NestInterceptor } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../src/database/prismaService';
 import { AuthGuard } from '../../src/modules/auth/infrastructure/guards/authGuard';
@@ -31,7 +31,7 @@ export function permissionsPrisma() {
 }
 
 /** HTTP real de Nest con guards reales y servicios aislados de transporte fiscal. */
-export async function permissionsHttpApp(controllers:Type[],prisma:any,overrides:Provider[]=[]) {
+export async function permissionsHttpApp(controllers:Type[],prisma:any,overrides:Provider[]=[],interceptors:NestInterceptor[]=[]) {
  const providers=new Map<any,Provider>();
  for(const controller of controllers)for(const type of Reflect.getMetadata('design:paramtypes',controller)??[]) {
   if(type)providers.set(type,{provide:type,useValue:{}});
@@ -42,6 +42,6 @@ export async function permissionsHttpApp(controllers:Type[],prisma:any,overrides
   ActionPermissionsService,ModulePermissionsService,{provide:TOKEN_SERVICE_PORT,useValue:token},...overrides,
  ])providers.set(typeof p==='function'?p:(p as any).provide,p);
  const module=await Test.createTestingModule({controllers,providers:[...providers.values()]}).compile();
- const app=module.createNestApplication();app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));await app.init();
+ const app=module.createNestApplication();app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));app.useGlobalInterceptors(...interceptors);await app.init();
  return {app,module};
 }
