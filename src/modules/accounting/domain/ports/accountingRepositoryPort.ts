@@ -14,9 +14,14 @@ export interface IAccountingRepositoryPort {
     sourceModule: string,
     sourceReferenceId: string,
   ): Promise<boolean>;
-  /** Catálogo PCGE global. */
-  findAccounts(): Promise<AccountingAccountEntity[]>;
+  /** Catálogo PCGE global. Por defecto solo las activas. */
+  findAccounts(opciones?: { includeInactive?: boolean }): Promise<AccountingAccountEntity[]>;
   createAccount(account: AccountingAccountEntity): Promise<AccountingAccountEntity>;
+  /** Cambia el nombre y/o el estado de una cuenta existente. */
+  updateAccount(
+    code: string,
+    cambios: { name?: string; isActive?: boolean },
+  ): Promise<AccountingAccountEntity>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;
