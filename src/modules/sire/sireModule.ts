@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/authModule';
+import { AccountingModule } from '../accounting/accountingModule';
+import { SunatModule } from '../sunat/sunatModule';
 import { SireController } from './infrastructure/controllers/sireController';
 import { ReconcileSireUseCase } from './application/use-cases/reconcileSireUseCase';
 import { SIRE_REPOSITORY_PORT } from './domain/ports/sireRepositoryPort';
@@ -73,9 +75,21 @@ import { COMPANY_CONFIGURATION_REPOSITORY_PORT } from './domain/ports/companyCon
 import { SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT } from './domain/ports/sireAccountingMappingRepositoryPort';
 import { PrismaCompanyConfigurationRepository } from './infrastructure/persistence/prismaCompanyConfigurationRepository';
 import { PrismaSireAccountingMappingRepository } from './infrastructure/persistence/prismaSireAccountingMappingRepository';
+import { RegisterSireAccountingEntryUseCase } from './application/use-cases/registerSireAccountingEntryUseCase';
+import { GetSireAccountingPreviewUseCase } from './application/use-cases/getSireAccountingPreviewUseCase';
+import { CompanyRucValidationController } from './infrastructure/controllers/companyRucValidationController';
+import { SireAccountingPreviewController } from './infrastructure/controllers/sireAccountingPreviewController';
+import { SIRE_ACCOUNTING_PREVIEW_REPOSITORY_PORT } from './domain/ports/sireAccountingPreviewRepositoryPort';
+import { PrismaSireAccountingPreviewRepository } from './infrastructure/persistence/prismaSireAccountingPreviewRepository';
 
 @Module({
-  imports: [AuthModule, QueueModule, ResilienceStateModule],
+  imports: [
+    AuthModule,
+    QueueModule,
+    ResilienceStateModule,
+    AccountingModule,
+    SunatModule,
+  ],
   controllers: [
     SireDashboardMetricsController,
     SireMetricsCompatibilityController,
@@ -88,6 +102,8 @@ import { PrismaSireAccountingMappingRepository } from './infrastructure/persiste
     SireConfigurationController,
     CompanyConfigurationController,
     SireAccountingMappingController,
+    CompanyRucValidationController,
+    SireAccountingPreviewController,
   ],
   providers: [
     ReconcileSireUseCase,
@@ -126,9 +142,12 @@ import { PrismaSireAccountingMappingRepository } from './infrastructure/persiste
     UpdateCompanyConfigurationUseCase,
     GetSireAccountingMappingsUseCase,
     SaveSireAccountingMappingsUseCase,
+    RegisterSireAccountingEntryUseCase,
+    GetSireAccountingPreviewUseCase,
     PrismaSireConfigurationRepository,
     PrismaCompanyConfigurationRepository,
     PrismaSireAccountingMappingRepository,
+    PrismaSireAccountingPreviewRepository,
     PrismaSireRepository,
     SireTxtParserAdapter,
     SireTxtWriterAdapter,
@@ -152,6 +171,10 @@ import { PrismaSireAccountingMappingRepository } from './infrastructure/persiste
     {
       provide: SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT,
       useExisting: PrismaSireAccountingMappingRepository,
+    },
+    {
+      provide: SIRE_ACCOUNTING_PREVIEW_REPOSITORY_PORT,
+      useExisting: PrismaSireAccountingPreviewRepository,
     },
     { provide: SIRE_PARSER_PORT, useExisting: SireTxtParserAdapter },
     { provide: SIRE_EXPORTER_PORT, useExisting: SireTxtWriterAdapter },
