@@ -1,0 +1,267 @@
+[
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceAccountingRegularizationController.ts",
+    "line": 15,
+    "name": "InvoiceAccountingRegularizationController",
+    "roles": "'ADMIN'",
+    "scope": "clase completa",
+    "capability": "INVOICE_ACCOUNTING_REGULARIZE",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceBatchRetryController.ts",
+    "line": 11,
+    "name": "InvoiceBatchRetryController",
+    "roles": "'ADMIN'",
+    "scope": "clase completa",
+    "capability": "INVOICE_BATCH_RETRY",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceBridgeReprocessController.ts",
+    "line": 12,
+    "name": "InvoiceBridgeReprocessController",
+    "roles": "'ADMIN'",
+    "scope": "clase completa",
+    "capability": "INVOICE_REPROCESS_BRIDGE",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceConfigController.ts",
+    "line": 61,
+    "name": "actualizarConfiguracion",
+    "roles": "'ADMIN'",
+    "scope": "método",
+    "capability": "INVOICE_CONFIG_EDIT",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "reservada ADMIN"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceConfigController.ts",
+    "line": 83,
+    "name": "crearSerie",
+    "roles": "'ADMIN'",
+    "scope": "método",
+    "capability": "INVOICE_CONFIG_EDIT",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "reservada ADMIN"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceDetractionController.ts",
+    "line": 20,
+    "name": "deposit",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_DETRACTION_REGISTER",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceDetractionController.ts",
+    "line": 29,
+    "name": "edit",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_DETRACTION_REGISTER",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceForcedResendController.ts",
+    "line": 11,
+    "name": "InvoiceForcedResendController",
+    "roles": "'ADMIN'",
+    "scope": "clase completa",
+    "capability": "INVOICE_FORCE_RESEND",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 183,
+    "name": "enviarResumen",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_SUMMARY_SEND",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 203,
+    "name": "enviarBaja",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_SUMMARY_SEND",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 234,
+    "name": "enviarAnulacionNotas",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_SUMMARY_SEND",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 244,
+    "name": "consultarAgregado",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_SUNAT_POLL",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 302,
+    "name": "resolverDlq",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_RESOLVE_DLQ",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 316,
+    "name": "reintentarCdr",
+    "roles": "'ADMIN'",
+    "scope": "método",
+    "capability": "INVOICE_RETRY_CDR",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 343,
+    "name": "notaCredito",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_NOTES_ISSUE",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceQueryController.ts",
+    "line": 363,
+    "name": "notaDebito",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_NOTES_ISSUE",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceSunatConsultController.ts",
+    "line": 18,
+    "name": "consultar",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_SUNAT_POLL",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoicesController.ts",
+    "line": 58,
+    "name": "create",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_EMIT",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoicesController.ts",
+    "line": 88,
+    "name": "emitir",
+    "roles": "'ADMIN', 'OPERADOR_FACTURACION'",
+    "scope": "método",
+    "capability": "INVOICE_EMIT",
+    "legacyRoles": [
+      "ADMIN",
+      "OPERADOR_FACTURACION"
+    ],
+    "classification": "operación delegable"
+  },
+  {
+    "p": "src/modules/invoices/application/services/invoiceForcedResendService.ts",
+    "line": 19,
+    "name": "actor de reenvío forzado",
+    "capability": "INVOICE_FORCE_RESEND",
+    "legacyRoles": [
+      "ADMIN"
+    ],
+    "classification": "operación delegable",
+    "scope": "servicio"
+  },
+  {
+    "p": "src/modules/invoices/infrastructure/controllers/invoiceDownloadController.ts",
+    "line": 44,
+    "name": "reparación XML",
+    "capability": "INVOICE_XML_REPAIR",
+    "legacyRoles": [
+      "ADMIN",
+      "CONTADOR",
+      "OPERADOR_FACTURACION",
+      "OPERADOR_ADUANAS"
+    ],
+    "classification": "operación delegable",
+    "scope": "efecto lateral"
+  }
+]
