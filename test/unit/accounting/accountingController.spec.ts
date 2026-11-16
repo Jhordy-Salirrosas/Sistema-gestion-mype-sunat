@@ -10,6 +10,7 @@ import { CloseAnnualUseCase } from '../../../src/modules/accounting/application/
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
+import { UpdateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/updateAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/openAccountingPeriodUseCase';
 import { OpenFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/openFiscalYearUseCase';
@@ -35,6 +36,7 @@ describe('AccountingController', () => {
   let getEntriesUseCase: jest.Mocked<GetAccountingEntriesUseCase>;
   let listAccountsUseCase: jest.Mocked<ListAccountingAccountsUseCase>;
   let createAccountUseCase: jest.Mocked<CreateAccountingAccountUseCase>;
+  let updateAccountUseCase: jest.Mocked<UpdateAccountingAccountUseCase>;
   let listPeriodsUseCase: jest.Mocked<ListAccountingPeriodsUseCase>;
   let openPeriodUseCase: jest.Mocked<OpenAccountingPeriodUseCase>;
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
@@ -97,6 +99,10 @@ describe('AccountingController', () => {
       execute: jest.fn().mockResolvedValue({}),
     } as unknown as jest.Mocked<CreateAccountingAccountUseCase>;
 
+    updateAccountUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<UpdateAccountingAccountUseCase>;
+
     listPeriodsUseCase = {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<ListAccountingPeriodsUseCase>;
@@ -144,6 +150,7 @@ describe('AccountingController', () => {
       getEntriesUseCase,
       listAccountsUseCase,
       createAccountUseCase,
+      updateAccountUseCase,
       listPeriodsUseCase,
       openPeriodUseCase,
       openFiscalYearUseCase,
