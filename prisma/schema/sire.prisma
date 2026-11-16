@@ -97,6 +97,45 @@ model SireConfiguration {
   @@map("sire_configurations")
 }
 
+/**
+ * Variables globales de la empresa para el módulo SIRE.
+ *
+ * El RUC sigue viviendo en `Company` (es el identificador fiscal único); aquí
+ * se guardan los datos que el usuario puede editar desde la pantalla de
+ * configuración: el nombre comercial con el que se muestran los reportes y las
+ * series de comprobantes que se usan como valores por defecto.
+ */
+model CompanyConfiguration {
+  id            String   @id @default(uuid())
+  company_id    String   @unique
+  business_name String?
+  series        String[] @default([])
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@map("company_configurations")
+}
+
+/**
+ * Mapeo contable de los conceptos SIRE a cuentas del PCGE.
+ *
+ * Cada empresa define una sola cuenta por tipo de operación (VENTAS, COMPRAS,
+ * IGV, BASE...). El par `(company_id, tipo_operacion)` es único para que el
+ * guardado masivo pueda hacer upsert sin duplicar filas.
+ */
+model SireAccountingMapping {
+  id              String   @id @default(uuid())
+  company_id      String
+  tipo_operacion  String
+  cuenta_contable String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@unique([company_id, tipo_operacion])
+  @@index([company_id])
+  @@map("sire_accounting_mappings")
+}
+
 model SirePeriod {
   id              String              @id @default(uuid())
   company_id      String

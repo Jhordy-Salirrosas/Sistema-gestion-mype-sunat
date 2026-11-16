@@ -63,6 +63,16 @@ import { GuardarConfiguracionSireUseCase } from './application/use-cases/guardar
 import { ConsultarEstadoConfiguracionSireUseCase } from './application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import { SIRE_CONFIGURATION_REPOSITORY_PORT } from './domain/ports/sireConfigurationRepositoryPort';
 import { PrismaSireConfigurationRepository } from './infrastructure/persistence/prismaSireConfigurationRepository';
+import { CompanyConfigurationController } from './infrastructure/controllers/companyConfigurationController';
+import { SireAccountingMappingController } from './infrastructure/controllers/sireAccountingMappingController';
+import { GetCompanyConfigurationUseCase } from './application/use-cases/getCompanyConfigurationUseCase';
+import { UpdateCompanyConfigurationUseCase } from './application/use-cases/updateCompanyConfigurationUseCase';
+import { GetSireAccountingMappingsUseCase } from './application/use-cases/getSireAccountingMappingsUseCase';
+import { SaveSireAccountingMappingsUseCase } from './application/use-cases/saveSireAccountingMappingsUseCase';
+import { COMPANY_CONFIGURATION_REPOSITORY_PORT } from './domain/ports/companyConfigurationRepositoryPort';
+import { SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT } from './domain/ports/sireAccountingMappingRepositoryPort';
+import { PrismaCompanyConfigurationRepository } from './infrastructure/persistence/prismaCompanyConfigurationRepository';
+import { PrismaSireAccountingMappingRepository } from './infrastructure/persistence/prismaSireAccountingMappingRepository';
 
 @Module({
   imports: [AuthModule, QueueModule, ResilienceStateModule],
@@ -76,6 +86,8 @@ import { PrismaSireConfigurationRepository } from './infrastructure/persistence/
     SireReadOnlyPeriodsController,
     SireMenuController,
     SireConfigurationController,
+    CompanyConfigurationController,
+    SireAccountingMappingController,
   ],
   providers: [
     ReconcileSireUseCase,
@@ -110,7 +122,13 @@ import { PrismaSireConfigurationRepository } from './infrastructure/persistence/
     ObtenerHistorialSireUseCase,
     GuardarConfiguracionSireUseCase,
     ConsultarEstadoConfiguracionSireUseCase,
+    GetCompanyConfigurationUseCase,
+    UpdateCompanyConfigurationUseCase,
+    GetSireAccountingMappingsUseCase,
+    SaveSireAccountingMappingsUseCase,
     PrismaSireConfigurationRepository,
+    PrismaCompanyConfigurationRepository,
+    PrismaSireAccountingMappingRepository,
     PrismaSireRepository,
     SireTxtParserAdapter,
     SireTxtWriterAdapter,
@@ -126,6 +144,14 @@ import { PrismaSireConfigurationRepository } from './infrastructure/persistence/
        */
       provide: SIRE_CONFIGURATION_REPOSITORY_PORT,
       useExisting: PrismaSireConfigurationRepository,
+    },
+    {
+      provide: COMPANY_CONFIGURATION_REPOSITORY_PORT,
+      useExisting: PrismaCompanyConfigurationRepository,
+    },
+    {
+      provide: SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT,
+      useExisting: PrismaSireAccountingMappingRepository,
     },
     { provide: SIRE_PARSER_PORT, useExisting: SireTxtParserAdapter },
     { provide: SIRE_EXPORTER_PORT, useExisting: SireTxtWriterAdapter },
