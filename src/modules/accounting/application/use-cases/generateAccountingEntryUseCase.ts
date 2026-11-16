@@ -97,6 +97,8 @@ export class GenerateAccountingEntryUseCase {
       entryNumber: nextEntryNumber,
       entryDate: new Date(dto.entryDate),
       glosa: dto.glosa,
+      observation: dto.observation,
+      responsible: dto.responsible,
       sourceModule: dto.sourceModule,
       journalCode: dto.journalCode,
       sourceReferenceId: dto.sourceReferenceId,

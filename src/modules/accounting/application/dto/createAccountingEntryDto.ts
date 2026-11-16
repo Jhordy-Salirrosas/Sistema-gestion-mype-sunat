@@ -49,6 +49,14 @@ export class CreateAccountingEntryDto {
   glosa: string;
 
   @IsString()
+  @IsOptional()
+  observation?: string;
+
+  @IsString()
+  @IsOptional()
+  responsible?: string;
+
+  @IsString()
   @IsNotEmpty()
   sourceModule: string;
 
