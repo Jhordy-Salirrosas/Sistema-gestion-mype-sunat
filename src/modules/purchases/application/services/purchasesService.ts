@@ -360,7 +360,7 @@ export class PurchasesService {
   async receivePurchase(
     companyId: string,
     id: string,
-    dto: { items?: { itemId: string; quantity: number }[]; receivedAt?: string },
+    dto: { items?: { itemId: string; quantity: number; rejectedQuantity?: number; reason?: string; notes?: string }[]; receivedAt?: string },
   ) {
     const existente = await this.prisma.nationalPurchase.findFirst({
       where: { id, company_id: companyId },
@@ -378,7 +378,7 @@ export class PurchasesService {
       .filter((x) => x.pendiente > 0);
     if (pendientes.length === 0) throw new BadRequestException('La compra no tiene cantidades pendientes de recepción.');
 
-    const solicitados = dto.items?.length
+    const solicitados: Array<{ itemId: string; quantity: number; rejectedQuantity?: number; reason?: string; notes?: string }> = dto.items?.length
       ? dto.items
       : pendientes.map((x) => ({ itemId: x.item.id, quantity: x.pendiente }));
     const warehouse = await this.prisma.inventoryWarehouse.findFirst({
@@ -393,9 +393,12 @@ export class PurchasesService {
         const fila = pendientes.find((x) => x.item.id === solicitud.itemId);
         if (!fila) throw new BadRequestException('Ítem de compra inválido o ya recibido.');
         const cantidad = Number(solicitud.quantity);
-        if (!(cantidad > 0) || cantidad > fila.pendiente + 0.00001) {
+        const rechazada = Number(solicitud.rejectedQuantity ?? 0);
+        const totalMovimiento = cantidad + rechazada;
+        if (!(cantidad >= 0) || !(rechazada >= 0) || totalMovimiento <= 0 || totalMovimiento > fila.pendiente + 0.00001) {
           throw new BadRequestException(`Cantidad inválida para ${fila.item.sku}. Pendiente: ${fila.pendiente}.`);
         }
+        if (rechazada > 0 && !solicitud.reason) throw new BadRequestException(`Indique el motivo de la diferencia para ${fila.item.sku}.`);
         const product = await tx.inventoryProduct.findUnique({ where: { id: fila.item.product_id } });
         if (!product) throw new NotFoundException(`Producto ${fila.item.sku} no encontrado.`);
         const balance = await tx.inventoryBalance.findUnique({
@@ -418,7 +421,7 @@ export class PurchasesService {
           quantity: cantidad,
           unitCost: Number(fila.item.unit_cost),
         });
-        await tx.inventoryBalance.upsert({
+        if (cantidad > 0) await tx.inventoryBalance.upsert({
           where: {
             company_id_warehouse_id_product_id: {
               company_id: companyId,
@@ -436,13 +439,13 @@ export class PurchasesService {
             total_inventory_value: r2(calc.resultingTotalValue), last_movement_at: receivedAt,
           },
         });
-        await tx.inventoryCostLayer.create({
+        if (cantidad > 0) await tx.inventoryCostLayer.create({
           data: {
             company_id: companyId, warehouse_id: warehouse.id, product_id: product.id,
             quantity_remaining: cantidad, unit_cost: r4(Number(fila.item.unit_cost)),
           },
         });
-        await tx.inventoryMovement.create({
+        if (cantidad > 0) await tx.inventoryMovement.create({
           data: {
             company_id: companyId, warehouse_id: warehouse.id, product_id: product.id,
             movement_number: `REC-${existente.purchase_number}-${fila.item.sku}-${Date.now()}-${index}`,
@@ -459,17 +462,20 @@ export class PurchasesService {
         });
         await tx.nationalPurchaseItem.update({
           where: { id: fila.item.id },
-          data: { received_quantity: { increment: cantidad } },
+          data: { received_quantity: { increment: totalMovimiento } },
         });
-        recibidos.push({ item: fila.item, quantity: cantidad, unitCost: Number(fila.item.unit_cost) });
+        if (rechazada > 0) {
+          await tx.purchaseReceptionDifference.create({ data: { purchase_id: id, item_id: fila.item.id, sku: fila.item.sku, received_quantity: cantidad, rejected_quantity: rechazada, reason: solicitud.reason!, notes: solicitud.notes?.trim() || null } });
+        }
+        if (cantidad > 0) recibidos.push({ item: fila.item, quantity: cantidad, unitCost: Number(fila.item.unit_cost) });
       }
 
-      const actualizada = await tx.nationalPurchase.findUnique({ where: { id }, include: { items: true } });
+      const actualizada = await tx.nationalPurchase.findUnique({ where: { id }, include: { items: true, reception_differences: true } });
       const completo = actualizada.items.every((i: any) => Number(i.received_quantity) + 0.00001 >= Number(i.quantity));
       const algo = actualizada.items.some((i: any) => Number(i.received_quantity) > 0);
       return tx.nationalPurchase.update({
         where: { id },
-        data: { reception_status: completo ? 'RECIBIDA' : algo ? 'PARCIAL' : 'PENDIENTE' },
+        data: { reception_status: completo ? 'RECIBIDA' : algo ? 'PARCIAL' : 'PENDIENTE', has_differences: actualizada.has_differences || (actualizada.reception_differences?.length ?? 0) > 0 },
         include: { items: true },
       });
     }).catch((error: unknown) => { this.logger.error(`Recepción falló: ${error instanceof Error ? error.stack : String(error)}`); throw error; });

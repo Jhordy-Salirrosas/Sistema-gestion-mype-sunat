@@ -379,10 +379,12 @@ model NationalPurchase {
   status              NationalPurchaseStatus @default(REGISTRADA)
   reception_status    ReceptionStatus        @default(PENDIENTE)
   paid_amount         Decimal                @default(0.00) @db.Decimal(14, 2)
+  has_differences     Boolean                @default(false)
   notes               String?
   responsible         String?
 
   items               NationalPurchaseItem[]
+  reception_differences PurchaseReceptionDifference[]
 
   created_at          DateTime               @default(now())
   updated_at          DateTime               @updatedAt
@@ -390,6 +392,22 @@ model NationalPurchase {
   @@unique([company_id, supplier_doc_number, document_type_code, document_serial, document_number], map: "uq_national_purchase_doc")
   @@index([company_id, issue_date])
   @@map("national_purchases")
+}
+
+model PurchaseReceptionDifference {
+  id                String           @id @default(uuid())
+  purchase_id       String
+  purchase          NationalPurchase @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+  item_id           String
+  sku               String
+  received_quantity Decimal          @db.Decimal(12, 4)
+  rejected_quantity Decimal          @db.Decimal(12, 4)
+  reason            String
+  notes             String?
+  created_at        DateTime         @default(now())
+
+  @@index([purchase_id])
+  @@map("purchase_reception_differences")
 }
 
 model NationalPurchaseItem {
