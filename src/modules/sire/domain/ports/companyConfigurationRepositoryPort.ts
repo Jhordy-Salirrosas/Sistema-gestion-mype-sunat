@@ -14,6 +14,11 @@ export const COMPANY_CONFIGURATION_REPOSITORY_PORT = Symbol(
 export interface CompanyConfigurationData {
   ruc: string;
   businessName: string | null;
+  direccion: string | null;
+  estado: string | null;
+  condicion: string | null;
+  ubigeo: string | null;
+  esAgenteRetencion: boolean | null;
   series: string[];
 }
 
@@ -25,6 +30,11 @@ export interface CompanyConfigurationData {
  */
 export interface CompanyConfigurationChanges {
   businessName?: string;
+  direccion?: string;
+  estado?: string;
+  condicion?: string;
+  ubigeo?: string;
+  esAgenteRetencion?: boolean;
   series?: string[];
 }
 

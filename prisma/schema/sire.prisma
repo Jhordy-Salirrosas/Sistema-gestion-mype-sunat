@@ -102,16 +102,22 @@ model SireConfiguration {
  *
  * El RUC sigue viviendo en `Company` (es el identificador fiscal único); aquí
  * se guardan los datos que el usuario puede editar desde la pantalla de
- * configuración: el nombre comercial con el que se muestran los reportes y las
- * series de comprobantes que se usan como valores por defecto.
+ * configuración: el nombre comercial con el que se muestran los reportes, la
+ * dirección/estado/condición devueltos por SUNAT y las series de comprobantes
+ * que se usan como valores por defecto.
  */
 model CompanyConfiguration {
-  id            String   @id @default(uuid())
-  company_id    String   @unique
-  business_name String?
-  series        String[] @default([])
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  company_id           String   @unique
+  business_name        String?
+  direccion            String?
+  estado               String?
+  condicion            String?
+  ubigeo               String?
+  es_agente_retencion  Boolean?
+  series               String[] @default([])
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
 
   @@map("company_configurations")
 }

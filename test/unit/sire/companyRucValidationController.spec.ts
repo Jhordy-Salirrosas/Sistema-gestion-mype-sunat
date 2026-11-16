@@ -30,11 +30,45 @@ describe('CompanyRucValidationController', () => {
     await expect(controller.validar('20601030013')).resolves.toEqual({
       ruc: '20601030013',
       razonSocial: 'REXTIE S.A.C.',
+      estadoContribuyente: 'ACTIVO',
+      condicionDomicilio: 'HABIDO',
+      direccionFiscal: 'AV. SIEMPRE VIVA 123',
+      ubigeo: '150101',
+      esAgenteRetencion: false,
+      fechaConsulta: '2026-01-01T00:00:00.000Z',
+      source: 'decolecta',
+      cached: false,
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
     });
     expect(service.consultar).toHaveBeenCalledWith('20601030013');
+  });
+
+  it('returns the full response even when optional fields are null', async () => {
+    service.consultar.mockResolvedValue({
+      ruc: '20601030013',
+      razonSocial: 'REXTIE S.A.C.',
+      estadoContribuyente: 'ACTIVO',
+      condicionDomicilio: 'HABIDO',
+      direccionFiscal: null,
+      ubigeo: null,
+      esAgenteRetencion: null,
+      fechaConsulta: '2026-01-01T00:00:00.000Z',
+      source: 'generico',
+      cached: true,
+    });
+
+    await expect(controller.validar('20601030013')).resolves.toMatchObject({
+      razonSocial: 'REXTIE S.A.C.',
+      direccion: null,
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: null,
+      esAgenteRetencion: null,
+      source: 'generico',
+      cached: true,
+    });
   });
 
   it('rechaza RUC que no tengan exactamente 11 dígitos', async () => {

@@ -9,7 +9,15 @@ async function validar(payload: Record<string, unknown>) {
 describe('UpdateCompanyConfigurationDto', () => {
   it('accepts a complete valid payload', async () => {
     await expect(
-      validar({ businessName: 'Demo SAC', series: ['F001', 'B001'] }),
+      validar({
+        businessName: 'Demo SAC',
+        direccion: 'AV. SIEMPRE VIVA 123',
+        estado: 'ACTIVO',
+        condicion: 'HABIDO',
+        ubigeo: '150101',
+        esAgenteRetencion: true,
+        series: ['F001', 'B001'],
+      }),
     ).resolves.toHaveLength(0);
   });
 
@@ -27,6 +35,35 @@ describe('UpdateCompanyConfigurationDto', () => {
     const errors = await validar({ businessName: 'x'.repeat(201) });
 
     expect(errors).not.toHaveLength(0);
+  });
+
+  it('rejects blank address, estado and condicion', async () => {
+    await expect(validar({ direccion: '' })).resolves.not.toHaveLength(0);
+    await expect(validar({ estado: '' })).resolves.not.toHaveLength(0);
+    await expect(validar({ condicion: '' })).resolves.not.toHaveLength(0);
+  });
+
+  it('rejects values that are too long for address, estado and condicion', async () => {
+    await expect(
+      validar({ direccion: 'x'.repeat(301) }),
+    ).resolves.not.toHaveLength(0);
+    await expect(
+      validar({ estado: 'x'.repeat(51) }),
+    ).resolves.not.toHaveLength(0);
+    await expect(
+      validar({ condicion: 'x'.repeat(51) }),
+    ).resolves.not.toHaveLength(0);
+  });
+
+  it('rejects an ubigeo that is not six digits', async () => {
+    await expect(validar({ ubigeo: '15010' })).resolves.not.toHaveLength(0);
+    await expect(validar({ ubigeo: '15010A' })).resolves.not.toHaveLength(0);
+  });
+
+  it('rejects a non-boolean retention agent flag', async () => {
+    await expect(
+      validar({ esAgenteRetencion: 'true' }),
+    ).resolves.not.toHaveLength(0);
   });
 
   it('rejects a series list that is not an array', async () => {

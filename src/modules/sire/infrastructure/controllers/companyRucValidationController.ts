@@ -30,8 +30,7 @@ export class CompanyRucValidationController {
     try {
       const data = await this.rucConsultaService.consultar(ruc);
       return {
-        ruc: data.ruc,
-        razonSocial: data.razonSocial,
+        ...data,
         direccion: data.direccionFiscal,
         estado: data.estadoContribuyente,
         condicion: data.condicionDomicilio,

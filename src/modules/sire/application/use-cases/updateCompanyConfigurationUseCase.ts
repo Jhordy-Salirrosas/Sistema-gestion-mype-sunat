@@ -32,7 +32,7 @@ export class UpdateCompanyConfigurationUseCase {
     dto: UpdateCompanyConfigurationDto,
   ): Promise<CompanyConfigurationResponse> {
     const changes = this.normalize(dto);
-    if (changes.businessName === undefined && changes.series === undefined) {
+    if (Object.keys(changes).length === 0) {
       throw new BadRequestException(
         'No se recibió ningún dato de la empresa para actualizar.',
       );
@@ -52,13 +52,48 @@ export class UpdateCompanyConfigurationUseCase {
     const changes: CompanyConfigurationChanges = {};
 
     if (dto.businessName !== undefined) {
-      const businessName = dto.businessName.trim();
-      if (businessName.length === 0) {
+      changes.businessName = this.requiredText(
+        dto.businessName,
+        'El nombre de la empresa no puede estar vacío.',
+      );
+    }
+
+    if (dto.direccion !== undefined) {
+      changes.direccion = this.requiredText(
+        dto.direccion,
+        'La dirección no puede estar vacía.',
+      );
+    }
+
+    if (dto.estado !== undefined) {
+      changes.estado = this.requiredText(
+        dto.estado,
+        'El estado del contribuyente no puede estar vacío.',
+      ).toUpperCase();
+    }
+
+    if (dto.condicion !== undefined) {
+      changes.condicion = this.requiredText(
+        dto.condicion,
+        'La condición del domicilio no puede estar vacía.',
+      ).toUpperCase();
+    }
+
+    if (dto.ubigeo !== undefined) {
+      const ubigeo = this.requiredText(
+        dto.ubigeo,
+        'El ubigeo no puede estar vacío.',
+      );
+      if (!/^\d{6}$/.test(ubigeo)) {
         throw new BadRequestException(
-          'El nombre de la empresa no puede estar vacío.',
+          'El ubigeo debe tener exactamente 6 dígitos.',
         );
       }
-      changes.businessName = businessName;
+      changes.ubigeo = ubigeo;
+    }
+
+    if (dto.esAgenteRetencion !== undefined) {
+      changes.esAgenteRetencion = dto.esAgenteRetencion;
     }
 
     if (dto.series !== undefined) {
@@ -66,6 +101,14 @@ export class UpdateCompanyConfigurationUseCase {
     }
 
     return changes;
+  }
+
+  private requiredText(value: string, message: string): string {
+    const text = value.trim();
+    if (text.length === 0) {
+      throw new BadRequestException(message);
+    }
+    return text;
   }
 
   private normalizeSeries(series: string[]): string[] {

@@ -21,6 +21,11 @@ describe('GetCompanyConfigurationUseCase', () => {
     repository.findByCompanyId.mockResolvedValue({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: false,
       series: ['F001', 'B001'],
     });
     const useCase = new GetCompanyConfigurationUseCase(repository);
@@ -28,6 +33,11 @@ describe('GetCompanyConfigurationUseCase', () => {
     await expect(useCase.execute(COMPANY_ID)).resolves.toEqual({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: false,
       series: ['F001', 'B001'],
     });
     expect(repository.findByCompanyId).toHaveBeenCalledWith(COMPANY_ID);
@@ -53,21 +63,36 @@ describe('UpdateCompanyConfigurationUseCase', () => {
     };
   }
 
-  it('trims the name and normalizes the series', async () => {
+  it('trims the text fields and normalizes estado, condicion and series', async () => {
     const { repository, useCase } = crearCaso();
     repository.update.mockResolvedValue({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: true,
       series: ['F001', 'B001'],
     });
 
     await useCase.execute(COMPANY_ID, {
       businessName: '  Demo SAC  ',
+      direccion: '  AV. SIEMPRE VIVA 123  ',
+      estado: ' activo ',
+      condicion: ' habido ',
+      ubigeo: ' 150101 ',
+      esAgenteRetencion: true,
       series: [' f001 ', 'b001', 'F001', '  '],
     });
 
     expect(repository.update).toHaveBeenCalledWith(COMPANY_ID, {
       businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: true,
       series: ['F001', 'B001'],
     });
   });
@@ -103,6 +128,53 @@ describe('UpdateCompanyConfigurationUseCase', () => {
       useCase.execute(COMPANY_ID, { businessName: '   ' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects blank address, estado and condicion', async () => {
+    const { repository, useCase } = crearCaso();
+
+    await expect(
+      useCase.execute(COMPANY_ID, { direccion: '   ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      useCase.execute(COMPANY_ID, { estado: '   ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      useCase.execute(COMPANY_ID, { condicion: '   ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an ubigeo that is not six digits', async () => {
+    const { repository, useCase } = crearCaso();
+
+    await expect(
+      useCase.execute(COMPANY_ID, { ubigeo: '15010' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      useCase.execute(COMPANY_ID, { ubigeo: '15010A' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('updates only the retention agent flag when it is the only field sent', async () => {
+    const { repository, useCase } = crearCaso();
+    repository.update.mockResolvedValue({
+      ruc: '20123456789',
+      businessName: null,
+      direccion: null,
+      estado: null,
+      condicion: null,
+      ubigeo: null,
+      esAgenteRetencion: true,
+      series: [],
+    });
+
+    await useCase.execute(COMPANY_ID, { esAgenteRetencion: true });
+
+    expect(repository.update).toHaveBeenCalledWith(COMPANY_ID, {
+      esAgenteRetencion: true,
+    });
   });
 
   it('throws NotFound when the company does not exist', async () => {

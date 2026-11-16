@@ -31,29 +31,45 @@ describe('CompanyConfigurationController', () => {
     (getUseCase.execute as jest.Mock).mockResolvedValue({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: false,
       series: ['F001'],
     });
 
     await expect(controller.obtener(user)).resolves.toEqual({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: false,
       series: ['F001'],
     });
     expect(getUseCase.execute).toHaveBeenCalledWith('company-id');
   });
 
   it('updates the configuration of the authenticated company', async () => {
-    const dto = { businessName: 'Demo SAC', series: ['F001', 'B001'] };
+    const dto = {
+      businessName: 'Demo SAC',
+      direccion: 'AV. SIEMPRE VIVA 123',
+      estado: 'ACTIVO',
+      condicion: 'HABIDO',
+      ubigeo: '150101',
+      esAgenteRetencion: false,
+      series: ['F001', 'B001'],
+    };
     (updateUseCase.execute as jest.Mock).mockResolvedValue({
       ruc: '20123456789',
-      businessName: 'Demo SAC',
-      series: ['F001', 'B001'],
+      ...dto,
     });
 
     await expect(controller.actualizar(dto, user)).resolves.toEqual({
       ruc: '20123456789',
-      businessName: 'Demo SAC',
-      series: ['F001', 'B001'],
+      ...dto,
     });
     expect(updateUseCase.execute).toHaveBeenCalledWith('company-id', dto);
   });
