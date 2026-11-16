@@ -78,3 +78,21 @@ ensayó solo en el contenedor PostgreSQL local. Las pruebas PostgreSQL verifican
 persistencia, aislamiento empresarial, catálogo y PUT con guards reales.
 Pruebas dirigidas iniciales: 2 archivos/13 pruebas de back aprobadas; build Nest
 aprobado. La suite completa del cierre incluye la cobertura de este cambio.
+
+## P2 — Diagnóstico SUNAT beta
+
+POST /invoices/connection-test exige AuthGuard + RolesGuard ADMIN, toma la
+empresa del token y resuelve las credenciales guardadas. Usa únicamente
+getStatus con ticket de diagnóstico 0000000000000, endpoint beta fijo,
+redirects prohibidos y timeout de 8 segundos. El WSDL beta consultado enumera
+getStatus, getStatusAR, sendBill, sendPack y sendSummary; no se presupone
+getStatusCdr, ausente en ese contrato. No se emite, anula, consulta documento
+real ni se escribe estado fiscal. Las pruebas sustituyen el transporte externo.
+
+La respuesta distingue conexión confirmada, rechazo de credenciales y respuesta
+no concluyente; HTTP 200 por sí solo no acredita conexión. Los faults ajenos a
+una respuesta getStatus reconocida no se declaran éxito. La validez beta no se
+presenta como validación de credenciales de producción. El certificado se
+inspecciona localmente y se informa por separado (vigente, vencido, futuro,
+inválido o ausente). No se publican SOL, PFX, claves ni cuerpo remoto. La
+pantalla muestra resultado, latencia y certificado sin emitir documentos.

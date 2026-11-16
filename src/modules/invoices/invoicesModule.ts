@@ -1,3 +1,5 @@
+import { SunatConnectionTestController } from './infrastructure/controllers/sunatConnectionTestController';
+import { SunatConnectionTestService } from './application/services/sunatConnectionTestService';
 import { InvoiceCommercialDefaultsController } from './infrastructure/controllers/invoiceCommercialDefaultsController';
 import { InvoiceCommercialDefaultsService } from './application/services/invoiceCommercialDefaultsService';
 import { InvoiceBatchRetryController } from './infrastructure/controllers/invoiceBatchRetryController';
@@ -80,6 +82,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
   // el de configuracion y el de emision devuelven JSON; el de descargas entrega
   // binarios con su Content-Disposition.
   controllers: [
+    SunatConnectionTestController,
     InvoiceCommercialDefaultsController,
     InvoiceBatchRetryController,
     InvoiceForcedResendController,
@@ -103,6 +106,7 @@ import { InventoryModule } from '../inventory/inventoryModule';
     InvoiceDownloadController,
   ],
   providers: [
+    SunatConnectionTestService,
     InvoiceCommercialDefaultsService,
     InvoiceBatchRetryService,
     RaBridgeReversalService,

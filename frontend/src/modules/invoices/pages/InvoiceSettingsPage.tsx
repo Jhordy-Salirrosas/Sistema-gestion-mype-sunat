@@ -1,3 +1,4 @@
+import { SunatConnectionTest } from '../components/SunatConnectionTest';
 import { InvoiceCommercialDefaults } from '../components/InvoiceCommercialDefaults';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -78,6 +79,7 @@ export default function InvoiceSettingsPage() {
       <Link to="/invoices/configuracion/precios">Precios de venta</Link>
       <InvoiceStorageNote aceptados={aceptados} />
       <InvoiceCommercialDefaults />
+      <SunatConnectionTest />
 
       <InvoiceSettingsTab
         ruc={ruc}

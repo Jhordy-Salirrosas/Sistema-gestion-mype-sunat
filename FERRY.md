@@ -28,7 +28,9 @@ Archivos del delta:
 
 - `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
 - `src/modules/invoices/components/InvoiceEmitModal.tsx`
+- `src/modules/invoices/components/SunatConnectionTest.tsx`
 - `src/modules/invoices/hooks/useCommercialDefaults.ts`
 - `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
 - `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
 - `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`
+- `test/unit/modules/invoices/cueva-connection.test.tsx`
