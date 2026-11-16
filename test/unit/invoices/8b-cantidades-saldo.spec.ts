@@ -11,7 +11,7 @@ it('proyecta original y pendiente por SKU; 04 no consume unidades, 07 pendiente 
   { monto_total: 20, credit_debit_reason_code: '04', items: [{ item_code: 'B', quantity: 5 }] },
  ]);
  expect(await h.run()).toMatchObject({ disponible: 88, cantidades_pendientes: [{ codigo: 'A', original: 2, pendiente: 1.5 }, { codigo: 'B', original: 5, pendiente: 5 }] });
- expect(h.invoice.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ company_id: 'empresa', referenced_invoice_id: 'origin', tipo_comprobante: '07', estado: { notIn: ['RECHAZADO', 'ANULADO'] } }) }));
+ expect(h.invoice.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ company_id: 'empresa', referenced_invoice_id: 'origin', tipo_comprobante: { in: ['07', '08'] }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } }) }));
 });
 it('01/06 también reservan cantidades, sin perder precisión decimal', async () => {
  const h = lectura([{ item_code: 'A', quantity: new Prisma.Decimal('.1') }, { item_code: 'A', quantity: new Prisma.Decimal('.2') }], [

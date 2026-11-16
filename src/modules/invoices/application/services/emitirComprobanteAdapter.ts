@@ -355,7 +355,8 @@ export const traducirEmision = (
     // contra BETA el 31-10, después de corregir el importe total.
     tipoOperacion: detraccion > 0 ? '1001' : '0101',
     formaPago: dto.forma_pago,
-    ...(dto.medio_pago ? { medioPago: dto.medio_pago } : {}),
+    ...(dto.saldoNotaCalculado ? { m1NoteBalance: dto.saldoNotaCalculado } : {}),
+    ...(dto.medio_pago ? { medioPago: dto.medio_pago, ...(['01', '03'].includes(dto.tipo_comprobante) ? { m1PaymentAccountingVersion: 1 as const } : {}) } : {}),
     // Cronograma de la venta al crédito. El DTO llega con `{monto, vencimiento}`
     // y el generador UBL necesita el número de cuota (Cuota001...) que es lo
     // que se escribe en el XML. Se numera aquí y no en el front para que la

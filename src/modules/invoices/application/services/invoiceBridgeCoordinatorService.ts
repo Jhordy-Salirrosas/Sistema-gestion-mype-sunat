@@ -210,6 +210,7 @@ export class InvoiceBridgeCoordinatorService {
       id: fila.id,
       estado: estado as 'ACEPTADO' | 'OBSERVADO',
       inventarioAlCrear: payload.m1InventorySnapshot,
+      pago: { forma: payload.formaPago, medio: payload.medioPago, version: payload.m1PaymentAccountingVersion },
       omisionesPendientes: omisionesPendientes(fila.history ?? []),
       companyId: fila.company_id,
       tipoComprobante: fila.tipo_comprobante,
@@ -217,7 +218,7 @@ export class InvoiceBridgeCoordinatorService {
       correlativo: fila.correlativo,
       fechaEmision: fila.fecha_emision.toISOString().slice(0, 10),
       almacen: payload.almacen,
-      cliente: { razonSocial: payload.cliente?.razonSocial },
+      cliente: { razonSocial: payload.cliente?.razonSocial, numeroDocumento: payload.cliente?.numeroDocumento },
       items: items.map((item) => ({
         itemCode: item.item_code ?? undefined,
         descripcion: item.description,

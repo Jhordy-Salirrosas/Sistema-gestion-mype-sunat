@@ -108,9 +108,8 @@ export class InvoiceNoteService {
   /**
    * Valida una Nota de Débito.
    *
-   * Una nota de débito AUMENTA el importe de la operación, así que no consume
-   * saldo: solo se comprueba que el motivo sea del Catálogo 10 y que el importe
-   * sea positivo.
+   * La ND conserva su tipo fiscal, pero Cueva P6 exige que su importe
+   * quepa en el saldo monetario del afectado, compartido con las NC.
    */
   public async autorizarDebito(
     companyId: string,
@@ -131,6 +130,8 @@ export class InvoiceNoteService {
         message: 'El importe de una nota de débito debe ser mayor que cero.',
       });
     }
+
+    verificarSaldoNota(saldo, importe);
 
     return {
       tipo: '08',

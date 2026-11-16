@@ -122,6 +122,14 @@ export class CollectionsService {
     const cobro = await this.prisma.collection.findFirst({ where: { id, company_id: companyId } });
     if (!cobro) throw new BadRequestException('Cobro no encontrado.');
     if (cobro.status === 'ANULADO') throw new BadRequestException('El cobro ya está anulado.');
+    // Los cobros automáticos de M1 ya están asentados en la venta (cuenta 10).
+    // Su reverso fiscal lo registra el puente de baja; nunca crear un segundo
+    // asiento COLLECTIONS ni permitir cancelar solo el saldo comercial.
+    if (id.startsWith('m1-cash:')) {
+      const invoice = await this.prisma.invoice.findFirst({ where: { id: cobro.invoice_id ?? '', company_id: companyId }, select: { estado: true } });
+      if (invoice?.estado !== 'ANULADO') throw new BadRequestException('Este cobro pertenece al asiento de una venta al contado. Anule primero el comprobante por el flujo fiscal.');
+      return this.prisma.collection.update({ where: { id }, data: { status: 'ANULADO' } });
+    }
     const original = await this.prisma.accountingEntry.findFirst({
       where: { company_id: companyId, source_module: 'COLLECTIONS', source_reference_id: id },
       include: { lines: true },
@@ -191,10 +199,20 @@ export class CollectionsService {
       if (!match) throw new BadRequestException('El comprobante debe tener formato F001-00000001.');
       const invoice = await this.prisma.invoice.findFirst({
         where: { company_id: companyId, serie: match[1], correlativo: Number(match[2]) },
-        select: { id: true, monto_total: true, estado: true },
+        select: { id: true, monto_total: true, estado: true, payload_ubl: true },
       });
       if (!invoice) throw new BadRequestException(`El comprobante ${numero} no existe en la empresa.`);
       if (!['ACEPTADO', 'OBSERVADO'].includes(invoice.estado)) throw new BadRequestException(`El comprobante ${numero} no está aceptado por SUNAT.`);
+      // El POS anterior también solicita POST /collections tras emitir. En
+      // ventas nuevas de contado el puente es dueño del cobro y del asiento:
+      // devolver el registro estable, o esperar, nunca crear otro COBRO.
+      const payload = invoice.payload_ubl as { m1PaymentAccountingVersion?: number; formaPago?: string; medioPago?: string } | null;
+      if (payload?.m1PaymentAccountingVersion === 1 && payload.formaPago === 'Contado' && payload.medioPago) {
+        const automatic = await this.prisma.collection.findFirst({ where: { id: `m1-cash:${invoice.id}`, company_id: companyId, status: { not: 'ANULADO' } } });
+        if (!automatic) throw new BadRequestException('El cobro automático estará disponible cuando el comprobante esté aceptado y el puente haya concluido.');
+        if (Math.round(Number(automatic.amount) * 100) !== Math.round(monto * 100) || dto.paymentMethod && dto.paymentMethod !== automatic.payment_method) throw new BadRequestException('El importe o medio solicitado no coincide con el cobro automático de la venta.');
+        return automatic;
+      }
       const { saldo } = await this.saldoFactura(companyId, invoice.id, Number(invoice.monto_total));
       if (monto > saldo + 0.005) throw new BadRequestException(`El cobro supera el saldo del comprobante (S/ ${saldo.toFixed(2)}).`);
       invoiceId = invoice.id;
