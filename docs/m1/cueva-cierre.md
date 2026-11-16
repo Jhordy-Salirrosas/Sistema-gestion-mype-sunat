@@ -50,3 +50,31 @@ también Vitest. No se ajusta ni se oculta ese umbral; se repetirá sin carga
 simultánea. Las 8 suites/50 pruebas omitidas son las omisiones declaradas por
 la base. Front: npm test -- --reporter=json. Resultados completos en
 cueva-back-before.json y cueva-front-before.json del workspace.
+
+## P1 — Medio de pago y configuración comercial
+
+Se conserva el catálogo compatible de PR #305 (incluidos depósito y cheque).
+Crédito es la forma fiscal, no un medio de cobro. Se corrigió la conversión de
+POST /invoices para conservar medioPago, además del camino /emitir que ya lo
+hacía. Las ventas nuevas llevan snapshot m1PaymentAccountingVersion=1: el
+puente usa caja 1011 para efectivo y la regla COBRO de la empresa para medios
+bancarios; admite mapeos COBRO_YAPE, COBRO_PLIN, COBRO_TARJETA, etc. No inventa
+subcuentas: sin cuenta 10 válida deja el puente pendiente con error visible.
+El crédito conserva CXC; los documentos/asientos históricos sin snapshot no
+se reclasifican. El cobro comercial se registra con clave estable m1-cash:ID,
+sin segundo asiento COBRO; su reintento no duplica cobros ni asientos. Se
+mantienen separadas detracción y retención.
+
+GET/PUT /invoices/commercial-defaults almacena la forma y el medio por empresa;
+solo ADMIN guarda, cualquier emisor autenticado puede leer dentro del módulo.
+La tabla aditiva se gestiona por SQL manual (no se cambia auth.prisma, protegido
+por la entrega de roles). Sin fila, Contado/Efectivo. La configuración global
+sugiere crédito únicamente para factura con cliente habilitado; conserva la
+regla de descuentos del maestro. Ambos formularios consumen el valor global.
+Un fallo de lectura se informa; no se presume que el cliente concede crédito.
+
+El SQL y checksum están en scripts/manual/cueva-commercial-defaults.*. Se
+ensayó solo en el contenedor PostgreSQL local. Las pruebas PostgreSQL verifican
+persistencia, aislamiento empresarial, catálogo y PUT con guards reales.
+Pruebas dirigidas iniciales: 2 archivos/13 pruebas de back aprobadas; build Nest
+aprobado. La suite completa del cierre incluye la cobertura de este cambio.

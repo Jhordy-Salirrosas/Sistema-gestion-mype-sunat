@@ -1,17 +1,34 @@
-# Ferry — grilla híbrida del detalle de líneas de emisión
+# Ferry — Semana Cueva, paquete 4
 
-Rama `fix/m1-emitir-grilla-hibrida-ag`, base back `03890af881fea82e45801870a16a6e97ca229391`.
-Cadena front en `CarlosSoles/Fronted-sistema-mype-sunat`: base `d649d6520a1670029984c4cf2d0ca06b64091095` → PR #306 (grilla híbrida) → main `ec515ebc4404d090cbb80fe02bbd0a95af5d8161` → PR #307 (ajuste de columnas) → main `44cad5fad75902b906dc91819ea0ee6fc668fc3d`.
+Back: `feat/cueva-cierre`, base `646fa51a9e1862efc9265c529d0d33b81f44d978`.
+Front: CarlosSoles/Fronted-sistema-mype-sunat, base `4fb2d30f841a374ce53efc57d790832b52c68510`.
 
-Cambio SOLO de presentación del componente `InvoiceItemsGrid`: desde 1024px, tabla compacta de una fila por línea; por debajo, tarjeta densa por línea. Los campos de solo lectura se renderizan como texto; sin textos de ayuda duplicados ni scroll horizontal. El ajuste posterior pasa la tabla a `table-auto` con `min-w-[110px]` en Descripción para que ninguna columna quede recortada entre 1024 y 1280 px. Sin cambios de campos, validaciones, payload ni atajos.
+Aplicar después de la entrega de roles administrables. No se modifican sus
+fuentes ni pruebas. No hay PR ni merge de esta entrega.
 
-## Aplicación
+## Aplicación e inventario
 
-1. Verificar `sha256sum -c SHA256SUMS` (inventaría los 12 archivos entregados en su estado final y este documento).
-2. Los archivos ya están integrados en el front (PR #306 y #307); este ferry es el registro en el back y actualiza en el espejo `frontend/` solo esos 12 archivos.
+Ejecutar `sha256sum -c SHA256SUMS` en la raíz del back. **Copiar exclusivamente
+los archivos frontend/ enumerados en SHA256SUMS**, quitando ese prefijo, sobre
+el front. El espejo del back contiene también archivos heredados de ferries
+anteriores que no pertenecen al delta de este paquete: no copiarlos ni borrarlos
+en el front. FERRY.md y SHA256SUMS son manifiestos de este paquete y su
+composición en el back debe respetar la secuencia de entregas.
 
-## Cierre y manifiesto
+API nueva consumida: GET/PUT `/invoices/commercial-defaults` por la
+configuración comercial y los formularios de emisión; POST
+`/invoices/connection-test` por el diagnóstico SUNAT; GET
+`/configuration/links` por la agrupación ADMIN. PUT y diagnósticos requieren
+ADMIN. Los endpoints existentes de configuración y alta de cliente conservan
+su contrato. El SQL aditivo se entrega en scripts/manual; no se aplica a bases
+compartidas. Consultar docs/m1/cueva-cierre.md para validación, detenciones y
+conteos finales.
 
-- Delta final: 12 archivos (1 componente + 11 pruebas adaptadas a leer los campos de solo lectura como texto).
-- Front: 194 archivos / 1462 pruebas aprobadas antes y después de cada PR; builds correctos; CI verde en ambos PR.
-- Certificación en la app servida: descripción y unidad visibles, botón de eliminar visible y funcional, totales correctos, sin scroll horizontal.
+Archivos del delta:
+
+- `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
+- `src/modules/invoices/components/InvoiceEmitModal.tsx`
+- `src/modules/invoices/hooks/useCommercialDefaults.ts`
+- `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
+- `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
+- `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`

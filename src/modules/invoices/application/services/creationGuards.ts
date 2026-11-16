@@ -53,7 +53,7 @@ export function fiscalToEmission(dto: CreateInvoiceDto): EmitirComprobanteDto {
     fecha_emision: dto.fecha_emision, customer_identity_type: dto.customer_identity_type,
     customer_identity_number: dto.customer_identity_number, customer_legal_name: dto.customer_legal_name!,
     almacen: p.almacen,
-    forma_pago: p.formaPago, cuotas, descuento_global: p.descuentoGlobal,
+    forma_pago: p.formaPago, medio_pago: p.medioPago as EmitirComprobanteDto['medio_pago'], cuotas, descuento_global: p.descuentoGlobal,
     medio_pago_detraccion: p.medioPagoDetraccion, cuenta_banco_nacion: p.cuentaBancoNacion,
     documento_afectado: p.documentoAfectado, referenced_invoice_id: dto.referenced_invoice_id,
     codigo_motivo_nota: p.codigoMotivoNota, descripcion_motivo_nota: descripcionCanonicaNota(dto.tipo_comprobante, p.codigoMotivoNota, p.descripcionMotivoNota),
