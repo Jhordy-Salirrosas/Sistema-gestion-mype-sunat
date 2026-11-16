@@ -1,3 +1,4 @@
+import type { PreparedEmission } from './preparedEmission';
 import { resolverFechaEmision } from '../../fiscalDate';
 import { esNotaDescuento, sinBolsasDevueltas } from '../../noteIcbperPolicy';
 import { calcularIcbper } from '../../ublIcbperLine';
@@ -300,7 +301,7 @@ const calcularDetraccion = (
  * @param correlativo número ya reservado por `InvoiceSeriesService`.
  */
 export const traducirEmision = (
-  dto: EmitirComprobanteDto,
+  dto: PreparedEmission,
   emisor: DatosEmisor,
   correlativo: number,
 ): ComprobanteTraducido => {
