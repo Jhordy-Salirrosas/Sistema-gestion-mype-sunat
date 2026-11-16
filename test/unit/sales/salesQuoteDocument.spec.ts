@@ -17,6 +17,7 @@ describe('SalesQuotesService - documento', () => {
   it('rechaza RUC/DNI inválidos y acepta sin documento', async () => {
     const { sut } = service();
     await expect(sut.create('c1', { ...base, customerDocType: '6', customerDocNumber: '123' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(sut.create('c1', { ...base, customerDocType: '6', customerDocNumber: '00100000001' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(sut.create('c1', { ...base, customerDocType: '1', customerDocNumber: '123' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(sut.create('c1', { ...base, customerDocType: '1', customerDocNumber: '12345678' })).resolves.toMatchObject({ customerDocType: '1' });
     await expect(sut.create('c1', { ...base, customerDocType: '0' })).resolves.toMatchObject({ customerDocType: '0', customerDocNumber: null });

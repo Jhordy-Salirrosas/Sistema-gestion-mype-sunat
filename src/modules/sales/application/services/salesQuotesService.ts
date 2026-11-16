@@ -4,6 +4,7 @@ import { PrismaService } from '../../../../database/prismaService';
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const rucValido = (ruc: string): boolean => {
   if (!/^\d{11}$/.test(ruc)) return false;
+  if (!/^(10|15|16|17|20)/.test(ruc)) return false;
   const suma = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2].reduce((s, peso, i) => s + Number(ruc[i]) * peso, 0);
   const diferencia = 11 - (suma % 11);
   return Number(ruc[10]) === (diferencia === 10 ? 0 : diferencia === 11 ? 1 : diferencia);
@@ -53,7 +54,7 @@ export class SalesQuotesService {
     if (!dto.customerName?.trim()) throw new BadRequestException('El cliente es obligatorio.');
     const tipoDoc = dto.customerDocType?.trim() || '6';
     const numeroDoc = dto.customerDocNumber?.trim() || '';
-    if (tipoDoc === '6' && !rucValido(numeroDoc)) throw new BadRequestException('RUC inválido: 11 dígitos y módulo 11.');
+    if (tipoDoc === '6' && !rucValido(numeroDoc)) throw new BadRequestException('RUC inválido: debe iniciar con 10, 15, 16, 17 o 20, tener 11 dígitos y módulo 11.');
     if (tipoDoc === '1' && !/^\d{8}$/.test(numeroDoc)) throw new BadRequestException('DNI inválido: 8 dígitos.');
     if (!['6', '1', '0'].includes(tipoDoc)) throw new BadRequestException('Tipo de documento inválido.');
     if (!dto.items?.length) throw new BadRequestException('La cotización necesita al menos un ítem.');
