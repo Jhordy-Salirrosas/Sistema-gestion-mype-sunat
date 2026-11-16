@@ -328,7 +328,7 @@ describe('InventoryPurchaseService (Compras Nacionales - Operación 02)', () => 
       { id: 'm1', movement_date: new Date('2026-11-05'), amount: 50, payment_method: 'TRANSFERENCIA', source_reference_id: 'COM-1', concept: 'Pago' },
     ]);
     const r = await service.supplierStatement(companyId, '20100000001');
-    expect(r.totals).toEqual({ total: 118, paid: 50, balance: 68 });
+    expect(r.totals).toEqual({ total: 118, paid: 50, credited: 0, balance: 68 });
     expect(r.purchases[0]).toMatchObject({ number: 'COM-1', balance: 68 });
     expect(r.payments).toHaveLength(1);
   });

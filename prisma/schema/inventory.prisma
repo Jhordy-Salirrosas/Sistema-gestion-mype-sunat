@@ -379,12 +379,14 @@ model NationalPurchase {
   status              NationalPurchaseStatus @default(REGISTRADA)
   reception_status    ReceptionStatus        @default(PENDIENTE)
   paid_amount         Decimal                @default(0.00) @db.Decimal(14, 2)
+  credit_amount       Decimal                @default(0.00) @db.Decimal(14, 2)
   has_differences     Boolean                @default(false)
   notes               String?
   responsible         String?
 
   items               NationalPurchaseItem[]
   reception_differences PurchaseReceptionDifference[]
+  credit_notes        SupplierCreditNote[]
 
   created_at          DateTime               @default(now())
   updated_at          DateTime               @updatedAt
@@ -408,6 +410,28 @@ model PurchaseReceptionDifference {
 
   @@index([purchase_id])
   @@map("purchase_reception_differences")
+}
+
+model SupplierCreditNote {
+  id             String           @id @default(uuid())
+  company_id     String
+  company        Company          @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  purchase_id    String
+  purchase       NationalPurchase @relation(fields: [purchase_id], references: [id], onDelete: Restrict)
+  note_number    String
+  issue_date     DateTime
+  amount         Decimal          @db.Decimal(14, 2)
+  net_amount     Decimal          @db.Decimal(14, 2)
+  igv_amount     Decimal          @db.Decimal(14, 2)
+  reason         String
+  notes          String?
+  created_by     String?
+  created_at     DateTime         @default(now())
+
+  @@unique([company_id, note_number])
+  @@index([company_id, issue_date])
+  @@index([purchase_id])
+  @@map("supplier_credit_notes")
 }
 
 model NationalPurchaseItem {
