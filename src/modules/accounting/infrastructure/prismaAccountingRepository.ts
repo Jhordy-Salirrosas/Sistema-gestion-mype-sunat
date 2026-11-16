@@ -167,7 +167,11 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     const entries = await this.prisma.accountingEntry.findMany({
       where: { company_id: companyId, period },
       include: { lines: true },
-      orderBy: { entry_number: 'asc' },
+      // Orden cronológico: primero la fecha contable y, dentro del día, el
+      // correlativo. Es el mismo orden con el que se exporta el PLE 5.1; si la
+      // pantalla ordenara solo por número, un asiento reprocesado con fecha
+      // anterior aparecería fuera de secuencia.
+      orderBy: [{ entry_date: 'asc' }, { entry_number: 'asc' }],
     });
 
     return entries.map(
@@ -182,6 +186,8 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           sourceModule: e.source_module,
           journalCode: e.journal_code ?? 'OPV',
           sourceReferenceId: e.source_reference_id ?? undefined,
+          status: e.status,
+          createdAt: e.created_at,
           lines: e.lines.map((l: any) => ({
             lineOrder: l.line_order ?? l.lineOrder,
             accountCode: l.account_code ?? l.accountCode,
