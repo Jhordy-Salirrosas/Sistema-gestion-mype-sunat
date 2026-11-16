@@ -28,6 +28,7 @@ Archivos del delta:
 
 - `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
 - `src/modules/invoices/components/InvoiceEmitModal.tsx`
+- `src/modules/invoices/components/InvoiceIssuerConfigForm.tsx`
 - `src/modules/invoices/components/SunatConnectionTest.tsx`
 - `src/modules/invoices/hooks/useCommercialDefaults.ts`
 - `src/modules/invoices/pages/InvoiceEmissionPage.tsx`

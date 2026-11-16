@@ -96,3 +96,11 @@ presenta como validación de credenciales de producción. El certificado se
 inspecciona localmente y se informa por separado (vigente, vencido, futuro,
 inválido o ausente). No se publican SOL, PFX, claves ni cuerpo remoto. La
 pantalla muestra resultado, latencia y certificado sin emitir documentos.
+
+## P3 — Selector de certificado visible
+
+El input nativo existente permanece visible y asociado a su etiqueta. Se
+agrega estilo explícito al botón file-selector-button para que el reset CSS
+no elimine su contraste y superficie de acción. La ayuda indica .pfx/.p12 y
+96 KiB. Se reutiliza FileReader y PUT /invoices/config con cert_base64 y
+cert_password; no hay endpoint, transporte ni validación nuevos.
