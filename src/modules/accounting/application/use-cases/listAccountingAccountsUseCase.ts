@@ -12,7 +12,7 @@ export class ListAccountingAccountsUseCase {
     private readonly repository: IAccountingRepositoryPort,
   ) {}
 
-  execute(): Promise<AccountingAccountEntity[]> {
-    return this.repository.findAccounts();
+  execute(includeInactive = false): Promise<AccountingAccountEntity[]> {
+    return this.repository.findAccounts({ includeInactive });
   }
 }
