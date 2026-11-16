@@ -82,6 +82,7 @@ import { CreditInstallmentsEditor } from './CreditInstallmentsEditor';
 import { problemasDeNota } from '../lib/invoiceNotaOrigen';
 
 interface InvoiceEmitModalProps {
+  tipoExplicito?: boolean;
   tipoInicial: TipoEmisible;
   configuracionCargando?: boolean;
   configuracionError?: boolean;
@@ -210,6 +211,7 @@ const motivosPendientes = (
 /** Modal de emisión con grilla de ítems, cuotas y resumen en tiempo real. */
 export const InvoiceEmitModal = ({
   tipoInicial,
+  tipoExplicito = false,
   seriesConfiguradas = [],
   configuracionCargando = false,
   configuracionError = false,
@@ -228,7 +230,7 @@ export const InvoiceEmitModal = ({
   const puedeOperar = useInvoiceWritePermission();
   const [b, setB] = useState<BorradorEmision>(() => {
     const tipoEfectivo: TipoEmisible =
-      tipoInicial === '07' || tipoInicial === '08'
+      tipoExplicito || tipoInicial === '07' || tipoInicial === '08'
         ? tipoInicial
         : tipoComprobantePorPerfil(perfilComercial) ?? tipoInicial;
     const inicial = borradorInicial(tipoEfectivo, fecha);
@@ -449,7 +451,7 @@ export const InvoiceEmitModal = ({
   const teclado = useInvoiceKeyboard(nuevoItem, () => { void confirmar(); }, enviando || !puedeOperar);
   return (
     <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
-      <DialogContent ref={formularioRef} showCloseButton={false} onKeyDown={teclado.handler} onEscapeKeyDown={e => e.preventDefault()} className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
+      <DialogContent ref={formularioRef} showCloseButton={false} onKeyDown={teclado.handler} onEscapeKeyDown={e => e.preventDefault()} className="max-h-[88vh] overflow-y-auto sm:max-w-[min(96vw,1440px)]">
         <DialogHeader className="pr-8">
           <DialogTitle>Emitir Comprobante Electrónico</DialogTitle>
           {teclado.ayuda}

@@ -125,3 +125,25 @@ También se conserva invoiceConfigController.ts, compartido por emisión y en
 esa entrega: no se bloquean sus lecturas operativas de series/checklist.
 La sección queda accesible desde la configuración administrativa ya existente;
 el menú global queda pendiente de componer después de la fusión de roles.
+
+## P5 — Emisión en contexto e identidad de boleta
+
+La acción de emitir factura/boleta del listado abre el modal de emisión ya
+existente y conserva la lista y sus filtros. La elección explícita del tipo
+no se sustituye por el perfil comercial. No se crea otro flujo de emisión.
+La cabecera precede al detalle en DOM y, desde pantalla ancha, ocupa la columna
+izquierda con las líneas a su derecha. En menor ancho se apilan; se conserva
+la grilla híbrida y su mecanismo de bolsas, validaciones y atajos.
+
+Boleta muestra un solo input que admite DNI, RUC o razón social: detecta
+entrada numérica y usa useRucAutofill/consultarDni/consultarRuc existentes,
+o busca por nombre en el maestro. La identidad obtenida se resume como texto.
+Los resultados de consulta no otorgan crédito ni descuentos: esos permisos
+siguen requiriendo selección del maestro. El alta continúa en PartnerFormDialog,
+sin navegación; al guardar se selecciona el registro creado. También permite
+completar manualmente la identidad si el proveedor no responde. La consulta
+pendiente se cancela al escoger un cliente para no sobrescribirlo.
+
+Pruebas dirigidas: campo único, consulta DNI y selección del alta sin perder
+el formulario; diagnóstico con resultado y error: 2 archivos/4 pruebas verdes.
+No se altera el maestro de terceros ni la validación documental de cotizaciones.

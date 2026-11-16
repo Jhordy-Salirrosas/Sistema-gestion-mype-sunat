@@ -26,8 +26,11 @@ conteos finales.
 
 Archivos del delta:
 
+- `src/modules/invoices/InvoiceList.tsx`
 - `src/modules/invoices/components/ConfigurationHub.tsx`
+- `src/modules/invoices/components/CustomerLookupField.tsx`
 - `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
+- `src/modules/invoices/components/InvoiceEmitCampos.tsx`
 - `src/modules/invoices/components/InvoiceEmitModal.tsx`
 - `src/modules/invoices/components/InvoiceIssuerConfigForm.tsx`
 - `src/modules/invoices/components/InvoiceSettingsTab.tsx`
@@ -37,3 +40,4 @@ Archivos del delta:
 - `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
 - `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`
 - `test/unit/modules/invoices/cueva-connection.test.tsx`
+- `test/unit/modules/invoices/cueva-single-identity.test.tsx`
