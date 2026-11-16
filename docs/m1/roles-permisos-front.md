@@ -36,7 +36,7 @@ El back base contiene GET `/auth/action-permissions/me`, GET/PUT `/auth/action-p
 
 ## Implementación por parte
 
-Pendiente tras registrar esta línea base. Se entregará un commit por P1, P2, P3 y P4 y este commit de fase 0. El ferry reemplazará el inventario heredado por los archivos de este paquete sobre `4abdfc0`, con FERRY.md y SHA256SUMS. Sin PRs ni merges.
+Se entrega un commit por P1, P2, P3 y P4 y el commit de fase 0. El ferry sustituye el inventario heredado por los archivos de este paquete sobre `4abdfc0`, con FERRY.md y SHA256SUMS. Sin PRs ni merges.
 
 ### P1 construido — cliente y hook de acciones
 
@@ -51,3 +51,24 @@ Los tests antiguos de otros flujos aíslan los hooks de permisos para conservar 
 ### P3 construido — editor de acciones
 
 La sección «Acciones» muestra los cinco roles por las cuatro acciones. GET/PUT usan el catálogo del paquete 1; al guardar se invalidan las acciones efectivas. ADMIN queda deshabilitado y el manejador lo protege; sus filas se excluyen del PUT, por lo que una denegación persistida tampoco se reemplaza por un permiso supuesto. Carga y errores son visibles y bloquean el guardado sin datos. Cuatro pruebas dirigidas aprobadas: matriz, protección ADMIN, guardado/invalidación y errores de consulta/guardado.
+
+### P4 construido — alta de usuarios
+
+El ADMIN dispone de nombre, correo, contraseña y rol en «Usuarios y almacenes». `warehousesApi.createUser` envía POST `/auth/users` sin empresa elegible por el cliente; el servidor usa la empresa autenticada. Éxito limpia el formulario, incluida la contraseña, e invalida la lista. Los errores 409 y 403 se muestran expresamente y los demás usan el mensaje del servidor; no se anuncia éxito tras un rechazo. Se conserva la edición de roles, estado y almacenes. La contraseña usa entrada protegida y no se pasa como variable de la caché de mutaciones. Seis pruebas de alta, refresco, errores, acceso y envío pendiente.
+
+## Cierre y comparación
+
+| Suite completa front | Archivos aprobados | Archivos fallidos | Pruebas aprobadas | Pruebas fallidas | Omitidas |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Base `4abdfc0` | 192 | 2 | 1460 | 2 | 0 |
+| Entrega | 197 | 2 | 1486 | 2 | 0 |
+
+Total: 194 → 199 archivos y 1462 → 1488 pruebas. Se compararon los nombres completos de los fallos: exactamente los mismos dos de fecha documentados en fase 0, ningún fallo nuevo ni archivo con error de carga. La suite devuelve código 1 por esos fallos preexistentes autorizados; no se presenta como completamente verde. Los dos archivos de pruebas afectados y `invoiceEmitFecha.ts` permanecen idénticos a la base. `npm run build` (TypeScript + Vite) aprobado. No se ejecuta la suite del back: su implementación no cambia.
+
+### Resumen de archivos y manifiesto
+
+El delta contiene 54 archivos front: 18 de código, 35 de pruebas/soporte y `vite.config.ts`. Código: cliente y hooks auth, editor de permisos, alta/lista de usuarios y cliente de almacenes; en M1, hooks de escritura/fecha, página y campos de emisión, botones de operación/monitor y accesos al maestro desde emisión. Los tests existentes adaptan sus dependencias de permisos; cinco archivos nuevos cubren el paquete. No se modifica el maestro de terceros, la regla fiscal ni los tests de fecha preexistentes.
+
+`frontend/` coincide byte por byte con los 54 archivos del delta sobre `4abdfc0`. `SHA256SUMS` contiene 55 entradas: todo el ferry y FERRY.md, verificadas con `sha256sum -c SHA256SUMS`. El documento FERRY.md describe bases, aplicación y consumo de endpoints. Fuera del espejo solo cambian este informe, FERRY.md y SHA256SUMS; no hay cambios de implementación del back, PRs ni merges.
+
+Secuencia de commits: fase 0 `9041a9db`, P1 `cabd0304`, P2 `cabc19ae`, P3 `e728fc47` y P4 (commit que contiene este cierre).
