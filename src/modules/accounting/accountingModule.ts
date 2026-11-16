@@ -12,6 +12,7 @@ import { GetAccountingEntriesUseCase } from './application/use-cases/getAccounti
 import { RegisterInvoiceAccountingEntryUseCase } from './application/use-cases/registerInvoiceAccountingEntryUseCase';
 import { ListAccountingAccountsUseCase } from './application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from './application/use-cases/createAccountingAccountUseCase';
+import { UpdateAccountingAccountUseCase } from './application/use-cases/updateAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from './application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from './application/use-cases/openAccountingPeriodUseCase';
 import { OpenFiscalYearUseCase } from './application/use-cases/openFiscalYearUseCase';
@@ -44,6 +45,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
     CreateAccountingAccountUseCase,
+    UpdateAccountingAccountUseCase,
     ListAccountingPeriodsUseCase,
     OpenAccountingPeriodUseCase,
     OpenFiscalYearUseCase,
@@ -73,6 +75,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
     CreateAccountingAccountUseCase,
+    UpdateAccountingAccountUseCase,
     ListAccountingPeriodsUseCase,
     OpenAccountingPeriodUseCase,
     OpenFiscalYearUseCase,

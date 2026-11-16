@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -30,6 +31,8 @@ import { CloseAnnualUseCase } from '../../application/use-cases/closeAnnualUseCa
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
+import { UpdateAccountingAccountUseCase } from '../../application/use-cases/updateAccountingAccountUseCase';
+import { UpdateAccountingAccountDto } from '../../application/dto/updateAccountingAccountDto';
 import { ListAccountingPeriodsUseCase } from '../../application/use-cases/listAccountingPeriodsUseCase';
 import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAccountingPeriodUseCase';
 import { OpenFiscalYearUseCase } from '../../application/use-cases/openFiscalYearUseCase';
@@ -61,6 +64,7 @@ export class AccountingController {
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
+    private readonly updateAccountUseCase: UpdateAccountingAccountUseCase,
     private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
     private readonly openPeriodUseCase: OpenAccountingPeriodUseCase,
     private readonly openFiscalYearUseCase: OpenFiscalYearUseCase,
@@ -131,14 +135,19 @@ export class AccountingController {
   // GET: Catálogo PCGE y períodos de la empresa
   // ==========================================
   @Get('accounts')
-  async getAccounts() {
-    return this.listAccountsUseCase.execute();
+  async getAccounts(@Query('includeInactive') includeInactive?: string) {
+    return this.listAccountsUseCase.execute(includeInactive === 'true');
   }
 
   @Post('accounts')
   @HttpCode(HttpStatus.CREATED)
   async createAccount(@Body() dto: CreateAccountingAccountDto) {
     return this.createAccountUseCase.execute(dto);
+  }
+
+  @Patch('accounts/:code')
+  async updateAccount(@Param('code') code: string, @Body() dto: UpdateAccountingAccountDto) {
+    return this.updateAccountUseCase.execute(code, dto);
   }
 
   @Post('closing-entry/:year')
