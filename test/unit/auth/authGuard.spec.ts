@@ -27,10 +27,10 @@ describe('AuthGuard', () => {
       generateRefreshToken: jest.fn(),
       hashToken: jest.fn(),
     };
-    guard = new AuthGuard(mockTokenService);
+    guard = new AuthGuard(mockTokenService, {resolve:jest.fn(async p=>p)} as never);
   });
 
-  it('debería autorizar cuando el token Bearer es válido', () => {
+  it('debería autorizar cuando el token Bearer es válido', async () => {
     mockTokenService.verifyToken.mockReturnValue({
       sub: 'usr-1',
       email: 'a@mype.pe',
@@ -39,17 +39,17 @@ describe('AuthGuard', () => {
     });
 
     const ctx = createMockContext('Bearer valid.jwt.token');
-    expect(guard.canActivate(ctx)).toBe(true);
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
   });
 
-  it('debería rechazar si falta el encabezado Authorization', () => {
+  it('debería rechazar si falta el encabezado Authorization', async () => {
     const ctx = createMockContext(undefined);
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('debería rechazar si el token es inválido', () => {
+  it('debería rechazar si el token es inválido', async () => {
     mockTokenService.verifyToken.mockReturnValue(null);
     const ctx = createMockContext('Bearer invalid.token');
-    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 });

@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
@@ -43,7 +44,7 @@ describe('SIRE · consulta de períodos cuando la cola de PgBoss falla', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [SireReadOnlyPeriodsController],
-      providers: [
+      providers: [sessionMembershipTestProvider,
         AuthGuard,
         {
           provide: TOKEN_SERVICE_PORT,

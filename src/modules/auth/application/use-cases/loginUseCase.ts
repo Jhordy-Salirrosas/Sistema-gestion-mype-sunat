@@ -1,3 +1,4 @@
+import { SessionMembershipService } from '../services/sessionMembershipService';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { LoginDto } from '../dto/loginDto';
 import type { AuthResponseDto } from '../dto/authResponseDto';
@@ -20,6 +21,7 @@ export class LoginUseCase {
     private readonly hasher: HasherPort,
     @Inject(TOKEN_SERVICE_PORT)
     private readonly tokenService: TokenServicePort,
+    private readonly membership: SessionMembershipService,
   ) {}
 
   async execute(dto: LoginDto): Promise<AuthResponseDto> {
@@ -49,13 +51,15 @@ export class LoginUseCase {
       throw new UnauthorizedException('Credenciales de acceso incorrectas.');
     }
 
+    const session = await this.membership.resolve({ sub:user.id,email:user.email,companyId:user.companyId,role:user.role });
+
     const expiresInSeconds = 900; // 15 minutos
     const accessToken = this.tokenService.signToken(
       {
         sub: user.id,
         email: user.email,
         companyId: user.companyId,
-        role: user.role,
+        role: session.role,
       },
       expiresInSeconds,
     );
@@ -94,7 +98,7 @@ export class LoginUseCase {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role,
+        role: session.role,
         companyId: user.companyId,
         companyRuc: company?.ruc?.replace(/[\r\n\t ]/g, ''),
         companyLegalName: company?.legalName,

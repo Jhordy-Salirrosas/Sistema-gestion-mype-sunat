@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { CurrentCompany, Roles } from '../../../../common/decorators';
+import { CurrentCompany, RequireCapability } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
+import { CapabilityGuard } from '../../../auth/infrastructure/guards/capabilityGuard';
 import { AccountingRegularizationService } from '../../application/services/accountingRegularizationService';
 
 /**
@@ -11,8 +11,8 @@ import { AccountingRegularizationService } from '../../application/services/acco
  * cambiar el contrato ni el grafo de dependencias de ese controlador.
  */
 @Controller('api/v1/invoices')
-@UseGuards(AuthGuard, RolesGuard)
-@Roles('ADMIN')
+@UseGuards(AuthGuard, CapabilityGuard)
+@RequireCapability('INVOICE_ACCOUNTING_REGULARIZE')
 export class InvoiceAccountingRegularizationController {
   constructor(private readonly regularizacion: AccountingRegularizationService) {}
 

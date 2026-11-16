@@ -14,6 +14,8 @@
  *
  * O definir TEST_DATABASE_URL con otra cadena.
  */
+import { defaultActionPermissionsProvider } from '../../fixtures/defaultActionPermissions';
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -328,6 +330,12 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
+      // Los guards siguen activos; la identidad y el catálogo usan los dobles
+      // comunes de las suites de transporte. PostgreSQL y Outbox son reales.
+      .overrideProvider(sessionMembershipTestProvider.provide)
+      .useValue(sessionMembershipTestProvider.useValue)
+      .overrideProvider(defaultActionPermissionsProvider.provide)
+      .useValue(defaultActionPermissionsProvider.useFactory())
       // Se prueba ingesta + Outbox, nunca ejecución ni envío de los jobs.
       .overrideProvider(InvoiceJobConsumer)
       .useValue({ onModuleInit: jest.fn() })

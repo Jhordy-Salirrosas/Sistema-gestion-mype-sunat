@@ -1,3 +1,4 @@
+import { ActionPermissionsService } from '../../../auth/application/services/actionPermissionsService';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { QueueService } from '../../../resilience/infrastructure/queue/queue.service';
@@ -9,14 +10,15 @@ const incertidumbre = (row: { estado: string; transport_uncertain: boolean | nul
  (row.transport_uncertain === true || (row.transport_uncertain == null && ['ERROR_RED','ENVIADO'].includes(row.estado)));
 @Injectable()
 export class InvoiceForcedResendService {
- constructor(private readonly prisma: PrismaService, private readonly queue: QueueService) {}
+ constructor(private readonly prisma: PrismaService, private readonly queue: QueueService, private readonly permissions: ActionPermissionsService) {}
  private async pendiente(tx: Prisma.TransactionClient, id: string) {
   const rows = await tx.transactionHistory.findMany({ where: { invoice_id: id, codigo_error: { in: [FORCE_AUTH, FORCE_USED] } }, orderBy: { created_at: 'asc' } });
   const usados = new Set(rows.filter(r => r.codigo_error === FORCE_USED).map(r => { try { return JSON.parse(r.mensaje_error ?? '{}').autorizacionId; } catch { return null; } }));
   return [...rows].reverse().find(r => r.codigo_error === FORCE_AUTH && !usados.has(r.id));
  }
  async autorizar(companyId: string, id: string, actor: { sub?: string; role?: string }, body: unknown) {
-  if (actor?.role !== 'ADMIN' || !actor.sub) throw new ForbiddenException('Solo ADMIN autenticado puede autorizar el reenvío forzado.');
+  if (!actor?.sub || !actor.role) throw new ForbiddenException('Se requiere un actor autenticado para autorizar el reenvío.');
+  await this.permissions.assertAllowed(companyId, actor.role, 'INVOICE_FORCE_RESEND');
   const input = body as { motivo?: unknown; confirmado?: unknown; decisionId?: unknown; renovarAutorizacionId?: unknown } | null;
   if (!input || input.confirmado !== true || typeof input.motivo !== 'string' || !input.motivo.trim() || input.motivo.length > 1000) throw new BadRequestException('Indique un motivo escrito (hasta 1000 caracteres) y confirme explícitamente el riesgo de duplicidad.');
   if (typeof input.decisionId !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(input.decisionId)) throw new BadRequestException('Indique el identificador estable de esta decisión.');

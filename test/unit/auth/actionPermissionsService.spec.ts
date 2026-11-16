@@ -1,23 +1,24 @@
+import { withSecurityCatalog } from '../../fixtures/securityCatalogPrisma';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ActionPermissionsService, ACTIONS } from '../../../src/modules/auth/application/services/actionPermissionsService';
 import { ROLES } from '../../../src/modules/auth/application/services/modulePermissionsService';
 function setup() {
   const prisma: any = { roleActionPermission: { findMany: jest.fn(async () => []), upsert: jest.fn() } };
   prisma.$transaction = jest.fn(async cb => cb(prisma));
-  return { prisma, service: new ActionPermissionsService(prisma) };
+  return { prisma, service: new ActionPermissionsService(withSecurityCatalog(prisma)) };
 }
 it.each(ROLES)('defaults efectivos para %s preservan los roles existentes', async role => {
   const { service, prisma } = setup();
   const rows = await service.forRole('empresa', role);
-  expect(rows).toHaveLength(4);
-  for (const action of ACTIONS) expect(rows.find(r => r.actionCode === action.code)?.allowed).toBe(
+  expect(rows).toHaveLength(ACTIONS.length);
+  for (const action of ACTIONS.filter(a=>['INVOICE_EDIT_ISSUE_DATE','INVOICE_FORCE_RESEND','INVOICE_RESOLVE_DLQ','INVOICE_REPROCESS_BRIDGE'].includes(a.code))) expect(rows.find(r => r.actionCode === action.code)?.allowed).toBe(
     role === 'ADMIN' || role === 'OPERADOR_FACTURACION' && action.code === 'INVOICE_RESOLVE_DLQ');
-  expect(prisma.roleActionPermission.findMany).toHaveBeenCalledWith({ where: { company_id: 'empresa', role } });
+  expect(prisma.roleActionPermission.findMany).toHaveBeenCalledWith({ where: { company_id: 'empresa' } });
 });
-it('lista veinte combinaciones y aplica overrides false incluso a ADMIN', async () => {
+it('lista el catálogo por rol y aplica overrides false incluso a ADMIN', async () => {
   const { service, prisma } = setup();
   prisma.roleActionPermission.findMany.mockResolvedValue([{ role: 'ADMIN', action_code: 'INVOICE_FORCE_RESEND', allowed: false }]);
-  const rows = await service.list('empresa'); expect(rows).toHaveLength(20);
+  const rows = await service.list('empresa'); expect(rows).toHaveLength(ACTIONS.length*5);
   expect(rows.find(r => r.role === 'ADMIN' && r.actionCode === 'INVOICE_FORCE_RESEND')?.allowed).toBe(false);
   await expect(service.assertAllowed('empresa','ADMIN','INVOICE_FORCE_RESEND')).rejects.toBeInstanceOf(ForbiddenException);
 });

@@ -1,3 +1,4 @@
+import { ActionPermissionsService } from '../../../auth/application/services/actionPermissionsService';
 /**
  * Descargas de XML, CDR y PDF (TA-65).
  *
@@ -26,7 +27,7 @@ import { normalizarFormato } from '../../application/services/invoicePdfService'
 @Controller('api/v1/invoices')
 @UseGuards(AuthGuard)
 export class InvoiceDownloadController {
-  constructor(private readonly descargas: InvoiceDownloadService) {}
+  constructor(private readonly descargas: InvoiceDownloadService, private readonly permissions: ActionPermissionsService) {}
 
   /**
    * GET /api/v1/invoices/:id/xml
@@ -41,7 +42,8 @@ export class InvoiceDownloadController {
     @Res() res: Response,
     @Req() req?: { user?: { role?: string } },
   ): Promise<void> {
-    const archivo = req?.user?.role === 'AUDITOR'
+    const repair = req?.user?.role ? (await this.permissions.forRole(companyId,req.user.role)).some(row=>row.actionCode==='INVOICE_XML_REPAIR'&&row.allowed) : false;
+    const archivo = !repair
       ? await this.descargas.descargar(companyId, id, 'xml', undefined, false)
       : await this.descargas.descargar(companyId, id, 'xml');
     this.entregar(res, archivo);

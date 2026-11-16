@@ -1,0 +1,212 @@
+// CANDIDATO de parte 5. No sustituye al esquema activo en el paquete 3B.
+// prisma/schema/auth.prisma
+
+
+model Company {
+  id                    String        @id @default(uuid())
+  ruc                   String        @unique
+  legal_name            String
+  trade_name            String?
+  local_anexo String?
+  domicilio_fiscal String?
+  ubigeo_fiscal String?
+  departamento_fiscal String?
+  provincia_fiscal String?
+  distrito_fiscal String?
+
+  sol_user              String
+  sol_pass_encrypted    String
+  cert_storage_url      String?
+  issuer_ruc            String?       @db.VarChar(11)
+  issuer_environment    String?
+  issuer_config_activated_at DateTime?
+  issuer_sol_configured Boolean?
+  issuer_cert_configured Boolean?
+  issuer_config_version String?
+  cert_pass_encrypted   String?
+  sire_client_id_enc    String?
+  sire_client_secret_enc String?
+  // Cuenta del Banco de la Nación del emisor para depositar detracciones.
+  // Vive en la empresa y no en el formulario: es un dato fiscal fijo del
+  // contribuyente, no algo que se escriba en cada emisión. El formulario queda
+  // como respaldo para una cuenta distinta. SUNAT rechaza con 3034 si el XML
+  // no la trae.
+  detraction_account    String?
+  commercial_profile    String?       @db.VarChar(20)
+  is_active             Boolean       @default(true)
+  inventory_cost_method String        @default("PROMEDIO") // PROMEDIO | FIFO
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+
+  roles                 CompanyRole[]
+  users                 User[]
+  module_permissions    RoleModulePermission[]
+  action_permissions    RoleActionPermission[]
+  series                InvoiceSeries[]
+  invoices              Invoice[]
+  declarations          CustomsDeclaration[]
+  shipments             CustomsShipment[]
+  foreign_suppliers     ForeignSupplier[]
+  import_orders         ImportOrder[]
+  goods_receipts        GoodsReceipt[]
+  landed_cost_sheets    LandedCostSheet[]
+  inventory_warehouses  InventoryWarehouse[]
+  inventory_products    InventoryProduct[]
+  inventory_balances    InventoryBalance[]
+  inventory_cost_layers InventoryCostLayer[]
+  inventory_movements   InventoryMovement[]
+  inventory_obligations InventoryBookObligationDecision[]
+  national_purchases    NationalPurchase[]
+  purchase_orders       PurchaseOrder[]
+  supplier_credit_notes SupplierCreditNote[]
+  sales_quotes          SalesQuote[]
+  cash_closures         CashClosure[]
+  sire_proposals        SireProposal[]
+  sire_report_uploads   SireReportUpload[]
+  sire_periods          SirePeriod[]
+  sire_period_queries   SirePeriodQuery[]
+  sire_reconciliations  SireReconciliation[]
+  sire_importaciones    SireImportacion[]
+  sire_conciliaciones   SireConciliacion[]
+  sire_reportes         SireReporte[]
+  sire_configuration    SireConfiguration?
+  accounting_entries    AccountingEntry[]
+  accounting_periods    AccountingPeriod[]
+  accounting_fiscal_years AccountingFiscalYear[]
+  expenses              Expense[]
+  collections           Collection[]
+  accounting_rules      AccountingRule[]
+  ple_books             PleBook[]
+  audit_logs            AuditLog[]
+  business_partners     BusinessPartner[]
+  accounting_mappings   AccountingMapping[]
+  treasury_movements    TreasuryMovement[]
+  treasury_accounts     CompanyTreasuryAccount[]
+  inventory_brands             InventoryBrand[]
+  inventory_models             InventoryModel[]
+  inventory_categories         InventoryCategory[]
+  inventory_manufacturers      InventoryManufacturer[]
+  inventory_tags               InventoryTag[]
+  inventory_product_suppliers  InventoryProductSupplier[]
+  inventory_product_presentations InventoryProductPresentation[]
+  inventory_product_variants   InventoryProductVariant[]
+
+  @@map("companies")
+}
+
+model User {
+  id                    String        @id @default(uuid())
+  company_id            String
+  company               Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  email                 String        @unique
+  password_hash         String
+  full_name             String
+  role                  String        @default("OPERADOR_FACTURACION")
+  is_active             Boolean       @default(true)
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+
+  refresh_tokens        RefreshToken[]
+  warehouse_access      UserWarehouse[]
+  reconciliations       SireReconciliation[]
+  ple_books             PleBook[]
+  audit_logs            AuditLog[]
+
+  @@map("users")
+  role_catalog CompanyRole @relation(fields: [company_id, role], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+
+}
+
+model RoleModulePermission {
+  id         String   @id @default(uuid())
+  company_id String
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  role       String
+  module_code String
+  can_view   Boolean  @default(true)
+  can_write  Boolean  @default(true)
+  updated_at DateTime @updatedAt
+
+  @@unique([company_id, role, module_code])
+  @@index([company_id, role])
+  @@map("role_module_permissions")
+  role_catalog CompanyRole @relation(fields: [company_id, role], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+
+}
+
+model RoleActionPermission {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  role       String
+  action_code String
+  allowed     Boolean  @default(false)
+  updated_at  DateTime @updatedAt
+
+  @@unique([company_id, role, action_code])
+  @@index([company_id, role])
+  @@map("role_action_permissions")
+  role_catalog CompanyRole @relation(fields: [company_id, role], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+
+}
+
+model UserWarehouse {
+  id           String             @id @default(uuid())
+  user_id      String
+  user         User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  warehouse_id String
+  warehouse    InventoryWarehouse @relation(fields: [warehouse_id], references: [id], onDelete: Cascade)
+  created_at   DateTime           @default(now())
+
+  @@unique([user_id, warehouse_id])
+  @@index([warehouse_id])
+  @@map("user_warehouses")
+}
+
+model RefreshToken {
+  id                    String        @id @default(uuid())
+  user_id               String
+  user                  User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash            String
+  expires_at            DateTime
+  is_revoked            Boolean       @default(false)
+  created_at            DateTime      @default(now())
+
+  @@index([user_id, expires_at])
+  @@map("refresh_tokens")
+}
+
+// Expansión aditiva: los tres campos de rol existentes permanecen enum hasta el corte.
+model CompanyRole {
+  users User[]
+  module_permissions RoleModulePermission[]
+  action_permissions RoleActionPermission[]
+  company_id String
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  code String
+  name String
+  is_system Boolean @default(false)
+  menu_permissions RoleMenuPermission[]
+  @@id([company_id, code])
+  @@map("company_roles")
+}
+model PermissionMenuCatalog {
+  menu_code String @id
+  module_code String
+  path_pattern String @unique
+  parent_menu_code String?
+  parent PermissionMenuCatalog? @relation("MenuTree", fields: [parent_menu_code], references: [menu_code], onDelete: Restrict)
+  children PermissionMenuCatalog[] @relation("MenuTree")
+  permissions RoleMenuPermission[]
+  @@map("permission_menu_catalog")
+}
+model RoleMenuPermission {
+  company_id String
+  role_code String
+  menu_code String
+  can_view Boolean @default(false)
+  role CompanyRole @relation(fields: [company_id, role_code], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+  menu PermissionMenuCatalog @relation(fields: [menu_code], references: [menu_code], onDelete: Restrict)
+  @@id([company_id, role_code, menu_code])
+  @@map("role_menu_permissions")
+}

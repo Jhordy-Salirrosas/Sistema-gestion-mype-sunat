@@ -1,3 +1,4 @@
+import { sessionMembershipTestProvider } from '../../fixtures/sessionMembershipProvider';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
@@ -136,7 +137,7 @@ describe('SIRE · menú (flujo HTTP)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [SireMenuController],
-      providers: [
+      providers: [sessionMembershipTestProvider,
         AuthGuard,
         {
           provide: TOKEN_SERVICE_PORT,
