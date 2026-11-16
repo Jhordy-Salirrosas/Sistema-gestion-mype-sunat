@@ -19,6 +19,7 @@ import { CreatePurchaseDto } from '../../application/dto/createPurchaseDto';
 import { PayPurchaseDto } from '../../application/dto/payPurchaseDto';
 import { CreateManualPayableDto } from '../../application/dto/createManualPayableDto';
 import { ReceivePurchaseDto } from '../../application/dto/receivePurchaseDto';
+import { CreateSupplierCreditNoteDto } from '../../application/dto/supplierCreditNoteDto';
 import {
   mapPurchaseRecord,
   mapPurchasesListResponse,
@@ -58,6 +59,17 @@ export class PurchasesController {
   @HttpCode(HttpStatus.OK)
   async cancelPurchase(@Param('id') id: string, @CurrentCompany() companyId?: string) {
     return this.purchasesService.cancelPurchase(requirePurchaseCompanyId(companyId), id);
+  }
+
+  @Get(':id/credit-notes')
+  async creditNotes(@Param('id') id: string, @CurrentCompany() companyId?: string) {
+    return this.purchasesService.listSupplierCreditNotes(requirePurchaseCompanyId(companyId), id);
+  }
+
+  @Post(':id/credit-notes')
+  @HttpCode(HttpStatus.CREATED)
+  async createCreditNote(@Param('id') id: string, @Body() dto: CreateSupplierCreditNoteDto, @CurrentCompany() companyId?: string, @CurrentUser() user?: TokenPayload) {
+    return this.purchasesService.createSupplierCreditNote(requirePurchaseCompanyId(companyId), id, dto, user?.sub);
   }
 
   @Post(':id/pay')

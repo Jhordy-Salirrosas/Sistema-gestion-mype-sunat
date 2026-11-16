@@ -20,7 +20,8 @@ export function mapPurchaseRecord(
   const { includeExtended = false, includeItemsCount = false } = options;
   const totalAmount = Number(purchase.total_amount);
   const paidAmount = Number(purchase.paid_amount ?? 0);
-  const pendingAmount = Math.max(0, Math.round((totalAmount - paidAmount) * 100) / 100);
+  const creditAmount = Number(purchase.credit_amount ?? 0);
+  const pendingAmount = Math.max(0, Math.round((totalAmount - creditAmount - paidAmount) * 100) / 100);
 
   return {
     id: purchase.id,
@@ -43,7 +44,7 @@ export function mapPurchaseRecord(
     netAmount: Number(purchase.net_amount),
     igvAmount: Number(purchase.igv_amount),
     totalAmount,
-    ...(includeExtended ? { paidAmount, pendingAmount } : {}),
+    ...(includeExtended ? { paidAmount, creditAmount, pendingAmount } : {}),
     status: purchase.status,
     receptionStatus: purchase.reception_status ?? 'RECIBIDA',
     hasDifferences: purchase.has_differences === true,

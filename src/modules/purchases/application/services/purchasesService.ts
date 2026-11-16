@@ -633,6 +633,7 @@ export class PurchasesService {
     if (!purchase) throw new NotFoundException('Compra no encontrada.');
     if (purchase.status === 'ANULADA') throw new BadRequestException('La compra ya está anulada.');
     if (Number(purchase.paid_amount ?? 0) > 0) throw new BadRequestException('No se puede anular una compra con pagos registrados.');
+    if (Number(purchase.credit_amount ?? 0) > 0) throw new BadRequestException('No se puede anular una compra con notas de crédito.');
     if (purchase.reception_status !== 'PENDIENTE') throw new BadRequestException('No se puede anular una compra con mercadería recibida.');
 
     if (this.accounting) {
@@ -664,6 +665,49 @@ export class PurchasesService {
     return mapPurchaseRecord(actualizada, { includeExtended: true, includeItemsCount: true });
   }
 
+  async listSupplierCreditNotes(companyId: string, purchaseId: string) {
+    const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id: purchaseId, company_id: companyId }, select: { id: true } });
+    if (!purchase) throw new NotFoundException('Compra no encontrada.');
+    return this.prisma.supplierCreditNote.findMany({ where: { company_id: companyId, purchase_id: purchaseId }, orderBy: { created_at: 'desc' } });
+  }
+
+  async createSupplierCreditNote(companyId: string, purchaseId: string, dto: { amount: number; reason: string; issueDate?: string; notes?: string }, createdBy?: string) {
+    const purchase = await this.prisma.nationalPurchase.findFirst({ where: { id: purchaseId, company_id: companyId }, include: { items: true } });
+    if (!purchase) throw new NotFoundException('Compra no encontrada.');
+    if (purchase.status === 'ANULADA') throw new BadRequestException('La compra está anulada.');
+    const total = Number(purchase.total_amount);
+    const credito = Number(purchase.credit_amount ?? 0);
+    const pagado = Number(purchase.paid_amount ?? 0);
+    const disponible = Math.round((total - credito - pagado) * 100) / 100;
+    const monto = Math.round(Number(dto.amount) * 100) / 100;
+    if (!(monto > 0) || monto > disponible + 0.005) throw new BadRequestException(`El importe debe estar entre 0.01 y ${disponible.toFixed(2)}.`);
+    if (!dto.reason?.trim()) throw new BadRequestException('Indique el motivo de la nota de crédito.');
+    const fecha = dto.issueDate ? new Date(dto.issueDate) : new Date();
+    const year = fecha.getFullYear();
+    const ultima = await this.prisma.supplierCreditNote.findFirst({ where: { company_id: companyId, note_number: { startsWith: `NCC-${year}-` } }, orderBy: { note_number: 'desc' } });
+    const secuencia = ultima ? Number(ultima.note_number.split('-')[2]) + 1 : 1;
+    const numero = `NCC-${year}-${String(secuencia).padStart(4, '0')}`;
+    const neto = Math.round((monto / 1.18) * 100) / 100;
+    const igv = Math.round((monto - neto) * 100) / 100;
+    const nota = await this.prisma.supplierCreditNote.create({ data: { company_id: companyId, purchase_id: purchaseId, note_number: numero, issue_date: fecha, amount: monto, net_amount: neto, igv_amount: igv, reason: dto.reason.trim(), notes: dto.notes?.trim() || null, created_by: createdBy || null } });
+    const nuevoCredito = Math.round((credito + monto) * 100) / 100;
+    await this.prisma.nationalPurchase.update({ where: { id: purchaseId }, data: { credit_amount: nuevoCredito, status: pagado + nuevoCredito >= total - 0.005 ? 'PAGADA' : 'PAGO_PARCIAL' } });
+    if (this.accounting) {
+      const reglas = await this.prisma.accountingRule.findMany({ where: { company_id: companyId, process_code: 'COMPRA', is_active: true }, orderBy: { line_order: 'asc' } });
+      const porOrden = new Map<number, string>(reglas.map((r) => [Number(r.line_order), String(r.account_code)]));
+      if ([1, 2, 3].every((n) => porOrden.has(n))) {
+        await this.accounting.execute({ companyId, period: `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`, entryDate: fecha.toISOString(),
+          glosa: `Nota de crédito proveedor ${numero} · ${purchase.supplier_name}`, sourceModule: 'SUPPLIER_CREDIT_NOTE', journalCode: 'COM', sourceReferenceId: numero, idempotencyKey: `supplier-credit-note:${nota.id}`,
+          lines: [
+            { lineOrder: 1, accountCode: porOrden.get(3)!, accountName: 'Cuentas por pagar', debitAmount: monto, creditAmount: 0 },
+            { lineOrder: 2, accountCode: porOrden.get(1)!, accountName: 'Compras', debitAmount: 0, creditAmount: neto },
+            { lineOrder: 3, accountCode: porOrden.get(2)!, accountName: 'IGV crédito fiscal', debitAmount: 0, creditAmount: igv },
+          ] });
+      }
+    }
+    return { note: nota, purchase: await this.getPurchaseById(companyId, purchaseId) };
+  }
+
   async payPurchase(companyId: string, id: string, dto: PayPurchaseDto) {
     const purchase = await this.prisma.nationalPurchase.findFirst({
       where: { id, company_id: companyId },
@@ -675,7 +719,8 @@ export class PurchasesService {
 
     const total = Number(purchase.total_amount);
     const pagado = Number(purchase.paid_amount ?? 0);
-    const saldo = Math.round((total - pagado) * 100) / 100;
+    const credito = Number(purchase.credit_amount ?? 0);
+    const saldo = Math.round((total - credito - pagado) * 100) / 100;
     const monto = Math.round(Number(dto.amount ?? saldo) * 100) / 100;
     if (!(monto > 0) || monto > saldo) {
       throw new BadRequestException(`El monto debe estar entre 0.01 y ${saldo.toFixed(2)}.`);
@@ -689,7 +734,7 @@ export class PurchasesService {
       throw new BadRequestException('No hay reglas contables para PAGO. Configúrelas antes de pagar.');
     }
     const nuevoPagado = Math.round((pagado + monto) * 100) / 100;
-    const nuevoEstado = nuevoPagado >= total - 0.005 ? 'PAGADA' : 'PAGO_PARCIAL';
+    const nuevoEstado = nuevoPagado + credito >= total - 0.005 ? 'PAGADA' : 'PAGO_PARCIAL';
 
     const movimiento = await this.prisma.$transaction(async (tx: any) => {
       const creado = await tx.treasuryMovement.create({
