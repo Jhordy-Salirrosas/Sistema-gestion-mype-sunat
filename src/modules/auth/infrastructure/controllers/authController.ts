@@ -14,6 +14,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { CreateUserDto } from '../../application/dto/createUserDto';
+import { CreateUserService } from '../../application/services/createUserService';
 import { RegisterDto } from '../../application/dto/registerDto';
 import { LoginDto } from '../../application/dto/loginDto';
 import { UpdateProfileDto } from '../../application/dto/updateProfileDto';
@@ -41,6 +43,7 @@ import { CurrentUser } from '../decorators/currentUserDecorator';
 import { WarehouseAccessService } from '../../application/services/warehouseAccessService';
 import { SetUserWarehousesDto } from '../../application/dto/setUserWarehousesDto';
 import { UpdateUserDto } from '../../application/dto/updateUserDto';
+import { ActionPermissionsService } from '../../application/services/actionPermissionsService';
 import { ModulePermissionsService } from '../../application/services/modulePermissionsService';
 import type { TokenPayload } from '../../domain/ports/tokenServicePort';
 import {
@@ -61,6 +64,8 @@ export class AuthController {
     private readonly changePasswordUseCase: ChangePasswordUseCase,
     private readonly warehouseAccess: WarehouseAccessService,
     private readonly modulePermissions: ModulePermissionsService,
+    private readonly actionPermissions: ActionPermissionsService,
+    private readonly createUser: CreateUserService,
   ) {}
 
   @Post('register')
@@ -143,6 +148,33 @@ export class AuthController {
   async saveModulePermissions(@CurrentUser() user: TokenPayload, @Body() rows: Array<{ role: string; moduleCode: string; canView: boolean; canWrite: boolean }>) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar permisos.');
     return this.modulePermissions.replace(user.companyId, rows);
+  }
+
+  @Get('action-permissions/me')
+  @UseGuards(AuthGuard)
+  async myActionPermissions(@CurrentUser() user: TokenPayload) {
+    return this.actionPermissions.forRole(user.companyId, user.role);
+  }
+
+  @Get('action-permissions')
+  @UseGuards(AuthGuard)
+  async actionPermissionsList(@CurrentUser() user: TokenPayload) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar permisos.');
+    return this.actionPermissions.list(user.companyId);
+  }
+
+  @Put('action-permissions')
+  @UseGuards(AuthGuard)
+  async saveActionPermissions(@CurrentUser() user: TokenPayload, @Body() rows: unknown) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar permisos.');
+    return this.actionPermissions.replace(user.companyId, rows);
+  }
+
+  @Post('users')
+  @UseGuards(AuthGuard)
+  async addUser(@CurrentUser() user: TokenPayload, @Body() dto: CreateUserDto) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Solo el administrador puede gestionar usuarios.');
+    return this.createUser.create(user.companyId, dto);
   }
 
   @Get('users')

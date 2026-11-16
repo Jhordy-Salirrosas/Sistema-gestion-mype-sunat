@@ -18,6 +18,7 @@ describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
         }),
       } as any,
       user: {
+        findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockImplementation(async (params: any) => ({
           id: 'mocked-user-uuid',
           company_id: params.create.company_id,
@@ -82,11 +83,15 @@ describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
     expectedEmails.forEach((email) => {
       expect(mockPrisma.user?.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            company_id_email: expect.objectContaining({ email }),
-          }),
+          where: expect.objectContaining({ email, company_id: 'mocked-company-uuid' }),
         }),
       );
     });
   });
+  it('no modifica un usuario demo cuyo correo ya pertenece a otra empresa', async () => {
+    (mockPrisma.user as any).findUnique.mockResolvedValue({company_id:'otra-empresa'});
+    await expect(seedAuth(mockPrisma as PrismaClient)).rejects.toThrow('pertenece a otra empresa');
+    expect(mockPrisma.user?.upsert).not.toHaveBeenCalled();
+  });
+
 });

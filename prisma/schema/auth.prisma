@@ -46,6 +46,7 @@ model Company {
 
   users                 User[]
   module_permissions    RoleModulePermission[]
+  action_permissions    RoleActionPermission[]
   series                InvoiceSeries[]
   invoices              Invoice[]
   declarations          CustomsDeclaration[]
@@ -62,6 +63,7 @@ model Company {
   inventory_obligations InventoryBookObligationDecision[]
   national_purchases    NationalPurchase[]
   purchase_orders       PurchaseOrder[]
+  supplier_credit_notes SupplierCreditNote[]
   sales_quotes          SalesQuote[]
   cash_closures         CashClosure[]
   sire_proposals        SireProposal[]
@@ -101,7 +103,7 @@ model User {
   id                    String        @id @default(uuid())
   company_id            String
   company               Company       @relation(fields: [company_id], references: [id], onDelete: Restrict)
-  email                 String
+  email                 String        @unique
   password_hash         String
   full_name             String
   role                  Role          @default(OPERADOR_FACTURACION)
@@ -115,7 +117,6 @@ model User {
   ple_books             PleBook[]
   audit_logs            AuditLog[]
 
-  @@unique([company_id, email])
   @@map("users")
 }
 
@@ -132,6 +133,20 @@ model RoleModulePermission {
   @@unique([company_id, role, module_code])
   @@index([company_id, role])
   @@map("role_module_permissions")
+}
+
+model RoleActionPermission {
+  id          String   @id @default(uuid())
+  company_id  String
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  role        Role
+  action_code String
+  allowed     Boolean  @default(false)
+  updated_at  DateTime @updatedAt
+
+  @@unique([company_id, role, action_code])
+  @@index([company_id, role])
+  @@map("role_action_permissions")
 }
 
 model UserWarehouse {

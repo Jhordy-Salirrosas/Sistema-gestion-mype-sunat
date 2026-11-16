@@ -1,3 +1,5 @@
+import { RequireAction } from '../../../auth/infrastructure/decorators/actionPermissionDecorator';
+import { ActionPermissionsGuard } from '../../../auth/infrastructure/guards/actionPermissionsGuard';
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import { Roles } from '../../../../common/decorators';
 import {
@@ -54,7 +56,8 @@ export class InvoicesController {
    * se consulta después. Es deliberado no responder "aceptado" aquí.
    */
   @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, ActionPermissionsGuard)
+  @RequireAction('INVOICE_EDIT_ISSUE_DATE', true)
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   async create(
@@ -83,7 +86,8 @@ export class InvoicesController {
    * la ruta paramétrica (el orden de las rutas en Nest importa).
    */
   @Roles('ADMIN', 'OPERADOR_FACTURACION')
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, ActionPermissionsGuard)
+  @RequireAction('INVOICE_EDIT_ISSUE_DATE', true)
   @Post('emitir')
   @HttpCode(HttpStatus.CREATED)
   async emitir(

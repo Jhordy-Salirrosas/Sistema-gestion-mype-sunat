@@ -1,10 +1,13 @@
+import { RequireAction } from '../../../auth/infrastructure/decorators/actionPermissionDecorator';
+import { ActionPermissionsGuard } from '../../../auth/infrastructure/guards/actionPermissionsGuard';
 import { Body, Controller, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentCompany, CurrentUser, Roles } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import { InvoiceForcedResendService } from '../../application/services/invoiceForcedResendService';
 @Controller('api/v1/invoices')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, ActionPermissionsGuard)
+@RequireAction('INVOICE_FORCE_RESEND')
 @Roles('ADMIN')
 export class InvoiceForcedResendController {
  constructor(private readonly force: InvoiceForcedResendService) {}

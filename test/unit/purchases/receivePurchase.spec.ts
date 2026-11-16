@@ -35,6 +35,7 @@ function setup(initial = compra(), updated = compra({ reception_status: 'PARCIAL
     },
     inventoryCostLayer: { create: jest.fn().mockResolvedValue({}) },
     inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    purchaseReceptionDifference: { create: jest.fn().mockResolvedValue({}) },
   };
   const accounting = { execute: jest.fn().mockResolvedValue({}) };
   return { prisma, accounting, service: new PurchasesService(prisma as never, accounting as never) };
@@ -124,5 +125,19 @@ describe('PurchasesService - recepción de mercadería', () => {
     const { prisma, service } = setup();
     await service.receivePurchase('c1', 'p1', { items: [{ itemId: 'i1', quantity: 2 }], receivedAt: '2026-11-10T12:00:00.000Z' });
     expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ movement_date: new Date('2026-11-10T12:00:00.000Z') }) }));
+  });
+
+  it('registra diferencia y solo ingresa al stock la cantidad buena', async () => {
+    const { prisma, service } = setup(compra(), compra({ reception_status: 'RECIBIDA', has_differences: true, items: [item({ received_quantity: 10 })] }));
+    const r = await service.receivePurchase('c1', 'p1', { items: [{ itemId: 'i1', quantity: 7, rejectedQuantity: 3, reason: 'DANADO' }] });
+    expect(prisma.purchaseReceptionDifference.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ rejected_quantity: 3, reason: 'DANADO' }) }));
+    expect(prisma.nationalPurchaseItem.update).toHaveBeenCalledWith({ where: { id: 'i1' }, data: { received_quantity: { increment: 10 } } });
+    expect(prisma.inventoryMovement.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ quantity: 7 }) }));
+    expect(r.hasDifferences).toBe(true);
+  });
+
+  it('exige motivo cuando hay cantidad rechazada', async () => {
+    const { service } = setup();
+    await expect(service.receivePurchase('c1', 'p1', { items: [{ itemId: 'i1', quantity: 7, rejectedQuantity: 3 }] })).rejects.toThrow('motivo');
   });
 });

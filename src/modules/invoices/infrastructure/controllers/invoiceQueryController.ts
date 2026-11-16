@@ -1,3 +1,5 @@
+import { RequireAction } from '../../../auth/infrastructure/decorators/actionPermissionDecorator';
+import { ActionPermissionsGuard } from '../../../auth/infrastructure/guards/actionPermissionsGuard';
 import { fechaFiscalLima } from '../../fiscalDate';
 import { SummaryAggregateStore } from '../../application/services/summaryAggregateStore';
 import { SummaryDispatchService } from '../../application/services/summaryDispatchService';
@@ -296,8 +298,9 @@ export class InvoiceQueryController {
     return this.consultas.detalle(companyId, id);
   }
 
-  @UseGuards(RolesGuard)
+  @UseGuards(RolesGuard, ActionPermissionsGuard)
   @Roles('ADMIN', 'OPERADOR_FACTURACION')
+  @RequireAction('INVOICE_RESOLVE_DLQ')
   @Post(':id/resolver-dlq')
   resolverDlq(@CurrentCompany() companyId: string, @Param('id') id: string) {
     return this.consultas.resolverDlqAceptado(companyId, id);
