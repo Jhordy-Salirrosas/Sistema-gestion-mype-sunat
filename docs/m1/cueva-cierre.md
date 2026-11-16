@@ -293,3 +293,82 @@ ni otro registro comercial. Rechaza un medio/importe incompatible. Los
 comprobantes históricos conservan su flujo de cobranzas. Se prueban la espera,
 el reintento idempotente y el rechazo de cambios de importe/medio; tres pruebas
 de POS verifican medio global y crédito permitido/denegado por cliente.
+
+## Addendum P6 — Corrección de emisión HTTP de notas
+
+Rama `fix/m1-notas-saldo-http`, desde back main
+`db1d2a5773bb7e2f117dd425df9d6caef812a4dc`.
+
+### Causa y corrección
+
+`saldoNotaCalculado` estaba declarado, sin decoradores de validación, en
+EmitirComprobanteDto. Con target ES2023, la clase compilada materializa esa
+propiedad con valor undefined incluso si el cliente no la envía. La tubería
+HTTP con whitelist/forbidNonWhitelisted la rechaza. En la entrada fiscal la
+misma clase se instancia dentro de prepareCreation y produce el rechazo
+antes de reservar número. Las integraciones anteriores invocaban el servicio
+con el transform ES2021 de Jest, que no materializaba el campo de igual forma;
+por ello no representaban el comportamiento del build de producción.
+
+El campo sale del DTO de entrada y pasa a PreparedEmission, tipo interno que
+se obtiene tras validar el cuerpo y calcular el saldo bajo bloqueo del origen.
+El servicio y el adaptador consumen ese tipo; m1NoteBalance conserva su formato
+y sigue persistiendo el saldo anterior, importe y restante. No se agrega Allow,
+no se amplía el contrato de entrada y no se cambian las opciones de validación.
+Enviar saldoNotaCalculado o un campo arbitrario desde el cliente sigue dando 400.
+
+La configuración global de ValidationPipe se extrae sin cambios a
+applyGlobalValidation y se reutiliza desde bootstrap y la regresión. El bloque
+de opciones y la fábrica de errores son idénticos a los anteriores.
+
+### Regresión que faltaba
+
+notasSaldoHttp.integration.spec.ts usa el AppModule compilado de producción,
+la misma tubería global y el filtro HTTP, JWT firmado y usuario/rol/almacén
+reales en PostgreSQL. Recorre NC y ND por POST /invoices/emitir (201) y
+POST /invoices (202), monto parcial 35.40, saldo restante 82.60 y total inicial
+118; verifica snapshots persistidos, reintento idempotente, exceso rechazado
+sin incrementar correlativo y rechazo de campos indebidos sin crear documento.
+
+Solo se sustituyen los consumidores que enviarían documentos y la consulta
+externa de padrón; no los guards ni los servicios de autorización, creación,
+liquidación, persistencia o cola. Cada corrida crea una base local aislada,
+aplica allí las migraciones y el prerrequisito aditivo de roles ya entregado,
+y elimina esa base al finalizar. No se aplica SQL a una base compartida.
+
+CI compila antes de Jest. La regresión utiliza ese build ES2023; en ejecución
+local compila mediante Nest CLI antes de cargar la app para evitar artefactos
+anteriores. Esto cierra la diferencia entre el transform unitario y producción.
+
+| Regresión HTTP | Archivos | Aprobadas | Fallidas | Omitidas |
+| --- | --- | --- | --- | --- |
+| Antes de corregir el DTO | 1 | 2 | 8 | 0 |
+| Después, con base local aislada | 1 | 10 | 0 | 0 |
+
+### Auditoría del front
+
+Se inspeccionó, solo lectura, front main
+`41e13ac5d39d5fdcfa9b5266424bfb2f26abd45b`. El tipo/payload de emisión y sus
+constructores no incluyen saldoNotaCalculado ni m1NoteBalance. invoicesApi
+transmite ese payload a /invoices/emitir sin agregar esos campos. El front no
+requiere cambios: no se genera un ferry ni se ejecutan pruebas de front por
+esta corrección exclusivamente del back.
+
+### Verificación final del addendum
+
+Suite completa del back: **474 archivos**, 464 aprobados y 10 omitidos;
+**4576 pruebas**, 4513 aprobadas, 0 fallidas y 63 omitidas. Todas las omisiones
+pertenecen a archivos preexistentes; la regresión HTTP nueva ejecutó sus
+10 pruebas sin omisiones. Se usó PostgreSQL 17 local, con
+TEST_DATABASE_URL y RUN_INTEGRATION_TESTS=required. Resultado completo:
+notas-http-full.json del workspace de ejecución.
+
+Build de producción aprobado (incluido el ejecutado por la regresión) y lint
+sin errores; conserva tres advertencias en archivos ajenos a la corrección.
+Para reproducir la regresión, usar una conexión local de pruebas con permiso
+CREATEDB y ejecutar npm test -- --runInBand
+ test/integration/invoices/notasSaldoHttp.integration.spec.ts con
+TEST_DATABASE_URL y RUN_INTEGRATION_TESTS=required. El catálogo y los documentos
+ficticios se crean exclusivamente en la base aislada, que se elimina al cerrar.
+No hay cambios de esquema ni migraciones nuevas. No se crean PRs ni merges y
+no se toca información de producción.

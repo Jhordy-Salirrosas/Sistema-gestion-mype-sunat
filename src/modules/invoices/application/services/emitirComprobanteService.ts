@@ -1,3 +1,4 @@
+import type { PreparedEmission } from './preparedEmission';
 import { resolverFechaEmision } from '../../fiscalDate';
 import { resolveIssuerIdentity } from '../../../sunat/issuerIdentity';
 import { validarCuentaSpot } from './spotMinimo';
@@ -112,7 +113,7 @@ export class EmitirComprobanteService {
    * usuario tiene que entender qué corregir sin llamar al soporte.
    */
   async emitir(
-    dto: EmitirComprobanteDto,
+    dto: PreparedEmission,
     companyId: string,
     inventorySnapshot?: Record<string, boolean>,
   ): Promise<ResultadoEmision> {

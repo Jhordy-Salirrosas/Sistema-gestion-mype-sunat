@@ -1,3 +1,4 @@
+import type { PreparedEmission } from './preparedEmission';
 import { resolverFechaEmision } from '../../fiscalDate';
 import { validarBolsasNota } from '../../noteBagXml';
 import { validarBolsasGratuitas } from '../../freeBagXml';
@@ -100,8 +101,8 @@ export async function validarLimiteCredito(tx: Prisma.TransactionClient, company
 }
 
 export async function prepareCreation(tx: Prisma.TransactionClient, input: EmitirComprobanteDto,
-  companyId: string): Promise<EmitirComprobanteDto> {
-  const dto = structuredClone(input);
+  companyId: string): Promise<PreparedEmission> {
+  const dto: PreparedEmission = structuredClone(input);
   dto.fecha_emision = resolverFechaEmision(dto.fecha_emision);
   if (notaSinCronograma(dto.tipo_comprobante, dto.codigo_motivo_nota)) { dto.forma_pago = 'Contado'; dto.cuotas = []; }
   const validable = plainToInstance(EmitirComprobanteDto, dto);
