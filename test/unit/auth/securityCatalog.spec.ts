@@ -4,9 +4,9 @@ import endpoints from '../../fixtures/legacyEndpointRoles.json';
 import routes from '../../fixtures/legacyRouteRoles.json';
 
 describe('Equivalencia del catálogo anterior (back d28ffc8059, front dcf7864b)', () => {
-  it('enumera los 72 usos de ruta, con códigos únicos, padres conocidos y sin ciclos', () => {
-    expect(MENU_CATALOG).toHaveLength(72);
-    expect(new Set(MENU_CATALOG.map(m => m.code)).size).toBe(72);
+  it('enumera los 73 usos de ruta, con códigos únicos, padres conocidos y sin ciclos', () => {
+    expect(MENU_CATALOG).toHaveLength(73);
+    expect(new Set(MENU_CATALOG.map(m => m.code)).size).toBe(73);
     expect(MENU_CATALOG.map(m => m.path)).toEqual(routes.map(m => m.path));
     for (const menu of MENU_CATALOG) {
       const seen = new Set<string>(); let parent: string | null = menu.code;

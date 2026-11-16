@@ -894,6 +894,19 @@ export const MENU_CATALOG: readonly MenuDefinition[] = [
     "reservedAdmin": false
   },
   {
+    "code": "MENU_ACCOUNTING_GUIA",
+    "moduleCode": "M4",
+    "path": "/accounting/guia",
+    "roles": [
+      "ADMIN",
+      "CONTADOR",
+      "AUDITOR"
+    ],
+    "parentCode": "MENU_ACCOUNTING",
+    "sourceLine": 681,
+    "reservedAdmin": false
+  },
+  {
     "code": "MENU_ACCOUNTING_PLAN_CUENTAS",
     "moduleCode": "M4",
     "path": "/accounting/plan-cuentas",
