@@ -1,3 +1,5 @@
+import { RolesController } from './infrastructure/controllers/rolesController';
+import { RoleCatalogService } from './application/services/roleCatalogService';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
 import { AuthController } from './infrastructure/controllers/authController';
@@ -28,7 +30,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [AuthController],
+  controllers: [AuthController, RolesController],
   providers: [
     RegisterUseCase,
     LoginUseCase,
@@ -56,6 +58,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
           process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
         ),
     },
+    RoleCatalogService,
     WarehouseAccessService,
     ModulePermissionsService,
     ActionPermissionsService,
@@ -73,6 +76,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     GetProfileUseCase,
     UpdateProfileUseCase,
     ChangePasswordUseCase,
+    RoleCatalogService,
     WarehouseAccessService,
     ModulePermissionsService,
     ActionPermissionsService,

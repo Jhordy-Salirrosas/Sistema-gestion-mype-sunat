@@ -1,3 +1,4 @@
+import { initializeCompanyRoles } from '../../application/services/roleCatalogService';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../database/prismaService';
@@ -146,6 +147,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           is_active: params.company.isActive,
         },
       });
+
+      await initializeCompanyRoles(tx, createdCompany.id);
 
       await tx.accountingRule.createMany({
         data: DEFAULT_ACCOUNTING_RULES.map(([process_code, document_type, line_order, account_code, side, base_calculation, description]) => ({

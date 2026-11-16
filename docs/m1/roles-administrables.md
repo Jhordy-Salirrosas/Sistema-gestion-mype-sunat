@@ -54,3 +54,13 @@ Las rutas de archivos/handlers corresponden al snapshot back de fase 0. Cuatro d
 Los ocho chequeos de administración de auth permanecen reservados ADMIN; no se delegan mediante nombre o menú. XML: la capacidad gobierna únicamente reparación/generación, no niega la descarga sin efectos de AUDITOR. Los permisos de módulo M1 se conservan como filtro adicional (bypass de escritura ADMIN y can_view para GET).
 
 Equivalencia: prueba independiente de los 21 puntos × 5 roles × 16 combinaciones de los cuatro overrides existentes × 4 combinaciones de can_view/can_write: 6720 comparaciones, sin discrepancias. Prueba adicional de delegación de fecha, denegación ADMIN y rol propio sin permisos. Catálogo de rutas comparado contra snapshot independiente de los 72 usos; unicidad/padres/ciclos verificados. No se detuvo ningún endpoint por falta de equivalencia.
+
+## Parte 2 — expansión compatible con enum
+
+SQL aditivo manual con preflight, transacción y checksums en scripts/manual/; instrucciones y reversa protegida en README-roles-administrables.md. Se ensayaron en PostgreSQL local esquema inicial, expansión, FKs multiempresa, repetición abortada y reversa. No se convirtió ni se aplicó SQL a base compartida. El esquema activo agrega solo modelos de catálogo/menús; los campos existentes siguen enum.
+
+APIs autenticadas: GET /auth/roles (ADMIN, code/name/isSystem), GET /auth/roles/config y GET /auth/permission-catalog; PATCH /auth/roles/:code solo ADMIN modifica name, no code/is_system, y protege nombre ADMIN. POST /auth/roles existe detrás de doble compuerta: ROLES_CUSTOM_ENABLED y almacenamiento users.role de texto. Default false; true sobre enum sigue false. Alta/asignación propia deshabilitadas antes del corte. No hay endpoint de borrado de roles del sistema.
+
+Registro de empresa y seed inicializan cinco roles/360 permisos de menú dentro de su transacción, sin sobrescribir existentes. Renombrado transaccional auditado con actor, empresa, code, antes/después. Ninguna autorización depende del nombre visible.
+
+Verificación P2: build Prisma/Nest aprobado; cuatro archivos / 21 pruebas dirigidas aprobadas, incluidos los cinco escenarios SQL reales y la adaptación de fixtures de seed/registro. Las suites completas se repetirán al cerrar todas las partes.

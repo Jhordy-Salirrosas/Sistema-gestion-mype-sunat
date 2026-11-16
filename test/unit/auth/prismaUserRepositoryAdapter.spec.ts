@@ -212,6 +212,8 @@ describe('PrismaUserRepositoryAdapter', () => {
       company: { create: jest.fn().mockResolvedValue(companyRow) },
       user: { create: jest.fn().mockResolvedValue(userRow) },
       refreshToken: { create: jest.fn().mockResolvedValue({}) },
+      companyRole: { createMany: jest.fn() },
+      roleMenuPermission: { createMany: jest.fn() },
       accountingRule: { createMany: jest.fn().mockResolvedValue({ count: 23 }) },
       auditLog,
     };
