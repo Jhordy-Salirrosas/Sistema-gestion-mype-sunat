@@ -42,6 +42,7 @@ export interface InvoicePayload extends DatosTributarios {
   formaPago?: 'Contado' | 'Credito';
   medioPago?: string;
   m1PaymentAccountingVersion?: 1;
+  m1NoteBalance?: { antes: number; importe: number; restante: number };
   cuotas?: CuotaXml[];
   /**
    * Detracción SPOT (TA-63): código del Catálogo 54, por ejemplo '012'.

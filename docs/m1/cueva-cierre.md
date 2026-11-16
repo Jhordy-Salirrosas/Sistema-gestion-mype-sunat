@@ -147,3 +147,34 @@ pendiente se cancela al escoger un cliente para no sobrescribirlo.
 Pruebas dirigidas: campo único, consulta DNI y selección del alta sin perder
 el formulario; diagnóstico con resultado y error: 2 archivos/4 pruebas verdes.
 No se altera el maestro de terceros ni la validación documental de cotizaciones.
+
+## P6 — ND parcial o total con consumo de saldo
+
+Se modifica la premisa anterior: tanto NC como ND vigentes reservan saldo
+monetario del afectado. Se excluyen rechazadas/anuladas. Las ND conservan su
+tipo fiscal y tratamiento contable; no se contabilizan como devolución ni
+consumen unidades físicas para las NC. El atributo histórico `devuelto` del
+contrato de saldo conserva su nombre por compatibilidad y ahora informa el
+importe aplicado en ambos tipos de nota; la UI lo rotula como aplicado en notas.
+
+Las dos entradas de emisión ejecutan la comprobación dentro de la transacción
+común, con bloqueo FOR UPDATE del origen, importes en céntimos y validación de
+empresa/adquirente. Se persiste en el payload de la nota m1NoteBalance con
+saldo anterior, importe y restante calculados por el servidor; el saldo actual
+del afectado se deriva de las notas vigentes, sin columna duplicada susceptible
+de desincronizarse. Si una ND anterior ya agota el afectado, no se permite otra.
+No se modifican filas históricas ni se ejecuta conversión de datos.
+
+El modal permite indicar importe parcial o aplicar todo el saldo. Distribuye
+el ajuste monetario en las líneas de ND sin cambiar producto, unidad, cantidad,
+afectación ni bolsas; los valores calculados permanecen como texto. Valida
+precisión, positividad, tributos fijos y total exacto antes de aplicar. El
+servidor vuelve a liquidar y limita al saldo real al emitir. Los formularios
+consultan y refrescan saldo también para ND, sin depender solo del estado UI.
+
+Verificación dirigida: 38 pruebas existentes de notas/cantidades aprobadas;
+PostgreSQL real con AtomicInvoiceCreationService comprueba ambas entradas
+(pantalla/fiscal), ND 35.40 + 82.60 sobre origen 118, snapshots persistidos,
+rechazo del exceso y dos ND concurrentes de 80 (solo una admitida). Tres
+archivos/5 pruebas verdes con los controles HTTP administrativos. Front:
+2 pruebas de importe parcial/total y rechazo de cero, exceso y precisión.

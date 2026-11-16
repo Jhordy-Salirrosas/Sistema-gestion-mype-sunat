@@ -36,8 +36,10 @@ Archivos del delta:
 - `src/modules/invoices/components/InvoiceSettingsTab.tsx`
 - `src/modules/invoices/components/SunatConnectionTest.tsx`
 - `src/modules/invoices/hooks/useCommercialDefaults.ts`
+- `src/modules/invoices/lib/invoiceDebitAmount.ts`
 - `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
 - `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
 - `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`
 - `test/unit/modules/invoices/cueva-connection.test.tsx`
+- `test/unit/modules/invoices/cueva-debit-amount.test.ts`
 - `test/unit/modules/invoices/cueva-single-identity.test.tsx`

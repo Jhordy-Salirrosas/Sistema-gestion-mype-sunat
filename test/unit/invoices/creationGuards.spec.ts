@@ -73,10 +73,10 @@ it('no permite origen inexistente, otra nota, otro adquirente o referencias cont
   await expect(h.run({ ...note(), documento_afectado: 'F001-00000002', referenced_invoice_id: 'origin' })).rejects.toThrow('no coinciden');
   await expect(h.run({ ...note(), documento_afectado: undefined })).rejects.toThrow('exige');
 });
-it('débito por UUID recupera número y no consume saldo de crédito', async () => {
+it('débito por UUID recupera número y registra consumo de saldo', async () => {
   const h = harness();
   const result = await h.run({ ...note(), tipo_comprobante: '08', documento_afectado: undefined, referenced_invoice_id: 'origin' });
-  expect(result.documento_afectado).toBe('F001-00000001'); expect(h.tx.invoice.findMany).not.toHaveBeenCalled();
+  expect(result.documento_afectado).toBe('F001-00000001'); expect(h.tx.invoice.findMany).toHaveBeenCalled(); expect(result.saldoNotaCalculado).toEqual({ antes: 118, importe: 118, restante: 0 });
 });
 const raw = () => ({ ruc_emisor: '20100070970', tipo_comprobante: '01', serie: 'F001', fecha_emision: '2026-11-07',
   payload_ubl: { rucEmisor: '20100070970', tipoComprobante: '01', serie: 'F001', fechaEmision: '2026-11-07',

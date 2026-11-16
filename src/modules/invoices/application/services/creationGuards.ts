@@ -206,24 +206,24 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
     }
     dto.referenced_invoice_id = actual.id;
     dto.documento_afectado = referencia;
+    const notas = await tx.invoice.findMany({ where: { company_id: companyId,
+      referenced_invoice_id: actual.id, tipo_comprobante: { in: ['07', '08'] }, estado: { notIn: ['RECHAZADO', 'ANULADO'] } },
+      select: { monto_total: true, tipo_comprobante: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } } });
     if (dto.tipo_comprobante === '08') validarCantidadesNota(dto.items, actual.items, []);
     if (dto.tipo_comprobante === '07') {
-      const notas = await tx.invoice.findMany({ where: { company_id: companyId,
-        referenced_invoice_id: actual.id, tipo_comprobante: '07', estado: { notIn: ['RECHAZADO', 'ANULADO'] } },
-      select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } } });
       const total = esMotivoCreditoTotal(dto.codigo_motivo_nota);
-      // La exigencia de totalidad no cambia qué notas anteriores reservan unidades físicas.
       const anteriores = total || devuelveUnidades(dto.codigo_motivo_nota)
-        ? notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items) : [];
+        ? notas.filter(n => n.tipo_comprobante !== '08' && devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items) : [];
       validarCantidadesNota(dto.items, actual.items, anteriores, total);
-      const disponible = Math.round(Number(actual.monto_total) * 100) - notas.reduce((s, n) => s + Math.round(Number(n.monto_total) * 100), 0);
-      const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
-      validarImporteNota(importe);
-      if (Math.round(importe * 100) > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
-      if (esMotivoCreditoTotal(dto.codigo_motivo_nota) && Math.round(importe * 100) !== disponible) {
-        throw new BadRequestException('El motivo de nota exige devolver el saldo disponible total');
-      }
     }
+    const disponible = Math.max(0, Math.round(Number(actual.monto_total) * 100) - notas.reduce((sum, note) => sum + Math.round(Number(note.monto_total) * 100), 0));
+    const importe = traducirEmision(dto, { ruc: '', razonSocial: '' }, 0).importes.total;
+    validarImporteNota(importe);
+    const centimos = Math.round(importe * 100);
+    if (centimos > disponible) throw new ConflictException('NOTA_EXCEDE_SALDO');
+    dto.saldoNotaCalculado = { antes: disponible / 100, importe, restante: (disponible - centimos) / 100 };
+    if (dto.tipo_comprobante === '07' && esMotivoCreditoTotal(dto.codigo_motivo_nota) && centimos !== disponible) throw new BadRequestException('El motivo de nota exige devolver el saldo disponible total');
+
   }
   if (dto.tipo_comprobante === '01' || dto.tipo_comprobante === '03') {
     const fecha = new Date(resolverFechaEmision(dto.fecha_emision).slice(0, 10) + 'T00:00:00Z');
