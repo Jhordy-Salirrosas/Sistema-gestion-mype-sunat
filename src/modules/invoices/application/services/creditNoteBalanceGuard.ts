@@ -106,7 +106,7 @@ export const verificarSaldoNota = (
       message:
         `La nota por ${importe.toFixed(2)} supera el saldo disponible del ` +
         `comprobante (${saldo.disponible.toFixed(2)} de ${saldo.total.toFixed(2)}; ` +
-        `ya se acreditaron ${saldo.devuelto.toFixed(2)}).`,
+        `ya se aplicaron notas por ${saldo.devuelto.toFixed(2)}).`,
       saldo,
     });
   }
@@ -147,17 +147,17 @@ export class ControlSaldoNotas {
 
     verificarOrigenAceptado(origen.estado);
 
-    // Suma de las notas de crédito (tipo 07) vigentes que apuntan a este
-    // comprobante. Las de tipo 08 (débito) aumentan el importe y no consumen
-    // saldo, así que no entran en la resta.
+    // Cueva P6: NC y ND reservan saldo monetario del afectado. Las ND
+    // conservan su tratamiento tributario/contable, sin devolver unidades.
+    // devuelto mantiene el nombre del contrato y suma ambos tipos de nota.
     const notas = await this.prisma.invoice.findMany({
       where: {
         company_id: companyId,
-        tipo_comprobante: '07',
+        tipo_comprobante: { in: ['07', '08'] },
         referenced_invoice_id: origen.id,
         estado: { notIn: ESTADOS_NOTA_SIN_EFECTO as never },
       },
-      select: { monto_total: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } },
+      select: { monto_total: true, tipo_comprobante: true, credit_debit_reason_code: true, items: { select: { item_code: true, quantity: true } } },
     });
 
     const devuelto = notas.reduce(
@@ -168,7 +168,7 @@ export class ControlSaldoNotas {
     const saldo = saldoDisponible(Number(origen.monto_total), devuelto);
 
     const originales = cantidadesPendientes(origen.items ?? [], []);
-    const pendientes = cantidadesPendientes(origen.items ?? [], notas.filter(n => devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items ?? []));
+    const pendientes = cantidadesPendientes(origen.items ?? [], notas.filter(n => n.tipo_comprobante !== '08' && devuelveUnidades(n.credit_debit_reason_code)).flatMap(n => n.items ?? []));
     return {
       ...saldo,
       motivos_totales: CATALOGO_09_MOTIVOS.filter(m => esMotivoCreditoTotal(m.codigo)).map(m => m.codigo),

@@ -1,3 +1,4 @@
+import { invoicePaymentAccount } from './invoicePaymentAccount';
 import { BRIDGE_OMITTED, BRIDGE_RESOLVED } from './invoiceBridgeOmission';
 import { devuelveUnidades, esNota02Historica } from './notePhysicalReturnPolicy';
 /**
@@ -61,6 +62,7 @@ export interface ResultadoPuente {
 /** Factura mínima que necesita el puente. */
 export interface FacturaParaPuente {
   estado?: 'ACEPTADO' | 'OBSERVADO';
+  pago?: { forma?: 'Contado' | 'Credito'; medio?: string; version?: number };
   inventarioAlCrear?: Record<string, boolean>;
   omisionesPendientes?: string[];
   politicaDevolucionFisica02?: number;
@@ -73,7 +75,7 @@ export interface FacturaParaPuente {
   /** Número del comprobante tal como se emitió (serie-correlativo). */
   numeroCompleto?: string;
   moneda?: string;
-  cliente?: { razonSocial?: string };
+  cliente?: { razonSocial?: string; numeroDocumento?: string };
   items: readonly LineaParaKardex[];
   /**
    * Importes ya liquidados. Los calcula quien llama con `UblGeneratorService`,
@@ -133,6 +135,21 @@ export class InvoiceAccountingBridgeService {
       ? (errores.push(factura.motivoBloqueoAsiento), { asientoOmitido: true })
       : await this.registrarAsiento(factura, numero, errores);
 
+    // El asiento de contado ya carga tesorería: registrar el cobro comercial
+    // sin crear un segundo asiento COBRO. Clave estable para recuperarse de
+    // un fallo entre asiento y cobro, incluso si el asiento ya existía.
+    if (!errores.length && factura.pago?.version === 1 && factura.pago.forma === 'Contado' && factura.pago.medio && ['01', '03'].includes(factura.tipoComprobante)) {
+      try {
+        const amount = Math.round((factura.importes.total - factura.importes.detraccion - factura.importes.retencion) * 100) / 100;
+        if (amount > 0) await this.prisma.collection.upsert({
+          where: { id: `m1-cash:${factura.id}` }, update: {},
+          create: { id: `m1-cash:${factura.id}`, company_id: factura.companyId,
+            invoice_id: factura.id, invoice_number: numero, collection_date: new Date(`${factura.fechaEmision}T12:00:00-05:00`),
+            customer_name: factura.cliente?.razonSocial ?? '', customer_doc: factura.cliente?.numeroDocumento,
+            description: `Cobro de contado ${numero}`, amount, payment_method: factura.pago.medio, status: 'REGISTRADO' },
+        });
+      } catch { errores.push('Contabilidad: cobro de contado pendiente de registrar; reprocese el puente.'); }
+    }
     const costo = factura.motivoBloqueoAsiento || errores.some(e => e.startsWith('Kardex'))
       ? {}
       : !requiereCosto ? { costoVenta: 0, asientoCostoOmitido: true }
@@ -355,6 +372,20 @@ export class InvoiceAccountingBridgeService {
       ...(cuentaRegla(8, 'RETENCION', 'IGV - Retenciones') ? { porCobrarRetenido: cuentaRegla(8, 'RETENCION', 'IGV - Retenciones')! } : {}),
       ...(cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos') ? { descuento: cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos')! } : {}),
     };
+    // Solo nuevas ventas con snapshot; nunca reclasifica asientos históricos.
+    if (['01', '03'].includes(factura.tipoComprobante) && factura.pago?.version === 1 && factura.pago.forma === 'Contado') {
+      try {
+        const [cobroRules, cobroMappings] = await Promise.all([
+          this.prisma.accountingRule.findMany({ where: { company_id: factura.companyId, process_code: 'COBRO', is_active: true } }),
+          this.prisma.accountingMapping.findMany({ where: { company_id: factura.companyId, process_code: 'COBRO', is_active: true } }),
+        ]);
+        const cash = invoicePaymentAccount(factura.pago.forma, factura.pago.medio, cobroRules, cobroMappings);
+        if (cash) cuentas.porCobrar = cash;
+      } catch (error) {
+        errores.push(`Contabilidad: ${error instanceof Error ? error.message : 'No se pudo resolver el medio de pago'}`);
+        return { asientoOmitido: false };
+      }
+    }
     const requeridas: [keyof typeof CUENTAS_VENTA, number][] = [
       ['porCobrar', i.total - i.detraccion - i.retencion], ['descuento', i.descuentoNoAfecto ?? descuento],
       ['detraccion', i.detraccion], ['porCobrarRetenido', i.retencion], ['gravada', i.gravado],

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ReconcilePeriodDto } from '../dto/reconcilePeriodDto';
 import type { ReconcileResultDto } from '../dto/reconcileResultDto';
 import { ReconciliationMatcherRule } from '../../domain/rules/reconciliationMatcherRule';
@@ -6,12 +6,15 @@ import {
   SIRE_REPOSITORY_PORT,
   type ISireRepositoryPort,
 } from '../../domain/ports/sireRepositoryPort';
+import { RegisterSireAccountingEntryUseCase } from './registerSireAccountingEntryUseCase';
 
 @Injectable()
 export class ReconcileSireUseCase {
   constructor(
     @Inject(SIRE_REPOSITORY_PORT)
     private readonly sireRepository: ISireRepositoryPort,
+    @Optional()
+    private readonly registerAccounting?: RegisterSireAccountingEntryUseCase,
   ) {}
 
   async execute(
@@ -48,6 +51,13 @@ export class ReconcileSireUseCase {
       discrepanciesCount: summary.discrepanciesCount,
       discrepancies: summary.details,
     });
+
+    await this.registerAccounting?.execute(
+      companyId,
+      dto.period,
+      dto.bookType,
+      dto.localRecords,
+    );
 
     return {
       period: dto.period,

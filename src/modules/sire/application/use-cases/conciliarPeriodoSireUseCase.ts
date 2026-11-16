@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { toDomainBookType } from '../sireBookType';
 import type { SireLibroMenu } from '../dto/sireMenuQueryDto';
 import type {
@@ -11,6 +11,11 @@ import {
 } from '../../domain/rules/sireMockDataRule';
 import { friendlySireJobFailureMessage } from '../../domain/rules/sireJobFailureMessages';
 import { SireMenuRepository } from '../../infrastructure/persistence/sireMenuRepository';
+import {
+  SIRE_REPOSITORY_PORT,
+  type ISireRepositoryPort,
+} from '../../domain/ports/sireRepositoryPort';
+import { RegisterSireAccountingEntryUseCase } from './registerSireAccountingEntryUseCase';
 
 /**
  * Conciliación de un periodo.
@@ -25,7 +30,14 @@ import { SireMenuRepository } from '../../infrastructure/persistence/sireMenuRep
  */
 @Injectable()
 export class ConciliarPeriodoSireUseCase {
-  constructor(private readonly repository: SireMenuRepository) {}
+  constructor(
+    private readonly repository: SireMenuRepository,
+    @Optional()
+    @Inject(SIRE_REPOSITORY_PORT)
+    private readonly sireRepository?: ISireRepositoryPort,
+    @Optional()
+    private readonly registerAccounting?: RegisterSireAccountingEntryUseCase,
+  ) {}
 
   async execute(
     companyId: string,
@@ -53,6 +65,23 @@ export class ConciliarPeriodoSireUseCase {
       diferencias: resumen.diferencias,
       detalle: { resumen, comprobantes },
     });
+
+    const libroConciliado = libro ?? 'RVIE_VENTAS';
+    if (this.sireRepository && this.registerAccounting) {
+      const propuestas = await this.sireRepository.findProposalsByPeriod(
+        companyId,
+        periodo,
+        toDomainBookType(libroConciliado),
+      );
+      if (propuestas.length > 0) {
+        await this.registerAccounting.execute(
+          companyId,
+          periodo,
+          libroConciliado,
+          propuestas,
+        );
+      }
+    }
 
     return {
       conciliacionId: registro.id,

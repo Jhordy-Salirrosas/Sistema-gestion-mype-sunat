@@ -1,6 +1,10 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
-import { HttpStatus } from '@nestjs/common';
+import {
+  HTTP_CODE_METADATA,
+  METHOD_METADATA,
+  PATH_METADATA,
+} from '@nestjs/common/constants';
+import { HttpStatus, RequestMethod } from '@nestjs/common';
 import { SireConfigurationController } from '../../../src/modules/sire/infrastructure/controllers/sireConfigurationController';
 import type { ConsultarEstadoConfiguracionSireUseCase } from '../../../src/modules/sire/application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import type { GuardarConfiguracionSireUseCase } from '../../../src/modules/sire/application/use-cases/guardarConfiguracionSireUseCase';
@@ -68,6 +72,33 @@ describe('SireConfigurationController', () => {
     );
 
     expect(httpCode).toBe(HttpStatus.OK);
+  });
+
+  it('exposes POST configuracion and GET configuracion/status', () => {
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        SireConfigurationController.prototype.guardar,
+      ),
+    ).toBe('configuracion');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        SireConfigurationController.prototype.guardar,
+      ),
+    ).toBe(RequestMethod.POST);
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        SireConfigurationController.prototype.estado,
+      ),
+    ).toBe('configuracion/status');
+    expect(
+      Reflect.getMetadata(
+        METHOD_METADATA,
+        SireConfigurationController.prototype.estado,
+      ),
+    ).toBe(RequestMethod.GET);
   });
 
   it('rejects a session without company', async () => {

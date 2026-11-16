@@ -170,6 +170,8 @@ export class LineaEmisionDto {
  * sus propias líneas, que es el descuadre más caro de detectar.
  */
 export class EmitirComprobanteDto {
+  /** Resultado interno calculado bajo bloqueo del origen; no es entrada HTTP. */
+  saldoNotaCalculado?: { antes: number; importe: number; restante: number };
   @IsOptional()
   @IsString()
   @Length(1, 30)

@@ -328,7 +328,7 @@ describe('TA-66 · autorización de Nota de Crédito', () => {
     expect(args.where.estado.notIn).toContain('ANULADO');
   });
 
-  it('solo se suman las notas de tipo 07, no los débitos', async () => {
+  it('NC y ND vigentes consumen el saldo del afectado', async () => {
     const { notas, findMany } = servicio();
 
     await notas.autorizarCredito('emp-1', {
@@ -340,7 +340,7 @@ describe('TA-66 · autorización de Nota de Crédito', () => {
     const args = findMany.mock.calls[0][0] as unknown as {
       where: { tipo_comprobante: string };
     };
-    expect(args.where.tipo_comprobante).toBe('07');
+    expect(args.where.tipo_comprobante).toEqual({ in: ['07', '08'] });
   });
 });
 
@@ -364,19 +364,9 @@ describe('TA-66 · autorización de Nota de Débito', () => {
     expect(autorizada.motivoDescripcion).toBe('Intereses por mora 20 días');
   });
 
-  it('una nota de débito NO consume saldo: puede cobrarse aunque el saldo sea cero', async () => {
-    // El comprobante ya fue anulado por completo con una nota de crédito, pero
-    // los intereses por mora se siguen cobrando.
+  it('rechaza ND cuando el afectado ya no tiene saldo', async () => {
     const { notas } = servicio({ notas: [1180] });
-
-    const autorizada = await notas.autorizarDebito('emp-1', {
-      comprobanteOrigenId: 'inv-1',
-      motivoCodigo: '01',
-      importe: 50,
-    });
-
-    expect(autorizada.importe).toBe(50);
-    expect(autorizada.saldo.disponible).toBe(0);
+    await expect(notas.autorizarDebito('emp-1', { comprobanteOrigenId: 'inv-1', motivoCodigo: '01', importe: 50 })).rejects.toThrow(ConflictException);
   });
 
   it('rechaza un motivo que no pertenece al Catálogo 10', async () => {

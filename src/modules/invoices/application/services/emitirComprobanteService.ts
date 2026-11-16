@@ -316,7 +316,7 @@ export class EmitirComprobanteService {
 
     // Una nota de crédito devuelve dinero: no puede superar lo que queda por
     // devolver del comprobante original.
-    if (dto.tipo_comprobante === '07') {
+    if (TIPOS_NOTA.includes(dto.tipo_comprobante as '07' | '08')) {
       const saldo = await this.saldoDevolvible(
         companyId,
         origen.id,
@@ -330,7 +330,7 @@ export class EmitirComprobanteService {
       const importeNota = this.totalConImpuestos(dto);
       if (Math.round(importeNota * 100) > Math.round(saldo * 100)) {
         throw new BadRequestException(
-          `La nota de crédito (S/ ${importeNota.toFixed(2)}) supera el saldo ` +
+          `La nota (S/ ${importeNota.toFixed(2)}) supera el saldo ` +
             `disponible de ${referencia} (S/ ${saldo.toFixed(2)}).`,
         );
       }
@@ -378,7 +378,7 @@ export class EmitirComprobanteService {
       where: {
         company_id: companyId,
         referenced_invoice_id: origenId,
-        tipo_comprobante: '07',
+        tipo_comprobante: { in: ['07', '08'] },
         estado: { notIn: ESTADOS_NOTA_SIN_EFECTO as never },
       },
       select: { monto_total: true },
