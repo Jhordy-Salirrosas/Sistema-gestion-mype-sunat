@@ -122,6 +122,7 @@ INSERT INTO public.permission_menu_catalog(menu_code,module_code,path_pattern) V
  ('MENU_PURCHASES_EXPENSES','M8','/purchases/expenses'),
  ('MENU_EXPENSES','M4','/expenses'),
  ('MENU_ACCOUNTING_RULES','M4','/accounting/rules'),
+ ('MENU_ACCOUNTING_GUIA','M4','/accounting/guia'),
  ('MENU_ACCOUNTING_PLAN_CUENTAS','M4','/accounting/plan-cuentas'),
  ('MENU_ACCOUNTING_PERIODS','M4','/accounting/periods'),
  ('MENU_ACCOUNTING_TAX_BOOKS','M4','/accounting/tax-books'),
@@ -161,6 +162,7 @@ UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHE
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_SALES' WHERE menu_code='MENU_SALES_COBRANZAS';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_PURCHASES' WHERE menu_code='MENU_PURCHASES_EXPENSES';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_RULES';
+UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_GUIA';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_PLAN_CUENTAS';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_PERIODS';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_TAX_BOOKS';
@@ -236,6 +238,7 @@ FROM public.company_roles r CROSS JOIN (VALUES
  ('MENU_PURCHASES_EXPENSES',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_EXPENSES',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_RULES',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
+ ('MENU_ACCOUNTING_GUIA',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_PLAN_CUENTAS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_PERIODS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_TAX_BOOKS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
