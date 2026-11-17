@@ -11,7 +11,12 @@ export class GetLedgerUseCase {
     private readonly repository: IAccountingRepositoryPort,
   ) {}
 
-  async execute(companyId: string, period: string, accountCode: string) {
+  async execute(
+    companyId: string,
+    period: string,
+    accountCode: string,
+    opciones: { soloDirectos?: boolean } = {},
+  ) {
     const normalizado = /^\d{4}-\d{1,2}$/.test(period)
       ? `${period.slice(0, 4)}-${period.slice(5).padStart(2, '0')}`
       : period;
@@ -30,9 +35,12 @@ export class GetLedgerUseCase {
 
     // El detalle de una cuenta de mayor vive en sus subcuentas. Si se pide el
     // mayor, se muestran todas sus hijas; si se pide una subcuenta, solo esa.
-    const hijas = accounts
-      .filter((item) => item.code !== accountCode && item.code.startsWith(accountCode))
-      .map((item) => item.code);
+    // `soloDirectos` deja únicamente los movimientos propios de la cuenta.
+    const hijas = opciones.soloDirectos
+      ? []
+      : accounts
+          .filter((item) => item.code !== accountCode && item.code.startsWith(accountCode))
+          .map((item) => item.code);
     const codigos = [accountCode, ...hijas];
     const porVariasCuentas = hijas.length > 0 && this.repository.findLedgerMovementsByAccounts;
 

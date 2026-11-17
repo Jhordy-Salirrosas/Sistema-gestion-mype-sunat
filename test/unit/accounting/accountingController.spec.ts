@@ -294,7 +294,7 @@ describe('AccountingController', () => {
     getTrialBalanceUseCase.execute.mockResolvedValue(balance);
 
     await expect(controller.getLedger('comp-1', '2026-11', '1211')).resolves.toBe(ledger);
-    expect(getLedgerUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', '1211');
+    expect(getLedgerUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', '1211', { soloDirectos: false });
 
     await expect(controller.getTrialBalance('comp-1', '2026-11')).resolves.toBe(balance);
     expect(getTrialBalanceUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');

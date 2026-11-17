@@ -251,11 +251,14 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
     @Query('period') period?: string,
     @Query('accountCode') accountCode?: string,
+    @Query('soloDirectos') soloDirectos?: string,
   ) {
     return this.getLedgerUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period ?? this.periodoActual(),
       accountCode ?? '',
+      // Por defecto la cuenta de mayor muestra el consolidado de sus subcuentas.
+      { soloDirectos: soloDirectos === 'true' || soloDirectos === '1' },
     );
   }
 
