@@ -15,6 +15,8 @@ export interface LedgerMovement {
 export interface TrialBalanceRow {
   accountCode: string;
   accountName: string;
+  /** Saldo acumulado de los períodos anteriores (deudor positivo). */
+  openingBalance?: number;
   debit: number;
   credit: number;
 }
