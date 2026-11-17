@@ -1,0 +1,481 @@
+{
+  "base": "48056aa001067e6abeefe641573ccb54c6d13f2f",
+  "node": "v24.22.1",
+  "python": "3.12.14",
+  "lxml": [
+    6,
+    1,
+    1,
+    0
+  ],
+  "libxslt": [
+    1,
+    1,
+    43
+  ],
+  "defaultBudgetMs": 20000,
+  "cold": "fresh Python/imports/XSL/temp directory per validation; host file cache retained",
+  "method": "one logical CPU affinity, calibrated CPU contention; Docker rootless has no cgroups",
+  "scenarios": [
+    {
+      "scenario": "0",
+      "calibration": {
+        "cpu": 0,
+        "competitors": 0,
+        "effectiveCpu": 0.473,
+        "calibration": {
+          "cpuSeconds": 0.250005452,
+          "wallSeconds": 0.52907523799513
+        },
+        "concurrency": 1
+      },
+      "measurements": [
+        {
+          "tipo": "07",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 412,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 306,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 344,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 333,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 288,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 303,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 302,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 281,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 240,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 308,
+          "valid": true
+        }
+      ]
+    },
+    {
+      "scenario": "9",
+      "calibration": {
+        "cpu": 0,
+        "competitors": 9,
+        "effectiveCpu": 0.066,
+        "calibration": {
+          "cpuSeconds": 0.25000508699999996,
+          "wallSeconds": 3.759776391001651
+        },
+        "concurrency": 1
+      },
+      "measurements": [
+        {
+          "tipo": "07",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 4034,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 3280,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 3240,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 3288,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2649,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2907,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 3712,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2792,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2564,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2640,
+          "valid": true
+        }
+      ]
+    },
+    {
+      "scenario": "19",
+      "calibration": {
+        "cpu": 0,
+        "competitors": 19,
+        "effectiveCpu": 0.049,
+        "calibration": {
+          "cpuSeconds": 0.25000546,
+          "wallSeconds": 5.078365605993895
+        },
+        "concurrency": 1
+      },
+      "measurements": [
+        {
+          "tipo": "07",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 6542,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5877,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5812,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5512,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5808,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 4828,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5800,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 6180,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5160,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 5736,
+          "valid": true
+        }
+      ]
+    },
+    {
+      "scenario": "9x2",
+      "calibration": {
+        "cpu": 0,
+        "competitors": 9,
+        "effectiveCpu": 0.098,
+        "calibration": {
+          "cpuSeconds": 0.250006637,
+          "wallSeconds": 2.5439479399938136
+        },
+        "concurrency": 2
+      },
+      "measurements": [
+        {
+          "tipo": "07",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2737,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 1,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2766,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2161,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 2,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2224,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 3,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2100,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2104,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 4,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2256,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2283,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2349,
+          "valid": true
+        },
+        {
+          "tipo": "07",
+          "sample": 5,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2424,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 1,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2180,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 1,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2248,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 2,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2400,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 2,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2372,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 3,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2928,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 3,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2904,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 4,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2168,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 4,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2228,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 5,
+          "worker": 0,
+          "budgetMs": 20000,
+          "ms": 2196,
+          "valid": true
+        },
+        {
+          "tipo": "08",
+          "sample": 5,
+          "worker": 1,
+          "budgetMs": 20000,
+          "ms": 2281,
+          "valid": true
+        }
+      ]
+    }
+  ]
+}

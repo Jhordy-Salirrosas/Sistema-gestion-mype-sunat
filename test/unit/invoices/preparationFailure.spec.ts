@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { ErrorValidacionBloqueada } from '../../../src/modules/invoices/application/services/invoiceSendGate';
 import { clasificarPreparacion, registrarEtapa } from '../../../src/modules/invoices/application/services/preparationFailure';
 import { presentarResultado } from '../../../src/modules/invoices/application/services/invoiceResultPresentation';
 import { InvoiceJobConsumer } from '../../../src/modules/invoices/invoiceJobConsumer';
@@ -39,4 +40,53 @@ it('una causa de transporte posterior impide revivir preparación antigua', () =
     { estado_nuevo: 'ERROR_RED', codigo_error: causa.codigo, mensaje_error: JSON.stringify(causa) },
     { estado_nuevo: 'ERROR_RED', codigo_error: 'NETWORK_ERROR', mensaje_error: 'Fallo de transporte posterior' },
   ], false)).toBeUndefined();
+});
+
+// El detalle técnico permanece en el historial, sin cambiar la presentación.
+describe('diagnóstico de VALIDACION_LOCAL', () => {
+  function local(error: unknown) {
+    registrarEtapa(error, 'VALIDACION_LOCAL');
+    return clasificarPreparacion(error);
+  }
+  it.each([
+    'Ejecutor SFS excedió 20000 ms', 'Ejecutor SFS excedió 35000 ms',
+    'Ejecutor Python SFS no disponible', 'Ejecutor SFS no completó la validación',
+    'Ejecutor SFS no disponible', 'NO_CONCLUYENTE', 'BYPASS_NO_PERMITIDO',
+    'VALIDACION_OFICIAL_NO_DISPONIBLE', 'SIN_MOTIVO', 'XML_NO_PERSISTIDO',
+  ])('conserva el motivo conocido: %s', motivo => {
+    const causa = local(new ErrorValidacionBloqueada('password=secreto <XML/>', motivo));
+    expect(causa.detalleDiagnostico).toEqual({ claseError: 'ErrorValidacionBloqueada', motivo });
+    const { detalleDiagnostico: _detalleDiagnostico, ...anterior } = causa;
+    const history = (value: unknown) => [{ estado_nuevo: 'ERROR_RED', codigo_error: causa.codigo, mensaje_error: JSON.stringify(value) }];
+    expect(presentarResultado('ERROR_RED', null, history(causa), false)).toEqual(presentarResultado('ERROR_RED', null, history(anterior), false));
+    expect(JSON.stringify(causa)).not.toContain('secreto');
+    expect(JSON.stringify(causa)).not.toContain('<XML');
+  });
+  it.each(['password=secreto', 'Ejecutor SFS excedió 20000 ms <XML/>', 'Ejecutor SFS excedió 2147483648 ms', 'Ejecutor SFS excedió 0 ms'])('no persiste un motivo fuera del vocabulario: %s', motivo => {
+    expect(local(new ErrorValidacionBloqueada('mensaje arbitrario', motivo)).detalleDiagnostico).toEqual({
+      claseError: 'ErrorValidacionBloqueada', motivo: 'MOTIVO_NO_CATALOGADO',
+    });
+  });
+  it.each([new TypeError('payload=secreto'), new SyntaxError('XML=secreto'), new Error('SQL=secreto')])('conserva solo la clase para %s', error => {
+    error.name = 'password=secreto';
+    expect(local(error).detalleDiagnostico).toEqual({ claseError: Object.getPrototypeOf(error).constructor.name });
+    expect(JSON.stringify(local(error))).not.toContain('secreto');
+  });
+  it('conserva clases propias sin mensajes ni propiedades adicionales', () => {
+    class FalloPersistencia extends Error {}
+    expect(local(new FalloPersistencia('token=secreto')).detalleDiagnostico).toEqual({ claseError: 'FalloPersistencia' });
+  });
+  it('omite nombres de clase no seguros', () => {
+    const error = new Error('secreto');
+    Object.setPrototypeOf(error, { ...Error.prototype, constructor: { name: 'XML=<datos>' } });
+    // Mantener instanceof Error para comprobar el saneamiento del nombre.
+    Object.setPrototypeOf(Object.getPrototypeOf(error), Error.prototype);
+    expect(local(error).detalleDiagnostico).toEqual({ claseError: 'ErrorNoIdentificado' });
+  });
+  it('no agrega detalle en otras etapas ni serializa valores lanzados sin clase Error', () => {
+    const error = new Error('secreto'); registrarEtapa(error, 'FIRMA');
+    expect(clasificarPreparacion(error)).not.toHaveProperty('detalleDiagnostico');
+    const plain = { payload: 'secreto' };
+    expect(local(plain).detalleDiagnostico).toEqual({ claseError: 'ErrorNoIdentificado' });
+  });
 });
