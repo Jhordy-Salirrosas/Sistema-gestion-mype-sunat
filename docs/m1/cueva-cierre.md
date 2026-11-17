@@ -407,3 +407,135 @@ Verificación completa con PostgreSQL local, CI=true y cobertura: 474 archivos
 (4513 aprobadas, 63 omitidas); después: ocho pruebas nuevas aprobadas, sin
 nuevas omisiones. Las diez pruebas HTTP siguen aprobadas. Lint aprobado con
 las tres advertencias preexistentes en archivos no modificados.
+
+## Addendum — Observabilidad de preparación y presupuesto SFS
+
+Rama `fix/m1-preparacion-observabilidad`, desde el SHA solicitado
+`48056aa001067e6abeefe641573ccb54c6d13f2f`. Durante el fetch, main remoto ya
+había avanzado a `0d4ad273`; se conservó la base explícita del encargo.
+No se consultan ni modifican FD01-00000006, FD01-00000007, producción ni bases
+compartidas. No hay transporte SUNAT, migraciones nuevas, PR ni merge.
+
+### Causa persistida
+
+El JSON de `transaction_history.mensaje_error` de la clasificación de
+preparación agrega `detalleDiagnostico` exclusivamente en VALIDACION_LOCAL:
+
+```json
+{
+  "detalleDiagnostico": {
+    "claseError": "ErrorValidacionBloqueada",
+    "motivo": "Ejecutor SFS excedió 20000 ms"
+  }
+}
+```
+
+Para ErrorValidacionBloqueada se admite el vocabulario actual:
+`Ejecutor Python SFS no disponible`, `Ejecutor SFS no disponible`,
+`Ejecutor SFS no completó la validación`, `NO_CONCLUYENTE`,
+`BYPASS_NO_PERMITIDO`, `VALIDACION_OFICIAL_NO_DISPONIBLE`, `SIN_MOTIVO` y
+`XML_NO_PERSISTIDO`. El motivo de tiempo agotado admite exclusivamente un
+presupuesto entero positivo hasta 2147483647 ms, que no es un dato fiscal.
+Un motivo desconocido queda como `MOTIVO_NO_CATALOGADO`; nunca se copia texto
+arbitrario del error. Otros errores conservan únicamente su clase obtenida
+del prototipo (nombre técnico acotado), no su mensaje ni error.name; un nombre
+no seguro o un valor lanzado sin clase Error queda `ErrorNoIdentificado`.
+
+El historial se escribe por la misma persistencia atómica existente, sin
+migrar el esquema. `causa`, código, categoría, etapa y recuperabilidad
+conservan su comportamiento. La presentación continúa leyendo `causa`, no
+`detalleDiagnostico`: las pruebas comparan la respuesta visible completa
+antes/después. No se agregan XML, payload, SQL, rutas del ejecutor, claves ni
+mensajes de drivers al diagnóstico.
+
+### Regresión real incorporada
+
+Se incorpora el cambio de la spec de `333d77fe` sin fusionar su rama ni copiar
+su informe de investigación anterior. El consumidor completo permanece real;
+solo se intercepta su registro automático de cola. Cuatro casos NC/ND por
+ambas entradas HTTP recorren el build ES2023, creación, generación UBL,
+firma/verificación, ZIP, guardado y compuerta XSD/XSL real. No se llama al
+transporte. Si fallan, se recoge el stderr de una reproducción local del
+validador sobre el fixture sintético, sin el catch genérico del protocolo.
+
+Dos casos adicionales NC/ND fuerzan un error real de arranque del ejecutor,
+comprueban en PostgreSQL el estado ERROR_RED y el detalle persistido, y
+restauran el ejecutor: la preparación del mismo XML firmado pasa al reintentar,
+sin enviar el documento. Las unitarias cubren tiempos agotados, salida no
+concluyente, motivos desconocidos, clases de error, ausencia de datos
+sensibles y presentación inalterada. Corrida dirigida: 2 archivos y 42 pruebas
+aprobados; todas las sentencias de preparationFailure.ts cubiertas.
+
+### Mediciones y decisión de presupuesto
+
+Se ejecutó el runner de **dist/** generado por `npm run build`, con las notas
+NC y ND de `test/fixtures/sfs`, los assets oficiales reales, Python 3.12.14,
+lxml 6.1.1, libxslt 1.1.43 y Node 24.22.1. Cada llamada crea un proceso Python
+nuevo, importa lxml, copia los assets a un directorio temporal y compila la
+hoja XSL: arranque frío de proceso y compilación. No se vació la caché de
+archivos del host. No se representa esta medición como arranque con disco
+físico frío ni como reproducción exacta del hardware de Render.
+
+Docker local informa `rootless-mode without cgroups`; sus flags --cpus no
+aplican la cuota. Esa ejecución no se usó como prueba de CPU restringida.
+Para restringir de forma comprobable, se fijaron el runner, sus subprocesos y
+0/9/19 competidores al mismo núcleo lógico mediante sched_setaffinity. Una
+sonda de 250 ms de CPU mide la fracción efectiva antes de cada escenario.
+Las fracciones son calibraciones observadas bajo contención, no cuotas
+constantes garantizadas. Host: AMD EPYC 9V74, x86_64.
+
+| Competidores | CPU efectiva calibrada | Validaciones simultáneas | Muestras por tipo | NC mín./mediana/máx. (ms) | ND mín./mediana/máx. (ms) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0,473 | 1 | 5 | 288 / 333 / 412 | 240 / 302 / 308 |
+| 9 | 0,066 | 1 | 5 | 2649 / 3280 / 4034 | 2564 / 2792 / 3712 |
+| 19 | 0,049 | 1 | 5 | 5512 / 5812 / 6542 | 4828 / 5736 / 6180 |
+| 9 | 0,098 | 2 | 10 | 2100 / 2269,5 / 2766 | 2168 / 2264,5 / 2928 |
+
+Las 50 validaciones completaron con cero errores y sin vencer el presupuesto.
+**Decisión: mantener el default de 20000 ms. Valor recomendado para la carga
+medida: SUNAT_SFS_TIMEOUT_MS=20000.** El máximo observado de 6542 ms deja un
+margen de aproximadamente 3,06 veces. No hay evidencia local que justifique
+subir el default; no se atribuye con ello una causa al fallo intermitente de
+producción. El nuevo historial permitirá distinguir si realmente vence ese
+presupuesto o si falla el arranque/protocolo u otra clase de error. El override
+existente sigue disponible, sin modificar sus límites ni el fail-closed.
+
+Datos crudos: `docs/m1/preparacion-sfs-mediciones.json`. Reproducción local:
+
+```sh
+npm run build
+python3 scripts/m1/benchmark_sfs_cpu.py --competitors 0
+python3 scripts/m1/benchmark_sfs_cpu.py --competitors 9
+python3 scripts/m1/benchmark_sfs_cpu.py --competitors 19
+python3 scripts/m1/benchmark_sfs_cpu.py --competitors 9 --concurrency 2
+```
+
+Cada script usa solo fixtures locales y finaliza sus competidores al terminar.
+No requiere base de datos ni red. Para contrastar otro presupuesto, se pasa
+SUNAT_SFS_TIMEOUT_MS al mismo comando.
+
+### Verificación
+
+La primera corrida de base coincidió con el agotamiento del disco por una
+imagen temporal de medición: fallaron 5 suites/43 pruebas del ejecutor. Se
+retiró la imagen y se recuperó espacio; no se cambió código para resolver esos
+fallos. La línea base válida se repitió en un checkout aislado del mismo SHA,
+con el cliente Prisma generado: 476 archivos, 466 suites aprobadas/10 omitidas,
+4593 pruebas (4530 aprobadas/63 omitidas), 12 snapshots aprobados y cero fallos.
+
+Resultado final con cobertura y PostgreSQL local:
+
+| Conteo | Base válida | Final |
+| --- | ---: | ---: |
+| Archivos totales | 476 | 476 |
+| Suites aprobadas / omitidas | 466 / 10 | 466 / 10 |
+| Pruebas totales | 4593 | 4619 |
+| Pruebas aprobadas / omitidas | 4530 / 63 | 4556 / 63 |
+| Fallos | 0 | 0 |
+| Snapshots aprobados | 12 | 12 |
+
+Son 26 pruebas nuevas aprobadas, sin nuevas omisiones. Build aprobado y lint
+aprobado con las tres advertencias preexistentes en archivos no modificados.
+Se entrega observabilidad de la causa, regresión real y decisión de presupuesto
+basada en mediciones; no se declara resuelta una causa de infraestructura de
+producción que todavía no ha quedado identificada en su historial.
