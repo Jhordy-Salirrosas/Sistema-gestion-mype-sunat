@@ -4,6 +4,8 @@ export interface LedgerMovement {
   entryDate: Date;
   glosa: string;
   sourceModule: string;
+  /** Documento de origen (factura, DAM, comprobante), si el asiento lo tiene. */
+  sourceReferenceId?: string | null;
   accountCode: string;
   accountName: string;
   debit: number;
