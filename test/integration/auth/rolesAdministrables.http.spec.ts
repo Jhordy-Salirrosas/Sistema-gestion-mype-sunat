@@ -52,10 +52,10 @@ it('rechaza usuario inactivo y pertenencia a otra empresa antes del handler',asy
  members.find(r=>r.id==='admin').is_active=false;await request(app.getHttpServer()).get('/api/v1/auth/roles').set(auth()).expect(401);
  members.find(r=>r.id==='admin').is_active=true;members.find(r=>r.id==='admin').company_id='otra';await request(app.getHttpServer()).get('/api/v1/auth/roles').set(auth()).expect(401);
 });
-it('flag apagado informa false, rechaza alta y conserva los 72 menús técnicos',async()=>{
+it('flag apagado informa false, rechaza alta y conserva los 73 menús técnicos',async()=>{
  const flag=await request(app.getHttpServer()).get('/api/v1/auth/roles/config').set(auth()).expect(200);expect(flag.body.customRolesEnabled).toBe(false);
  await request(app.getHttpServer()).post('/api/v1/auth/roles').set(auth()).send({code:'PROPIO',name:'Administrador'}).expect(403);
- const catalog=await request(app.getHttpServer()).get('/api/v1/auth/permission-catalog').set(auth()).expect(200);expect(catalog.body.menus).toHaveLength(72);
+ const catalog=await request(app.getHttpServer()).get('/api/v1/auth/permission-catalog').set(auth()).expect(200);expect(catalog.body.menus).toHaveLength(73);
 });
 it('snapshot usa overrides y denegación ADMIN; el servidor impide nuevas mutaciones de autobloqueo',async()=>{
  overrides.push({company_id:'empresa',role:'ADMIN',action_code:'INVOICE_FORCE_RESEND',allowed:false});
