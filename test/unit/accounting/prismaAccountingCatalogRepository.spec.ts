@@ -184,8 +184,8 @@ describe('PrismaAccountingRepository - catálogo y períodos', () => {
     ]);
 
     await expect(repository.findTrialBalanceRows('c1', '2026-11')).resolves.toEqual([
-      { accountCode: '1211', accountName: 'CxC', debit: 118, credit: 0 },
-      { accountCode: '7011', accountName: 'Ventas', debit: 0, credit: 118 },
+      { accountCode: '1211', accountName: 'CxC', openingBalance: 118, debit: 118, credit: 0 },
+      { accountCode: '7011', accountName: 'Ventas', openingBalance: -118, debit: 0, credit: 118 },
     ]);
   });
 

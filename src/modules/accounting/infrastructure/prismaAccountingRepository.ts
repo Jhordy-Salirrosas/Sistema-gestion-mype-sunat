@@ -411,12 +411,32 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
       where: { company_id: companyId, period },
       include: { lines: true },
     });
-    const rows = new Map<string, { accountCode: string; accountName: string; debit: number; credit: number }>();
+    // Saldo de arrastre: todo lo anterior al período. Sin esto la columna
+    // "Saldo inicial" del balance de comprobación siempre saldría en cero.
+    const anteriores = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period: { lt: period } },
+      include: { lines: true },
+    });
+    const iniciales = new Map<string, number>();
+    for (const entry of anteriores) {
+      for (const line of entry.lines) {
+        const acumulado = iniciales.get(line.account_code) ?? 0;
+        iniciales.set(
+          line.account_code,
+          acumulado + Number(line.debit_amount) - Number(line.credit_amount),
+        );
+      }
+    }
+    const rows = new Map<
+      string,
+      { accountCode: string; accountName: string; openingBalance: number; debit: number; credit: number }
+    >();
     for (const entry of entries) {
       for (const line of entry.lines) {
         const actual = rows.get(line.account_code) ?? {
           accountCode: line.account_code,
           accountName: line.account_name,
+          openingBalance: iniciales.get(line.account_code) ?? 0,
           debit: 0,
           credit: 0,
         };

@@ -21,18 +21,23 @@ export class GetTrialBalanceUseCase {
 
     const rows = await this.repository.findTrialBalanceRows(companyId, normalizado);
     const data = rows.map((row) => {
+      const opening = Math.round((row.openingBalance ?? 0) * 100) / 100;
       const debit = Math.round(row.debit * 100) / 100;
       const credit = Math.round(row.credit * 100) / 100;
       return {
         ...row,
+        openingBalance: opening,
         debit,
         credit,
-        balance: Math.round((debit - credit) * 100) / 100,
+        // Saldo final: lo que venía arrastrando más el movimiento del período.
+        balance: Math.round((opening + debit - credit) * 100) / 100,
       };
     });
     const totalDebit = Math.round(data.reduce((sum, row) => sum + row.debit, 0) * 100) / 100;
     const totalCredit = Math.round(data.reduce((sum, row) => sum + row.credit, 0) * 100) / 100;
+    const totalOpening = Math.round(data.reduce((sum, row) => sum + row.openingBalance, 0) * 100) / 100;
+    const totalBalance = Math.round(data.reduce((sum, row) => sum + row.balance, 0) * 100) / 100;
 
-    return { period: normalizado, rows: data, totalDebit, totalCredit };
+    return { period: normalizado, rows: data, totalDebit, totalCredit, totalOpening, totalBalance };
   }
 }
