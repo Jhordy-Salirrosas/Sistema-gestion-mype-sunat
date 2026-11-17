@@ -51,6 +51,15 @@ describe('UpdateAccountingAccountUseCase', () => {
     const repo = crearRepositorio();
     const caso = new UpdateAccountingAccountUseCase(repo as never);
 
-    await expect(caso.execute('1212', {})).rejects.toThrow('Indica el nombre o el estado');
+    await expect(caso.execute('1212', {})).rejects.toThrow('Indica el nombre');
+  });
+
+  it('cambia el tipo de cuenta (elemento del PCGE)', async () => {
+    const repo = crearRepositorio();
+    const caso = new UpdateAccountingAccountUseCase(repo as never);
+
+    await caso.execute('1212', { element: 'Activo realizable' });
+
+    expect(repo.updateAccount).toHaveBeenCalledWith('1212', { element: 'Activo realizable' });
   });
 });
