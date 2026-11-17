@@ -121,7 +121,19 @@ export class InvoiceQueryService {
     const [productos, saldos] = await Promise.all([
       this.prisma.inventoryProduct.findMany({
         where: { company_id: companyId, ...(historicos ? {} : { is_active: true }) },
-        select: { is_active: true, id: true, sku: true, description: true, sunat_unit_code: true, tax_affectation: true, sale_price: true },
+        select: {
+          is_active: true,
+          id: true,
+          sku: true,
+          description: true,
+          sunat_unit_code: true,
+          tax_affectation: true,
+          sale_price: true,
+          has_detraction: true,
+          detraction_code: true,
+          detraction_rate: true,
+          discount_rate: true,
+        },
         orderBy: { sku: 'asc' },
       }),
       this.prisma.inventoryBalance.findMany({
@@ -140,6 +152,10 @@ export class InvoiceQueryService {
       return { activo: p.is_active !== false, sku: p.sku, description: p.description, sunatUnitCode: p.sunat_unit_code,
         taxAffectation: p.tax_affectation?.trim() || null, currentStock: stock,
         salePrice: vendible ? precio : null, vendible,
+        hasDetraction: Boolean(p.has_detraction),
+        detractionCode: p.detraction_code || null,
+        detractionRate: p.detraction_rate ? Number(p.detraction_rate) : null,
+        discountRate: p.discount_rate ? Number(p.discount_rate) : 0,
         motivo };
     }) };
   }

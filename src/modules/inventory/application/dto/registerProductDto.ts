@@ -206,6 +206,22 @@ export class RegisterProductDto {
   @IsOptional()
   min_price?: number;
 
+  @IsBoolean()
+  @IsOptional()
+  has_detraction?: boolean;
+
+  @IsString()
+  @IsOptional()
+  detraction_code?: string;
+
+  @IsNumber()
+  @IsOptional()
+  detraction_rate?: number;
+
+  @IsNumber()
+  @IsOptional()
+  discount_rate?: number;
+
   // Ubicación física (Obs 12)
   @IsString()
   @IsOptional()

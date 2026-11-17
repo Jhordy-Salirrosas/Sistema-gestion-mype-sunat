@@ -136,7 +136,7 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
   }
   const productos = await tx.inventoryProduct.findMany({ where: {
     company_id: companyId, sku: { in: codigos as string[] }, ...(esNota ? {} : { is_active: true }),
-  }, select: { sku: true, tax_affectation: true, sunat_unit_code: true, is_active: true, sale_price: true } });
+  }, select: { sku: true, tax_affectation: true, sunat_unit_code: true, is_active: true, sale_price: true, discount_rate: true } });
   for (const l of dto.items) {
     const producto = productos.find((p) => p.sku === l.codigo!.trim());
     if (!producto) throw new BadRequestException(`Producto o servicio no registrado: ${l.codigo}`);
@@ -176,14 +176,19 @@ export async function prepareCreation(tx: Prisma.TransactionClient, input: Emiti
       if (esAfectacionGratuita(linea.afectacion!)) validarBolsasGratuitas(linea.cantidad, linea.cantidadBolsas ?? (linea.icbper ?? 0) * 2);
     }
   }
-  const descuento = Boolean(dto.descuento_global) || dto.items.some((l) => Boolean(l.descuento));
-  if (dto.forma_pago === 'Credito' || descuento) {
+  const descuentoManual = Boolean(dto.descuento_global) || dto.items.some((l) => {
+    if (!l.descuento) return false;
+    const prod = productos.find((p) => p.sku === l.codigo?.trim());
+    const prodDesc = prod?.discount_rate ? Number(prod.discount_rate) : 0;
+    return prodDesc <= 0;
+  });
+  if (dto.forma_pago === 'Credito' || descuentoManual) {
     const cliente = await tx.businessPartner.findFirst({ where: { company_id: companyId,
       doc_type: dto.customer_identity_type, doc_number: dto.customer_identity_number, is_active: true },
     select: { has_credit: true, allows_discount: true } });
     if (!dto.customer_identity_number || !dto.customer_identity_type || !cliente ||
       (dto.forma_pago === 'Credito' && cliente.has_credit !== true) ||
-      (descuento && cliente.allows_discount !== true)) throw new BadRequestException('El maestro no autoriza crédito o descuentos para este cliente');
+      (descuentoManual && cliente.allows_discount !== true)) throw new BadRequestException('El maestro no autoriza crédito o descuentos para este cliente');
   }
   if (dto.tipo_comprobante === '07' || dto.tipo_comprobante === '08') {
     const numero = /^([A-Za-z0-9]{4})-(\d{1,8})$/.exec(dto.documento_afectado?.trim() ?? '');

@@ -321,6 +321,11 @@ export class MasterDataService {
         bank_account: dto.accountNumber?.trim() || null,
         swift_code: dto.swiftCode?.trim() || null,
         default_currency: currency,
+        is_related: dto.isRelated ?? false,
+        vessel_name: dto.vesselName?.trim() || null,
+        voyage_number: dto.voyageNumber?.trim() || null,
+        bl_number: dto.blNumber?.trim() || null,
+        port_origin: dto.portOrigin?.trim() || null,
       };
       try {
         await this.prisma.foreignSupplier.upsert({
@@ -490,6 +495,11 @@ export class MasterDataService {
             ...(dto.accountNumber !== undefined ? { bank_account: dto.accountNumber?.trim() || null } : {}),
             ...(dto.swiftCode !== undefined ? { swift_code: dto.swiftCode?.trim() || null } : {}),
             ...(dto.currencyCode !== undefined ? { default_currency: dto.currencyCode.toUpperCase() } : {}),
+            ...(dto.isRelated !== undefined ? { is_related: dto.isRelated } : {}),
+            ...(dto.vesselName !== undefined ? { vessel_name: dto.vesselName?.trim() || null } : {}),
+            ...(dto.voyageNumber !== undefined ? { voyage_number: dto.voyageNumber?.trim() || null } : {}),
+            ...(dto.blNumber !== undefined ? { bl_number: dto.blNumber?.trim() || null } : {}),
+            ...(dto.portOrigin !== undefined ? { port_origin: dto.portOrigin?.trim() || null } : {}),
           },
         });
       }

@@ -105,6 +105,10 @@ export class InventoryStocksController {
         promo_price: dto.promo_price ?? null,
         commission_rate: dto.commission_rate ?? null,
         min_price: dto.min_price ?? null,
+        has_detraction: dto.has_detraction ?? false,
+        detraction_code: dto.detraction_code?.trim() || null,
+        detraction_rate: dto.detraction_rate ?? null,
+        discount_rate: dto.discount_rate ?? 0,
         warehouse_location: dto.warehouse_location?.trim() || null,
         attributes: dto.attributes || [],
       },
@@ -252,6 +256,10 @@ export class InventoryStocksController {
       unitCode: p.sunat_unit_code || 'NIU',
       costPrice: p.cost_price ? Number(p.cost_price) : undefined,
       salePrice: p.sale_price ? Number(p.sale_price) : undefined,
+      hasDetraction: Boolean(p.has_detraction),
+      detractionCode: p.detraction_code || undefined,
+      detractionRate: p.detraction_rate ? Number(p.detraction_rate) : undefined,
+      discountRate: p.discount_rate ? Number(p.discount_rate) : 0,
     }));
   }
 
@@ -324,6 +332,10 @@ export class InventoryStocksController {
         promo_price: dto.promo_price,
         commission_rate: dto.commission_rate,
         min_price: dto.min_price,
+        ...(dto.has_detraction !== undefined && { has_detraction: dto.has_detraction }),
+        ...(dto.detraction_code !== undefined && { detraction_code: dto.detraction_code?.trim() || null }),
+        ...(dto.detraction_rate !== undefined && { detraction_rate: dto.detraction_rate }),
+        ...(dto.discount_rate !== undefined && { discount_rate: dto.discount_rate }),
         warehouse_location: dto.warehouse_location?.trim(),
         ...(dto.attributes !== undefined && { attributes: dto.attributes }),
       };

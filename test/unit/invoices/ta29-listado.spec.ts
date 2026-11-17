@@ -36,6 +36,15 @@ function crearServicio(opciones: { sinComprobante?: boolean } = {}) {
       count: jest.fn().mockResolvedValue(1),
       findFirst: jest.fn().mockResolvedValue(opciones.sinComprobante ? null : filaListado()),
     },
+    inventoryProduct: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    inventoryBalance: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    inventoryWarehouse: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest.fn(async (operaciones: Array<Promise<unknown>>) =>
       Promise.all(operaciones),
     ),
@@ -88,5 +97,80 @@ describe('TA-29 · InvoiceQueryService', () => {
     await expect(servicio.reintentarCdr(EMPRESA, 'inv-inexistente')).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('catalogoProductos y almacenes', () => {
+    it('retorna catálogo con detracciones y descuentos correctamente mapeados', async () => {
+      const { servicio, prisma } = crearServicio();
+      (prisma.inventoryProduct.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'prod-1',
+          sku: 'SKU-001',
+          description: 'Laptop',
+          sunat_unit_code: 'NIU',
+          tax_affectation: '10',
+          sale_price: '1500.00',
+          is_active: true,
+          has_detraction: true,
+          detraction_code: '022',
+          detraction_rate: 10,
+          discount_rate: 5,
+        },
+        {
+          id: 'prod-2',
+          sku: 'SKU-002',
+          description: 'Mouse',
+          sunat_unit_code: 'NIU',
+          tax_affectation: '10',
+          sale_price: '50.00',
+          is_active: true,
+          has_detraction: false,
+          detraction_code: null,
+          detraction_rate: null,
+          discount_rate: null,
+        },
+      ]);
+      (prisma.inventoryBalance.findMany as jest.Mock).mockResolvedValue([
+        { product_id: 'prod-1', current_stock: 15 },
+        { product_id: 'prod-2', current_stock: 30 },
+      ]);
+
+      const catalogo = await servicio.catalogoProductos(EMPRESA, 'ALM-01');
+
+      expect(catalogo.balances).toHaveLength(2);
+      expect(catalogo.balances[0]).toMatchObject({
+        sku: 'SKU-001',
+        hasDetraction: true,
+        detractionCode: '022',
+        detractionRate: 10,
+        discountRate: 5,
+        currentStock: 15,
+        vendible: true,
+      });
+      expect(catalogo.balances[1]).toMatchObject({
+        sku: 'SKU-002',
+        hasDetraction: false,
+        detractionCode: null,
+        detractionRate: null,
+        discountRate: 0,
+        currentStock: 30,
+        vendible: true,
+      });
+    });
+
+    it('lista almacenes activos de la empresa', async () => {
+      const { servicio, prisma } = crearServicio();
+      (prisma.inventoryWarehouse.findMany as jest.Mock).mockResolvedValue([
+        { warehouse_code: 'ALM-01', description: 'Principal' },
+      ]);
+
+      const res = await servicio.almacenes(EMPRESA);
+      expect(res).toHaveLength(1);
+      expect(prisma.inventoryWarehouse.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ company_id: EMPRESA, is_active: true }),
+        }),
+      );
+    });
   });
 });
