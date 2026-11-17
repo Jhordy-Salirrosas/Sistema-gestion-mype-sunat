@@ -122,6 +122,7 @@ INSERT INTO public.permission_menu_catalog(menu_code,module_code,path_pattern) V
  ('MENU_PURCHASES_EXPENSES','M8','/purchases/expenses'),
  ('MENU_EXPENSES','M4','/expenses'),
  ('MENU_ACCOUNTING_RULES','M4','/accounting/rules'),
+ ('MENU_ACCOUNTING_GUIA','M4','/accounting/guia'),
  ('MENU_ACCOUNTING_PLAN_CUENTAS','M4','/accounting/plan-cuentas'),
  ('MENU_ACCOUNTING_PERIODS','M4','/accounting/periods'),
  ('MENU_ACCOUNTING_TAX_BOOKS','M4','/accounting/tax-books'),
@@ -161,6 +162,7 @@ UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHE
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_SALES' WHERE menu_code='MENU_SALES_COBRANZAS';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_PURCHASES' WHERE menu_code='MENU_PURCHASES_EXPENSES';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_RULES';
+UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_GUIA';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_PLAN_CUENTAS';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_PERIODS';
 UPDATE public.permission_menu_catalog SET parent_menu_code='MENU_ACCOUNTING' WHERE menu_code='MENU_ACCOUNTING_TAX_BOOKS';
@@ -236,13 +238,14 @@ FROM public.company_roles r CROSS JOIN (VALUES
  ('MENU_PURCHASES_EXPENSES',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_EXPENSES',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_RULES',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
+ ('MENU_ACCOUNTING_GUIA',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_PLAN_CUENTAS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_PERIODS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_TAX_BOOKS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_PLE',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[])) m(menu_code,roles);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public.permission_menu_catalog)<>72 THEN RAISE EXCEPTION 'Catálogo incompleto'; END IF;
+ IF (SELECT count(*) FROM public.permission_menu_catalog)<>73 THEN RAISE EXCEPTION 'Catálogo incompleto'; END IF;
  IF (SELECT count(*) FROM public.company_roles)<>(SELECT count(*)*5 FROM public.companies) THEN RAISE EXCEPTION 'Roles incompletos'; END IF;
- IF (SELECT count(*) FROM public.role_menu_permissions)<>(SELECT count(*)*72 FROM public.company_roles) THEN RAISE EXCEPTION 'Matriz incompleta'; END IF;
+ IF (SELECT count(*) FROM public.role_menu_permissions)<>(SELECT count(*)*73 FROM public.company_roles) THEN RAISE EXCEPTION 'Matriz incompleta'; END IF;
 END $$;
 COMMIT;
