@@ -242,6 +242,62 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     };
   }
 
+  /** Códigos que cuelgan de una cuenta (hijos, nietos, …), por prefijo. */
+  async findDescendantCodes(code: string) {
+    const rows = await this.prisma.accountingAccount.findMany({
+      where: { code: { startsWith: code, not: code } },
+      select: { code: true },
+    });
+    return rows.map((row) => row.code);
+  }
+
+  async setAccountsActive(codes: readonly string[], isActive: boolean) {
+    if (codes.length === 0) return 0;
+    const resultado = await this.prisma.accountingAccount.updateMany({
+      where: { code: { in: [...codes] } },
+      data: { is_active: isActive },
+    });
+    return resultado.count;
+  }
+
+  /**
+   * Saldo de la cuenta (y sus subcuentas) hasta el período indicado.
+   *
+   * Se suman debe − haber de las líneas; sirve para impedir que se inactive una
+   * cuenta con movimientos vivos en el mes abierto.
+   */
+  async accountPeriodBalance(companyId: string, code: string, period: string) {
+    const entradas = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period },
+      include: { lines: true },
+    });
+    let saldo = 0;
+    for (const entrada of entradas) {
+      for (const linea of entrada.lines) {
+        if (linea.account_code === code || linea.account_code.startsWith(code)) {
+          saldo += Number(linea.debit_amount) - Number(linea.credit_amount);
+        }
+      }
+    }
+    return Math.round(saldo * 100) / 100;
+  }
+
+  /** Reglas de contabilización activas que usan la cuenta. */
+  async accountUsedInRules(companyId: string, code: string) {
+    return this.prisma.accountingRule.count({
+      where: { company_id: companyId, account_code: code, is_active: true },
+    });
+  }
+
+  /** Si la empresa tiene la cuenta configurada como cuenta de tesorería. */
+  async accountIsTreasury(companyId: string, code: string) {
+    const fila = await this.prisma.companyTreasuryAccount.findFirst({
+      where: { company_id: companyId, code },
+      select: { id: true },
+    });
+    return Boolean(fila);
+  }
+
   async findAccounts(opciones?: { includeInactive?: boolean }) {
     const rows = await this.prisma.accountingAccount.findMany({
       where: opciones?.includeInactive ? undefined : { is_active: true },

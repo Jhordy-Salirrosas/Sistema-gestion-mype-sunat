@@ -22,6 +22,21 @@ export interface IAccountingRepositoryPort {
     code: string,
     cambios: { name?: string; element?: string; isActive?: boolean },
   ): Promise<AccountingAccountEntity>;
+  /**
+   * Todos los códigos que cuelgan de una cuenta (hijos, nietos, …).
+   *
+   * La jerarquía se codifica en el propio código (10 → 101 → 1011), así que se
+   * resuelve por prefijo sin recorrer la tabla nivel a nivel.
+   */
+  findDescendantCodes(code: string): Promise<string[]>;
+  /** Activa o desactiva varias cuentas de una vez (cascada). */
+  setAccountsActive(codes: readonly string[], isActive: boolean): Promise<number>;
+  /** Suma de debe − haber de la cuenta en el período indicado. */
+  accountPeriodBalance(companyId: string, code: string, period: string): Promise<number>;
+  /** Si la cuenta participa en reglas de contabilización activas. */
+  accountUsedInRules(companyId: string, code: string): Promise<number>;
+  /** Si la cuenta está configurada como cuenta de tesorería. */
+  accountIsTreasury(companyId: string, code: string): Promise<boolean>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;

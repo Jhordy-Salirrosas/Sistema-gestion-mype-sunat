@@ -149,8 +149,14 @@ export class AccountingController {
   }
 
   @Patch('accounts/:code')
-  async updateAccount(@Param('code') code: string, @Body() dto: UpdateAccountingAccountDto) {
-    return this.updateAccountUseCase.execute(code, dto);
+  async updateAccount(
+    @Param('code') code: string,
+    @Body() dto: UpdateAccountingAccountDto,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    // La empresa hace falta para validar saldo, reglas y tesorería al cambiar
+    // el estado de la cuenta.
+    return this.updateAccountUseCase.execute(this.empresaDelToken(currentCompanyId), code, dto);
   }
 
   @Post('closing-entry/:year')
