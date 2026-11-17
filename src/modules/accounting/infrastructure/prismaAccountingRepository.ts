@@ -518,6 +518,8 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           sourceReferenceId: entry.source_reference_id,
           accountCode: line.account_code,
           accountName: line.account_name,
+          /** El mayor marca las anulaciones para no contarlas como vigentes. */
+          status: entry.status,
           debit: Number(line.debit_amount),
           credit: Number(line.credit_amount),
         })),
