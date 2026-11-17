@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -6,6 +6,7 @@ import { Client } from 'pg';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { fakeFiscalAddress } from '../../fixtures/fakeFiscalAddress';
+import { fakeIssuerCertificate } from '../../fixtures/fakeIssuerCertificate';
 
 const url = process.env.TEST_DATABASE_URL;
 const cases = ['07', '08'].flatMap(tipo => ['pantalla', 'fiscal'].map(route => ({ tipo, route })));
@@ -13,11 +14,12 @@ const cases = ['07', '08'].flatMap(tipo => ['pantalla', 'fiscal'].map(route => (
   let db: any, app: any, queue: any, actor: any, token: string, company: string;
   let translate: any, today: () => string;
   let databaseName: string;
-  const original = { DATABASE_URL: process.env.DATABASE_URL, PG_BOSS_URL: process.env.PG_BOSS_URL };
+  let consumer: any;
+  const original = { DATABASE_URL: process.env.DATABASE_URL, PG_BOSS_URL: process.env.PG_BOSS_URL, CERT_BASE64: process.env.CERT_BASE64, CERT_PASSWORD: process.env.CERT_PASSWORD };
   jest.setTimeout(120000);
   beforeAll(async () => {
     if (!url || !['localhost','127.0.0.1'].includes(new URL(url).hostname)) throw Error('Solo PostgreSQL local de pruebas');
-    // CI construye después de Jest. Este archivo ejercita deliberadamente el
+    // CI construye antes de Jest. Este archivo ejercita deliberadamente el
     // build de producción (class fields ES2023), no el transform ES2021 de Jest.
     const root = resolve(__dirname, '../../..');
     if (process.env.CI !== 'true') execFileSync(process.execPath, [resolve(root,'node_modules/@nestjs/cli/bin/nest.js'),'build'], { cwd: root, stdio: 'pipe', timeout: 90000 });
@@ -45,14 +47,18 @@ const cases = ['07', '08'].flatMap(tipo => ['pantalla', 'fiscal'].map(route => (
     const pg = new Client({ connectionString: process.env.DATABASE_URL }); await pg.connect();
     try { if (!(await pg.query("SELECT to_regclass('public.company_roles') AS table_name")).rows[0].table_name) await pg.query(readFileSync('scripts/manual/roles-administrables-expansion.sql','utf8')); }
     finally { await pg.end(); }
+    process.env.CERT_BASE64 = fakeIssuerCertificate().p12();
+    process.env.CERT_PASSWORD = 'obviously-fake-password';
+    // Se detiene solo el registro automático de la cola, no la preparación.
+    const workerInit = jest.spyOn(InvoiceJobConsumer.prototype, 'onModuleInit').mockResolvedValue(undefined);
     const module = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(InvoiceJobConsumer).useValue({ onModuleInit: () => undefined })
       .overrideProvider(SummaryJobConsumer).useValue({ onModuleInit: () => undefined })
       .overrideProvider(RucConsultaService).useValue({consultar: async () => null})
       .compile();
     app = module.createNestApplication(); app.useLogger(false);
     applyGlobalValidation(app); app.useGlobalFilters(new HttpExceptionFilter());
-    await app.init(); db = app.get(PrismaService); queue = app.get(QueueService);
+    try { await app.init(); } finally { workerInit.mockRestore(); }
+    consumer = app.get(InvoiceJobConsumer); db = app.get(PrismaService); queue = app.get(QueueService);
     actor = app.get(TOKEN_SERVICE_PORT);
   });
   beforeEach(async () => {
@@ -103,6 +109,27 @@ const cases = ['07', '08'].flatMap(tipo => ['pantalla', 'fiscal'].map(route => (
   it.each(cases)('$tipo $route: total inicial por HTTP sin saldo calculado en el cuerpo',async({tipo,route})=>{
     const response=await post(route,bodyFor(tipo,route,118,true));expect(response.status).toBe(route==='pantalla'?201:202);
     expect((await db.invoice.findUniqueOrThrow({where:{id:response.body.id}})).payload_ubl.m1NoteBalance).toEqual({antes:118,importe:118,restante:0});
+  });
+  it.each(cases)('$tipo $route: preparación del build con firma, XSD y XSL reales, sin transporte', async ({tipo, route}) => {
+    const response = await post(route, bodyFor(tipo, route, 10));
+    expect(response.status).toBe(route === 'pantalla' ? 201 : 202);
+    let prepared;
+    try { prepared = await consumer.preparar(response.body.id); }
+    catch (error) {
+      // Solo fixtures locales: ejecutar sin el catch sanitizado del protocolo
+      // permite ver el error real de Python/libxslt en stderr si vuelve a fallar.
+      const failed = await db.invoice.findUniqueOrThrow({ where: { id: response.body.id } });
+      const diagnostic = spawnSync(process.env.SUNAT_SFS_PYTHON ?? 'python3', ['-c',
+        "import json,sys; sys.path.insert(0,'scripts/m1'); from validate_sfs import validar; print(json.dumps(validar(json.load(sys.stdin))))"],
+      { input: JSON.stringify({ xml: failed.xml_storage_url, tipo }), encoding: 'utf8', timeout: 20000,
+        env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+      throw new Error(`Preparación local ${tipo}: ${String(error)}; stderr del validador: ${diagnostic.stderr}`, { cause: error });
+    }
+    expect(prepared).toMatchObject({ firmado: true, bloqueoXsl: null, omitidaPorDemo: false });
+    const stored = await db.invoice.findUniqueOrThrow({ where: { id: response.body.id } });
+    expect(stored.xml_storage_url).toContain('<ds:Signature');
+    expect(stored.xml_hash_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(stored.payload_ubl.m1NoteBalance).toEqual({ antes: 118, importe: 10, restante: 108 });
   });
   it.each(['pantalla','fiscal'])('%s: rechaza saldo falsificado y campos arbitrarios sin numerar',async route=>{
     for(const field of ['saldoNotaCalculado','campoNoDeclarado']) {

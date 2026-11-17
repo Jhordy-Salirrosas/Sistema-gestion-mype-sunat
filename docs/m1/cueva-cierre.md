@@ -407,3 +407,59 @@ Verificación completa con PostgreSQL local, CI=true y cobertura: 474 archivos
 (4513 aprobadas, 63 omitidas); después: ocho pruebas nuevas aprobadas, sin
 nuevas omisiones. Las diez pruebas HTTP siguen aprobadas. Lint aprobado con
 las tres advertencias preexistentes en archivos no modificados.
+
+## Addendum — Preparación local de notas, investigación desde 991491c1
+
+Rama `fix/m1-notas-validacion-local`, base exacta
+`991491c1d93063db1b5c14f154e5b033acc8a4ad`. Investigación exclusivamente local:
+no se consulta ni modifica la nota FD01-00000006, producción ni una base
+compartida; no se efectúa transporte SUNAT.
+
+La regresión HTTP anterior sustituía **todo InvoiceJobConsumer** por un objeto
+con onModuleInit vacío. No sustituía directamente el validador: no llegaba a
+él, porque terminaba en creación y encolado. Se cambia esa sustitución por una
+intercepción exclusiva del registro automático de la cola, conservando la
+instancia real del consumidor del build ES2023. Cuatro casos nuevos recorren
+NC y ND por ambas entradas HTTP, emisión parcial de 10, generación UBL,
+certificado autofirmado de pruebas, verificación de firma, ZIP, persistencia
+del XML y compuerta XSD/XSL oficial mediante Python/lxml y los assets reales.
+Se comprueba que no hubo bypass ni bloqueo, y que se conserva el saldo
+calculado. Se invoca preparar, nunca procesar ni el transporte.
+
+Si esa preparación falla, la prueba reproduce el validador en un subproceso
+local sin el catch genérico del protocolo, recoge stderr y lo adjunta al
+fallo de Jest. Solo opera sobre fixtures sintéticos locales; no cambia los
+logs ni las respuestas de producción, ni registra XML o claves privadas.
+
+**Resultado observado, no diagnóstico de producción:** los 14 casos HTTP
+pasan sobre el build de esta base, incluidos los cuatro recorridos reales.
+La ejecución directa sin catch también devuelve completado=true en NC/ND,
+sin stderr. Se contrastaron motivos de ambos catálogos, moneda, emisor,
+cliente, texto con caracteres especiales, unidad ZZ y referencias a boleta;
+los casos válidos completan y los inválidos devuelven rechazo fiscal, sin
+reproducir el fallo de infraestructura. El motor principal es Python 3.12,
+lxml 6.1.1/libxslt 1.1.43; el contraste con lxml 4.9.4 tampoco reproduce ese
+fallo. No se modifican reglas SUNAT, assets ni código de producción sin una
+causa demostrada.
+
+**Pendiente para corregir de raíz:** obtener el XML firmado que falló (o el
+stderr real de ese caso y sus datos fiscales mínimos) para reproducir la
+diferencia. M1_PREPARATION_INFRAESTRUCTURA/VALIDACION_LOCAL por sí solo no
+identifica la excepción: también comprende errores posteriores del registro
+de la decisión fiscal. No se atribuye una causa ni se declara corregido el
+incidente de producción con estos resultados.
+
+Verificación: build ES2023 y lint aprobados (las tres advertencias de lint
+preexistentes, sin nuevas). Suite completa con PostgreSQL local:
+
+| Conteo | Base | Después de ampliar la regresión |
+| --- | ---: | ---: |
+| Archivos totales | 474 | 474 |
+| Suites aprobadas / omitidas | 464 / 10 | 464 / 10 |
+| Pruebas totales | 4584 | 4588 |
+| Pruebas aprobadas / omitidas | 4521 / 63 | 4525 / 63 |
+| Fallos | 0 | 0 |
+| Snapshots aprobados | 12 | 12 |
+
+Este commit entrega cobertura de preparación y evidencia de investigación;
+**no es todavía una corrección acreditada del incidente de producción**.
