@@ -11,6 +11,7 @@ import { CloseAnnualUseCase } from './application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from './application/use-cases/getAccountingEntriesUseCase';
 import { RegisterInvoiceAccountingEntryUseCase } from './application/use-cases/registerInvoiceAccountingEntryUseCase';
 import { ListAccountingAccountsUseCase } from './application/use-cases/listAccountingAccountsUseCase';
+import { GetAccountsWithMovementsUseCase } from './application/use-cases/getAccountsWithMovementsUseCase';
 import { CreateAccountingAccountUseCase } from './application/use-cases/createAccountingAccountUseCase';
 import { UpdateAccountingAccountUseCase } from './application/use-cases/updateAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from './application/use-cases/listAccountingPeriodsUseCase';
@@ -45,6 +46,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
+    GetAccountsWithMovementsUseCase,
     CreateAccountingAccountUseCase,
     UpdateAccountingAccountUseCase,
     ListAccountingPeriodsUseCase,
@@ -76,6 +78,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
+    GetAccountsWithMovementsUseCase,
     CreateAccountingAccountUseCase,
     UpdateAccountingAccountUseCase,
     ListAccountingPeriodsUseCase,

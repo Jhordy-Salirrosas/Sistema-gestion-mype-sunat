@@ -31,6 +31,7 @@ import { GetIgvReconciliationUseCase } from '../../application/use-cases/getIgvR
 import { CloseAnnualUseCase } from '../../application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
+import { GetAccountsWithMovementsUseCase } from '../../application/use-cases/getAccountsWithMovementsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
 import { UpdateAccountingAccountUseCase } from '../../application/use-cases/updateAccountingAccountUseCase';
 import { UpdateAccountingAccountDto } from '../../application/dto/updateAccountingAccountDto';
@@ -65,6 +66,7 @@ export class AccountingController {
     private readonly closeAnnualUseCase: CloseAnnualUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
+    private readonly getAccountsWithMovementsUseCase: GetAccountsWithMovementsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
     private readonly updateAccountUseCase: UpdateAccountingAccountUseCase,
     private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
@@ -140,6 +142,23 @@ export class AccountingController {
   @Get('accounts')
   async getAccounts(@Query('includeInactive') includeInactive?: string) {
     return this.listAccountsUseCase.execute(includeInactive === 'true');
+  }
+
+  /**
+   * Códigos de cuenta con al menos una línea en el período.
+   *
+   * El selector del mayor lo usa para ofrecer solo cuentas con movimiento; con
+   * 1742 cuentas en el catálogo, la mayoría no tiene actividad en un mes dado.
+   */
+  @Get('accounts/with-movements')
+  async getAccountsWithMovements(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+  ) {
+    return this.getAccountsWithMovementsUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period ?? this.periodoActual(),
+    );
   }
 
   @Post('accounts')
@@ -252,13 +271,19 @@ export class AccountingController {
     @Query('period') period?: string,
     @Query('accountCode') accountCode?: string,
     @Query('soloDirectos') soloDirectos?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
   ) {
     return this.getLedgerUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period ?? this.periodoActual(),
       accountCode ?? '',
-      // Por defecto la cuenta de mayor muestra el consolidado de sus subcuentas.
-      { soloDirectos: soloDirectos === 'true' || soloDirectos === '1' },
+      {
+        // Por defecto la cuenta de mayor muestra el consolidado de sus subcuentas.
+        soloDirectos: soloDirectos === 'true' || soloDirectos === '1',
+        desde,
+        hasta,
+      },
     );
   }
 

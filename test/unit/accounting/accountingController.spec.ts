@@ -9,6 +9,7 @@ import { GetIgvReconciliationUseCase } from '../../../src/modules/accounting/app
 import { CloseAnnualUseCase } from '../../../src/modules/accounting/application/use-cases/closeAnnualUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
+import { GetAccountsWithMovementsUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountsWithMovementsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
 import { UpdateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/updateAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
@@ -97,6 +98,9 @@ describe('AccountingController', () => {
     listAccountsUseCase = {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<ListAccountingAccountsUseCase>;
+    accountsWithMovementsUseCase = {
+      execute: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<GetAccountsWithMovementsUseCase>;
     createAccountUseCase = {
       execute: jest.fn().mockResolvedValue({}),
     } as unknown as jest.Mocked<CreateAccountingAccountUseCase>;
@@ -154,6 +158,7 @@ describe('AccountingController', () => {
       closeAnnualUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
+      accountsWithMovementsUseCase,
       createAccountUseCase,
       updateAccountUseCase,
       listPeriodsUseCase,

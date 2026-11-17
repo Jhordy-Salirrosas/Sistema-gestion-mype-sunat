@@ -37,6 +37,8 @@ export interface IAccountingRepositoryPort {
   accountUsedInRules(companyId: string, code: string): Promise<number>;
   /** Si la cuenta está configurada como cuenta de tesorería. */
   accountIsTreasury(companyId: string, code: string): Promise<boolean>;
+  /** Códigos de cuenta con al menos una línea de asiento en el período. */
+  findAccountCodesWithMovements(companyId: string, period: string): Promise<string[]>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;

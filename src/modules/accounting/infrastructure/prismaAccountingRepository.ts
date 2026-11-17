@@ -298,6 +298,19 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return Boolean(fila);
   }
 
+  /** Códigos de cuenta con al menos una línea de asiento en el período. */
+  async findAccountCodesWithMovements(companyId: string, period: string) {
+    const entradas = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period },
+      select: { lines: { select: { account_code: true } } },
+    });
+    const codigos = new Set<string>();
+    for (const entrada of entradas) {
+      for (const linea of entrada.lines) codigos.add(linea.account_code);
+    }
+    return [...codigos].sort();
+  }
+
   async findAccounts(opciones?: { includeInactive?: boolean }) {
     const rows = await this.prisma.accountingAccount.findMany({
       where: opciones?.includeInactive ? undefined : { is_active: true },
