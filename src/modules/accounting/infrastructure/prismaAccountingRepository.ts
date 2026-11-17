@@ -322,7 +322,9 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     for (const entrada of entradas) {
       for (const linea of entrada.lines) codigos.add(linea.account_code);
     }
-    return [...codigos].sort();
+    // Comparador explícito: `sort()` sin él ordena por texto Unicode y Sonar lo
+    // marca como defecto; los códigos contables se ordenan como cadenas.
+    return [...codigos].sort((a, b) => a.localeCompare(b));
   }
 
   /** Deja constancia de quién y por qué reabrió un período. */

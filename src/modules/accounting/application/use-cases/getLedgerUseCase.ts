@@ -75,7 +75,7 @@ export class GetLedgerUseCase {
     let saldo = openingBalance;
     const movements = rows.map((row) => {
       // En un rango cada línea pertenece a una cuenta con su propia naturaleza.
-      const signo = hayRango ? factorDe(row.accountCode ?? codigos[0]) : factor;
+      const signo = hayRango ? factorDe(row.accountCode) : factor;
       saldo = Math.round((saldo + signo * (row.debit - row.credit)) * 100) / 100;
       return {
         ...row,
