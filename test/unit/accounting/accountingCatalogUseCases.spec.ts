@@ -10,6 +10,7 @@ describe('Casos de uso del catálogo contable', () => {
     findPeriods: jest.fn(),
     openPeriod: jest.fn(),
     closePeriod: jest.fn(),
+    findEntriesByPeriod: jest.fn().mockResolvedValue([]),
   } as unknown as jest.Mocked<IAccountingRepositoryPort>;
 
   beforeEach(() => jest.clearAllMocks());
@@ -39,5 +40,22 @@ describe('Casos de uso del catálogo contable', () => {
     repository.closePeriod.mockResolvedValue(period);
     await expect(new CloseAccountingPeriodUseCase(repository).execute('c1', '2026-11')).resolves.toBe(period);
     expect(repository.closePeriod).toHaveBeenCalledWith('c1', '2026-11');
+  });
+
+  it('no cierra un período con un asiento descuadrado', async () => {
+    repository.findEntriesByPeriod.mockResolvedValue([
+      {
+        entryNumber: 7,
+        lines: [
+          { accountCode: '12121', debitAmount: 100, creditAmount: 0 },
+          { accountCode: '70121', debitAmount: 0, creditAmount: 90 },
+        ],
+      },
+    ] as never);
+
+    await expect(new CloseAccountingPeriodUseCase(repository).execute('c1', '2026-11')).rejects.toThrow(
+      'asiento 7 está descuadrado',
+    );
+    expect(repository.closePeriod).not.toHaveBeenCalled();
   });
 });

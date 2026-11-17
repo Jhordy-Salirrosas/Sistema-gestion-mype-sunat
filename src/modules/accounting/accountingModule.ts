@@ -8,9 +8,11 @@ import { ExportTaxPleUseCase } from './application/use-cases/exportTaxPleUseCase
 import { ValidateTaxPleUseCase } from './application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from './application/use-cases/getIgvReconciliationUseCase';
 import { CloseAnnualUseCase } from './application/use-cases/closeAnnualUseCase';
+import { GetClosingPreviewUseCase } from './application/use-cases/getClosingPreviewUseCase';
 import { GetAccountingEntriesUseCase } from './application/use-cases/getAccountingEntriesUseCase';
 import { RegisterInvoiceAccountingEntryUseCase } from './application/use-cases/registerInvoiceAccountingEntryUseCase';
 import { ListAccountingAccountsUseCase } from './application/use-cases/listAccountingAccountsUseCase';
+import { GetAccountsWithMovementsUseCase } from './application/use-cases/getAccountsWithMovementsUseCase';
 import { CreateAccountingAccountUseCase } from './application/use-cases/createAccountingAccountUseCase';
 import { UpdateAccountingAccountUseCase } from './application/use-cases/updateAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from './application/use-cases/listAccountingPeriodsUseCase';
@@ -18,6 +20,7 @@ import { OpenAccountingPeriodUseCase } from './application/use-cases/openAccount
 import { OpenFiscalYearUseCase } from './application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from './application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from './application/use-cases/closeAccountingPeriodUseCase';
+import { ReopenAccountingPeriodUseCase } from './application/use-cases/reopenAccountingPeriodUseCase';
 import { DeleteAccountingPeriodUseCase } from './application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from './application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from './application/use-cases/getTrialBalanceUseCase';
@@ -42,9 +45,11 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     ValidateTaxPleUseCase,
     GetIgvReconciliationUseCase,
     CloseAnnualUseCase,
+    GetClosingPreviewUseCase,
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
+    GetAccountsWithMovementsUseCase,
     CreateAccountingAccountUseCase,
     UpdateAccountingAccountUseCase,
     ListAccountingPeriodsUseCase,
@@ -52,6 +57,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     OpenFiscalYearUseCase,
     CloseFiscalYearUseCase,
     CloseAccountingPeriodUseCase,
+    ReopenAccountingPeriodUseCase,
     DeleteAccountingPeriodUseCase,
     GetLedgerUseCase,
     GetTrialBalanceUseCase,
@@ -73,9 +79,11 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     ValidateTaxPleUseCase,
     GetIgvReconciliationUseCase,
     CloseAnnualUseCase,
+    GetClosingPreviewUseCase,
     GetAccountingEntriesUseCase,
     RegisterInvoiceAccountingEntryUseCase,
     ListAccountingAccountsUseCase,
+    GetAccountsWithMovementsUseCase,
     CreateAccountingAccountUseCase,
     UpdateAccountingAccountUseCase,
     ListAccountingPeriodsUseCase,
@@ -83,6 +91,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     OpenFiscalYearUseCase,
     CloseFiscalYearUseCase,
     CloseAccountingPeriodUseCase,
+    ReopenAccountingPeriodUseCase,
     DeleteAccountingPeriodUseCase,
     GetLedgerUseCase,
     GetTrialBalanceUseCase,
