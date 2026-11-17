@@ -317,6 +317,11 @@ describe('MasterDataService', () => {
         bankName: 'Bank of China',
         accountNumber: 'BOC-001122',
         swiftCode: 'BKCHCNBJ',
+        isRelated: true,
+        vesselName: 'Ever Given',
+        voyageNumber: 'V-102',
+        blNumber: 'MEDU1234567',
+        portOrigin: 'CNSHA',
         roles: ['PROVEEDOR_EXTERIOR', 'IMPORTADOR'],
       });
 
@@ -340,7 +345,17 @@ describe('MasterDataService', () => {
           currency_code: 'USD',
         }),
       });
-      expect(mockPrisma.foreignSupplier.upsert).toHaveBeenCalled();
+      expect(mockPrisma.foreignSupplier.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            is_related: true,
+            vessel_name: 'Ever Given',
+            voyage_number: 'V-102',
+            bl_number: 'MEDU1234567',
+            port_origin: 'CNSHA',
+          }),
+        }),
+      );
     });
 
     it('no bloquea creación si falla la sincronización con ForeignSupplier', async () => {
@@ -395,12 +410,27 @@ describe('MasterDataService', () => {
         accountNumber: 'ICBC-99',
         swiftCode: 'ICBKCNBJ',
         currencyCode: 'usd',
+        isRelated: true,
+        vesselName: 'Ever Given',
+        voyageNumber: 'V-102',
+        blNumber: 'MEDU1234567',
+        portOrigin: 'CNSHA',
       });
 
       expect(mockPrisma.partnerAddress.update).toHaveBeenCalled();
       expect(mockPrisma.partnerContact.update).toHaveBeenCalled();
       expect(mockPrisma.partnerBankAccount.update).toHaveBeenCalled();
-      expect(mockPrisma.foreignSupplier.update).toHaveBeenCalled();
+      expect(mockPrisma.foreignSupplier.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            is_related: true,
+            vessel_name: 'Ever Given',
+            voyage_number: 'V-102',
+            bl_number: 'MEDU1234567',
+            port_origin: 'CNSHA',
+          }),
+        }),
+      );
 
       // Segunda pasada: no existen subentidades -> create, y falla sync ForeignSupplier sin lanzar excepción
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
