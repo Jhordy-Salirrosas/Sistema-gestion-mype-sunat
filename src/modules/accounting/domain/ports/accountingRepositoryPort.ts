@@ -31,6 +31,8 @@ export interface IAccountingRepositoryPort {
   findDescendantCodes(code: string): Promise<string[]>;
   /** Activa o desactiva varias cuentas de una vez (cascada). */
   setAccountsActive(codes: readonly string[], isActive: boolean): Promise<number>;
+  /** Deja constancia de quién inactivó la cuenta. */
+  registrarInactivacion(code: string, usuarioId?: string): Promise<void>;
   /** Suma de debe − haber de la cuenta en el período indicado. */
   accountPeriodBalance(companyId: string, code: string, period: string): Promise<number>;
   /** Si la cuenta participa en reglas de contabilización activas. */

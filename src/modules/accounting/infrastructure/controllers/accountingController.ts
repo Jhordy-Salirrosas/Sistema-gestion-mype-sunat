@@ -15,7 +15,7 @@ import {
   UseGuards,
   Delete,
 } from '@nestjs/common';
-import { CurrentCompany } from '../../../../common/decorators';
+import { CurrentCompany, CurrentUser } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { PrismaService } from '../../../../database/prismaService';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
@@ -176,10 +176,13 @@ export class AccountingController {
     @Param('code') code: string,
     @Body() dto: UpdateAccountingAccountDto,
     @CurrentCompany() currentCompanyId?: string,
+    @CurrentUser() usuario?: { id?: string; sub?: string },
   ) {
     // La empresa hace falta para validar saldo, reglas y tesorería al cambiar
-    // el estado de la cuenta.
-    return this.updateAccountUseCase.execute(this.empresaDelToken(currentCompanyId), code, dto);
+    // el estado de la cuenta; el usuario, para auditar la inactivación.
+    return this.updateAccountUseCase.execute(this.empresaDelToken(currentCompanyId), code, dto, {
+      usuarioId: usuario?.id ?? usuario?.sub,
+    });
   }
 
   @Post('closing-entry/:year')

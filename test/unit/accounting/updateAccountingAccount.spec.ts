@@ -27,6 +27,7 @@ describe('UpdateAccountingAccountUseCase', () => {
     accountIsTreasury: jest.fn().mockResolvedValue(opciones.tesoreria ?? false),
     findDescendantCodes: jest.fn().mockResolvedValue(opciones.descendientes ?? []),
     setAccountsActive: jest.fn().mockResolvedValue(1),
+    registrarInactivacion: jest.fn().mockResolvedValue(undefined),
     updateAccount: jest.fn().mockImplementation(async (code: string, cambios: object) => ({
       ...cuentasBase.find((c) => c.code === code),
       code,

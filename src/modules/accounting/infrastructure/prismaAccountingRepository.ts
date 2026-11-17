@@ -255,9 +255,23 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     if (codes.length === 0) return 0;
     const resultado = await this.prisma.accountingAccount.updateMany({
       where: { code: { in: [...codes] } },
-      data: { is_active: isActive },
+      data: {
+        is_active: isActive,
+        // Al reactivar se limpia la auditoría de la inactivación anterior.
+        inactive_at: isActive ? null : new Date(),
+        ...(isActive ? { inactive_by: null } : {}),
+      },
     });
     return resultado.count;
+  }
+
+  /** Deja constancia de quién inactivó la cuenta. */
+  async registrarInactivacion(code: string, usuarioId?: string) {
+    if (!usuarioId) return;
+    await this.prisma.accountingAccount.updateMany({
+      where: { code },
+      data: { inactive_by: usuarioId },
+    });
   }
 
   /**

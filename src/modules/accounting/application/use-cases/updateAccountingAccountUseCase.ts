@@ -36,6 +36,7 @@ export class UpdateAccountingAccountUseCase {
     companyId: string,
     code: string,
     cambios: { name?: string; element?: string; isActive?: boolean },
+    opciones: { usuarioId?: string } = {},
   ): Promise<UpdateAccountResult> {
     const cuentas = await this.repository.findAccounts({ includeInactive: true });
     const cuenta = cuentas.find((item) => item.code === code);
@@ -68,6 +69,7 @@ export class UpdateAccountingAccountUseCase {
       const descendientes = await this.repository.findDescendantCodes(code);
       descendientesAfectados = await this.repository.setAccountsActive(descendientes, cambios.isActive);
       await this.repository.setAccountsActive([code], cambios.isActive);
+      if (!cambios.isActive) await this.repository.registrarInactivacion(code, opciones.usuarioId);
       cuentaActualizada.isActive = cambios.isActive;
     }
 

@@ -143,6 +143,9 @@ model AccountingAccount {
   parent_code String?
   level       Int
   is_active   Boolean  @default(true)
+  /** Auditoría de la inactivación: cuándo y quién. */
+  inactive_at DateTime?
+  inactive_by String?
 
   @@index([parent_code])
   @@index([element])
