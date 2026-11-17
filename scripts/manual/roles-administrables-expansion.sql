@@ -244,8 +244,8 @@ FROM public.company_roles r CROSS JOIN (VALUES
  ('MENU_ACCOUNTING_TAX_BOOKS',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[]),
  ('MENU_ACCOUNTING_PLE',ARRAY['ADMIN','CONTADOR','AUDITOR']::text[])) m(menu_code,roles);
 DO $$ BEGIN
- IF (SELECT count(*) FROM public.permission_menu_catalog)<>72 THEN RAISE EXCEPTION 'Catálogo incompleto'; END IF;
+ IF (SELECT count(*) FROM public.permission_menu_catalog)<>73 THEN RAISE EXCEPTION 'Catálogo incompleto'; END IF;
  IF (SELECT count(*) FROM public.company_roles)<>(SELECT count(*)*5 FROM public.companies) THEN RAISE EXCEPTION 'Roles incompletos'; END IF;
- IF (SELECT count(*) FROM public.role_menu_permissions)<>(SELECT count(*)*72 FROM public.company_roles) THEN RAISE EXCEPTION 'Matriz incompleta'; END IF;
+ IF (SELECT count(*) FROM public.role_menu_permissions)<>(SELECT count(*)*73 FROM public.company_roles) THEN RAISE EXCEPTION 'Matriz incompleta'; END IF;
 END $$;
 COMMIT;
