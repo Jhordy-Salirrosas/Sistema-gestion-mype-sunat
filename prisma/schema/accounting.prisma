@@ -143,6 +143,9 @@ model AccountingAccount {
   parent_code String?
   level       Int
   is_active   Boolean  @default(true)
+  /** Auditoría de la inactivación: cuándo y quién. */
+  inactive_at DateTime?
+  inactive_by String?
 
   @@index([parent_code])
   @@index([element])
@@ -160,6 +163,12 @@ model AccountingPeriod {
   status     AccountingPeriodStatus @default(ABIERTO)
   opened_at  DateTime               @default(now())
   closed_at  DateTime?
+  /** Usuario que cerró el período (auditoría del cierre). */
+  closed_by  String?
+  /** Última reapertura: cuándo, quién y por qué. */
+  reopened_at    DateTime?
+  reopened_by    String?
+  reopen_reason  String?
 
   @@unique([company_id, period])
   @@index([company_id, year, month])

@@ -20,7 +20,7 @@ export interface PleExportResult {
  * rotulado 6.1, que es peor que un error porque se puede presentar sin que
  * nadie lo note.
  */
-const LIBROS_SOPORTADOS = new Set(['050100', '030100']);
+const LIBROS_SOPORTADOS = new Set(['050100', '030100', '060100']);
 
 @Injectable()
 export class ExportPleTxtUseCase {
@@ -84,6 +84,74 @@ export class ExportPleTxtUseCase {
         );
       }
       this.exigirFormato(lines, '030100');
+      return {
+        fileName,
+        recordsCount: lines.length,
+        totalDebit: Math.round(totalDebit * 100) / 100,
+        totalCredit: Math.round(totalCredit * 100) / 100,
+        content: lines.length > 0 ? lines.join('\r\n') + '\r\n' : '',
+      };
+    }
+
+    // 6.1 Libro Mayor: misma estructura de campos que el 5.1, pero los
+    // movimientos se agrupan y ordenan por cuenta contable. Se reutiliza el
+    // correlativo y el CUO del Diario para que ambos libros concilien.
+    if (String(dto.bookCode) === '060100') {
+      const filas: Array<{
+        code: string;
+        cuo: string;
+        correlativo: string;
+        fecha: string;
+        glosa: string;
+        debe: number;
+        haber: number;
+      }> = [];
+
+      entries.forEach((entry, entryIndex) => {
+        const { cuo, correlativo } = this.identificadores(entry, entryIndex, dto);
+        const fechaContable = this.fecha(entry.entryDate);
+        entry.lines.forEach((line) => {
+          const code = line.accountCode || (line as any).account_code || '';
+          const debe = Number(line.debitAmount ?? (line as any).debit_amount ?? 0);
+          const haber = Number(line.creditAmount ?? (line as any).credit_amount ?? 0);
+          filas.push({ code, cuo, correlativo, fecha: fechaContable, glosa: entry.glosa || '', debe, haber });
+        });
+      });
+
+      // Orden del mayor: por cuenta y, dentro de ella, por asiento.
+      filas.sort((a, b) => a.code.localeCompare(b.code) || a.cuo.localeCompare(b.cuo));
+
+      for (const fila of filas) {
+        totalDebit += fila.debe;
+        totalCredit += fila.haber;
+        lines.push(
+          construirLinea([
+            periodo, // 1 período
+            fila.cuo, // 2 CUO
+            fila.correlativo, // 3 correlativo del asiento
+            fila.code, // 4 cuenta contable
+            '', // 5 unidad de operación
+            '', // 6 centro de costos
+            'PEN', // 7 moneda
+            '', // 8 tipo de documento del emisor
+            '', // 9 número de documento del emisor
+            '', // 10 tipo de comprobante
+            '', // 11 serie
+            '', // 12 número
+            fila.fecha, // 13 fecha contable
+            '', // 14 fecha de vencimiento
+            '', // 15 fecha de la operación
+            fila.glosa, // 16 glosa
+            '', // 17 glosa referencial
+            fila.debe.toFixed(2), // 18 debe
+            fila.haber.toFixed(2), // 19 haber
+            '', // 20 dato estructurado
+            '1', // 21 estado de la operación
+          ]),
+        );
+      }
+
+      this.exigirFormato(lines, '060100');
       return {
         fileName,
         recordsCount: lines.length,
@@ -160,6 +228,26 @@ export class ExportPleTxtUseCase {
       totalCredit: Math.round(totalCredit * 100) / 100,
       content: lines.length > 0 ? lines.join('\r\n') + '\r\n' : '',
     };
+  }
+
+  /**
+   * CUO y correlativo del asiento, compartidos por el 5.1 y el 6.1.
+   *
+   * El primer dígito del correlativo indica el tipo de asiento (A apertura,
+   * M movimiento, C cierre). Todo lo que emite el sistema es movimiento.
+   */
+  private identificadores(
+    entry: AccountingEntryEntity,
+    entryIndex: number,
+    dto: ExportPleDto,
+  ): { cuo: string; correlativo: string } {
+    const rawEntryNumber = entry.entryNumber ? String(entry.entryNumber) : '';
+    const isFormattedCuo = /^\d{3}-\d{6}-\d{3,}$/.test(rawEntryNumber);
+    const cuo = isFormattedCuo
+      ? rawEntryNumber
+      : `001-${dto.year}${String(dto.month).padStart(2, '0')}-${String(entryIndex + 1).padStart(3, '0')}`;
+    const numeroAsiento = /^\d+$/.test(rawEntryNumber) ? Number(rawEntryNumber) : entryIndex + 1;
+    return { cuo, correlativo: `M${String(numeroAsiento).padStart(3, '0')}` };
   }
 
   /**

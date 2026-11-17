@@ -7,8 +7,10 @@ import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application
 import { ValidateTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from '../../../src/modules/accounting/application/use-cases/getIgvReconciliationUseCase';
 import { CloseAnnualUseCase } from '../../../src/modules/accounting/application/use-cases/closeAnnualUseCase';
+import { GetClosingPreviewUseCase } from '../../../src/modules/accounting/application/use-cases/getClosingPreviewUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
+import { GetAccountsWithMovementsUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountsWithMovementsUseCase';
 import { CreateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/createAccountingAccountUseCase';
 import { UpdateAccountingAccountUseCase } from '../../../src/modules/accounting/application/use-cases/updateAccountingAccountUseCase';
 import { ListAccountingPeriodsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingPeriodsUseCase';
@@ -16,6 +18,7 @@ import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/app
 import { OpenFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
+import { ReopenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/reopenAccountingPeriodUseCase';
 import { DeleteAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
@@ -76,6 +79,9 @@ describe('AccountingController', () => {
       execute: jest.fn(),
     } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
 
+    closingPreviewUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<GetClosingPreviewUseCase>;
     closeAnnualUseCase = { execute: jest.fn() } as unknown as jest.Mocked<CloseAnnualUseCase>;
 
     treasuryAccounts = {
@@ -97,6 +103,9 @@ describe('AccountingController', () => {
     listAccountsUseCase = {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<ListAccountingAccountsUseCase>;
+    accountsWithMovementsUseCase = {
+      execute: jest.fn().mockResolvedValue([]),
+    } as unknown as jest.Mocked<GetAccountsWithMovementsUseCase>;
     createAccountUseCase = {
       execute: jest.fn().mockResolvedValue({}),
     } as unknown as jest.Mocked<CreateAccountingAccountUseCase>;
@@ -113,6 +122,9 @@ describe('AccountingController', () => {
       execute: jest.fn(),
     } as unknown as jest.Mocked<OpenAccountingPeriodUseCase>;
 
+    reopenPeriodUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<ReopenAccountingPeriodUseCase>;
     closePeriodUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<CloseAccountingPeriodUseCase>;
@@ -152,8 +164,10 @@ describe('AccountingController', () => {
       validateTaxPleUseCase,
       getIgvReconciliationUseCase,
       closeAnnualUseCase,
+      closingPreviewUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
+      accountsWithMovementsUseCase,
       createAccountUseCase,
       updateAccountUseCase,
       listPeriodsUseCase,
@@ -161,6 +175,7 @@ describe('AccountingController', () => {
       openFiscalYearUseCase,
       closeFiscalYearUseCase,
       closePeriodUseCase,
+      reopenPeriodUseCase,
       deletePeriodUseCase,
       getLedgerUseCase,
       getTrialBalanceUseCase,
@@ -294,7 +309,7 @@ describe('AccountingController', () => {
     getTrialBalanceUseCase.execute.mockResolvedValue(balance);
 
     await expect(controller.getLedger('comp-1', '2026-11', '1211')).resolves.toBe(ledger);
-    expect(getLedgerUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', '1211');
+    expect(getLedgerUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', '1211', { soloDirectos: false });
 
     await expect(controller.getTrialBalance('comp-1', '2026-11')).resolves.toBe(balance);
     expect(getTrialBalanceUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');

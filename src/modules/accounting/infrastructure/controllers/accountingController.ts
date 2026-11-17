@@ -15,7 +15,7 @@ import {
   UseGuards,
   Delete,
 } from '@nestjs/common';
-import { CurrentCompany } from '../../../../common/decorators';
+import { CurrentCompany, CurrentUser } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { PrismaService } from '../../../../database/prismaService';
 import { CreateAccountingEntryDto } from '../../application/dto/createAccountingEntryDto';
@@ -29,8 +29,10 @@ import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUse
 import { ValidateTaxPleUseCase } from '../../application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from '../../application/use-cases/getIgvReconciliationUseCase';
 import { CloseAnnualUseCase } from '../../application/use-cases/closeAnnualUseCase';
+import { GetClosingPreviewUseCase } from '../../application/use-cases/getClosingPreviewUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
+import { GetAccountsWithMovementsUseCase } from '../../application/use-cases/getAccountsWithMovementsUseCase';
 import { CreateAccountingAccountUseCase } from '../../application/use-cases/createAccountingAccountUseCase';
 import { UpdateAccountingAccountUseCase } from '../../application/use-cases/updateAccountingAccountUseCase';
 import { UpdateAccountingAccountDto } from '../../application/dto/updateAccountingAccountDto';
@@ -39,6 +41,7 @@ import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAcc
 import { OpenFiscalYearUseCase } from '../../application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from '../../application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
+import { ReopenAccountingPeriodUseCase } from '../../application/use-cases/reopenAccountingPeriodUseCase';
 import { DeleteAccountingPeriodUseCase } from '../../application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
@@ -63,8 +66,10 @@ export class AccountingController {
     private readonly validateTaxPleUseCase: ValidateTaxPleUseCase,
     private readonly getIgvReconciliationUseCase: GetIgvReconciliationUseCase,
     private readonly closeAnnualUseCase: CloseAnnualUseCase,
+    private readonly getClosingPreviewUseCase: GetClosingPreviewUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
+    private readonly getAccountsWithMovementsUseCase: GetAccountsWithMovementsUseCase,
     private readonly createAccountUseCase: CreateAccountingAccountUseCase,
     private readonly updateAccountUseCase: UpdateAccountingAccountUseCase,
     private readonly listPeriodsUseCase: ListAccountingPeriodsUseCase,
@@ -72,6 +77,7 @@ export class AccountingController {
     private readonly openFiscalYearUseCase: OpenFiscalYearUseCase,
     private readonly closeFiscalYearUseCase: CloseFiscalYearUseCase,
     private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
+    private readonly reopenPeriodUseCase: ReopenAccountingPeriodUseCase,
     private readonly deletePeriodUseCase: DeleteAccountingPeriodUseCase,
     private readonly getLedgerUseCase: GetLedgerUseCase,
     private readonly getTrialBalanceUseCase: GetTrialBalanceUseCase,
@@ -142,6 +148,23 @@ export class AccountingController {
     return this.listAccountsUseCase.execute(includeInactive === 'true');
   }
 
+  /**
+   * Códigos de cuenta con al menos una línea en el período.
+   *
+   * El selector del mayor lo usa para ofrecer solo cuentas con movimiento; con
+   * 1742 cuentas en el catálogo, la mayoría no tiene actividad en un mes dado.
+   */
+  @Get('accounts/with-movements')
+  async getAccountsWithMovements(
+    @CurrentCompany() currentCompanyId?: string,
+    @Query('period') period?: string,
+  ) {
+    return this.getAccountsWithMovementsUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period ?? this.periodoActual(),
+    );
+  }
+
   @Post('accounts')
   @HttpCode(HttpStatus.CREATED)
   async createAccount(@Body() dto: CreateAccountingAccountDto) {
@@ -149,8 +172,17 @@ export class AccountingController {
   }
 
   @Patch('accounts/:code')
-  async updateAccount(@Param('code') code: string, @Body() dto: UpdateAccountingAccountDto) {
-    return this.updateAccountUseCase.execute(code, dto);
+  async updateAccount(
+    @Param('code') code: string,
+    @Body() dto: UpdateAccountingAccountDto,
+    @CurrentCompany() currentCompanyId?: string,
+    @CurrentUser() usuario?: { id?: string; sub?: string },
+  ) {
+    // La empresa hace falta para validar saldo, reglas y tesorería al cambiar
+    // el estado de la cuenta; el usuario, para auditar la inactivación.
+    return this.updateAccountUseCase.execute(this.empresaDelToken(currentCompanyId), code, dto, {
+      usuarioId: usuario?.id ?? usuario?.sub,
+    });
   }
 
   @Post('closing-entry/:year')
@@ -160,6 +192,22 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ) {
     return this.generateClosingEntryUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      Number(year),
+    );
+  }
+
+  /**
+   * Vista previa del cierre anual: ingresos, gastos y resultado del ejercicio.
+   *
+   * El contador debe ver el resultado antes de confirmar el asiento de cierre.
+   */
+  @Get('closing-preview/:year')
+  async getClosingPreview(
+    @Param('year') year: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.getClosingPreviewUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       Number(year),
     );
@@ -225,6 +273,27 @@ export class AccountingController {
     );
   }
 
+  /**
+   * Reabre un período cerrado. Exige motivo y queda auditado.
+   *
+   * Se separa del POST de apertura para que el motivo sea obligatorio: abrir un
+   * mes nuevo es rutina, reabrir uno cerrado es una excepción que hay que
+   * justificar.
+   */
+  @Post('periods/:period/reopen')
+  @HttpCode(HttpStatus.OK)
+  async reopenPeriod(
+    @Param('period') period: string,
+    @Body() dto: { motivo?: string },
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.reopenPeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+      { motivo: dto?.motivo ?? '' },
+    );
+  }
+
   @Delete('periods/:period')
   @HttpCode(HttpStatus.OK)
   async deletePeriod(
@@ -245,11 +314,20 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
     @Query('period') period?: string,
     @Query('accountCode') accountCode?: string,
+    @Query('soloDirectos') soloDirectos?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
   ) {
     return this.getLedgerUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period ?? this.periodoActual(),
       accountCode ?? '',
+      {
+        // Por defecto la cuenta de mayor muestra el consolidado de sus subcuentas.
+        soloDirectos: soloDirectos === 'true' || soloDirectos === '1',
+        desde,
+        hasta,
+      },
     );
   }
 

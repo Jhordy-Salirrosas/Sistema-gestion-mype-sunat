@@ -125,7 +125,25 @@ describe('ExportPleTxtUseCase', () => {
 
   it('rechaza un libro no implementado en vez de emitir una trama con otra forma', async () => {
     await expect(
-      useCase.execute({ companyRuc: '20100070970', year: 2026, month: 3, bookCode: '060100' } as any, mockEntries),
-    ).rejects.toThrow('El libro 060100 todavía no está implementado');
+      useCase.execute({ companyRuc: '20100070970', year: 2026, month: 3, bookCode: '070100' } as any, mockEntries),
+    ).rejects.toThrow('El libro 070100 todavía no está implementado');
+  });
+
+  it('emite el libro mayor 6.1 agrupado por cuenta', async () => {
+    const resultado = await useCase.execute(
+      { companyRuc: '20100070970', year: 2026, month: 3, bookCode: '060100' } as any,
+      mockEntries,
+    );
+
+    expect(resultado.fileName).toContain('060100');
+    const filas = resultado.content.trim().split('\r\n');
+    expect(filas.length).toBe(resultado.recordsCount);
+
+    // Cada fila tiene 21 columnas y la cuenta (campo 4) no se repite desordenada.
+    const cuentas = filas.map((fila) => fila.split('|')[3]);
+    expect(cuentas).toEqual([...cuentas].sort((a, b) => a.localeCompare(b)));
+    for (const fila of filas) {
+      // La trama cierra con la tubería final que exige SUNAT.\n      expect(fila.endsWith('|')).toBe(true);\n      expect(fila.split('|').length - 1).toBe(21);
+    }
   });
 });
