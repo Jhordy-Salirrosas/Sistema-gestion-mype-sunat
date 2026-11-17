@@ -380,6 +380,7 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
           entryDate: entry.entry_date,
           glosa: entry.glosa,
           sourceModule: entry.source_module,
+          sourceReferenceId: entry.source_reference_id,
           accountCode: line.account_code,
           accountName: line.account_name,
           debit: Number(line.debit_amount),
