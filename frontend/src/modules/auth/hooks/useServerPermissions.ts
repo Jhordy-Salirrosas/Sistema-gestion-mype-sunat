@@ -1,8 +1,14 @@
 import { useEffect,useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { permissionsApi } from '../services/permissionsApi';
 import { usePermissionsIdentity } from './usePermissionsIdentity';
 import { useAuthStore } from '@/stores/authStore';
+import { getApiErrorStatus, getApiRetryAfterMs } from '@/lib/apiErrors';
+
+// La pausa pertenece a la consulta: se comparte entre observadores y se
+// libera junto con su caché, sin mezclar usuarios ni empresas.
+const permissionPauses = new WeakMap<object, { until: number; error: unknown }>();
+const remainingPause = (query: object) => Math.max(0, (permissionPauses.get(query)?.until ?? 0) - Date.now());
 
 const cleanPath=(path:string)=>path.split('?')[0].replace(/\/+$/,'')||'/';
 function matches(pattern:string,path:string){
@@ -11,7 +17,22 @@ function matches(pattern:string,path:string){
 }
 export function useServerPermissions(){
  const {user,scope}=usePermissionsIdentity();
- const query=useQuery({queryKey:['permissions-me',...scope],queryFn:permissionsApi.mine,enabled:Boolean(user),retry:false,staleTime:15_000,refetchInterval:30_000});
+ const client=useQueryClient();
+ const queryKey=['permissions-me',...scope];
+ const query=useQuery({queryKey,queryFn:async()=>{
+  const current=client.getQueryCache().find({queryKey,exact:true});
+  const pause=current&&permissionPauses.get(current);
+  if(pause&&pause.until>Date.now())throw pause.error;
+  if(current)permissionPauses.delete(current);
+  try{return await permissionsApi.mine();}catch(error){
+   if(current&&getApiErrorStatus(error)===429)permissionPauses.set(current,{until:Date.now()+getApiRetryAfterMs(error),error});
+   throw error;
+  }
+ },enabled:Boolean(user),retry:false,staleTime:15_000,
+ refetchInterval:q=>{const pause=remainingPause(q);return pause>0?Math.min(2_147_483_647,pause):30_000;},
+ refetchOnMount:q=>remainingPause(q)===0,
+ refetchOnReconnect:q=>remainingPause(q)===0,
+ refetchOnWindowFocus:false});
  const data=query.data;
  const valid=Boolean(data&&typeof data.role?.code==='string'&&typeof data.role?.name==='string'&&Array.isArray(data.modules)&&data.modules.every(m=>m&&typeof m.canView==='boolean'&&typeof m.canWrite==='boolean')&&Array.isArray(data.actions)&&data.actions.every(a=>a&&typeof a.actionCode==='string'&&typeof a.allowed==='boolean')&&Array.isArray(data.menus)&&data.menus.every(m=>m&&typeof m.path==='string'&&typeof m.canView==='boolean'));
  const ready=Boolean(user)&&query.isSuccess&&valid;
@@ -24,7 +45,7 @@ export function useServerPermissions(){
   if(exact)return exact.canView;
   return data.menus.some(menu=>menu.canView&&(target==='/'||menu.path.toLowerCase().startsWith(target.toLowerCase()+'/')));
  },[ready,data]);
- return {ready,isLoading:Boolean(user)&&query.isPending,isError:query.isError||(query.isSuccess&&!valid),snapshot:ready?data:undefined,
+ return {errorStatus:getApiErrorStatus(query.error),ready,isLoading:Boolean(user)&&query.isPending,isError:query.isError||(query.isSuccess&&!valid),snapshot:ready?data:undefined,
   actions:ready?data!.actions:[],canAction:(code:string)=>ready&&data!.actions.some(a=>a.actionCode===code&&a.allowed),
   canView:(moduleCode:string)=>ready&&data!.modules.some(m=>m.moduleCode===moduleCode&&m.canView),
   canWrite:(moduleCode:string)=>ready&&data!.modules.some(m=>m.moduleCode===moduleCode&&m.canWrite),

@@ -1,81 +1,70 @@
-# Ferry — Semana Cueva, paquete 4
+# Ferry — Mensajes y pausa ante HTTP 429
 
-Back: `feat/cueva-cierre`, base `646fa51a9e1862efc9265c529d0d33b81f44d978`.
-Front: CarlosSoles/Fronted-sistema-mype-sunat, base `4fb2d30f841a374ce53efc57d790832b52c68510`.
+Rama back: `fix/m1-auth-429`.
+Base back main: `d4d362f602452caee2ae26648d3971597904d4c4`.
+Repositorio front: CarlosSoles/Fronted-sistema-mype-sunat.
+Base front solicitada: `95d78a4cad9cf015384529df34705ef1e95ec933`.
 
-Aplicar después de la entrega de roles administrables. No se modifican sus
-fuentes ni pruebas. No hay PR ni merge de esta entrega.
+## Aplicación
 
-## Aplicación e inventario
+Verificar `sha256sum -c SHA256SUMS` en la raíz del back. Copiar únicamente los
+archivos `frontend/` enumerados en ese manifiesto, retirando dicho prefijo,
+sobre el repositorio front. El espejo heredado contiene archivos de otros
+ferries: no copiarlos ni eliminarlos como parte de este paquete. No hay
+cambios de dependencias ni archivos que eliminar en el front.
 
-Ejecutar `sha256sum -c SHA256SUMS` en la raíz del back. **Copiar exclusivamente
-los archivos frontend/ enumerados en SHA256SUMS**, quitando ese prefijo, sobre
-el front. El espejo del back contiene también archivos heredados de ferries
-anteriores que no pertenecen al delta de este paquete: no copiarlos ni borrarlos
-en el front. FERRY.md y SHA256SUMS son manifiestos de este paquete y su
-composición en el back debe respetar la secuencia de entregas.
+## Comportamiento
 
-API nueva consumida: GET/PUT `/invoices/commercial-defaults` por la
-configuración comercial, los formularios de emisión M1 y el POS; POST
-`/invoices/connection-test` por el diagnóstico SUNAT; GET
-`/configuration/links` por la agrupación ADMIN. PUT y diagnósticos requieren
-ADMIN. Los endpoints existentes de configuración y alta de cliente conservan
-su contrato. El SQL aditivo se entrega en scripts/manual; no se aplica a bases
-compartidas. Consultar docs/m1/cueva-cierre.md para validación, detenciones y
-conteos finales.
+- apiErrors expone el estado HTTP. Para 429 prioriza «Demasiados intentos,
+  espera un momento e inténtalo de nuevo», incluso si el cuerpo de la respuesta
+  contiene un mensaje de credenciales. Login mantiene el mensaje actual de
+  credenciales ante 401.
+- RoleProtectedRoute y la redirección de inicio muestran el aviso de límite
+  para el error 429 de permisos. La explicación del servidor despertando se
+  conserva para otros errores. El botón manual no permite evitar la pausa.
+- useServerPermissions pausa GET `/auth/permissions/me` según Retry-After
+  (segundos o fecha HTTP). Sin cabecera válida espera 60 segundos, frente al
+  sondeo habitual de 30. Un plazo cero o ya vencido deja un mínimo de 1 segundo
+  para evitar una repetición inmediata.
+- La pausa se comparte entre observadores de la misma consulta, con la clave
+  existente por usuario/empresa/rol, y no se adelanta por reintentos manuales,
+  invalidación, reconexión ni remontaje mientras esa consulta sigue en caché.
+  Al vencer, se consulta automáticamente; después de un éxito vuelve el sondeo
+  habitual. Un nuevo 429 establece su propio plazo. Los permisos siguen
+  denegados durante carga/error, incluso si existían datos anteriores.
 
-Archivos del delta:
+Se usan los contratos existentes de login y permisos; se lee la cabecera HTTP
+Retry-After cuando está disponible para el navegador. No se modifica el
+interceptor de refresh: la premisa de su bucle de reintentos quedó descartada
+en fase 0. No hay cambios de código backend, migraciones, PR ni merge.
 
-- `src/components/layout/ConfigurationMenuLink.tsx`
-- `src/components/layout/Navbar.tsx`
-- `src/modules/invoices/InvoiceList.tsx`
-- `src/modules/invoices/components/ConfigurationHub.tsx`
-- `src/modules/invoices/components/CustomerLookupField.tsx`
-- `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
-- `src/modules/invoices/components/InvoiceEmitCampos.tsx`
-- `src/modules/invoices/components/InvoiceEmitModal.tsx`
-- `src/modules/invoices/components/InvoiceIssuerConfigForm.tsx`
-- `src/modules/invoices/components/InvoiceSettingsTab.tsx`
-- `src/modules/invoices/components/SunatConnectionTest.tsx`
-- `src/modules/invoices/hooks/useCommercialDefaults.ts`
-- `src/modules/invoices/lib/invoiceDebitAmount.ts`
-- `src/modules/invoices/lib/invoiceEmitValidation.ts`
-- `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
-- `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
-- `src/modules/sales/pages/SalesPosPage.tsx`
-- `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`
-- `test/unit/modules/invoices/cueva-configuration.test.tsx`
-- `test/unit/modules/invoices/cueva-connection.test.tsx`
-- `test/unit/modules/invoices/cueva-debit-amount.test.ts`
-- `test/unit/modules/invoices/cueva-pos-payment.test.tsx`
-- `test/unit/modules/invoices/cueva-single-identity.test.tsx`
-- `test/unit/modules/invoices/invoiceM1Regressions.test.ts`
+## Inventario del delta
 
-## Validación final
+- `src/lib/apiErrors.ts`
+- `src/modules/auth/components/LoginForm.tsx`
+- `src/modules/auth/hooks/useServerPermissions.ts`
+- `src/routes/RoleProtectedRoute.tsx`
+- `src/routes/appRoutes.tsx`
+- `test/unit/lib/apiErrors.test.ts`
+- `test/unit/modules/auth/authRateLimit.test.tsx`
 
-Front: base 199 archivos/1488 pruebas; entrega 205 archivos/1504 pruebas,
-todas aprobadas, sin omisiones. Vitest inventaría 367/373 agrupaciones de
-suites, respectivamente; no se confunden con archivos. Back: base 435 archivos,
-4228 pruebas aprobadas, 1 fallo y 50 omitidas; entrega 443 archivos, 4263
-aprobadas, 0 fallos y las mismas 50 omitidas (8 suites). Builds aprobados.
-La fase 0 pusheada es 3ca39c61; el detalle por parte consta en el informe.
+## Verificación
 
-El delta consta de 24 archivos (17 fuentes y 7 pruebas). No copiar todo el
-espejo heredado. Ejemplo de aplicación desde la raíz del back, con FRONT_TARGET
-apuntando al checkout del front que se haya preparado para la revisión:
+| Conteo | Base front 95d78a4 | Final |
+| --- | ---: | ---: |
+| Archivos de pruebas | 213 | 214 |
+| Pruebas aprobadas | 1559 | 1573 |
+| Pruebas fallidas | 0 | 0 |
+| Pruebas omitidas | 0 | 0 |
 
-```sh
-: "${FRONT_TARGET:?Defina FRONT_TARGET con el checkout del front}"
-sha256sum -c SHA256SUMS || exit 1
-while read -r checksum path; do
-  case "$path" in
-    frontend/*) install -D "$path" "$FRONT_TARGET/${path#frontend/}" ;;
-  esac
-done < SHA256SUMS
-```
+Suite completa: `npm test` (reporter JSON para guardar los conteos). Build:
+`npm run build`, aprobado. ESLint sobre los siete archivos tocados, aprobado.
+No se ejecuta suite del back porque el delta contiene únicamente el ferry.
 
-El catálogo de roles/menús y los archivos protegidos de la entrega anterior
-permanecen intactos. La ubicación global de Configuración usa Navbar y la ruta
-administrativa existente; no introduce otra pantalla ni modifica Sidebar/rutas.
-Antes de desplegar los defaults comerciales, revisar y aplicar su SQL por el
-procedimiento manual autorizado. En este encargo solo se ensayó localmente.
+Pruebas dirigidas: 2 archivos y 20 casos aprobados; incluyen las pruebas
+previas de apiErrors y 14 casos nuevos. Se verifican login 429 y 401, prioridad
+del 429 sobre un texto incorrecto de credenciales del backend, aviso de
+permisos 429, presentación genérica conservada para otros errores,
+Retry-After en segundos y fecha HTTP, cabeceras ausentes/inválidas, ausencia
+de llamadas al segundo 30, bloqueo de reintentos adelantados, remontaje de
+observadores, reanudación automática y aislamiento por empresa.

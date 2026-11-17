@@ -1,3 +1,4 @@
+import { RATE_LIMIT_MESSAGE } from '@/lib/apiErrors';
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -48,7 +49,6 @@ const PurchasesPage = React.lazy(() => import('@/modules/purchases/pages/Purchas
 const PurchaseOrdersPage = React.lazy(() => import('@/modules/purchases/pages/PurchaseOrdersPage'));
 const PurchasesDashboardPage = React.lazy(() => import('@/modules/purchases/pages/PurchasesDashboardPage'));
 const PurchasesPayablesPage = React.lazy(() => import('@/modules/inventory/pages/PurchasesPayablesPage'));
-const InventoryTransfersPage = React.lazy(() => import('@/modules/inventory/pages/InventoryTransfersPage'));
 const InventoryAdjustmentsPage = React.lazy(() => import('@/modules/inventory/pages/InventoryAdjustmentsPage'));
 const InventoryConfigPage = React.lazy(() => import('@/modules/inventory/pages/InventoryConfigPage'));
 const UserWarehousesPage = React.lazy(() => import('@/modules/auth/pages/UserWarehousesPage'));
@@ -64,6 +64,8 @@ const InventoryOpeningPage = React.lazy(() => import('@/modules/inventory/pages/
 const InventoryMovementsPage = React.lazy(() => import('@/modules/inventory/pages/InventoryMovementsPage'));
 const ProductKardexPage = React.lazy(() => import('@/modules/inventory/pages/ProductKardexPage'));
 const SireConfiguracionPage = React.lazy(() => import('@/modules/sire/pages/SireConfiguracionPage'));
+const SireCredentialsPage = React.lazy(() => import('@/modules/sire/pages/SireCredentialsPage'));
+const SireMapeoContablePage = React.lazy(() => import('@/modules/sire/pages/SireMapeoContablePage'));
 const SireReconciliationPage = React.lazy(() => import('@/modules/sire/pages/SireReconciliationPage'));
 const SireImportPage = React.lazy(() => import('@/modules/sire/pages/SireImportPage'));
 const SirePeriodosPage = React.lazy(() => import('@/modules/sire/pages/SirePeriodosPage'));
@@ -78,6 +80,7 @@ const ExpensesPage = React.lazy(() => import('@/modules/expenses/pages/ExpensesP
 const CollectionsPage = React.lazy(() => import('@/modules/collections/pages/CollectionsPage'));
 const AccountingTaxBooksPage = React.lazy(() => import('@/modules/accounting/pages/AccountingTaxBooksPage'));
 const AccountingPlanCuentasPage = React.lazy(() => import('@/modules/accounting/pages/AccountingPlanCuentasPage'));
+const AccountingGuidePage = React.lazy(() => import('@/modules/accounting/pages/AccountingGuidePage'));
 const AccountingPlePage = React.lazy(() => import('@/modules/accounting/pages/AccountingPlePage'));
 const AccountingPeriodsPage = React.lazy(() => import('@/modules/accounting/pages/AccountingPeriodsPage'));
 const AccountingLedgerPage = React.lazy(() => import('@/modules/accounting/pages/AccountingLedgerPage'));
@@ -96,10 +99,10 @@ const PageLoadingFallback = () => (
 
 // Redirección dinámica al módulo correspondiente según la Matriz RBAC del rol activo
 const RoleHomeRedirect = () => {
-  const p=useServerPermissions();
-  if(p.isLoading)return <PageLoadingFallback/>;
-  if(p.isError)return <p role='alert'>No se pudieron consultar los permisos.</p>;
-  const target=getPermissionHome(p.homePath);
+  const p = useServerPermissions();
+  if (p.isLoading) return <PageLoadingFallback />;
+  if (p.isError) return <p role='alert'>{p.errorStatus === 429 ? RATE_LIMIT_MESSAGE : 'No se pudieron consultar los permisos.'}</p>;
+  const target = getPermissionHome(p.homePath);
   return <Navigate to={target} replace />;
 };
 
@@ -462,11 +465,7 @@ export const AppRoutes = () => {
             />
             <Route
               path="/inventory/transfers"
-              element={
-                <RoleProtectedRoute >
-                  <InventoryTransfersPage />
-                </RoleProtectedRoute>
-              }
+              element={<Navigate to="/inventory/movements?tab=transfers" replace />}
             />
             <Route
               path="/inventory/adjustments"
@@ -529,7 +528,7 @@ export const AppRoutes = () => {
               path="/sire"
               element={<Navigate to="/sire/conciliacion" replace />}
             />
-                        <Route
+            <Route
               path="/sire/configuracion"
               element={
                 <RoleProtectedRoute >
@@ -537,8 +536,24 @@ export const AppRoutes = () => {
                 </RoleProtectedRoute>
               }
             />
+            <Route
+              path="/sire/credenciales"
+              element={
+                <RoleProtectedRoute >
+                  <SireCredentialsPage />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="/sire/config" element={<Navigate to="/sire/configuracion" replace />} />
-<Route
+            <Route
+              path="/sire/mapeo-contable"
+              element={
+                <RoleProtectedRoute >
+                  <SireMapeoContablePage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="/sire/importar"
               element={
                 <RoleProtectedRoute >
@@ -675,6 +690,14 @@ export const AppRoutes = () => {
               element={
                 <RoleProtectedRoute >
                   <AccountingRulesPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounting/guia"
+              element={
+                <RoleProtectedRoute >
+                  <AccountingGuidePage />
                 </RoleProtectedRoute>
               }
             />
