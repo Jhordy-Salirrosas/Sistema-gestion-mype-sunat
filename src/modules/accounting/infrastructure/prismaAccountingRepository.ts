@@ -344,6 +344,16 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return this.mapPeriod(row);
   }
 
+  async countEntriesByPeriod(companyId: string, period: string) {
+    return this.prisma.accountingEntry.count({ where: { company_id: companyId, period } });
+  }
+
+  async deletePeriod(companyId: string, period: string) {
+    await this.prisma.accountingPeriod.delete({
+      where: { company_id_period: { company_id: companyId, period } },
+    });
+  }
+
   async findLedgerOpeningBalance(companyId: string, period: string, accountCode: string) {
     const entries = await this.prisma.accountingEntry.findMany({
       where: { company_id: companyId, period: { lt: period } },

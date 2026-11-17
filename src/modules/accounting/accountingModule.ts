@@ -18,6 +18,7 @@ import { OpenAccountingPeriodUseCase } from './application/use-cases/openAccount
 import { OpenFiscalYearUseCase } from './application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from './application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from './application/use-cases/closeAccountingPeriodUseCase';
+import { DeleteAccountingPeriodUseCase } from './application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from './application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from './application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from './application/use-cases/getIncomeStatementUseCase';
@@ -51,6 +52,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     OpenFiscalYearUseCase,
     CloseFiscalYearUseCase,
     CloseAccountingPeriodUseCase,
+    DeleteAccountingPeriodUseCase,
     GetLedgerUseCase,
     GetTrialBalanceUseCase,
     GetIncomeStatementUseCase,
@@ -81,6 +83,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     OpenFiscalYearUseCase,
     CloseFiscalYearUseCase,
     CloseAccountingPeriodUseCase,
+    DeleteAccountingPeriodUseCase,
     GetLedgerUseCase,
     GetTrialBalanceUseCase,
     GetIncomeStatementUseCase,
