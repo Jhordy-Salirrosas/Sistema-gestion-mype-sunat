@@ -72,6 +72,12 @@ model InventoryProduct {
   min_price             Decimal?            @db.Decimal(14, 2)
   warehouse_location    String?
 
+  // Reglas comerciales y tributarias (Detracción y Descuento)
+  has_detraction        Boolean             @default(false)
+  detraction_code       String?
+  detraction_rate       Decimal?            @db.Decimal(5, 2)
+  discount_rate         Decimal?            @default(0.00) @db.Decimal(5, 2)
+
   is_active             Boolean             @default(true)
   created_at            DateTime            @default(now())
   updated_at            DateTime            @updatedAt

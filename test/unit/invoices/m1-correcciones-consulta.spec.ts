@@ -257,6 +257,7 @@ describe('M1 catálogo de productos para emisión', () => {
           taxAffectation: '20',
           currentStock: 5.5,
           activo: true, salePrice: 35.4, vendible: true, motivo: null,
+          hasDetraction: false, detractionCode: null, detractionRate: null, discountRate: 0,
         },
         {
           sku: 'B',
@@ -265,6 +266,7 @@ describe('M1 catálogo de productos para emisión', () => {
           taxAffectation: null,
           currentStock: 0,
           activo: true, salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
+          hasDetraction: false, detractionCode: null, detractionRate: null, discountRate: 0,
         },
         {
           sku: 'C',
@@ -273,6 +275,7 @@ describe('M1 catálogo de productos para emisión', () => {
           taxAffectation: null,
           currentStock: 0,
           activo: true, salePrice: null, vendible: false, motivo: 'sin precio de venta configurado',
+          hasDetraction: false, detractionCode: null, detractionRate: null, discountRate: 0,
         },
       ],
     });

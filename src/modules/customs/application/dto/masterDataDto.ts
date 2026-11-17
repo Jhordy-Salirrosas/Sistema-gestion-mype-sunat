@@ -157,6 +157,26 @@ class BasePartnerOptionalFieldsDto {
   @IsOptional()
   @IsString()
   swiftCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isRelated?: boolean;
+
+  @IsOptional()
+  @IsString()
+  vesselName?: string;
+
+  @IsOptional()
+  @IsString()
+  voyageNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  blNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  portOrigin?: string;
 }
 
 export class CreatePartnerDto extends BasePartnerOptionalFieldsDto {

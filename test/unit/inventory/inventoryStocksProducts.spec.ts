@@ -36,6 +36,10 @@ describe('InventoryStocksController - listAllProducts', () => {
         sunat_unit_code: 'NIU',
         cost_price: 25.5,
         sale_price: 45.0,
+        has_detraction: true,
+        detraction_code: '009',
+        detraction_rate: 10,
+        discount_rate: 5,
       },
       {
         id: 'p-2',
@@ -46,6 +50,10 @@ describe('InventoryStocksController - listAllProducts', () => {
         sunat_unit_code: 'ZZ',
         cost_price: null,
         sale_price: null,
+        has_detraction: false,
+        detraction_code: null,
+        detraction_rate: null,
+        discount_rate: 0,
       },
     ]);
 
@@ -61,8 +69,14 @@ describe('InventoryStocksController - listAllProducts', () => {
     expect(result).toHaveLength(2);
     expect(result[0].isInventory).toBe(true);
     expect(result[0].costPrice).toBe(25.5);
+    expect(result[0].hasDetraction).toBe(true);
+    expect(result[0].detractionCode).toBe('009');
+    expect(result[0].detractionRate).toBe(10);
+    expect(result[0].discountRate).toBe(5);
     expect(result[1].isService).toBe(true);
     expect(result[1].costPrice).toBeUndefined();
+    expect(result[1].hasDetraction).toBe(false);
+    expect(result[1].discountRate).toBe(0);
   });
 
   it('debe excluir servicios si includeServices es false', async () => {
