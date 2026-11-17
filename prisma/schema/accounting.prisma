@@ -128,6 +128,9 @@ model AccountingRule {
   base_calculation String
   description      String?
   is_active        Boolean  @default(true)
+  /** Auditoría de la última modificación de la regla. */
+  updated_at       DateTime?
+  updated_by       String?
 
   @@unique([company_id, process_code, document_type, line_order])
   @@index([company_id, process_code, is_active])

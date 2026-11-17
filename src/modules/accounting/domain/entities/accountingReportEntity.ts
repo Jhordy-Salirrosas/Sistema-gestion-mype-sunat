@@ -8,6 +8,8 @@ export interface LedgerMovement {
   sourceReferenceId?: string | null;
   accountCode: string;
   accountName: string;
+  /** Estado del asiento: permite marcar las anulaciones en el mayor. */
+  status?: 'BORRADOR' | 'ASENTADO' | 'ANULADO';
   debit: number;
   credit: number;
 }

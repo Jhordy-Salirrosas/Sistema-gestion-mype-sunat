@@ -488,16 +488,17 @@ export class AccountingController {
   async upsertRule(@Body() body: {
     processCode: string; documentType?: string; lineOrder: number;
     accountCode: string; side: 'DEBE' | 'HABER'; baseCalculation: string; description?: string;
-  }, @CurrentCompany() currentCompanyId?: string) {
+  }, @CurrentCompany() currentCompanyId?: string, @CurrentUser() usuario?: { id?: string; sub?: string }) {
     const companyId = this.empresaDelToken(currentCompanyId);
+    const usuarioId = usuario?.id ?? usuario?.sub;
     if (!body.processCode || !body.accountCode || !['DEBE', 'HABER'].includes(body.side)) {
       throw new BadRequestException('Regla inválida: proceso, cuenta y lado son obligatorios.');
     }
     const documentType = body.documentType ?? '*';
     return this.prisma.accountingRule.upsert({
       where: { company_id_process_code_document_type_line_order: { company_id: companyId, process_code: body.processCode, document_type: documentType, line_order: body.lineOrder } },
-      update: { account_code: body.accountCode, side: body.side, base_calculation: body.baseCalculation, description: body.description, is_active: true },
-      create: { company_id: companyId, process_code: body.processCode, document_type: documentType, line_order: body.lineOrder, account_code: body.accountCode, side: body.side, base_calculation: body.baseCalculation, description: body.description },
+      update: { account_code: body.accountCode, side: body.side, base_calculation: body.baseCalculation, description: body.description, is_active: true, updated_at: new Date(), ...(usuarioId ? { updated_by: usuarioId } : {}) },
+      create: { company_id: companyId, process_code: body.processCode, document_type: documentType, line_order: body.lineOrder, account_code: body.accountCode, side: body.side, base_calculation: body.baseCalculation, description: body.description, updated_at: new Date(), ...(usuarioId ? { updated_by: usuarioId } : {}) },
     });
   }
 
