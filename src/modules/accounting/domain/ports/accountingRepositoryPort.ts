@@ -39,6 +39,12 @@ export interface IAccountingRepositoryPort {
   accountIsTreasury(companyId: string, code: string): Promise<boolean>;
   /** Códigos de cuenta con al menos una línea de asiento en el período. */
   findAccountCodesWithMovements(companyId: string, period: string): Promise<string[]>;
+  /** Deja constancia de quién y por qué reabrió un período. */
+  registrarReapertura(
+    companyId: string,
+    period: string,
+    datos: { motivo: string; usuarioId?: string },
+  ): Promise<void>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;

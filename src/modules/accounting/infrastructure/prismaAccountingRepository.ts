@@ -311,6 +311,22 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return [...codigos].sort();
   }
 
+  /** Deja constancia de quién y por qué reabrió un período. */
+  async registrarReapertura(
+    companyId: string,
+    period: string,
+    datos: { motivo: string; usuarioId?: string },
+  ) {
+    await this.prisma.accountingPeriod.updateMany({
+      where: { company_id: companyId, period },
+      data: {
+        reopened_at: new Date(),
+        reopened_by: datos.usuarioId ?? null,
+        reopen_reason: datos.motivo,
+      },
+    });
+  }
+
   async findAccounts(opciones?: { includeInactive?: boolean }) {
     const rows = await this.prisma.accountingAccount.findMany({
       where: opciones?.includeInactive ? undefined : { is_active: true },

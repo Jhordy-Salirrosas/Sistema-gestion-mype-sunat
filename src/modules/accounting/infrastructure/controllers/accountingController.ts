@@ -40,6 +40,7 @@ import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAcc
 import { OpenFiscalYearUseCase } from '../../application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from '../../application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
+import { ReopenAccountingPeriodUseCase } from '../../application/use-cases/reopenAccountingPeriodUseCase';
 import { DeleteAccountingPeriodUseCase } from '../../application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
@@ -74,6 +75,7 @@ export class AccountingController {
     private readonly openFiscalYearUseCase: OpenFiscalYearUseCase,
     private readonly closeFiscalYearUseCase: CloseFiscalYearUseCase,
     private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
+    private readonly reopenPeriodUseCase: ReopenAccountingPeriodUseCase,
     private readonly deletePeriodUseCase: DeleteAccountingPeriodUseCase,
     private readonly getLedgerUseCase: GetLedgerUseCase,
     private readonly getTrialBalanceUseCase: GetTrialBalanceUseCase,
@@ -247,6 +249,27 @@ export class AccountingController {
     return this.closePeriodUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period,
+    );
+  }
+
+  /**
+   * Reabre un período cerrado. Exige motivo y queda auditado.
+   *
+   * Se separa del POST de apertura para que el motivo sea obligatorio: abrir un
+   * mes nuevo es rutina, reabrir uno cerrado es una excepción que hay que
+   * justificar.
+   */
+  @Post('periods/:period/reopen')
+  @HttpCode(HttpStatus.OK)
+  async reopenPeriod(
+    @Param('period') period: string,
+    @Body() dto: { motivo?: string },
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.reopenPeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+      { motivo: dto?.motivo ?? '' },
     );
   }
 

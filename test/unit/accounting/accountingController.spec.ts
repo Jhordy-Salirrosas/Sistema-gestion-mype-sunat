@@ -17,6 +17,7 @@ import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/app
 import { OpenFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
+import { ReopenAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/reopenAccountingPeriodUseCase';
 import { DeleteAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
@@ -117,6 +118,9 @@ describe('AccountingController', () => {
       execute: jest.fn(),
     } as unknown as jest.Mocked<OpenAccountingPeriodUseCase>;
 
+    reopenPeriodUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<ReopenAccountingPeriodUseCase>;
     closePeriodUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<CloseAccountingPeriodUseCase>;
@@ -166,6 +170,7 @@ describe('AccountingController', () => {
       openFiscalYearUseCase,
       closeFiscalYearUseCase,
       closePeriodUseCase,
+      reopenPeriodUseCase,
       deletePeriodUseCase,
       getLedgerUseCase,
       getTrialBalanceUseCase,
