@@ -20,7 +20,7 @@ export interface IAccountingRepositoryPort {
   /** Cambia el nombre y/o el estado de una cuenta existente. */
   updateAccount(
     code: string,
-    cambios: { name?: string; isActive?: boolean },
+    cambios: { name?: string; element?: string; isActive?: boolean },
   ): Promise<AccountingAccountEntity>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;

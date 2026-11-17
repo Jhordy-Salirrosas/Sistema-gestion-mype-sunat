@@ -222,11 +222,12 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     return { code: row.code, name: row.name, element: row.element, nature: row.nature as 'Deudora' | 'Acreedora', parentCode: row.parent_code, level: row.level, isActive: row.is_active };
   }
 
-  async updateAccount(code: string, cambios: { name?: string; isActive?: boolean }) {
+  async updateAccount(code: string, cambios: { name?: string; element?: string; isActive?: boolean }) {
     const row = await this.prisma.accountingAccount.update({
       where: { code },
       data: {
         ...(cambios.name === undefined ? {} : { name: cambios.name }),
+        ...(cambios.element === undefined ? {} : { element: cambios.element }),
         ...(cambios.isActive === undefined ? {} : { is_active: cambios.isActive }),
       },
     });
