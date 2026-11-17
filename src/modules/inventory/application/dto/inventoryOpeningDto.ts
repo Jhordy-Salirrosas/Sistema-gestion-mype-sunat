@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -32,6 +33,30 @@ export class CreateOpeningDto {
   @IsOptional()
   @IsString()
   warehouseCode?: string;
+
+  @IsOptional()
+  @IsString()
+  period?: string;
+
+  @IsOptional()
+  @IsString()
+  documentTypeCode?: string;
+
+  @IsOptional()
+  @IsString()
+  documentSerial?: string;
+
+  @IsOptional()
+  @IsString()
+  documentNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  openingReason?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  generateAccountingEntry?: boolean;
 
   @IsOptional()
   @IsString()
