@@ -29,6 +29,7 @@ import { ExportTaxPleUseCase } from '../../application/use-cases/exportTaxPleUse
 import { ValidateTaxPleUseCase } from '../../application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from '../../application/use-cases/getIgvReconciliationUseCase';
 import { CloseAnnualUseCase } from '../../application/use-cases/closeAnnualUseCase';
+import { GetClosingPreviewUseCase } from '../../application/use-cases/getClosingPreviewUseCase';
 import { GetAccountingEntriesUseCase } from '../../application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../application/use-cases/listAccountingAccountsUseCase';
 import { GetAccountsWithMovementsUseCase } from '../../application/use-cases/getAccountsWithMovementsUseCase';
@@ -65,6 +66,7 @@ export class AccountingController {
     private readonly validateTaxPleUseCase: ValidateTaxPleUseCase,
     private readonly getIgvReconciliationUseCase: GetIgvReconciliationUseCase,
     private readonly closeAnnualUseCase: CloseAnnualUseCase,
+    private readonly getClosingPreviewUseCase: GetClosingPreviewUseCase,
     private readonly getEntriesUseCase: GetAccountingEntriesUseCase,
     private readonly listAccountsUseCase: ListAccountingAccountsUseCase,
     private readonly getAccountsWithMovementsUseCase: GetAccountsWithMovementsUseCase,
@@ -187,6 +189,22 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ) {
     return this.generateClosingEntryUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      Number(year),
+    );
+  }
+
+  /**
+   * Vista previa del cierre anual: ingresos, gastos y resultado del ejercicio.
+   *
+   * El contador debe ver el resultado antes de confirmar el asiento de cierre.
+   */
+  @Get('closing-preview/:year')
+  async getClosingPreview(
+    @Param('year') year: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.getClosingPreviewUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       Number(year),
     );

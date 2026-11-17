@@ -45,6 +45,11 @@ export interface IAccountingRepositoryPort {
     period: string,
     datos: { motivo: string; usuarioId?: string },
   ): Promise<void>;
+  /** Saldo por cuenta de los asientos del año, para la vista previa del cierre. */
+  saldosDeResultado(
+    companyId: string,
+    year: number,
+  ): Promise<Array<{ code: string; name: string; debit: number; credit: number }>>;
   /** Períodos de la empresa, más recientes primero. */
   findPeriods(companyId: string): Promise<AccountingPeriodEntity[]>;
   findPeriod(companyId: string, period: string): Promise<AccountingPeriodEntity | null>;

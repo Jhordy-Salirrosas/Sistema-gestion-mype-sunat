@@ -7,6 +7,7 @@ import { ExportTaxPleUseCase } from '../../../src/modules/accounting/application
 import { ValidateTaxPleUseCase } from '../../../src/modules/accounting/application/use-cases/validateTaxPleUseCase';
 import { GetIgvReconciliationUseCase } from '../../../src/modules/accounting/application/use-cases/getIgvReconciliationUseCase';
 import { CloseAnnualUseCase } from '../../../src/modules/accounting/application/use-cases/closeAnnualUseCase';
+import { GetClosingPreviewUseCase } from '../../../src/modules/accounting/application/use-cases/getClosingPreviewUseCase';
 import { GetAccountingEntriesUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountingEntriesUseCase';
 import { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 import { GetAccountsWithMovementsUseCase } from '../../../src/modules/accounting/application/use-cases/getAccountsWithMovementsUseCase';
@@ -78,6 +79,9 @@ describe('AccountingController', () => {
       execute: jest.fn(),
     } as unknown as jest.Mocked<GetIgvReconciliationUseCase>;
 
+    closingPreviewUseCase = {
+      execute: jest.fn().mockResolvedValue({}),
+    } as unknown as jest.Mocked<GetClosingPreviewUseCase>;
     closeAnnualUseCase = { execute: jest.fn() } as unknown as jest.Mocked<CloseAnnualUseCase>;
 
     treasuryAccounts = {
@@ -160,6 +164,7 @@ describe('AccountingController', () => {
       validateTaxPleUseCase,
       getIgvReconciliationUseCase,
       closeAnnualUseCase,
+      closingPreviewUseCase,
       getEntriesUseCase,
       listAccountsUseCase,
       accountsWithMovementsUseCase,

@@ -327,6 +327,29 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     });
   }
 
+  /** Saldo por cuenta de los asientos del año, para la vista previa del cierre. */
+  async saldosDeResultado(companyId: string, year: number) {
+    const entradas = await this.prisma.accountingEntry.findMany({
+      where: { company_id: companyId, period: { startsWith: `${year}-` } },
+      include: { lines: true },
+    });
+    const cuentas = new Map<string, { code: string; name: string; debit: number; credit: number }>();
+    for (const entrada of entradas) {
+      for (const linea of entrada.lines) {
+        const actual = cuentas.get(linea.account_code) ?? {
+          code: linea.account_code,
+          name: linea.account_name,
+          debit: 0,
+          credit: 0,
+        };
+        actual.debit += Number(linea.debit_amount);
+        actual.credit += Number(linea.credit_amount);
+        cuentas.set(linea.account_code, actual);
+      }
+    }
+    return [...cuentas.values()].sort((a, b) => a.code.localeCompare(b.code));
+  }
+
   async findAccounts(opciones?: { includeInactive?: boolean }) {
     const rows = await this.prisma.accountingAccount.findMany({
       where: opciones?.includeInactive ? undefined : { is_active: true },
