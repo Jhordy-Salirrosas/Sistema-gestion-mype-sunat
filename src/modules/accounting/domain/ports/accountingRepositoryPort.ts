@@ -29,6 +29,10 @@ export interface IAccountingRepositoryPort {
   openFiscalYear(companyId: string, year: number): Promise<AccountingPeriodEntity[]>;
   closeFiscalYear(companyId: string, year: number): Promise<AccountingPeriodEntity[]>;
   closePeriod(companyId: string, period: string): Promise<AccountingPeriodEntity>;
+  /** Cuenta los asientos de un período; se usa antes de eliminar el período. */
+  countEntriesByPeriod(companyId: string, period: string): Promise<number>;
+  /** Borra el período. Solo debe llamarse cuando no tiene asientos. */
+  deletePeriod(companyId: string, period: string): Promise<void>;
   /** Movimientos de una cuenta en un período. */
   findLedgerMovements(companyId: string, period: string, accountCode: string): Promise<LedgerMovement[]>;
   /** Saldo acumulado de la cuenta en períodos anteriores. */

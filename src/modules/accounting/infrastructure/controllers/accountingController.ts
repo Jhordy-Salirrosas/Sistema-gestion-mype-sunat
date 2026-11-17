@@ -13,6 +13,7 @@ import {
   Query,
   UnauthorizedException,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { CurrentCompany } from '../../../../common/decorators';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
@@ -38,6 +39,7 @@ import { OpenAccountingPeriodUseCase } from '../../application/use-cases/openAcc
 import { OpenFiscalYearUseCase } from '../../application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from '../../application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../application/use-cases/closeAccountingPeriodUseCase';
+import { DeleteAccountingPeriodUseCase } from '../../application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../application/use-cases/getIncomeStatementUseCase';
@@ -70,6 +72,7 @@ export class AccountingController {
     private readonly openFiscalYearUseCase: OpenFiscalYearUseCase,
     private readonly closeFiscalYearUseCase: CloseFiscalYearUseCase,
     private readonly closePeriodUseCase: CloseAccountingPeriodUseCase,
+    private readonly deletePeriodUseCase: DeleteAccountingPeriodUseCase,
     private readonly getLedgerUseCase: GetLedgerUseCase,
     private readonly getTrialBalanceUseCase: GetTrialBalanceUseCase,
     private readonly getIncomeStatementUseCase: GetIncomeStatementUseCase,
@@ -217,6 +220,18 @@ export class AccountingController {
     @CurrentCompany() currentCompanyId?: string,
   ) {
     return this.closePeriodUseCase.execute(
+      this.empresaDelToken(currentCompanyId),
+      period,
+    );
+  }
+
+  @Delete('periods/:period')
+  @HttpCode(HttpStatus.OK)
+  async deletePeriod(
+    @Param('period') period: string,
+    @CurrentCompany() currentCompanyId?: string,
+  ) {
+    return this.deletePeriodUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period,
     );

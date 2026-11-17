@@ -16,6 +16,7 @@ import { OpenAccountingPeriodUseCase } from '../../../src/modules/accounting/app
 import { OpenFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/openFiscalYearUseCase';
 import { CloseFiscalYearUseCase } from '../../../src/modules/accounting/application/use-cases/closeFiscalYearUseCase';
 import { CloseAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/closeAccountingPeriodUseCase';
+import { DeleteAccountingPeriodUseCase } from '../../../src/modules/accounting/application/use-cases/deleteAccountingPeriodUseCase';
 import { GetLedgerUseCase } from '../../../src/modules/accounting/application/use-cases/getLedgerUseCase';
 import { GetTrialBalanceUseCase } from '../../../src/modules/accounting/application/use-cases/getTrialBalanceUseCase';
 import { GetIncomeStatementUseCase } from '../../../src/modules/accounting/application/use-cases/getIncomeStatementUseCase';
@@ -40,6 +41,7 @@ describe('AccountingController', () => {
   let listPeriodsUseCase: jest.Mocked<ListAccountingPeriodsUseCase>;
   let openPeriodUseCase: jest.Mocked<OpenAccountingPeriodUseCase>;
   let closePeriodUseCase: jest.Mocked<CloseAccountingPeriodUseCase>;
+  let deletePeriodUseCase: jest.Mocked<DeleteAccountingPeriodUseCase>;
   let openFiscalYearUseCase: jest.Mocked<OpenFiscalYearUseCase>;
   let closeFiscalYearUseCase: jest.Mocked<CloseFiscalYearUseCase>;
   let getLedgerUseCase: jest.Mocked<GetLedgerUseCase>;
@@ -114,6 +116,9 @@ describe('AccountingController', () => {
     closePeriodUseCase = {
       execute: jest.fn(),
     } as unknown as jest.Mocked<CloseAccountingPeriodUseCase>;
+    deletePeriodUseCase = {
+      execute: jest.fn().mockResolvedValue({ period: '2027-01', deleted: true }),
+    } as unknown as jest.Mocked<DeleteAccountingPeriodUseCase>;
     openFiscalYearUseCase = {
       execute: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<OpenFiscalYearUseCase>;
@@ -156,6 +161,7 @@ describe('AccountingController', () => {
       openFiscalYearUseCase,
       closeFiscalYearUseCase,
       closePeriodUseCase,
+      deletePeriodUseCase,
       getLedgerUseCase,
       getTrialBalanceUseCase,
       getIncomeStatementUseCase,
