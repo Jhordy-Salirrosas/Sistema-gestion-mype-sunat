@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import {
   Activity,
-  ArrowLeftRight,
   BookOpen,
   Boxes,
   Building2,
@@ -23,7 +22,9 @@ import {
   WalletCards,
   FolderGit2,
   GitCompareArrows,
+  KeyRound,
   LayoutDashboard,
+  ListChecks,
   FileUp,
   ClipboardCheck,
   History,
@@ -41,16 +42,15 @@ export interface SubNavItem {
   title: string;
   path: string;
   icon: React.ComponentType<{ className?: string }>;
-  /**
-   * Roles que pueden ver este subítem dentro del módulo.
-   *
-   * Sin esto heredaría los roles del padre y ofrecería entradas que la propia
-   * ruta rechaza: el caso de Configuración de Facturación, que solo admite
-   * ADMIN pero aparecería a un operador y lo llevaría a "sin acceso".
-   */
-
   /** Agrupador visual dentro del módulo (ej. Registros / Reportes). */
   group?: string;
+  /**
+   * El submódulo es nuevo y el servidor todavía no lo conoce en su catálogo de
+   * menús. Se muestra si el usuario puede ver el módulo, sin esperar a que el
+   * backend lo publique: de lo contrario, cada pantalla nueva obligaría a
+   * redesplegar el servidor antes de poder entrar.
+   */
+  adelanto?: { moduleCode: string };
 }
 
 export interface NavItem {
@@ -71,14 +71,14 @@ export const NAV_ITEMS: NavItem[] = [
     developer: 'Ventas',
 
     subItems: [
-      { title: 'Punto de venta', path: '/sales/pos', icon: ShoppingCart},
-      { title: 'Cotizaciones', path: '/sales/cotizaciones', icon: FileText},
-      { title: 'Pedidos', path: '/sales/pedidos', icon: FileText},
-      { title: 'Cierre de caja', path: '/sales/caja', icon: Banknote},
+      { title: 'Punto de venta', path: '/sales/pos', icon: ShoppingCart },
+      { title: 'Cotizaciones', path: '/sales/cotizaciones', icon: FileText },
+      { title: 'Pedidos', path: '/sales/pedidos', icon: FileText },
+      { title: 'Cierre de caja', path: '/sales/caja', icon: Banknote },
       { title: 'Historial de ventas', path: '/sales/historial', icon: History },
-      { title: 'Devoluciones de venta', path: '/sales/devoluciones', icon: RotateCcw},
-      { title: 'Reporte de ventas y margen', path: '/sales/reportes', icon: LayoutDashboard},
-      { title: 'Cuentas por cobrar y cobros', path: '/sales/cobranzas', icon: WalletCards},
+      { title: 'Devoluciones de venta', path: '/sales/devoluciones', icon: RotateCcw },
+      { title: 'Reporte de ventas y margen', path: '/sales/reportes', icon: LayoutDashboard },
+      { title: 'Cuentas por cobrar y cobros', path: '/sales/cobranzas', icon: WalletCards },
     ],
   },
   {
@@ -139,7 +139,7 @@ export const NAV_ITEMS: NavItem[] = [
       { title: '4. Recojo y almacén (Kardex)', path: '/customs/landed-cost', icon: Calculator },
       { title: 'Contabilidad y Asientos Aduaneros (PCGE / NIC 2)', path: '/customs/accounting', icon: BookOpen },
       { title: 'Proveedores del exterior', path: '/customs/suppliers', icon: Building2 },
-      { title: 'Configuración aduanera', path: '/customs/config', icon: Settings},
+      { title: 'Configuración aduanera', path: '/customs/config', icon: Settings },
     ],
   },
   {
@@ -153,7 +153,7 @@ export const NAV_ITEMS: NavItem[] = [
       { title: 'Registro de compras', path: '/purchases', icon: Receipt },
       { title: 'Cuentas por pagar', path: '/purchases/payables', icon: WalletCards },
       { title: 'Proveedores', path: '/invoices/clientes', icon: Building2 },
-      { title: 'Gastos', path: '/purchases/expenses', icon: Receipt},
+      { title: 'Gastos', path: '/purchases/expenses', icon: Receipt },
     ],
   },
   {
@@ -166,11 +166,10 @@ export const NAV_ITEMS: NavItem[] = [
       { title: 'Resumen de inventario', path: '/inventory/dashboard', icon: LayoutDashboard, group: 'Inventario' },
       { title: 'Existencias y Catálogo', path: '/inventory/stocks', icon: Boxes, group: 'Inventario' },
       { title: 'Movimientos', path: '/inventory/movements', icon: GitCompareArrows, group: 'Inventario' },
-      { title: 'Transferencias', path: '/inventory/transfers', icon: ArrowLeftRight,  group: 'Inventario' },
-      { title: 'Ajustes y toma física', path: '/inventory/adjustments', icon: ClipboardCheck,  group: 'Inventario' },
-      { title: 'Saldo inicial', path: '/inventory/opening', icon: FileUp,  group: 'Inventario' },
+      { title: 'Ajustes y toma física', path: '/inventory/adjustments', icon: ClipboardCheck, group: 'Inventario' },
+      { title: 'Saldo inicial', path: '/inventory/opening', icon: FileUp, group: 'Inventario' },
       { title: 'Kardex valorizado', path: '/kardex/general', icon: BookOpen, group: 'Kardex' },
-      { title: 'Configuración y Costeo', path: '/inventory/config', icon: Settings,  group: 'Kardex' },
+      { title: 'Configuración y Costeo', path: '/inventory/config', icon: Settings, group: 'Kardex' },
     ],
   },
   {
@@ -181,6 +180,8 @@ export const NAV_ITEMS: NavItem[] = [
 
     subItems: [
       { title: 'Configuración SUNAT', path: '/sire/configuracion', icon: Settings },
+      { title: 'Credenciales SUNAT', path: '/sire/credenciales', icon: KeyRound },
+      { title: 'Mapeo Contable', path: '/sire/mapeo-contable', icon: ListChecks },
       { title: 'Importar Propuesta', path: '/sire/importar', icon: FileUp },
       { title: 'Consulta de periodos', path: '/sire/periodos', icon: Search },
       { title: 'Conciliación y Cruce', path: '/sire/conciliacion', icon: GitCompareArrows },
@@ -196,9 +197,10 @@ export const NAV_ITEMS: NavItem[] = [
 
     subItems: [
       { title: 'Resumen contable', path: '/accounting/dashboard', icon: LayoutDashboard, group: 'Registros' },
-      { title: 'Libro Diario (PCGE)', path: '/accounting', icon: FileText, group: 'Registros' },
-      { title: 'Plan de Cuentas (PCGE)', path: '/accounting/plan-cuentas', icon: BookOpen, group: 'Registros' },
+      { title: 'Libro Diario', path: '/accounting', icon: FileText, group: 'Registros' },
+      { title: 'Cuentas Contables', path: '/accounting/plan-cuentas', icon: BookOpen, group: 'Registros' },
       { title: 'Períodos Contables', path: '/accounting/periods', icon: CalendarDays, group: 'Registros' },
+      { title: 'Guía contable', path: '/accounting/guia', icon: BookOpen, group: 'Registros', adelanto: { moduleCode: 'M4' } },
       { title: 'Reglas de contabilización', path: '/accounting/rules', icon: Settings, group: 'Registros' },
       { title: 'Libro Mayor', path: '/accounting/ledger', icon: BookOpen, group: 'Reportes' },
       { title: 'Balance de Comprobación', path: '/accounting/trial-balance', icon: ClipboardCheck, group: 'Reportes' },
@@ -265,9 +267,21 @@ export const Sidebar = () => {
     });
   };
 
-  const permissions=useServerPermissions();
-  const subItemsVisibles=(item:NavItem):SubNavItem[] => (item.subItems??[]).filter(sub=>permissions.canNavigate(sub.path));
-  const visibleNavItems=NAV_ITEMS.filter(item=>permissions.canNavigate(item.path));
+  const permissions = useServerPermissions();
+  /**
+   * Un subítem se muestra si el servidor lo autoriza o si es un adelanto del
+   * frontend y el usuario puede ver su módulo. Así una pantalla nueva no queda
+   * invisible hasta que el backend se redespliegue.
+   */
+  const puedeVerSubItem = (sub: SubNavItem): boolean => {
+    if (permissions.canNavigate(sub.path)) return true;
+    if (!sub.adelanto) return false;
+    const menus = permissions.snapshot?.menus ?? [];
+    const loConoceElServidor = menus.some(menu => menu.path === sub.path);
+    return !loConoceElServidor && permissions.canView(sub.adelanto.moduleCode);
+  };
+  const subItemsVisibles = (item: NavItem): SubNavItem[] => (item.subItems ?? []).filter(puedeVerSubItem);
+  const visibleNavItems = NAV_ITEMS.filter(item => permissions.canNavigate(item.path));
   const terminoMenu = menuQuery.trim().toLowerCase();
   const filteredNavItems = visibleNavItems.flatMap((item) => {
     if (!terminoMenu) return [item];
@@ -338,7 +352,7 @@ export const Sidebar = () => {
 
                   {!isSidebarCollapsed && (
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {!permissions.canWrite(permissions.snapshot?.menus.find(m=>m.path.startsWith(item.path))?.moduleCode??'') ? (
+                      {!permissions.canWrite(permissions.snapshot?.menus.find(m => m.path.startsWith(item.path))?.moduleCode ?? '') ? (
                         <span className="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-muted text-muted-foreground">
                           Lectura
                         </span>
@@ -377,7 +391,7 @@ export const Sidebar = () => {
                   {!isSidebarCollapsed && (
                     <div className="flex-1 flex items-center justify-between truncate">
                       <span className="truncate">{item.title}</span>
-                      {!permissions.canWrite(permissions.snapshot?.menus.find(m=>m.path.startsWith(item.path))?.moduleCode??'') ? (
+                      {!permissions.canWrite(permissions.snapshot?.menus.find(m => m.path.startsWith(item.path))?.moduleCode ?? '') ? (
                         <span className="text-[9px] uppercase font-bold px-1 py-0.5 rounded bg-muted text-muted-foreground">
                           Lectura
                         </span>
