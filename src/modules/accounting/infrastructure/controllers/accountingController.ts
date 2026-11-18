@@ -284,13 +284,13 @@ export class AccountingController {
   @HttpCode(HttpStatus.OK)
   async reopenPeriod(
     @Param('period') period: string,
-    @Body() dto: { motivo?: string },
+    @Body() dto: { motivo?: string; anularCierre?: boolean },
     @CurrentCompany() currentCompanyId?: string,
   ) {
     return this.reopenPeriodUseCase.execute(
       this.empresaDelToken(currentCompanyId),
       period,
-      { motivo: dto?.motivo ?? '' },
+      { motivo: dto?.motivo ?? '', anularCierre: dto?.anularCierre === true },
     );
   }
 
