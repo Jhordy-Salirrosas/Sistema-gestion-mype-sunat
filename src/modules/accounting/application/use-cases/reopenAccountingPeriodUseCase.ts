@@ -27,7 +27,7 @@ export class ReopenAccountingPeriodUseCase {
   async execute(
     companyId: string,
     period: string,
-    opciones: { motivo: string; usuarioId?: string },
+    opciones: { motivo: string; usuarioId?: string; anularCierre?: boolean },
   ): Promise<ReopenPeriodResult> {
     const motivo = opciones.motivo?.trim() ?? '';
     if (motivo.length < 10) {
@@ -54,9 +54,14 @@ export class ReopenAccountingPeriodUseCase {
       `CIERRE-${year}`,
     );
     if (tieneCierre) {
-      throw new BadRequestException(
-        `El ejercicio ${year} tiene un asiento de cierre generado. Anúlalo antes de reabrir un mes.`,
-      );
+      // Reabrir sin anular el cierre duplicaría el resultado del ejercicio, así
+      // que se exige confirmarlo de forma explícita desde la pantalla.
+      if (!opciones.anularCierre) {
+        throw new BadRequestException(
+          `El ejercicio ${year} tiene un asiento de cierre generado. Marca "Anular el asiento de cierre" para reabrir el mes.`,
+        );
+      }
+      await this.repository.anularAsientoCierre(companyId, year);
     }
 
     const advertencias: string[] = [];
