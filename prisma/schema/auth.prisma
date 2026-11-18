@@ -1,12 +1,5 @@
 // prisma/schema/auth.prisma
 
-enum Role {
-  ADMIN
-  CONTADOR
-  OPERADOR_FACTURACION
-  OPERADOR_ADUANAS
-  AUDITOR
-}
 
 model Company {
   id                    String        @id @default(uuid())
@@ -107,7 +100,7 @@ model User {
   email                 String        @unique
   password_hash         String
   full_name             String
-  role                  Role          @default(OPERADOR_FACTURACION)
+  role                  String        @default("OPERADOR_FACTURACION")
   is_active             Boolean       @default(true)
   created_at            DateTime      @default(now())
   updated_at            DateTime      @updatedAt
@@ -119,13 +112,15 @@ model User {
   audit_logs            AuditLog[]
 
   @@map("users")
+  role_catalog CompanyRole @relation(fields: [company_id, role], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+
 }
 
 model RoleModulePermission {
   id         String   @id @default(uuid())
   company_id String
   company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  role       Role
+  role       String
   module_code String
   can_view   Boolean  @default(true)
   can_write  Boolean  @default(true)
@@ -134,13 +129,15 @@ model RoleModulePermission {
   @@unique([company_id, role, module_code])
   @@index([company_id, role])
   @@map("role_module_permissions")
+  role_catalog CompanyRole @relation(fields: [company_id, role], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+
 }
 
 model RoleActionPermission {
   id          String   @id @default(uuid())
   company_id  String
   company     Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  role        Role
+  role       String
   action_code String
   allowed     Boolean  @default(false)
   updated_at  DateTime @updatedAt
@@ -148,6 +145,8 @@ model RoleActionPermission {
   @@unique([company_id, role, action_code])
   @@index([company_id, role])
   @@map("role_action_permissions")
+  role_catalog CompanyRole @relation(fields: [company_id, role], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
+
 }
 
 model UserWarehouse {
@@ -176,10 +175,13 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-// Expansión aditiva: los tres campos de rol existentes permanecen enum hasta el corte.
+// Catálogo empresarial: roles de usuarios y permisos referencian su empresa/code.
 model CompanyRole {
+  users User[]
+  module_permissions RoleModulePermission[]
+  action_permissions RoleActionPermission[]
   company_id String
-  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   code String
   name String
   is_system Boolean @default(false)
@@ -192,7 +194,7 @@ model PermissionMenuCatalog {
   module_code String
   path_pattern String @unique
   parent_menu_code String?
-  parent PermissionMenuCatalog? @relation("MenuTree", fields: [parent_menu_code], references: [menu_code], onDelete: Restrict)
+  parent PermissionMenuCatalog? @relation("MenuTree", fields: [parent_menu_code], references: [menu_code], onDelete: Restrict, onUpdate: NoAction)
   children PermissionMenuCatalog[] @relation("MenuTree")
   permissions RoleMenuPermission[]
   @@map("permission_menu_catalog")
@@ -203,7 +205,7 @@ model RoleMenuPermission {
   menu_code String
   can_view Boolean @default(false)
   role CompanyRole @relation(fields: [company_id, role_code], references: [company_id, code], onDelete: Restrict, onUpdate: Restrict)
-  menu PermissionMenuCatalog @relation(fields: [menu_code], references: [menu_code], onDelete: Restrict)
+  menu PermissionMenuCatalog @relation(fields: [menu_code], references: [menu_code], onDelete: Restrict, onUpdate: NoAction)
   @@id([company_id, role_code, menu_code])
   @@map("role_menu_permissions")
 }

@@ -21,7 +21,7 @@ export class CreateUserService {
     try {
       const user = await this.prisma.$transaction(async tx => {
       const user = await tx.user.create({
-        data: { company_id: companyId, full_name: dto.name.trim(), email, password_hash: passwordHash, role: dto.role as never, is_active: true },
+        data: { company_id: companyId, full_name: dto.name.trim(), email, password_hash: passwordHash, role: dto.role, is_active: true },
         select: { id: true, company_id: true, email: true, full_name: true, role: true, is_active: true },
       });
       await auditSecurityChange(tx,companyId,actorId,'ROLE_USER_ASSIGNMENT',user.role,null,{userId:user.id,role:user.role,isActive:user.is_active});

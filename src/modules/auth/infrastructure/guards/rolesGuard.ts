@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Acceso denegado: Usuario no autenticado.');
     }
 
-    const hasRole = requiredRoles.includes(user.role as UserRole);
+    const hasRole = requiredRoles.includes(user.role);
     if (!hasRole) {
       throw new ForbiddenException(
         `Acceso denegado: Se requiere uno de los roles [${requiredRoles.join(', ')}].`,
