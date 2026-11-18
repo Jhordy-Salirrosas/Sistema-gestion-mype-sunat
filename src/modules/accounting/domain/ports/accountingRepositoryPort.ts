@@ -47,6 +47,8 @@ export interface IAccountingRepositoryPort {
     period: string,
     datos: { motivo: string; usuarioId?: string },
   ): Promise<void>;
+  /** Anula el asiento de cierre del ejercicio para poder reabrir un mes. */
+  anularAsientoCierre(companyId: string, year: number): Promise<number>;
   /** Saldo por cuenta de los asientos del año, para la vista previa del cierre. */
   saldosDeResultado(
     companyId: string,
