@@ -1,5 +1,18 @@
-# Candidato para el corte — no activo
+# Contrato de corte — esquema activo texto/FK
 
-`auth.prisma` sustituirá únicamente `prisma/schema/auth.prisma` durante la parte 5 aprobada, después de convertir las tres columnas existentes a texto y verificar preflight/FKs/índices. Se combina con los demás archivos del esquema activo y se valida en un directorio temporal. No se usa para generar el cliente del paquete 3B: este debe seguir escribiendo las columnas enum existentes.
+La parte 5 activa `prisma/schema/auth.prisma`: tres columnas de rol de usuario
+como String, tres relaciones compuestas (company_id, role) a CompanyRole y
+retiro del enum Role. `auth.prisma` en esta carpeta conserva una referencia del
+mismo contrato, no un segundo esquema que deba desplegarse.
 
-Diferencias del candidato: retiro de enum Role; User.role y los dos permisos pasan a String; el default se conserva como texto; tres relaciones compuestas (company_id, role) → CompanyRole(company_id, code), onDelete/onUpdate Restrict. No hay SQL de conversión ejecutable en este paquete. La migración de corte, lock/backup, despliegue de todos los clientes y activación del flag requieren las partes 5–6. No copiar este archivo al esquema activo ni ejecutar db push/migrate deploy antes de ese corte.
+Las migraciones normales son `20261118000100_roles_expansion_adoption` y
+`20261118000200_roles_text_cutover`. La primera adopta la expansión existente
+(o la crea al reproducir desde cero) y completa únicamente el menú de guía.
+La segunda convierte con USING y valida todas las FK dentro de su transacción.
+Las tres FK de expansión conservan ON UPDATE NO ACTION; las de rol compuesto
+usan RESTRICT. No usar diff automático, db push ni reset para sustituirlas.
+
+El paquete construye el artefacto, pero no ejecuta la ventana ni habilita roles
+propios. ROLES_CUSTOM_ENABLED permanece bajo control de la ventana aprobada.
+Drenar el runtime enum y todos sus escritores antes de aplicar las migraciones;
+no basta con dejar el flag apagado. Consultar docs/m1/roles-cutover-parte5.md.

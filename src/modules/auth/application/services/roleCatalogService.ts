@@ -20,7 +20,25 @@ export async function requireCompanyRole(db: Pick<Prisma.TransactionClient,'comp
 /** Doble compuerta: un flag no permite asignar códigos propios a columnas enum. */
 export async function customRolesEnabled(db: Pick<Prisma.TransactionClient,'$queryRaw'>): Promise<boolean> {
   if (process.env.ROLES_CUSTOM_ENABLED !== 'true') return false;
-  const rows = await db.$queryRaw<Array<{ storage: string; validated: boolean }>>`SELECT format_type(a.atttypid,a.atttypmod) AS storage, EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid=a.attrelid AND c.confrelid='public.company_roles'::regclass AND c.contype='f' AND c.convalidated AND cardinality(c.conkey)=2) AS validated FROM pg_attribute a WHERE a.attrelid IN ('public.users'::regclass,'public.role_module_permissions'::regclass,'public.role_action_permissions'::regclass) AND a.attname='role' AND NOT a.attisdropped`;
+  const rows = await db.$queryRaw<Array<{ storage: string; validated: boolean }>>`
+    SELECT format_type(a.atttypid,a.atttypmod) AS storage,
+      EXISTS (
+        SELECT 1 FROM pg_constraint c
+        WHERE c.conrelid=a.attrelid AND c.confrelid='public.company_roles'::regclass
+          AND c.contype='f' AND c.convalidated AND NOT c.condeferrable
+          AND c.confupdtype='r' AND c.confdeltype='r'
+          AND c.conkey=ARRAY[
+            (SELECT attnum FROM pg_attribute WHERE attrelid=a.attrelid AND attname='company_id' AND NOT attisdropped),
+            a.attnum
+          ]::smallint[]
+          AND c.confkey=ARRAY[
+            (SELECT attnum FROM pg_attribute WHERE attrelid='public.company_roles'::regclass AND attname='company_id' AND NOT attisdropped),
+            (SELECT attnum FROM pg_attribute WHERE attrelid='public.company_roles'::regclass AND attname='code' AND NOT attisdropped)
+          ]::smallint[]
+      ) AS validated
+    FROM pg_attribute a
+    WHERE a.attrelid IN ('public.users'::regclass,'public.role_module_permissions'::regclass,'public.role_action_permissions'::regclass)
+      AND a.attname='role' AND NOT a.attisdropped AND a.attnotnull`;
   return rows.length === 3 && rows.every(row=>row.storage==='text'&&row.validated);
 }
 export async function requireAssignableRole(db: Pick<Prisma.TransactionClient,'companyRole'|'$queryRaw'>, companyId: string, code: string) {

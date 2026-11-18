@@ -69,7 +69,7 @@ export class WarehouseAccessService {
         const admins=await tx.user.count({where:{company_id:companyId,role:'ADMIN',is_active:true}});
         if(admins<=1)throw new BadRequestException('Debe existir al menos un administrador activo.');
       }
-      const updated=await tx.user.update({where:{id:userId},data:{...(dto.role?{role:dto.role as never}:{}),...(dto.isActive!==undefined?{is_active:dto.isActive}:{})}});
+      const updated=await tx.user.update({where:{id:userId},data:{...(dto.role?{role:dto.role}:{}),...(dto.isActive!==undefined?{is_active:dto.isActive}:{})}});
       await auditSecurityChange(tx,companyId,actorId,'ROLE_USER_ASSIGNMENT',updated.role,{userId,role:usuario.role,isActive:usuario.is_active},{userId,role:updated.role,isActive:updated.is_active});
       return {id:updated.id,role:updated.role,isActive:updated.is_active};
     });

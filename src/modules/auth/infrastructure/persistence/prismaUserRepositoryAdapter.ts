@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../../../database/prismaService';
 import { DEFAULT_ACCOUNTING_RULES } from '../../../accounting/domain/rules/defaultAccountingRules';
-import { UserEntity, type UserRole } from '../../domain/entities/userEntity';
+import { UserEntity } from '../../domain/entities/userEntity';
 import { CompanyEntity } from '../../domain/entities/companyEntity';
 import { RefreshTokenEntity } from '../../domain/entities/refreshTokenEntity';
 import type {
@@ -42,7 +42,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       companyId: 'mock-company-id',
       email: email || 'contador@mype.pe',
       fullName: 'Usuario Demo (Modo Offline)',
-      role: 'ADMIN' as UserRole,
+      role: 'ADMIN',
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -71,7 +71,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       companyId: companyId || 'mock-company-id',
       email: 'contador@mype.pe',
       fullName: 'Usuario Demo (Modo Offline)',
-      role: 'ADMIN' as UserRole,
+      role: 'ADMIN',
       isActive: true,
     });
   }
@@ -170,7 +170,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           email: params.user.email,
           password_hash: params.passwordHash,
           full_name: params.user.fullName,
-          role: params.user.role as never,
+          role: params.user.role,
           is_active: params.user.isActive,
         },
       });
@@ -310,7 +310,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
         companyId: 'mock-company-id',
         email: 'contador@mype.pe',
         fullName: fullName.trim(),
-        role: 'ADMIN' as UserRole,
+        role: 'ADMIN',
         isActive: true,
       });
     }
@@ -331,7 +331,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       companyId: raw.company_id,
       email: raw.email,
       fullName: raw.full_name,
-      role: raw.role as UserRole,
+      role: raw.role,
       isActive: raw.is_active,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,

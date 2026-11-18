@@ -66,7 +66,7 @@ export class ModulePermissionsService {
           if(effective.canView!==row.canView||effective.canWrite!==row.canWrite)throw new ForbiddenException('Los permisos de ADMIN están protegidos.');
           continue;
         }
-        await tx.roleModulePermission.upsert({where:{company_id_role_module_code:{company_id:companyId,role:row.role as never,module_code:row.moduleCode}},create:{company_id:companyId,role:row.role as never,module_code:row.moduleCode,can_view:row.canView,can_write:row.canWrite},update:{can_view:row.canView,can_write:row.canWrite}});
+        await tx.roleModulePermission.upsert({where:{company_id_role_module_code:{company_id:companyId,role:row.role,module_code:row.moduleCode}},create:{company_id:companyId,role:row.role,module_code:row.moduleCode,can_view:row.canView,can_write:row.canWrite},update:{can_view:row.canView,can_write:row.canWrite}});
       }
       await auditSecurityChange(tx,companyId,actorId,'ROLE_MODULE_PERMISSIONS','modules',before,await tx.roleModulePermission.findMany({where:{company_id:companyId}}));
     });return this.list(companyId);
