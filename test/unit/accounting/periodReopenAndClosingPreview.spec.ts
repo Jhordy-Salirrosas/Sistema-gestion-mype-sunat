@@ -11,6 +11,8 @@ import { GetAccountsWithMovementsUseCase } from '../../../src/modules/accounting
 describe('ReopenAccountingPeriodUseCase', () => {
   const crear = (periodos: Array<{ period: string; status: string }>, tieneCierre = false) => ({
     findPeriods: jest.fn().mockResolvedValue(periodos),
+    // El bloqueo mira solo cierres vigentes: uno anulado no debe impedir reabrir.
+    tieneCierreAnualVigente: jest.fn().mockResolvedValue(tieneCierre),
     existsBySourceReference: jest.fn().mockResolvedValue(tieneCierre),
     openPeriod: jest.fn().mockResolvedValue({ period: '2026-11', status: 'ABIERTO' }),
     registrarReapertura: jest.fn().mockResolvedValue(undefined),

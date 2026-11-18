@@ -48,11 +48,8 @@ export class ReopenAccountingPeriodUseCase {
     // Un ejercicio con asiento de cierre no se reabre por partes: primero se
     // anula el cierre para no dejar resultados duplicados.
     const year = Number(period.slice(0, 4));
-    const tieneCierre = await this.repository.existsBySourceReference(
-      companyId,
-      'CLOSING',
-      `CIERRE-${year}`,
-    );
+    // Solo bloquea un cierre VIGENTE: si ya se anuló, no debe impedir reabrir.
+    const tieneCierre = await this.repository.tieneCierreAnualVigente(companyId, year);
     if (tieneCierre) {
       // Reabrir sin anular el cierre duplicaría el resultado del ejercicio, así
       // que se exige confirmarlo de forma explícita desde la pantalla.
