@@ -18,7 +18,7 @@ describe('PrismaAccountingRepository - reglas de cuentas y períodos', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       accountingPeriod: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      accountingEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      accountingEntry: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       accountingRule: { count: jest.fn().mockResolvedValue(0) },
       companyTreasuryAccount: { findFirst: jest.fn().mockResolvedValue(null) },
     };
@@ -122,6 +122,20 @@ describe('PrismaAccountingRepository - reglas de cuentas y períodos', () => {
     expect(llamada.data.reopen_reason).toBe('Ajuste');
     expect(llamada.data.reopened_by).toBe('u-1');
     expect(llamada.data.reopened_at).toBeInstanceOf(Date);
+  });
+
+  it('anula el asiento de cierre del ejercicio', async () => {
+    await repository.anularAsientoCierre('c1', 2026);
+
+    expect(prismaMock.accountingEntry.updateMany).toHaveBeenCalledWith({
+      where: {
+        company_id: 'c1',
+        source_module: 'CLOSING',
+        source_reference_id: 'CIERRE-2026',
+        status: { not: 'ANULADO' },
+      },
+      data: { status: 'ANULADO' },
+    });
   });
 
   it('acumula los saldos del año por cuenta para la vista previa', async () => {
