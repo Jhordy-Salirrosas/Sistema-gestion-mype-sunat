@@ -1,81 +1,48 @@
-# Ferry — Semana Cueva, paquete 4
+# Ferry — Roles administrables, parte 5: navegación de inventario
 
-Back: `feat/cueva-cierre`, base `646fa51a9e1862efc9265c529d0d33b81f44d978`.
-Front: CarlosSoles/Fronted-sistema-mype-sunat, base `4fb2d30f841a374ce53efc57d790832b52c68510`.
+Rama: `ferry/roles-cutover-front`.
+Base back main: `d4d362f602452caee2ae26648d3971597904d4c4`.
+Repositorio front: CarlosSoles/Fronted-sistema-mype-sunat.
+Base front: `9d188381c0f63c13143576f499b0b58d0f23f9bd`.
 
-Aplicar después de la entrega de roles administrables. No se modifican sus
-fuentes ni pruebas. No hay PR ni merge de esta entrega.
+La base front avanzó respecto a la fase 0 (`21c662f`); se conserva su main
+actual para no sobrescribir los cambios de contabilidad/navegación del equipo.
+El delta funcional sigue siendo exclusivamente la decisión aprobada: retirar
+las dos listas ADMIN de /inventory/adjustments y /inventory/opening y seguir
+el snapshot del servidor. También se retiran el campo de metadata y su filtro,
+que ya no tienen usos. No se añade enforcement al back.
 
-## Aplicación e inventario
+Aplicar únicamente los archivos frontend/ enumerados en SHA256SUMS,
+retirando ese prefijo, sobre la base front indicada. Verificar antes
+`sha256sum -c SHA256SUMS` desde la raíz del back. El espejo heredado contiene
+otros ferries: no copiar ni eliminar sus archivos como parte de este paquete.
 
-Ejecutar `sha256sum -c SHA256SUMS` en la raíz del back. **Copiar exclusivamente
-los archivos frontend/ enumerados en SHA256SUMS**, quitando ese prefijo, sobre
-el front. El espejo del back contiene también archivos heredados de ferries
-anteriores que no pertenecen al delta de este paquete: no copiarlos ni borrarlos
-en el front. FERRY.md y SHA256SUMS son manifiestos de este paquete y su
-composición en el back debe respetar la secuencia de entregas.
+No cambian endpoints ni payloads: Sidebar, rutas y paleta usan
+GET /auth/permissions/me. La API manda para roles del sistema y propios,
+incluido ADMIN cuando recibe una denegación. Las concesiones explícitas de
+menús siguen filtradas por módulo y los demás controles existentes del back.
+La diferencia visible aprobada es que un rol distinto de ADMIN puede ver esos
+dos enlaces si el servidor se los concede. No se promete equivalencia con el
+filtro local anterior en estos dos enlaces: su eliminación fue aprobada.
 
-API nueva consumida: GET/PUT `/invoices/commercial-defaults` por la
-configuración comercial, los formularios de emisión M1 y el POS; POST
-`/invoices/connection-test` por el diagnóstico SUNAT; GET
-`/configuration/links` por la agrupación ADMIN. PUT y diagnósticos requieren
-ADMIN. Los endpoints existentes de configuración y alta de cliente conservan
-su contrato. El SQL aditivo se entrega en scripts/manual; no se aplica a bases
-compartidas. Consultar docs/m1/cueva-cierre.md para validación, detenciones y
-conteos finales.
+Rama backend relacionada: feat/roles-cutover. La ventana y la habilitación son
+posteriores: este ferry no cambia ROLES_CUSTOM_ENABLED ni configura despliegues.
+No hay dependencias nuevas ni archivos que eliminar en el front.
 
-Archivos del delta:
+## Inventario
 
-- `src/components/layout/ConfigurationMenuLink.tsx`
-- `src/components/layout/Navbar.tsx`
-- `src/modules/invoices/InvoiceList.tsx`
-- `src/modules/invoices/components/ConfigurationHub.tsx`
-- `src/modules/invoices/components/CustomerLookupField.tsx`
-- `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
-- `src/modules/invoices/components/InvoiceEmitCampos.tsx`
-- `src/modules/invoices/components/InvoiceEmitModal.tsx`
-- `src/modules/invoices/components/InvoiceIssuerConfigForm.tsx`
-- `src/modules/invoices/components/InvoiceSettingsTab.tsx`
-- `src/modules/invoices/components/SunatConnectionTest.tsx`
-- `src/modules/invoices/hooks/useCommercialDefaults.ts`
-- `src/modules/invoices/lib/invoiceDebitAmount.ts`
-- `src/modules/invoices/lib/invoiceEmitValidation.ts`
-- `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
-- `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
-- `src/modules/sales/pages/SalesPosPage.tsx`
-- `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`
-- `test/unit/modules/invoices/cueva-configuration.test.tsx`
-- `test/unit/modules/invoices/cueva-connection.test.tsx`
-- `test/unit/modules/invoices/cueva-debit-amount.test.ts`
-- `test/unit/modules/invoices/cueva-pos-payment.test.tsx`
-- `test/unit/modules/invoices/cueva-single-identity.test.tsx`
-- `test/unit/modules/invoices/invoiceM1Regressions.test.ts`
+- src/components/layout/Sidebar.tsx
+- test/unit/modules/auth/rolesCutoverNavigation.test.tsx
 
-## Validación final
+## Verificación
 
-Front: base 199 archivos/1488 pruebas; entrega 205 archivos/1504 pruebas,
-todas aprobadas, sin omisiones. Vitest inventaría 367/373 agrupaciones de
-suites, respectivamente; no se confunden con archivos. Back: base 435 archivos,
-4228 pruebas aprobadas, 1 fallo y 50 omitidas; entrega 443 archivos, 4263
-aprobadas, 0 fallos y las mismas 50 omitidas (8 suites). Builds aprobados.
-La fase 0 pusheada es 3ca39c61; el detalle por parte consta en el informe.
+La suite nueva prueba rol propio autorizado, cinco roles de sistema con
+concesión, rol propio denegado y ADMIN denegado, y coincidencia de sidebar,
+paleta y ruta directa. Las otras pruebas de equivalencia de cinco roles/alias,
+carga/error y permisos dinámicos permanecen vigentes.
 
-El delta consta de 24 archivos (17 fuentes y 7 pruebas). No copiar todo el
-espejo heredado. Ejemplo de aplicación desde la raíz del back, con FRONT_TARGET
-apuntando al checkout del front que se haya preparado para la revisión:
-
-```sh
-: "${FRONT_TARGET:?Defina FRONT_TARGET con el checkout del front}"
-sha256sum -c SHA256SUMS || exit 1
-while read -r checksum path; do
-  case "$path" in
-    frontend/*) install -D "$path" "$FRONT_TARGET/${path#frontend/}" ;;
-  esac
-done < SHA256SUMS
-```
-
-El catálogo de roles/menús y los archivos protegidos de la entrega anterior
-permanecen intactos. La ubicación global de Configuración usa Navbar y la ruta
-administrativa existente; no introduce otra pantalla ni modifica Sidebar/rutas.
-Antes de desplegar los defaults comerciales, revisar y aplicar su SQL por el
-procedimiento manual autorizado. En este encargo solo se ensayó localmente.
+Suite completa: 216 → 217 archivos, 1586 → 1595 pruebas aprobadas;
+cero fallos y cero omisiones. Pruebas dirigidas: 23 casos en dos archivos.
+TypeScript/Vite aprobado. ESLint del delta: cero errores; permanece la
+advertencia anterior por NAV_ITEMS exportado desde Sidebar. No cambia el
+interceptor de refresh ni el manejo de permisos/429 del paquete anterior.
