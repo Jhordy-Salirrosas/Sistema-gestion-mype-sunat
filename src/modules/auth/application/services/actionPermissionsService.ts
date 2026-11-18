@@ -38,7 +38,7 @@ export class ActionPermissionsService {
       const value=before.find(r=>r.role===row.role&&r.action_code===row.actionCode)?.allowed??(ACTIONS.find(a=>a.code===row.actionCode)!.roles as readonly string[]).includes(row.role);
       if(value!==row.allowed)throw new ForbiddenException('Los permisos de ADMIN están protegidos.');continue;
     }
-    await tx.roleActionPermission.upsert({where:{company_id_role_action_code:{company_id:companyId,role:row.role as never,action_code:row.actionCode}},create:{company_id:companyId,role:row.role as never,action_code:row.actionCode,allowed:row.allowed},update:{allowed:row.allowed}});
+    await tx.roleActionPermission.upsert({where:{company_id_role_action_code:{company_id:companyId,role:row.role,action_code:row.actionCode}},create:{company_id:companyId,role:row.role,action_code:row.actionCode,allowed:row.allowed},update:{allowed:row.allowed}});
    }
    await auditSecurityChange(tx,companyId,actorId,'ROLE_ACTION_PERMISSIONS','actions',before,await tx.roleActionPermission.findMany({where:{company_id:companyId}}));
   });return this.list(companyId);
