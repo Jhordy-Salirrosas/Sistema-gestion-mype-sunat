@@ -232,6 +232,9 @@ describe('CustomsController', () => {
 
   it('gestiona documentos de declaración y catálogos con y sin Prisma', async () => {
     expect(await controller.getCatalogsBrokers('agencia')).toEqual([]);
+    expect(await controller.getCatalogsOffices()).toEqual([]);
+    expect(await controller.getCatalogsBanks()).toEqual([]);
+    expect(await controller.getCatalogsVuceEntities()).toEqual([]);
     await expect(controller.getDeclarationDocuments('d-1', undefined)).rejects.toThrow(UnauthorizedException);
     expect(await controller.getDeclarationDocuments('d-1', 'comp-001')).toEqual([]);
     await expect(controller.getCatalogsSuppliers(undefined, 'q')).rejects.toThrow(UnauthorizedException);
@@ -251,6 +254,9 @@ describe('CustomsController', () => {
       },
       customsBroker: { findMany: jest.fn().mockResolvedValue([{ id: 'br-1' }]) },
       foreignSupplier: { findMany: jest.fn().mockResolvedValue([{ id: 'sup-1' }]) },
+      customsOffice: { findMany: jest.fn().mockResolvedValue([{ code: '118' }]) },
+      authorizedBank: { findMany: jest.fn().mockResolvedValue([{ code: '002' }]) },
+      vuceEntity: { findMany: jest.fn().mockResolvedValue([{ code: 'DIGESA' }]) },
     };
     const prismaCtrl = new CustomsController(
       calculateDuaUseCase,
@@ -272,5 +278,8 @@ describe('CustomsController', () => {
     expect(await prismaCtrl.getDeclarationDocuments('d-1', 'comp-001')).toEqual([{ id: 'doc-1' }]);
     expect(await prismaCtrl.getCatalogsBrokers('agencia')).toEqual([{ id: 'br-1' }]);
     expect(await prismaCtrl.getCatalogsSuppliers('comp-001', 'china')).toEqual([{ id: 'sup-1' }]);
+    expect(await prismaCtrl.getCatalogsOffices()).toEqual([{ code: '118' }]);
+    expect(await prismaCtrl.getCatalogsBanks()).toEqual([{ code: '002' }]);
+    expect(await prismaCtrl.getCatalogsVuceEntities()).toEqual([{ code: 'DIGESA' }]);
   });
 });

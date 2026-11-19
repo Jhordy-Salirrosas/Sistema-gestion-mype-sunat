@@ -168,6 +168,42 @@ export class CustomsController {
   }
 
   // Catálogos auxiliares de aduanas
+  @Get('catalogs/offices')
+  @HttpCode(HttpStatus.OK)
+  async getCatalogsOffices() {
+    if (this.prisma) {
+      return this.prisma.customsOffice.findMany({
+        where: { is_active: true },
+        orderBy: { code: 'asc' },
+      });
+    }
+    return [];
+  }
+
+  @Get('catalogs/banks')
+  @HttpCode(HttpStatus.OK)
+  async getCatalogsBanks() {
+    if (this.prisma) {
+      return this.prisma.authorizedBank.findMany({
+        where: { is_active: true },
+        orderBy: { code: 'asc' },
+      });
+    }
+    return [];
+  }
+
+  @Get('catalogs/vuce-entities')
+  @HttpCode(HttpStatus.OK)
+  async getCatalogsVuceEntities() {
+    if (this.prisma) {
+      return this.prisma.vuceEntity.findMany({
+        where: { is_active: true },
+        orderBy: { code: 'asc' },
+      });
+    }
+    return [];
+  }
+
   @Get('catalogs/brokers')
   @HttpCode(HttpStatus.OK)
   async getCatalogsBrokers(@Query('q') query?: string) {

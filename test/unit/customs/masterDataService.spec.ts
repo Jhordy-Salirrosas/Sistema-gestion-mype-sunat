@@ -58,6 +58,21 @@ describe('MasterDataService', () => {
         upsert: jest.fn(),
         update: jest.fn(),
       },
+      customsOffice: {
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+      },
+      authorizedBank: {
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+      },
+      vuceEntity: {
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+      },
       country: {
         findMany: jest.fn(),
         upsert: jest.fn(),
@@ -510,6 +525,38 @@ describe('MasterDataService', () => {
       const syncedFallback = await service.syncTodayExchangeRate();
       expect(syncedFallback.source).toBe('CACHE');
       globalThis.fetch = originalFetch;
+    });
+
+    it('gestiona CRUD de aduanas, bancos autorizados y entidades VUCE', async () => {
+      mockPrisma.customsOffice.findMany.mockResolvedValue([{ code: '118', name: 'Marítima del Callao' }]);
+      mockPrisma.customsOffice.upsert.mockResolvedValue({ code: '118', name: 'Marítima del Callao', is_active: true });
+      mockPrisma.customsOffice.update.mockResolvedValue({ code: '118', is_active: false });
+
+      expect(await service.listCustomsOffices()).toHaveLength(1);
+      expect(await service.upsertCustomsOffice({ code: ' 118 ', name: ' Marítima del Callao ' })).toEqual(
+        expect.objectContaining({ code: '118', is_active: true }),
+      );
+      expect(await service.deleteCustomsOffice(' 118 ')).toEqual({ code: '118', is_active: false });
+
+      mockPrisma.authorizedBank.findMany.mockResolvedValue([{ code: '002', name: 'BCP' }]);
+      mockPrisma.authorizedBank.upsert.mockResolvedValue({ code: '002', name: 'BCP', is_active: true });
+      mockPrisma.authorizedBank.update.mockResolvedValue({ code: '002', is_active: false });
+
+      expect(await service.listAuthorizedBanks()).toHaveLength(1);
+      expect(await service.upsertAuthorizedBank({ code: ' 002 ', name: ' BCP ' })).toEqual(
+        expect.objectContaining({ code: '002', is_active: true }),
+      );
+      expect(await service.deleteAuthorizedBank(' 002 ')).toEqual({ code: '002', is_active: false });
+
+      mockPrisma.vuceEntity.findMany.mockResolvedValue([{ code: 'DIGESA', name: 'Salud Ambiental', sector: 'SALUD' }]);
+      mockPrisma.vuceEntity.upsert.mockResolvedValue({ code: 'DIGESA', name: 'Salud Ambiental', sector: 'SALUD', is_active: true });
+      mockPrisma.vuceEntity.update.mockResolvedValue({ code: 'DIGESA', is_active: false });
+
+      expect(await service.listVuceEntities()).toHaveLength(1);
+      expect(await service.upsertVuceEntity({ code: ' DIGESA ', name: ' Salud Ambiental ', sector: ' SALUD ' })).toEqual(
+        expect.objectContaining({ code: 'DIGESA', is_active: true }),
+      );
+      expect(await service.deleteVuceEntity(' DIGESA ')).toEqual({ code: 'DIGESA', is_active: false });
     });
   });
 });

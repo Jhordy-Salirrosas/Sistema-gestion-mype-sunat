@@ -31,6 +31,10 @@ describe('DniConsultaService', () => {
     await expect(service.consultar('12345678')).rejects.toBeInstanceOf(ServiceUnavailableException);
     jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 500 } as Response);
     await expect(service.consultar('12345678')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 401 } as Response);
+    await expect(service.consultar('12345678')).rejects.toThrow('token');
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 429 } as Response);
+    await expect(service.consultar('12345678')).rejects.toThrow('límite');
   });
 
   it('usa URL sin placeholder y rechaza respuesta vacía o sin nombre', async () => {

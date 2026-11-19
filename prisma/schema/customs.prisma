@@ -103,6 +103,7 @@ model ForeignSupplier {
 
   shipments        CustomsShipment[]
   orders           ImportOrder[]
+  proformas        ImportProforma[]
 
   @@unique([company_id, tax_id])
   @@index([company_id, business_name])
@@ -484,6 +485,12 @@ model ImportOrder {
   notes                 String?
   responsible           String?
 
+  quotation_id          String?                   @unique
+  quotation             ImportQuotation?          @relation(fields: [quotation_id], references: [id], onDelete: SetNull)
+  purchase_id           String?
+  purchase_doc_number   String?
+  purchase_doc_url      String?
+
   shipment_id           String?
   shipment              CustomsShipment?          @relation(fields: [shipment_id], references: [id], onDelete: SetNull)
 
@@ -556,6 +563,77 @@ model ImportOrderDocument {
 
   @@index([order_id, stage_index])
   @@map("import_order_documents")
+}
+
+model ImportQuotation {
+  id                    String            @id @default(uuid())
+  company_id            String
+  company               Company           @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  quotation_number      String            // COT-2026-0001
+  title                 String            // Lote Equipos y Componentes
+  target_incoterm       String?           @default("FOB")
+  target_currency       String?           @default("USD")
+  status                String            @default("EN_NEGOCIACION") // EN_NEGOCIACION, ADJUDICADA, CANCELADA
+  awarded_proforma_id   String?
+  items                 Json?             @default("[]")
+  notes                 String?
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+
+  proformas             ImportProforma[]
+  order                 ImportOrder?
+
+  @@unique([company_id, quotation_number])
+  @@map("import_quotations")
+}
+
+model ImportProforma {
+  id                    String               @id @default(uuid())
+  quotation_id          String
+  quotation             ImportQuotation      @relation(fields: [quotation_id], references: [id], onDelete: Cascade)
+  supplier_id           String?
+  supplier              ForeignSupplier?     @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  supplier_name         String
+  supplier_country      String               @default("CN")
+  proforma_number       String               // PI-2026-0091
+  incoterm              String               @default("FOB")
+  origin_port           String?
+  currency_code         String               @default("USD")
+  total_fob             Decimal              @db.Decimal(14, 2)
+  estimated_freight     Decimal?             @default(0.00) @db.Decimal(14, 2)
+  estimated_insurance   Decimal?             @default(0.00) @db.Decimal(14, 2)
+  total_cif             Decimal?             @default(0.00) @db.Decimal(14, 2)
+  lead_time_days        Int?                 @default(30)
+  payment_terms         String?
+  validity_date         DateTime?
+  status                String               @default("EN_EVALUACION") // EN_EVALUACION, GANADORA, DESCARTADA_EN_CARTERA
+  rejection_reason      String?
+  notes                 String?
+  created_at            DateTime             @default(now())
+  updated_at            DateTime             @updatedAt
+
+  items                 ImportProformaItem[]
+
+  @@index([quotation_id])
+  @@map("import_proformas")
+}
+
+model ImportProformaItem {
+  id                    String            @id @default(uuid())
+  proforma_id           String
+  proforma              ImportProforma    @relation(fields: [proforma_id], references: [id], onDelete: Cascade)
+  product_id            String?
+  sku                   String?
+  description           String
+  quantity              Decimal           @db.Decimal(14, 4)
+  unit_price            Decimal           @db.Decimal(14, 4)
+  total_fob             Decimal           @db.Decimal(14, 2)
+  unit_code             String            @default("NIU")
+  hs_code               String?
+  created_at            DateTime          @default(now())
+
+  @@index([proforma_id])
+  @@map("import_proforma_items")
 }
 
 

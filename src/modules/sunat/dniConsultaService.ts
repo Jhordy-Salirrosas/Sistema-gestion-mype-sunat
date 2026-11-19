@@ -35,7 +35,7 @@ export class DniConsultaService {
     if (!/^\d{8}$/.test(dni)) {
       throw new BadRequestException({ code: 'DNI_INVALIDO', message: 'El DNI debe tener 8 dígitos.' });
     }
-    const token = this.config.get<string>('DECOLECTA_API_TOKEN') ?? this.config.get<string>('SUNAT_RUC_SERVICE_API_KEY');
+    const token = this.config.get<string>('DECOLECTA_DNI_API_TOKEN') ?? this.config.get<string>('DECOLECTA_API_TOKEN') ?? this.config.get<string>('SUNAT_RUC_SERVICE_API_KEY');
     if (!token) {
       throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_NOT_CONFIGURED', message: 'Configure DECOLECTA_API_TOKEN para consultar DNI.' });
     }
@@ -51,6 +51,8 @@ export class DniConsultaService {
     }
     if (!response.ok) {
       if (response.status === 404 || response.status === 422) throw new BadRequestException({ code: 'DNI_NO_ENCONTRADO', message: 'El DNI no fue encontrado en RENIEC.' });
+      if (response.status === 401 || response.status === 403) throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_UNAUTHORIZED', message: 'El token de Decolecta no tiene acceso a DNI o no está configurado.' });
+      if (response.status === 429) throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_RATE_LIMIT', message: 'Se agotó el límite de consultas DNI de Decolecta.' });
       throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_UNAVAILABLE', message: 'El proveedor de DNI no respondió correctamente.' });
     }
     const data = await response.json().catch(() => null) as DniPayload | null;
