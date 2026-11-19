@@ -1,81 +1,77 @@
-# Ferry — Semana Cueva, paquete 4
+# Ferry — Emisión M1 en dos paneles
 
-Back: `feat/cueva-cierre`, base `646fa51a9e1862efc9265c529d0d33b81f44d978`.
-Front: CarlosSoles/Fronted-sistema-mype-sunat, base `4fb2d30f841a374ce53efc57d790832b52c68510`.
+## Bases y transporte
 
-Aplicar después de la entrega de roles administrables. No se modifican sus
-fuentes ni pruebas. No hay PR ni merge de esta entrega.
+- Rama del back: `ferry/m1-emitir-ventanilla`.
+- Front destino: `CarlosSoles/Fronted-sistema-mype-sunat`.
+- Main del front confirmado y base exacta del delta: `45ad4ec69179e73270ea90a46275ae58a82ef8a8`.
+- Base del repositorio de transporte: `5b37083a1ee7671854a372f4256caa3a4db418d6`.
 
-## Aplicación e inventario
+## Aplicación y delta real
 
-Ejecutar `sha256sum -c SHA256SUMS` en la raíz del back. **Copiar exclusivamente
-los archivos frontend/ enumerados en SHA256SUMS**, quitando ese prefijo, sobre
-el front. El espejo del back contiene también archivos heredados de ferries
-anteriores que no pertenecen al delta de este paquete: no copiarlos ni borrarlos
-en el front. FERRY.md y SHA256SUMS son manifiestos de este paquete y su
-composición en el back debe respetar la secuencia de entregas.
+Copiar los seis archivos de `frontend/` a las mismas rutas del repositorio
+front. Revisar contra la base indicada si main incorpora cambios posteriores.
+No se modifica código del back. Esta rama no se fusiona al back para instalar
+la interfaz: contiene el transporte del delta del front.
 
-API nueva consumida: GET/PUT `/invoices/commercial-defaults` por la
-configuración comercial, los formularios de emisión M1 y el POS; POST
-`/invoices/connection-test` por el diagnóstico SUNAT; GET
-`/configuration/links` por la agrupación ADMIN. PUT y diagnósticos requieren
-ADMIN. Los endpoints existentes de configuración y alta de cliente conservan
-su contrato. El SQL aditivo se entrega en scripts/manual; no se aplica a bases
-compartidas. Consultar docs/m1/cueva-cierre.md para validación, detenciones y
-conteos finales.
+| Ruta del front | Cambio frente a la base |
+| --- | --- |
+| `src/modules/invoices/pages/InvoiceEmissionPage.tsx` | Modificado: operación a la izquierda; facturación/pago y liquidación con Emitir al final a la derecha. Ajuste visual de altura, paneles apilados y resumen móvil persistente. |
+| `src/modules/invoices/components/InvoiceItemsGrid.tsx` | Modificado: breakpoint de presentación según ancho del contenedor a 1024px; conserva campos, validaciones y callbacks. |
+| `src/modules/invoices/components/InvoicePaymentPanel.tsx` | Nuevo: botones Efectivo/Yape/Tarjeta/Crédito, catálogo completo existente y referencia local de entrega/vuelto. |
+| `test/unit/modules/invoices/invoiceVentanilla.test.tsx` | Nuevo: ocho casos de render, selección, contrato y vuelto. |
+| `test/unit/modules/invoices/invoiceItemsLayout.test.tsx` | Modificado: expectativas del breakpoint según panel, sin alterar aserciones de cálculo. |
+| `test/unit/modules/invoices/paqueteFechaTipo.test.tsx` | Modificado: selección del tipo por etiqueta en vez de orden de los selectores; conserva íntegras las expectativas de fechas. |
 
-Archivos del delta:
+El inventario `frontend/` contiene exclusivamente estos seis archivos.
+Los archivos de ferries antiguos retirados del inventario de transporte NO
+se deben eliminar del repositorio del front.
 
-- `src/components/layout/ConfigurationMenuLink.tsx`
-- `src/components/layout/Navbar.tsx`
-- `src/modules/invoices/InvoiceList.tsx`
-- `src/modules/invoices/components/ConfigurationHub.tsx`
-- `src/modules/invoices/components/CustomerLookupField.tsx`
-- `src/modules/invoices/components/InvoiceCommercialDefaults.tsx`
-- `src/modules/invoices/components/InvoiceEmitCampos.tsx`
-- `src/modules/invoices/components/InvoiceEmitModal.tsx`
-- `src/modules/invoices/components/InvoiceIssuerConfigForm.tsx`
-- `src/modules/invoices/components/InvoiceSettingsTab.tsx`
-- `src/modules/invoices/components/SunatConnectionTest.tsx`
-- `src/modules/invoices/hooks/useCommercialDefaults.ts`
-- `src/modules/invoices/lib/invoiceDebitAmount.ts`
-- `src/modules/invoices/lib/invoiceEmitValidation.ts`
-- `src/modules/invoices/pages/InvoiceEmissionPage.tsx`
-- `src/modules/invoices/pages/InvoiceSettingsPage.tsx`
-- `src/modules/sales/pages/SalesPosPage.tsx`
-- `test/unit/modules/invoices/cueva-commercial-defaults.test.ts`
-- `test/unit/modules/invoices/cueva-configuration.test.tsx`
-- `test/unit/modules/invoices/cueva-connection.test.tsx`
-- `test/unit/modules/invoices/cueva-debit-amount.test.ts`
-- `test/unit/modules/invoices/cueva-pos-payment.test.tsx`
-- `test/unit/modules/invoices/cueva-single-identity.test.tsx`
-- `test/unit/modules/invoices/invoiceM1Regressions.test.ts`
+## Contrato y reglas conservadas
 
-## Validación final
+- Ruta `/invoices/emision`; mismo `borradorAPayloadEmision` y `POST /invoices/emitir`.
+- `medio_pago` conserva sus siete valores existentes: EFECTIVO, YAPE, PLIN,
+  TARJETA, TRANSFERENCIA, DEPOSITO y CHEQUE. Los tres botones son accesos
+  directos; el selector conserva el catálogo completo.
+- Crédito sigue siendo `forma_pago: 'Credito'` con sus cuotas y la habilitación
+  vigente por tipo/cliente; no se introduce un valor CREDITO en `medio_pago`.
+- Entrega/vuelto son estado local del componente visual, calculado en céntimos
+  sobre el pago directo ya existente (descontados depósito BN y retención).
+  No se envían ni modifican importes, cuotas ni validaciones. Una entrega
+  insuficiente informa el pendiente sin añadir un bloqueo de emisión.
+- Se reutilizan la búsqueda de cliente, campo único de boleta, consulta DNI/RUC,
+  alta de cliente en modal, catálogo de productos, descuentos, almacén/serie,
+  permiso por acción de la fecha y guardas de emisión/stock/tributos.
+- La detracción sigue derivándose del SPOT de cada ítem; se conservan la
+  liquidación y el medio de pago de detracción. El formulario modal de notas,
+  sus reglas y los traductores de contrato no se modifican.
+- Panel derecho con controles desplazables y liquidación/acción al final;
+  altura medida respecto del viewport para mantenerlos visibles en escritorio.
+  En móvil los paneles se apilan y se conserva un resumen compacto de pago.
 
-Front: base 199 archivos/1488 pruebas; entrega 205 archivos/1504 pruebas,
-todas aprobadas, sin omisiones. Vitest inventaría 367/373 agrupaciones de
-suites, respectivamente; no se confunden con archivos. Back: base 435 archivos,
-4228 pruebas aprobadas, 1 fallo y 50 omitidas; entrega 443 archivos, 4263
-aprobadas, 0 fallos y las mismas 50 omitidas (8 suites). Builds aprobados.
-La fase 0 pusheada es 3ca39c61; el detalle por parte consta en el informe.
+## Verificación
 
-El delta consta de 24 archivos (17 fuentes y 7 pruebas). No copiar todo el
-espejo heredado. Ejemplo de aplicación desde la raíz del back, con FRONT_TARGET
-apuntando al checkout del front que se haya preparado para la revisión:
+- Suite completa final: **217 archivos, 1593 pruebas aprobadas,
+  0 fallidas y 0 omitidas**. Incluye los ocho casos nuevos.
+- Pruebas dirigidas iniciales: 30 aprobadas en tres archivos. Dirigidas finales:
+  21 aprobadas en cinco archivos, incluidas las adaptaciones de layout.
+- Build final `npm run build` (TypeScript + Vite): aprobado.
+- Navegador Chromium local con API simulada: 1440, 1280, 1024, 768, 480 y 360px;
+  sin desbordamiento horizontal ni errores de ejecución. En escritorio,
+  liquidación y Emitir quedan dentro del viewport; en móvil permanece visible
+  el resumen compacto. Comprobada también la tabla con un panel de 1168px.
+- Estados, consultas, cálculos y función emitir previos al layout de la página:
+  idénticos a la base. Sin cambios en servicios, tipos ni traductores del payload.
+- ESLint de los seis archivos: **cuatro errores preexistentes, cero nuevos**.
+  La comparación contra la página de la base reproduce las mismas ubicaciones:
+  178:31 y 272:5 (`set-state-in-effect`), 178:133 y 178:178 (declaraciones
+  posteriores usadas en el efecto de defaults). No se alteran en esta comisión.
+- `git diff --check`: aprobado. `SHA256SUMS` cubre FERRY.md y los seis archivos.
 
-```sh
-: "${FRONT_TARGET:?Defina FRONT_TARGET con el checkout del front}"
-sha256sum -c SHA256SUMS || exit 1
-while read -r checksum path; do
-  case "$path" in
-    frontend/*) install -D "$path" "$FRONT_TARGET/${path#frontend/}" ;;
-  esac
-done < SHA256SUMS
-```
+La primera corrida completa detectó cinco fallos de presentación: duplicidad
+textual del resumen móvil en tres consultas, breakpoint anterior y selección
+por orden de un combobox. Se corrigieron antes de repetir la suite completa;
+las expectativas de importes y de fechas se mantienen.
 
-El catálogo de roles/menús y los archivos protegidos de la entrega anterior
-permanecen intactos. La ubicación global de Configuración usa Navbar y la ruta
-administrativa existente; no introduce otra pantalla ni modifica Sidebar/rutas.
-Antes de desplegar los defaults comerciales, revisar y aplicar su SQL por el
-procedimiento manual autorizado. En este encargo solo se ensayó localmente.
+No se crean PRs, no se realizan merges ni despliegues, y no se accede a datos
+compartidos o de producción.
