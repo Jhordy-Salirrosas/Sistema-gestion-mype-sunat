@@ -54,7 +54,7 @@ it('agrupa operación a la izquierda y facturación, liquidación y emisión en 
   expect(pago.getByLabelText('Tipo de comprobante')).toBeVisible();
   expect(pago.getByLabelText('Fecha de emisión')).toBeVisible();
   expect(pago.getByText('Liquidación')).toBeVisible();
-  expect(pago.getByRole('button', { name: 'Emitir comprobante' })).toHaveTextContent('Emitir');
+  expect(pago.getByRole('button', { name: 'Emitir comprobante' })).toHaveTextContent('Revisar y emitir');
   expect(pago.getByRole('button', { name: 'Crédito' })).toBeDisabled();
 });
 
@@ -66,6 +66,8 @@ it.each([['Efectivo', 'EFECTIVO'], ['Yape', 'YAPE'], ['Tarjeta', 'TARJETA']] as 
     expect(screen.getByLabelText('Medio de pago')).toHaveValue(medio);
     if (medio === 'EFECTIVO') fireEvent.change(screen.getByLabelText('Monto entregado (S/)'), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Emitir comprobante' }));
+    expect(invoicesApi.emitirComprobante).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar emisión' }));
     await waitFor(() => expect(invoicesApi.emitirComprobante).toHaveBeenCalledTimes(1));
     const payload = vi.mocked(invoicesApi.emitirComprobante).mock.calls[0][0];
     expect(payload).toMatchObject({ tipo_comprobante: '01', forma_pago: 'Contado', medio_pago: medio,
@@ -122,4 +124,44 @@ it('el vuelto usa el pago directo con depósito BN y retención ya descontados',
   render(<InvoicePaymentPanel formaPago="Contado" medioPago="EFECTIVO" creditoHabilitado={false} pagoDirecto={88.17} onCambiar={vi.fn()} />);
   fireEvent.change(screen.getByLabelText('Monto entregado (S/)'), { target: { value: '100' } });
   expect(within(screen.getByRole('status', { name: 'Vuelto' })).getByRole('status')).toHaveTextContent('S/ 11.83');
+});
+
+
+it('valida al salir del documento, oculta el error durante la edición y enlaza el resumen al campo', async () => {
+  await mount();
+  expect(screen.queryByText('La factura exige el RUC del cliente.')).toBeNull();
+  const doc=screen.getByLabelText('RUC del cliente');
+  fireEvent.focus(doc);fireEvent.change(doc,{target:{value:'12'}});
+  expect(doc).toHaveAttribute('aria-invalid','false');
+  fireEvent.blur(doc);
+  expect(doc).toHaveAttribute('aria-invalid','true');
+  fireEvent.focus(doc);expect(doc).toHaveAttribute('aria-invalid','false');
+  fireEvent.change(doc,{target:{value:''}});fireEvent.blur(doc);
+  fireEvent.click(screen.getByRole('button',{name:'Emitir comprobante'}));
+  const summary=screen.getByRole('alert',{name:'Revise los campos indicados'});
+  await waitFor(()=>expect(summary).toHaveFocus());
+  const link=within(summary).getByRole('link',{name:'La factura exige el RUC del cliente.'});
+  fireEvent.click(link);expect(doc).toHaveFocus();expect(invoicesApi.emitirComprobante).not.toHaveBeenCalled();
+});
+it('revisión permite cambiar una sección sin enviar ni perder las líneas', async () => {
+  await preparar();fireEvent.click(screen.getByRole('button',{name:'Emitir comprobante'}));
+  const dialog=screen.getByRole('dialog',{name:'Revisar y emitir'});
+  expect(within(dialog).getByText('Cliente de prueba',{exact:false})).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole('button',{name:'Cambiar cliente'}));
+  await waitFor(()=>expect(screen.getByLabelText('RUC del cliente')).toHaveFocus());
+  expect(screen.getByLabelText('Cantidad de la línea 1',{exact:true})).toHaveValue('1');
+  expect(invoicesApi.emitirComprobante).not.toHaveBeenCalled();
+});
+it('recupera el borrador real de la pantalla y conserva lo digitado tras un error de envío',async()=>{
+ localStorage.clear();useAuthStore.setState({activeCompany:{tenantId:'empresa',ruc:'20100070970',razonSocial:'Empresa'}});
+ await preparar();fireEvent.change(screen.getByLabelText('Cantidad de la línea 1',{exact:true}),{target:{value:'2'}});
+ const key='m1:emision:v1:empresa:admin';
+ await waitFor(()=>expect(JSON.parse(localStorage.getItem(key)??'null')?.data.items[0].cantidad).toBe(2),{timeout:2500});
+ cleanup();await mount();expect(screen.getByRole('button',{name:'Retomar borrador'})).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Retomar borrador'}));
+ await waitFor(()=>expect(screen.getByLabelText('Razón social / nombre')).toHaveValue('Cliente de prueba'));
+ expect(screen.getByLabelText('Cantidad de la línea 1',{exact:true})).toHaveValue('2');
+ vi.mocked(invoicesApi.emitirComprobante).mockRejectedValueOnce({response:{data:{message:'El servicio no pudo procesar el intento.'}}});
+ fireEvent.click(screen.getByRole('button',{name:'Emitir comprobante'}));fireEvent.click(await screen.findByRole('button',{name:'Confirmar emisión'}));
+ await screen.findByText('No se emitió');expect(screen.getByLabelText('Cantidad de la línea 1',{exact:true})).toHaveValue('2');expect(screen.getByLabelText('Razón social / nombre')).toHaveValue('Cliente de prueba');expect(localStorage.getItem(key)).not.toBeNull();localStorage.removeItem(key);
 });

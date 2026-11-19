@@ -1,3 +1,12 @@
+import { useInvoiceBlur } from '../hooks/useInvoiceBlur';
+import { flushSync } from 'react-dom';
+import { useAuthStore } from '@/stores/authStore';
+import { masterDataApi } from '@/modules/customs/services/masterDataApi';
+import { invoiceFormIssues } from '../lib/invoiceFormIssues';
+import { InlineInvoiceError, InvoiceErrorSummary } from '../components/InvoiceFormFeedback';
+import { InvoiceReview } from '../components/InvoiceReview';
+import { useInvoiceLocalDraft } from '../hooks/useInvoiceLocalDraft';
+import { InvoiceUxPage as Page } from '../components/InvoiceUxPage';
 import { InvoicePaymentPanel } from '../components/InvoicePaymentPanel';
 import { useCommercialDefaults, permittedDefault } from '../hooks/useCommercialDefaults';
 import { useInvoiceDatePermission } from '../hooks/useInvoiceDatePermission';
@@ -64,19 +73,19 @@ import {
   AlertDescription,
   AlertTitle,
   Badge,
+  Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   Input,
-  Page,
   PageHeader,
   PageText,
 } from '@/components/ui';
 import { FileText, Send } from 'lucide-react';
 import { documentoValidoParaTipo, mensajeErrorDocumento } from '../lib/invoiceEmitValidation';
 import { useRucAutofill } from '../hooks/useRucAutofill';
-import { CustomerLookupField } from '../components/CustomerLookupField';
+import { CustomerLookupField, partnerToCustomer } from '../components/CustomerLookupField';
 import { InvoiceItemsGrid } from '../components/InvoiceItemsGrid';
 import { InvoiceDescuentoGlobal } from '../components/InvoiceDescuentoGlobal';
 import { liquidarDescuentoGlobal, type DescuentoGlobal } from '../lib/invoiceDescuentoGlobal';
@@ -128,6 +137,9 @@ import type { ResultadoEmisionBackend } from '../types/invoiceEmision.types';
 
 export default function InvoiceEmissionPage() {
   const puedeOperar = useInvoiceWritePermission();
+  const usuario = useAuthStore(state=>state.user?.id);
+  const empresa = useAuthStore(state=>state.activeCompany?.tenantId);
+  const restaurando = useRef(false);
   const { canEditDate, explanation: dateExplanation } = useInvoiceDatePermission();
   const [searchParams] = useSearchParams();
   const tipoQuery = searchParams.get('tipo');
@@ -175,6 +187,7 @@ export default function InvoiceEmissionPage() {
   const { data: commercialDefaults, isError: defaultsError } = useCommercialDefaults();
   const [formaPago, setFormaPago] = useState<'Contado' | 'Credito'>('Contado');
   useEffect(() => {
+    if (restaurando.current) { restaurando.current=false; return; }
     if (commercialDefaults) { setFormaPago(permittedDefault(commercialDefaults, clienteSeleccionado?.tieneCredito === true, tipo)); setMedioPago(commercialDefaults.medio_pago); setCuotas([]); }
   }, [commercialDefaults, clienteSeleccionado?.id, clienteSeleccionado?.tieneCredito, tipo]);
   const [medioPago, setMedioPago] = useState<import('../types/invoiceEmision.types').MedioPagoVenta>('EFECTIVO');
@@ -312,7 +325,9 @@ export default function InvoiceEmissionPage() {
     setItems((prev) => actualizarItem(prev, indice, parcial));
   };
 
+  const [ultimaLineaQuitada,setUltimaLineaQuitada]=useState<{indice:number;item:ItemBorrador}|null>(null);
   const eliminarItem = (indice: number) => {
+    if(items[indice])setUltimaLineaQuitada({indice,item:items[indice]});
     setItems((prev) => prev.filter((_, i) => i !== indice));
   };
 
@@ -336,9 +351,40 @@ export default function InvoiceEmissionPage() {
     setItems(prev => colocarProductoEnFilaVacia(prev, { ...relleno, clave: String(Date.now()) }));
   };
 
+  const incidencias = invoiceFormIssues({tipo,serie:serieActual,fecha:fechaEmision,documento:clienteDoc,nombre:clienteRazonSocial,items,descuento:descuentoGlobal,productos,detraccion:detraccion.aplica,medioDetraccion:medioPagoDetraccion,forma:formaPago,cuotas,neto:netoPendiente});
+  const feedback = useInvoiceBlur(incidencias);
+  const resumenErroresRef = useRef<HTMLDivElement>(null);
+  const [revisar,setRevisar] = useState(false);
+  const revisionConfirmada = useRef(false);
+  const snapshot = {tipo,serie:serieActual,fecha:fechaEmision,almacen,clienteDoc,clienteRazonSocial,clienteDireccion,clienteSeleccionado,items,descuentoGlobal,formaPago,medioPago,cuotas,agenteRetencion,correccionRetencion,medioPagoDetraccion};
+  const borradorLocal = useInvoiceLocalDraft(usuario&&empresa?`m1:emision:v1:${empresa}:${usuario}`:null,snapshot);
+  const [errorBorrador,setErrorBorrador] = useState('');
+  const retomar = async () => {
+    const d = borradorLocal.disponible?.data;
+    if(!d)return;
+    if(!['01','03'].includes(d.tipo)||![d.serie,d.fecha,d.almacen,d.clienteDoc,d.clienteRazonSocial,d.clienteDireccion].every(v=>typeof v==='string')||!['Contado','Credito'].includes(d.formaPago)||!['EFECTIVO','YAPE','PLIN','TARJETA','TRANSFERENCIA','DEPOSITO','CHEQUE'].includes(d.medioPago)||!Array.isArray(d.cuotas)||!d.cuotas.every(c=>c&&Number.isFinite(c.monto)&&typeof c.vencimiento==='string')||!Array.isArray(d.items)||!d.items.every(i=>i&&['clave','codigo','descripcion','unidad'].every(k=>typeof i[k as keyof typeof i]==='string')&&Number.isFinite(i.cantidad)&&Number.isFinite(i.valorUnitario)&&['GRAVADA','GRATUITA','EXONERADA','INAFECTA'].includes(i.afectacion))) {setErrorBorrador('El borrador local no se puede recuperar. Descártelo para continuar.');return;}
+    try {
+      // La condición comercial se vuelve a leer del maestro; no se confía en una copia local.
+      const cliente = d.clienteSeleccionado?.id ? partnerToCustomer(await masterDataApi.getPartner(d.clienteSeleccionado.id)) : null;
+      restaurando.current = Boolean(commercialDefaults) && (tipo!==d.tipo||clienteSeleccionado?.id!==cliente?.id||clienteSeleccionado?.tieneCredito!==cliente?.tieneCredito);
+      flushSync(()=>{setTipo(d.tipo);setClienteSeleccionado(cliente);});
+      setSerieElegida(d.serie);setFechaEmision(d.fecha);setAlmacen(d.almacen);
+      setClienteDoc(cliente?.numeroDocumento??d.clienteDoc);setClienteRazonSocial(cliente?.razonSocial??d.clienteRazonSocial);setClienteDireccion(cliente?.direccion??d.clienteDireccion);
+      setItems(cliente?.admiteDescuento===true?d.items:d.items.map(i=>({...i,descuento:null})));setDescuentoGlobal(cliente?.admiteDescuento===true?d.descuentoGlobal:null);setFormaPago(d.formaPago==='Credito'&&!(d.tipo==='01'&&cliente?.tieneCredito===true)?'Contado':d.formaPago);setMedioPago(d.medioPago);setCuotas(d.formaPago==='Credito'&&d.tipo==='01'&&cliente?.tieneCredito===true?d.cuotas:[]);
+      setAgenteRetencion(d.agenteRetencion);setCorreccionRetencion(d.correccionRetencion);setMedioPagoDetraccion(d.medioPagoDetraccion);
+      borradorLocal.retomado();setErrorBorrador('');
+    }catch{setErrorBorrador('No se pudo comprobar el cliente del borrador. Reintente la recuperación con conexión.');}
+  };
+
   const emitir = async (evento: React.FormEvent) => {
     evento.preventDefault();
     if (!puedeOperar) return;
+    if (incidencias.length) {
+      feedback.mostrar(); setResultado(null); revisionConfirmada.current=false;
+      requestAnimationFrame(()=>resumenErroresRef.current?.focus()); return;
+    }
+    if (!revisionConfirmada.current) {setRevisar(true);return;}
+    revisionConfirmada.current=false;
     (evento.currentTarget.querySelector('[aria-invalid="true"]') as HTMLElement | null)?.focus();
     if (!serieActual) { setResultado({ ok: false, mensaje: 'Configure una serie activa para este tipo de comprobante.' }); return; }
 
@@ -455,6 +501,7 @@ export default function InvoiceEmissionPage() {
       payloadPendiente = borradorAPayloadEmision(borradorCompleto);
       const r: ResultadoEmisionBackend = await invoicesApi.emitirComprobante(payloadPendiente, intento.current.clavePara(payloadPendiente));
       intento.current.completar();
+      borradorLocal.descartar();
 
       setResultado({
         ok: true,
@@ -538,8 +585,13 @@ export default function InvoiceEmissionPage() {
       />
 
       {defaultsError && <p role="alert">No se pudo leer el pago predeterminado. Verifique la forma y el medio antes de emitir.</p>}
-      <form ref={formRef} onKeyDown={teclado.handler} onSubmit={emitir} className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+      <form noValidate ref={formRef} onChangeCapture={borradorLocal.marcar} onBlurCapture={feedback.alSalir} onFocusCapture={feedback.alEntrar} onKeyDown={teclado.handler} onSubmit={emitir} className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
         <div className="lg:col-span-2">{teclado.ayuda}</div>
+        {borradorLocal.disponible && <section className="space-y-2 rounded border p-3 lg:col-span-2" aria-label="Borrador disponible"><p>Hay un borrador guardado en este navegador.</p><Button type="button" variant="outline" onClick={()=>void retomar()}>Retomar borrador</Button><Button type="button" variant="ghost" onClick={borradorLocal.descartar}>Descartar borrador</Button></section>}
+        {borradorLocal.savedAt && <p role="status" className="text-xs lg:col-span-2">Borrador guardado {new Date(borradorLocal.savedAt).toLocaleTimeString('es-PE',{timeZone:'America/Lima',hour:'2-digit',minute:'2-digit',hour12:false})}</p>}
+        {errorBorrador && <p role="alert" className="lg:col-span-2">{errorBorrador}</p>}
+        {feedback.enviado && incidencias.length>0 && <InvoiceErrorSummary issues={incidencias} formRef={formRef} summaryRef={resumenErroresRef}/>}
+
         <section aria-labelledby="emision-operacion" className="min-w-0 space-y-5">
           <Card>
             <CardHeader>
@@ -550,6 +602,7 @@ export default function InvoiceEmissionPage() {
             <CardContent className="space-y-4">
               <h3 className="text-sm font-medium">Cliente</h3>
               <CustomerLookupField
+                erroresExternos={{documento:feedback.mensaje('#doc-cliente'),nombre:feedback.mensaje('#razon-cliente')}}
                 unico={tipo === '03'}
                 documento={clienteDoc}
                 razonSocial={clienteRazonSocial}
@@ -614,10 +667,11 @@ export default function InvoiceEmissionPage() {
                 <InvoiceWarehouseSelect value={almacen} onChange={setAlmacen} />
                 <div className="min-w-0 space-y-1.5 text-sm font-medium">
                   <label htmlFor="serie-cpe">Serie configurada</label>
-                  <select id="serie-cpe" value={serieActual} onChange={e => setSerieElegida(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
+                  <select id="serie-cpe" aria-invalid={Boolean(feedback.mensaje('#serie-cpe'))} aria-describedby={feedback.mensaje('#serie-cpe')?'serie-emision-error':undefined} value={serieActual} onChange={e => setSerieElegida(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
                     {!seriesDelTipo.length && <option value="">{estadoConfiguracion === 'cargando' ? 'Cargando configuración…' : estadoConfiguracion === 'error' ? 'No se pudo cargar la configuración' : 'Sin serie activa'}</option>}
                     {seriesDelTipo.map(s => <option key={s.series} value={s.series}>{s.series}</option>)}
                   </select>
+                  <InlineInvoiceError id="serie-emision-error" mensaje={feedback.mensaje('#serie-cpe')}/>
                   <InvoiceNextNumber cargando={estadoConfiguracion === 'cargando'} error={estadoConfiguracion === 'error'} serie={serieActual} actual={seriesDelTipo.find(s => s.series === serieActual)?.current_correlative} />
                 </div>
               </div>
@@ -626,7 +680,7 @@ export default function InvoiceEmissionPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Detalle de bienes y servicios</CardTitle></CardHeader>
             <CardContent className="min-w-0 space-y-4">
-              <InvoiceItemsGrid codigoSoloCatalogo tipo={tipo} catalogoEstado={catalogoEstado}
+              <InvoiceItemsGrid mostrarErrores={feedback.enviado} codigoSoloCatalogo tipo={tipo} catalogoEstado={catalogoEstado}
                 items={items}
                 onCambiar={cambiarItem}
                 onEliminar={eliminarItem}
@@ -636,7 +690,8 @@ export default function InvoiceEmissionPage() {
                 onAgregarConProducto={agregarConProducto}
                 admiteDescuento={clienteSeleccionado?.admiteDescuento === true}
               />
-              <InvoiceDescuentoGlobal
+              {ultimaLineaQuitada && <p role="status" className="text-sm">Ítem retirado. <Button type="button" variant="link" onClick={()=>{setItems(prev=>{const next=[...prev];next.splice(Math.min(ultimaLineaQuitada.indice,next.length),0,ultimaLineaQuitada.item);return next;});setUltimaLineaQuitada(null);borradorLocal.marcar();}}>Deshacer quitar ítem</Button></p>}
+              <InvoiceDescuentoGlobal error={feedback.mensaje('[data-invoice-discount]')}
                 valor={descuentoGlobal}
                 disabled={clienteSeleccionado?.admiteDescuento !== true}
                 onChange={setDescuentoGlobal}
@@ -687,13 +742,12 @@ export default function InvoiceEmissionPage() {
                     max={topeDeFechaEmision()}
                     value={fechaEmision}
                     readOnly={!canEditDate}
-                    aria-describedby={!canEditDate ? 'fecha-emision-permiso' : undefined}
+                    aria-invalid={Boolean(feedback.mensaje('#fecha-emision'))}
+                    aria-describedby={feedback.mensaje('#fecha-emision')?'fecha-emision-error':!canEditDate?'fecha-emision-permiso':undefined}
                     onChange={(e) => { if (canEditDate) cambiarFecha(e.target.value); }}
                   />
                   {dateExplanation && <PageText id="fecha-emision-permiso" variant="caption">{dateExplanation}</PageText>}
-                  {problemaFecha && (
-                    <PageText variant="error">{problemaFecha}</PageText>
-                  )}
+                  <InlineInvoiceError id="fecha-emision-error" mensaje={feedback.mensaje('#fecha-emision')} />
                   {!problemaFecha && formaPago === 'Credito' && cuotas.length > 0 && (
                     <PageText variant="caption">
                       Los vencimientos conservan su plazo respecto de la nueva
@@ -715,16 +769,16 @@ export default function InvoiceEmissionPage() {
                 }}
               />
               {formaPago === 'Credito' && (
-                <CreditInstallmentsEditor
+                <div id="emision-cuotas" tabIndex={-1}><CreditInstallmentsEditor mostrarErrores={feedback.enviado}
                   cuotas={cuotas}
                   netoPendiente={netoPendiente}
                   fechaEmision={fechaEmision}
                   onCambiar={setCuotas}
-                />
+                /><InlineInvoiceError mensaje={feedback.mensaje('#emision-cuotas')}/></div>
               )}
             </CardContent>
             <div className="shrink-0 space-y-4 border-t bg-muted/30 px-6 py-4">
-              <h3 className="text-sm font-semibold">Liquidación</h3>
+              <h3 id="emision-liquidacion" tabIndex={-1} className="text-sm font-semibold">Liquidación</h3>
               <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Op. gravada</span>
@@ -763,6 +817,7 @@ export default function InvoiceEmissionPage() {
                 Por eso se muestra qué línea la genera y cuánto, no un porcentaje
                 suelto sobre el total.
               */}
+              <InlineInvoiceError mensaje={feedback.mensaje('[aria-label="Medio de pago de la detracción"]')}/>
               <MedioPagoDetraccionSelect aplica={detraccion.aplica} value={medioPagoDetraccion} onChange={setMedioPagoDetraccion} />
               {detraccion.aplica ? (
                 <div className="space-y-1 border-t border-border pt-2 text-xs">
@@ -808,7 +863,7 @@ export default function InvoiceEmissionPage() {
               className="w-full"
             >
               <Send className="mr-2 h-4 w-4" />
-              {enviando ? 'Emitiendo…' : 'Emitir'}
+              {enviando ? 'Emitiendo…' : 'Revisar y emitir'}
             </InvoiceWriteButton>
             </div>
           </Card>
@@ -835,11 +890,16 @@ export default function InvoiceEmissionPage() {
             </Alert>
           )}
         </section>
+        {!puedeOperar && <p className="text-sm lg:col-start-2">Emisión no disponible. Espere la verificación de permisos; si persiste, solicite acceso al administrador.</p>}
+        {enviando && <p role="status" className="text-sm lg:col-start-2">La emisión está en curso. Espere el resultado antes de repetir.</p>}
         <div aria-label="Resumen de pago" className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg lg:hidden">
           <span className="text-sm font-medium">Total a pagar</span>
           <span className="flex items-baseline gap-1 font-semibold tabular-nums text-primary"><span>S/</span><span>{pagoSegunDeposito(importeTotal, detraccion.monto, retencion).pagoDirecto.toFixed(2)}</span></span>
         </div>
       </form>
+      <InvoiceReview open={revisar} close={()=>setRevisar(false)} cliente={`${clienteDoc} · ${clienteRazonSocial}`} items={items} total={importeTotal} importes={{base:totales.gravado,igv:totales.igv,icbper:totales.icbper,detraccion:detraccion.monto,retencion}} pago={formaPago==='Credito'?'Crédito':medioPago}
+        change={selector=>{setRevisar(false);requestAnimationFrame(()=>{const field=formRef.current?.querySelector<HTMLElement>(selector);field?.scrollIntoView?.({block:'center'});field?.focus();});}}
+        confirm={()=>{setRevisar(false);revisionConfirmada.current=true;formRef.current?.requestSubmit();}}/>
     </Page>
   );
 }

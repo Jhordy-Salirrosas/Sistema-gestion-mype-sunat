@@ -1,3 +1,5 @@
+import { InlineInvoiceError } from './InvoiceFormFeedback';
+import { CircleAlert } from 'lucide-react';
 import { erroresCamposLinea } from '../lib/invoiceLineFields';
 import { cantidadBolsasDe, errorBolsas, bolsasBloqueadasEnBoleta, BOLETA_GRATUITA_BOLSAS } from '../lib/invoiceBags';
 import { NOMBRES_AFECTACION } from '../lib/invoiceTributosXml';
@@ -20,7 +22,6 @@ import { Button, PageText } from '@/components/ui';
 import { InventoryProductSearchSelect } from './InventoryProductSearchSelect';
 import {
   calcularItem,
-  cantidadValidaParaUnidad,
   unidadDiscreta,
   type ItemBorrador,
 } from '../lib/invoiceItems';
@@ -73,6 +74,7 @@ export const InvoiceItemsGrid = ({
   esNota = false, catalogoEstado = 'listo',
 }: InvoiceItemsGridProps) => {
   const grillaRef = useRef<HTMLDivElement>(null);
+  const [enEdicion,setEnEdicion]=useState('');
   const [editados, setEditados] = useState<ReadonlySet<string>>(new Set());
   const marcarCampo = (clave: string, target: EventTarget) => {
     const campo = (target as HTMLElement).dataset.lineField;
@@ -150,16 +152,16 @@ export const InvoiceItemsGrid = ({
               const errores = erroresCamposLinea(item, esNota);
               const codigoAfectacion = item.codigoAfectacion || ({ GRAVADA: '10', EXONERADA: '20', INAFECTA: '30' } as Record<string, string>)[item.afectacion];
               const tributo = codigoAfectacion === '40' ? '9995 - Exportación' : item.afectacion === 'GRAVADA' ? '1000 - IGV' : item.afectacion === 'EXONERADA' ? '9997 - Exonerado' : '9998 - Inafecto';
-              const visible = (campo: keyof typeof errores) => Boolean(errores[campo]) && (mostrarErrores || editados.has(`${item.clave}:${campo}`));
+              const visible = (campo: keyof typeof errores) => Boolean(errores[campo]) && enEdicion!==`${item.clave}:${campo}` && (mostrarErrores || editados.has(`${item.clave}:${campo}`));
               const totales = calcularItem(item);
               const revisionLinea = revision.lineas[i];
               const conError = revisionLinea?.gravedad === 'error';
               return (
                 <Fragment key={item.clave}>
                 <tr
-                  onChangeCapture={e => marcarCampo(item.clave, e.target)} onBlurCapture={e => marcarCampo(item.clave, e.target)}
+                  onFocusCapture={e=>{const campo=(e.target as HTMLElement).dataset.lineField;setEnEdicion(`${item.clave}:${campo}`);if(campo)setEditados(v=>new Set([...v].filter(k=>k!==`${item.clave}:${campo}`)));}} onBlurCapture={e => {setEnEdicion('');marcarCampo(item.clave, e.target);}}
                   className={`flex flex-wrap items-start gap-2 rounded-lg border p-2.5 @min-[1024px]/items:table-row @min-[1024px]/items:rounded-none @min-[1024px]/items:border-0 @min-[1024px]/items:p-0 ${
-                    conError ? 'bg-destructive/5' : ''
+                    conError && (mostrarErrores || editados.has(`${item.clave}:cantidad`)) ? 'bg-destructive/5' : ''
                   }`}
                 >
                   {/* Cabecera compacta en <1024px: CÓDIGO · Descripción · Unidad · V.U. x */}
@@ -200,8 +202,8 @@ export const InvoiceItemsGrid = ({
                     >
                       {item.descripcion || '—'}
                     </span>
-                    {visible('descripcion') && <p id={`${item.clave}-descripcion-error`} role="alert" className="text-[11px] text-destructive">{errores.descripcion}</p>}
-                    {revisionLinea && revisionLinea.gravedad !== 'ok' && (
+                    {visible('descripcion') && <p id={`${item.clave}-descripcion-error`} role="alert" className="text-[11px] text-destructive"><CircleAlert aria-hidden="true" className="mr-1 inline h-3 w-3" />{errores.descripcion}</p>}
+                    {revisionLinea && revisionLinea.gravedad === 'aviso' && (
                       <p className={`mt-0.5 truncate text-[10px] leading-tight ${conError ? 'font-medium text-destructive' : 'text-amber-600 dark:text-amber-400'}`} title={revisionLinea.mensaje}>
                         {revisionLinea.mensaje}
                       </p>
@@ -219,13 +221,13 @@ export const InvoiceItemsGrid = ({
                     {!esNota && unidadDiscreta(item.unidad) ? <InvoiceIntegerInput
                       aria-label={`Cantidad de la línea ${i + 1}`} data-line-field="cantidad" data-line-invalid={Boolean(errores.cantidad)}
                       aria-describedby={visible('cantidad') ? `${item.clave}-cantidad-error` : undefined}
-                      aria-invalid={Boolean(errores.cantidad) || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
+                      aria-invalid={visible('cantidad') || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
                       className={`${CLASE_CELDA} text-right`} value={item.cantidad}
                       onValue={cantidad => onCambiar(i, { cantidad })} /> : (
                     <input
                       aria-label={`Cantidad de la línea ${i + 1}`} data-line-field="cantidad" data-line-invalid={Boolean(errores.cantidad)} aria-describedby={visible('cantidad') ? `${item.clave}-cantidad-error` : undefined}
                       max={cantidadesMaximas?.[i]}
-                      aria-invalid={!cantidadValidaParaUnidad(item.cantidad, item.unidad, esNota) || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
+                      aria-invalid={visible('cantidad') || (cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i])}
                       type="number"
                       min="0.001"
                       step="0.001"
@@ -243,7 +245,8 @@ export const InvoiceItemsGrid = ({
                       }}
                     />
                     )}
-                    {visible('cantidad') && <p id={`${item.clave}-cantidad-error`} role="alert" className="text-[11px] text-destructive">{errores.cantidad}</p>}
+                    {revisionLinea?.gravedad==='error' && enEdicion!==`${item.clave}:cantidad` && (mostrarErrores||editados.has(`${item.clave}:cantidad`)) && <InlineInvoiceError mensaje={revisionLinea.mensaje}/>}
+                    {visible('cantidad') && <p id={`${item.clave}-cantidad-error`} role="alert" className="text-[11px] text-destructive"><CircleAlert aria-hidden="true" className="mr-1 inline h-3 w-3" />{errores.cantidad}</p>}
                     {cantidadesMaximas !== undefined && item.cantidad > cantidadesMaximas[i] && <p role="alert" className="text-[11px] text-destructive">Supera las unidades disponibles del origen (máximo {cantidadesMaximas[i]}).</p>}
                   </td>
 
@@ -258,7 +261,7 @@ export const InvoiceItemsGrid = ({
                     >
                       {item.valorUnitario.toFixed(2)}
                     </span>
-                    {visible('valorUnitario') && <p id={`${item.clave}-valorUnitario-error`} role="alert" className="text-[11px] text-destructive">{errores.valorUnitario}</p>}
+                    {visible('valorUnitario') && <p id={`${item.clave}-valorUnitario-error`} role="alert" className="text-[11px] text-destructive"><CircleAlert aria-hidden="true" className="mr-1 inline h-3 w-3" />{errores.valorUnitario}</p>}
                   </td>
 
                   <td className="order-3 min-w-0 flex-1 basis-[110px] space-y-1 @min-[1024px]/items:table-cell @min-[1024px]/items:px-1.5 @min-[1024px]/items:py-1.5 @min-[1024px]/items:align-top">
@@ -352,7 +355,7 @@ export const InvoiceItemsGrid = ({
                   </td>
                 </tr>
                 {item.valorUnitario === 0 && !esNota && item.afectacion !== 'GRATUITA' && !visible('valorUnitario') && (
-                  <tr className={conError ? 'bg-destructive/5' : ''}>
+                  <tr className={conError && (mostrarErrores || editados.has(`${item.clave}:cantidad`)) ? 'bg-destructive/5' : ''}>
                     <td colSpan={10} className="block px-2 pb-1.5 @min-[1024px]/items:table-cell">
                       <p className="text-[11px] text-amber-700">El valor unitario de una línea onerosa debe ser mayor que cero.</p>
                     </td>
@@ -383,7 +386,7 @@ export const InvoiceItemsGrid = ({
       {/* Resumen de la validación contra el almacén: dice cuántas líneas se
           comprobaron de verdad, para no dar a entender que un producto que no
           está en el inventario también fue validado. */}
-      {revision.errores > 0 && (
+      {revision.errores > 0 && !enEdicion && (mostrarErrores||editados.size>0) && (
         <p className="text-[11px] font-medium text-destructive">
           {revision.errores === 1
             ? 'Hay 1 línea que supera el stock disponible.'
