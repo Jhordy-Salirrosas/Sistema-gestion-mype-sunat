@@ -14,6 +14,11 @@ export interface ConsultaDniResponse {
 
 interface DniPayload {
   dni?: unknown;
+  first_name?: unknown;
+  first_last_name?: unknown;
+  second_last_name?: unknown;
+  full_name?: unknown;
+  document_number?: unknown;
   numero_documento?: unknown;
   numeroDocumento?: unknown;
   nombres?: unknown;
@@ -58,12 +63,12 @@ export class DniConsultaService {
     }
     const data = await response.json().catch(() => null) as DniPayload | null;
     if (!data || typeof data !== 'object') throw new ClientSafeHttpException(503, 'El proveedor de DNI devolvió una respuesta inválida.');
-    const recibido = this.text(data.dni ?? data.numero_documento ?? data.numeroDocumento) || dni;
+    const recibido = this.text(data.document_number ?? data.dni ?? data.numero_documento ?? data.numeroDocumento) || dni;
     if (recibido !== dni) throw new ClientSafeHttpException(503, 'La respuesta del proveedor no corresponde al DNI consultado.');
-    const nombres = this.text(data.nombres);
-    const apellidoPaterno = this.text(data.apellido_paterno ?? data.apellidoPaterno);
-    const apellidoMaterno = this.text(data.apellido_materno ?? data.apellidoMaterno);
-    const nombreCompleto = this.text(data.nombre_completo ?? data.nombreCompleto)
+    const nombres = this.text(data.first_name ?? data.nombres);
+    const apellidoPaterno = this.text(data.first_last_name ?? data.apellido_paterno ?? data.apellidoPaterno);
+    const apellidoMaterno = this.text(data.second_last_name ?? data.apellido_materno ?? data.apellidoMaterno);
+    const nombreCompleto = this.text(data.full_name ?? data.nombre_completo ?? data.nombreCompleto)
       || [nombres, apellidoPaterno, apellidoMaterno].filter(Boolean).join(' ').trim();
     if (!nombreCompleto) throw new ClientSafeHttpException(503, 'La respuesta del proveedor no contiene el nombre completo.');
     return { dni, nombres, apellidoPaterno, apellidoMaterno, nombreCompleto, fechaConsulta: new Date().toISOString(), source: 'decolecta' };
