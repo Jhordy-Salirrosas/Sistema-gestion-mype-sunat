@@ -18,7 +18,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { CurrentUser } from '../../../../common/decorators';
+import { CurrentUser, Roles } from '../../../../common/decorators';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { ReconcilePeriodDto } from '../../application/dto/reconcilePeriodDto';
 import { SireHistoryQueryDto } from '../../application/dto/sireHistoryQueryDto';
@@ -30,6 +30,7 @@ import { IngestSireProposalUseCase } from '../../application/use-cases/ingestSir
 import { ReconcileSireUseCase } from '../../application/use-cases/reconcileSireUseCase';
 import type { ReconcileResultDto } from '../../application/dto/reconcileResultDto';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import { UploadSireReportUseCase } from '../../application/use-cases/uploadSireReportUseCase';
 import { GetSireProposalUseCase } from '../../application/use-cases/getSireProposalUseCase';
 import { ExcludeSireRecordUseCase } from '../../application/use-cases/excludeSireRecordUseCase';
@@ -48,6 +49,7 @@ import {
 } from '../../application/dto/sireProvisionalQueryDto';
 import { AcceptSireProposalUseCase } from '../../application/use-cases/acceptSireProposalUseCase';
 import { RestoreSireRecordUseCase } from '../../application/use-cases/restoreSireRecordUseCase';
+import { SIRE_OPERATION_ROLES } from '../../application/sireAccess';
 
 interface UploadedSireFile {
   originalname: string;
@@ -93,7 +95,8 @@ const reportUploadOptions = {
 };
 
 @Controller(['api/v1/sire', 'sire'])
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(...SIRE_OPERATION_ROLES)
 export class SireController {
   constructor(
     private readonly reconcileSireUseCase: ReconcileSireUseCase,

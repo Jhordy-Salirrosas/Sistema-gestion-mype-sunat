@@ -32,37 +32,37 @@ export class PrismaSireConfigurationRepository
     credentials: SireConfigurationCredentials,
   ): Promise<void> {
     const existing = await this.prisma.sireConfiguration.findUnique({
-      where: { company_id: companyId },
+      where: { companyId },
       select: {
-        client_id_enc: true,
-        client_secret_enc: true,
-        sol_user_enc: true,
-        sol_password_enc: true,
+        clientId: true,
+        clientSecret: true,
+        solUser: true,
+        solPasswordEncrypted: true,
       },
     });
 
     const data = {
-      client_id_enc: this.resolveEncrypted(
-        existing?.client_id_enc ?? null,
+      clientId: this.resolveEncrypted(
+        existing?.clientId ?? null,
         credentials.clientId,
       ),
-      client_secret_enc: this.resolveEncrypted(
-        existing?.client_secret_enc ?? null,
+      clientSecret: this.resolveEncrypted(
+        existing?.clientSecret ?? null,
         credentials.clientSecret,
       ),
-      sol_user_enc: this.resolveEncrypted(
-        existing?.sol_user_enc ?? null,
+      solUser: this.resolveEncrypted(
+        existing?.solUser ?? null,
         credentials.solUser,
       ),
-      sol_password_enc: this.resolveEncrypted(
-        existing?.sol_password_enc ?? null,
+      solPasswordEncrypted: this.resolveEncrypted(
+        existing?.solPasswordEncrypted ?? null,
         credentials.solPassword,
       ),
     };
 
     await this.prisma.sireConfiguration.upsert({
-      where: { company_id: companyId },
-      create: { company_id: companyId, ...data },
+      where: { companyId },
+      create: { companyId, ...data },
       update: data,
     });
   }
@@ -71,12 +71,12 @@ export class PrismaSireConfigurationRepository
     companyId: string,
   ): Promise<SireConfigurationResolved | null> {
     const row = await this.prisma.sireConfiguration.findUnique({
-      where: { company_id: companyId },
+      where: { companyId },
       select: {
-        client_id_enc: true,
-        client_secret_enc: true,
-        sol_user_enc: true,
-        sol_password_enc: true,
+        clientId: true,
+        clientSecret: true,
+        solUser: true,
+        solPasswordEncrypted: true,
       },
     });
 
@@ -85,10 +85,10 @@ export class PrismaSireConfigurationRepository
     }
 
     return {
-      clientId: this.decrypt(row.client_id_enc),
-      clientSecret: this.decrypt(row.client_secret_enc),
-      solUser: this.decrypt(row.sol_user_enc),
-      solPassword: this.decrypt(row.sol_password_enc),
+      clientId: this.decrypt(row.clientId),
+      clientSecret: this.decrypt(row.clientSecret),
+      solUser: this.decrypt(row.solUser),
+      solPassword: this.decrypt(row.solPasswordEncrypted),
     };
   }
 

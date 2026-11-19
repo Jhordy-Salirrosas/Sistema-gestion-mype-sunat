@@ -129,5 +129,5 @@ it('en producción migra la credencial del entorno a la empresa una sola vez', a
   Object.assign(h.company, { issuer_sol_configured: false, issuer_config_activated_at: new Date(), issuer_ruc: null });
   const contexto = await h.resolver.resolve(h.company.id);
   expect(contexto).toMatchObject({ solSource: 'company', sol: { username: `${COMPANY_RUC}MODDATOS` } });
-  expect(h.db.company.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ issuer_sol_configured: true, sol_user: 'MODDATOS' }) }));
+  expect(h.db.company.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ issuer_sol_configured: true, sunat_issuer_username: 'MODDATOS' }) }));
 });

@@ -40,4 +40,9 @@ export interface SireFileStoragePort {
    * Guarda el archivo y devuelve la ruta, el hash y el backend usado.
    */
   guardar(archivo: SireArchivoAGrabar): Promise<SireArchivoGuardado>;
+
+  /**
+   * Vuelve a leer el archivo desde el backend donde quedó guardado.
+   */
+  leer(ruta: string, backend: SireStorageBackend): Promise<Buffer>;
 }

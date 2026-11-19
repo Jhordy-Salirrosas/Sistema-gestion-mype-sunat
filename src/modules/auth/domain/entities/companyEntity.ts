@@ -7,8 +7,6 @@ export interface CompanyProps {
   solPassEncrypted: string;
   certStorageUrl?: string | null;
   certPassEncrypted?: string | null;
-  sireClientIdEnc?: string | null;
-  sireClientSecretEnc?: string | null;
   isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -47,14 +45,6 @@ export class CompanyEntity {
 
   get certPassEncrypted(): string | null {
     return this.props.certPassEncrypted ?? null;
-  }
-
-  get sireClientIdEnc(): string | null {
-    return this.props.sireClientIdEnc ?? null;
-  }
-
-  get sireClientSecretEnc(): string | null {
-    return this.props.sireClientSecretEnc ?? null;
   }
 
   get isActive(): boolean {

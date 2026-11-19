@@ -14,8 +14,8 @@ export function issuerConfigHarness() {
     issuer_environment: null as string | null,
     issuer_sol_configured: null as boolean | null,
     issuer_cert_configured: null as boolean | null,
-    sol_user: 'FAKE_LEGACY',
-    sol_pass_encrypted: 'fake-legacy-unmanaged',
+    sunat_issuer_username: 'FAKE_LEGACY',
+    sunat_issuer_password_enc: 'fake-legacy-unmanaged',
     cert_storage_url: null as string | null,
     cert_pass_encrypted: null as string | null,
   };

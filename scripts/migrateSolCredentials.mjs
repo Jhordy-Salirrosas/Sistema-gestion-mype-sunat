@@ -50,19 +50,19 @@ async function main() {
     await client.query('BEGIN');
     transactionOpen = true;
     const result = await client.query(
-      'SELECT id, sol_pass_encrypted FROM companies FOR UPDATE',
+      'SELECT id, sunat_issuer_password_enc FROM companies FOR UPDATE',
     );
     const legacyRows = result.rows.filter(
-      (row) => !row.sol_pass_encrypted.startsWith('sol:v1:'),
+      (row) => !row.sunat_issuer_password_enc.startsWith('sol:v1:'),
     );
 
     if (apply) {
       for (const row of legacyRows) {
         const updated = await client.query(
           `UPDATE companies
-           SET sol_pass_encrypted = $1, updated_at = NOW()
-           WHERE id = $2 AND sol_pass_encrypted = $3`,
-          [encrypt(row.sol_pass_encrypted), row.id, row.sol_pass_encrypted],
+           SET sunat_issuer_password_enc = $1, updated_at = NOW()
+           WHERE id = $2 AND sunat_issuer_password_enc = $3`,
+          [encrypt(row.sunat_issuer_password_enc), row.id, row.sunat_issuer_password_enc],
         );
         if (updated.rowCount !== 1) {
           throw new Error('Concurrent credential update detected.');

@@ -87,9 +87,23 @@ describe('SireConfigurationController HTTP', () => {
   it('rechaza el RUC y otras propiedades desconocidas', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/sire/configuracion')
-      .send({ companyId: 'otra-empresa' })
+      .send({ ruc: '20100070970' })
       .expect(400);
 
     expect(guardarUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it('permite a un ADMIN guardar la configuración de otra empresa', async () => {
+    guardarUseCase.execute.mockResolvedValue({ configured: true });
+
+    await request(app.getHttpServer())
+      .post('/api/v1/sire/configuracion')
+      .send({ companyId: 'otra-empresa', clientId: 'client-id' })
+      .expect(200);
+
+    expect(guardarUseCase.execute).toHaveBeenCalledWith(
+      'otra-empresa',
+      expect.objectContaining({ companyId: 'otra-empresa' }),
+    );
   });
 });

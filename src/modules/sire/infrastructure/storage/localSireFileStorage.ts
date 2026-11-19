@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -24,6 +24,10 @@ export class LocalSireFileStorage implements SireFileStoragePort {
 
   constructor(raiz?: string) {
     this.raiz = resolve(raiz ?? join(tmpdir(), SIRE_CARPETA_LOCAL_POR_DEFECTO));
+  }
+
+  async leer(ruta: string): Promise<Buffer> {
+    return readFile(ruta);
   }
 
   async guardar(archivo: SireArchivoAGrabar): Promise<SireArchivoGuardado> {

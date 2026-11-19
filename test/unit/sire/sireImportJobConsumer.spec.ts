@@ -1,9 +1,20 @@
+import AdmZip from 'adm-zip';
 import type { QueueService } from '../../../src/modules/resilience/infrastructure/queue/queue.service';
 import {
   SireImportJobConsumer,
   SIRE_SIMULACION_DELAY_MS,
 } from '../../../src/modules/sire/infrastructure/queue/sireImportJobConsumer';
 import type { SireMenuRepository } from '../../../src/modules/sire/infrastructure/persistence/sireMenuRepository';
+import type { SireFileStoragePort } from '../../../src/modules/sire/domain/ports/sireFileStoragePort';
+
+const IMPORTACION = {
+  messageId: 'message-id',
+  companyId: 'company-id',
+  tipo: 'IMPORTACION' as const,
+  registroId: 'importacion-id',
+  periodo: '202401',
+  libro: 'RCE_COMPRAS' as const,
+};
 
 function crearRepository() {
   return {
@@ -13,10 +24,24 @@ function crearRepository() {
     marcarReporteEnProceso: jest.fn().mockResolvedValue(undefined),
     completarReporte: jest.fn().mockResolvedValue(undefined),
     fallarReporte: jest.fn().mockResolvedValue(undefined),
+    buscarImportacionPorMessageId: jest.fn().mockResolvedValue({
+      id: 'importacion-id',
+      periodo: '202401',
+      libro: 'RCE_COMPRAS',
+      nombre_archivo: 'LE20601030013-RCE-202401.txt',
+      ruta_archivo: 'sire/company-id/202401/archivo.txt',
+      backend_almacen: 'LOCAL',
+    }),
     buscarReportePorMessageId: jest.fn().mockResolvedValue({
       ticket: '12345678',
     }),
   } as unknown as SireMenuRepository;
+}
+
+function crearStorage(contenido = '20601030013|F001|1|100|18|118\n20601030013|F001|2|50|9|59') {
+  return {
+    leer: jest.fn().mockResolvedValue(Buffer.from(contenido)),
+  } as unknown as SireFileStoragePort;
 }
 
 function crearQueue() {
@@ -45,7 +70,11 @@ describe('SireImportJobConsumer', () => {
   it('registers the worker and the dead letter queue worker', async () => {
     const queue = crearQueue();
 
-    await new SireImportJobConsumer(queue, crearRepository()).onModuleInit();
+    await new SireImportJobConsumer(
+      queue,
+      crearRepository(),
+      crearStorage(),
+    ).onModuleInit();
 
     expect(queue.registerSireImportWorker).toHaveBeenCalled();
     expect(queue.registerSireImportDlqWorker).toHaveBeenCalled();
@@ -57,35 +86,105 @@ describe('SireImportJobConsumer', () => {
     } as unknown as QueueService;
 
     await expect(
-      new SireImportJobConsumer(queue, crearRepository()).onModuleInit(),
+      new SireImportJobConsumer(
+        queue,
+        crearRepository(),
+        crearStorage(),
+      ).onModuleInit(),
     ).resolves.toBeUndefined();
   });
 
-  it('marks an import as completed after the simulated processing', async () => {
+  it('reads the TXT, extracts RUC/period and completes the import with the real count', async () => {
     const repository = crearRepository();
-    const consumer = new SireImportJobConsumer(crearQueue(), repository);
+    const storage = crearStorage();
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      storage,
+    );
 
-    await consumer.process({
-      messageId: 'message-id',
-      companyId: 'company-id',
-      tipo: 'IMPORTACION',
-      registroId: 'importacion-id',
-      periodo: '202401',
-      libro: 'RCE_COMPRAS',
-    });
+    await consumer.process(IMPORTACION);
 
     expect(repository.marcarImportacionEnProceso).toHaveBeenCalledWith(
       'importacion-id',
     );
+    expect(storage.leer).toHaveBeenCalledWith(
+      'sire/company-id/202401/archivo.txt',
+      'LOCAL',
+    );
     expect(repository.completarImportacion).toHaveBeenCalledWith(
       'importacion-id',
-      expect.any(Number),
+      2,
+    );
+  });
+
+  it('reads a ZIP and processes its TXT member', async () => {
+    const repository = crearRepository();
+    const zip = new AdmZip();
+    zip.addFile(
+      'LE20601030013-RCE-202401.txt',
+      Buffer.from('20601030013|F001|1|100|18|118\n'),
+    );
+    const storage = {
+      leer: jest.fn().mockResolvedValue(zip.toBuffer()),
+    } as unknown as SireFileStoragePort;
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      storage,
+    );
+
+    await consumer.process(IMPORTACION);
+
+    expect(repository.completarImportacion).toHaveBeenCalledWith(
+      'importacion-id',
+      1,
+    );
+  });
+
+  it('marks the import as ARCHIVO_INVALIDO when the RUC is missing', async () => {
+    const repository = crearRepository();
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      crearStorage('sin ruc ni periodo'),
+    );
+
+    await consumer.process(IMPORTACION);
+
+    expect(repository.completarImportacion).not.toHaveBeenCalled();
+    expect(repository.fallarImportacion).toHaveBeenCalledWith(
+      'importacion-id',
+      'ARCHIVO_INVALIDO',
+    );
+  });
+
+  it('marks the import as ALMACENAMIENTO_ERROR when the file cannot be read', async () => {
+    const repository = crearRepository();
+    const storage = {
+      leer: jest.fn().mockRejectedValue(new Error('archivo perdido')),
+    } as unknown as SireFileStoragePort;
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      storage,
+    );
+
+    await consumer.process(IMPORTACION);
+
+    expect(repository.fallarImportacion).toHaveBeenCalledWith(
+      'importacion-id',
+      'ALMACENAMIENTO_ERROR',
     );
   });
 
   it('marks a report as completed with its ticket', async () => {
     const repository = crearRepository();
-    const consumer = new SireImportJobConsumer(crearQueue(), repository);
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      crearStorage(),
+    );
 
     await consumer.process({
       messageId: 'message-id',
@@ -110,21 +209,18 @@ describe('SireImportJobConsumer', () => {
     (repository.completarImportacion as jest.Mock).mockRejectedValue(
       new Error('fallo de base de datos'),
     );
-    const consumer = new SireImportJobConsumer(crearQueue(), repository);
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      crearStorage(),
+    );
 
-    await expect(
-      consumer.process({
-        messageId: 'message-id',
-        companyId: 'company-id',
-        tipo: 'IMPORTACION',
-        registroId: 'importacion-id',
-        periodo: '202401',
-        libro: 'RCE_COMPRAS',
-      }),
-    ).rejects.toThrow('fallo de base de datos');
+    await expect(consumer.process(IMPORTACION)).rejects.toThrow(
+      'fallo de base de datos',
+    );
   });
 
-  it('waits two seconds by default to simulate the processing', () => {
+  it('keeps the report simulation delay available', () => {
     delete process.env['SIRE_SIMULACION_DELAY_MS'];
 
     expect(SIRE_SIMULACION_DELAY_MS).toBe(2_000);

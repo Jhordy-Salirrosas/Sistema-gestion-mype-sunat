@@ -14,8 +14,9 @@ model Company {
   provincia_fiscal String?
   distrito_fiscal String?
 
-  sol_user              String
-  sol_pass_encrypted    String
+  /// Credenciales SOL del emisor de comprobantes (facturación), NO de SIRE.
+  sunat_issuer_username String
+  sunat_issuer_password_enc String
   cert_storage_url      String?
   issuer_ruc            String?       @db.VarChar(11)
   issuer_environment    String?
@@ -24,8 +25,7 @@ model Company {
   issuer_cert_configured Boolean?
   issuer_config_version String?
   cert_pass_encrypted   String?
-  sire_client_id_enc    String?
-  sire_client_secret_enc String?
+  // Las credenciales SIRE viven exclusivamente en SireConfiguration.
   // Cuenta del Banco de la Nación del emisor para depositar detracciones.
   // Vive en la empresa y no en el formulario: es un dato fiscal fijo del
   // contribuyente, no algo que se escriba en cada emisión. El formulario queda

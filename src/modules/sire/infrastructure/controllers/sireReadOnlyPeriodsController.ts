@@ -10,11 +10,12 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { CurrentUser } from '../../../../common/decorators';
+import { CurrentUser, Roles } from '../../../../common/decorators';
 import { ClientSafeHttpException } from '../../../../common/exceptions';
 import { PrismaService } from '../../../../database/prismaService';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../../../auth/domain/ports/userRepositoryPort';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import { QueueService, type SirePeriodsJobData } from '../../../resilience/infrastructure/queue/queue.service';
 import { SirePeriodsRequestDto } from '../../application/dto/sirePeriodsRequestDto';
 import {
@@ -33,6 +35,7 @@ import {
   SIRE_REQUEST_STORE_FAILED_MESSAGE,
 } from '../../domain/rules/sirePeriodFailureMessages';
 import { describeErrorSafely } from '../../domain/rules/sireRedactionUtils';
+import { SIRE_OPERATION_ROLES } from '../../application/sireAccess';
 import { SireReadOnlyPeriodsClient } from '../sunat/sireReadOnlyPeriodsClient';
 
 /**
@@ -78,7 +81,8 @@ interface RequestCompany {
 }
 
 @Controller('api/v1/sire')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(...SIRE_OPERATION_ROLES)
 export class SireReadOnlyPeriodsController {
   private readonly logger = new Logger(SireReadOnlyPeriodsController.name);
 
@@ -95,6 +99,29 @@ export class SireReadOnlyPeriodsController {
   async getPeriods(
     @Body() dto: SirePeriodsRequestDto,
     @CurrentUser() user?: TokenPayload,
+  ): Promise<SirePeriodsRequestResponse> {
+    return this.requestPeriods(dto, user);
+  }
+
+  /**
+   * Alias GET de la consulta de períodos.
+   *
+   * No consulta SUNAT en línea: registra la solicitud y encola el trabajo de
+   * solo lectura. El worker autentica con POST OAuth y luego consulta con GET
+   * usando las credenciales de `SireConfiguration` de la empresa del job.
+   */
+  @Get('periodos')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async consultarPeriodos(
+    @Query() dto: SirePeriodsRequestDto,
+    @CurrentUser() user?: TokenPayload,
+  ): Promise<SirePeriodsRequestResponse> {
+    return this.requestPeriods(dto, user);
+  }
+
+  private async requestPeriods(
+    dto: SirePeriodsRequestDto,
+    user?: TokenPayload,
   ): Promise<SirePeriodsRequestResponse> {
     const company = await this.resolveCompany(user);
     this.assertIntegrationEnabled();

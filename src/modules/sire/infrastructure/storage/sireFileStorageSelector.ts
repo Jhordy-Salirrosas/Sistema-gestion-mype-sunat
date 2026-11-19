@@ -3,6 +3,7 @@ import {
   type SireArchivoAGrabar,
   type SireArchivoGuardado,
   type SireFileStoragePort,
+  type SireStorageBackend,
 } from '../../domain/ports/sireFileStoragePort';
 import { LocalSireFileStorage } from './localSireFileStorage';
 import { SupabaseSireFileStorage } from './supabaseSireFileStorage';
@@ -44,6 +45,14 @@ export class ResilientSireFileStorage implements SireFileStoragePort {
     }
 
     return this.respaldo.guardar(archivo);
+  }
+
+  async leer(ruta: string, backend: SireStorageBackend): Promise<Buffer> {
+    if (backend === 'SUPABASE' && this.principal) {
+      return this.principal.leer(ruta, backend);
+    }
+
+    return this.respaldo.leer(ruta, backend);
   }
 }
 

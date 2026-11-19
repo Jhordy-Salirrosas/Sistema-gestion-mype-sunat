@@ -44,29 +44,29 @@ describe('PrismaSireConfigurationRepository', () => {
 
       expect(cifrado.encrypt).toHaveBeenCalledTimes(4);
       expect(prisma.sireConfiguration.upsert).toHaveBeenCalledWith({
-        where: { company_id: COMPANY_ID },
+        where: { companyId: COMPANY_ID },
         create: {
-          company_id: COMPANY_ID,
-          client_id_enc: 'enc(client-id)',
-          client_secret_enc: 'enc(client-secret)',
-          sol_user_enc: 'enc(FAKEUSER)',
-          sol_password_enc: 'enc(fake-sol-password)',
+          companyId: COMPANY_ID,
+          clientId: 'enc(client-id)',
+          clientSecret: 'enc(client-secret)',
+          solUser: 'enc(FAKEUSER)',
+          solPasswordEncrypted: 'enc(fake-sol-password)',
         },
         update: {
-          client_id_enc: 'enc(client-id)',
-          client_secret_enc: 'enc(client-secret)',
-          sol_user_enc: 'enc(FAKEUSER)',
-          sol_password_enc: 'enc(fake-sol-password)',
+          clientId: 'enc(client-id)',
+          clientSecret: 'enc(client-secret)',
+          solUser: 'enc(FAKEUSER)',
+          solPasswordEncrypted: 'enc(fake-sol-password)',
         },
       });
     });
 
     it('keeps the stored value when the credential was not sent', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id-anterior)',
-        client_secret_enc: 'enc(client-secret-anterior)',
-        sol_user_enc: 'enc(FAKEUSER-anterior)',
-        sol_password_enc: 'enc(fake-sol-password-anterior)',
+        clientId: 'enc(client-id-anterior)',
+        clientSecret: 'enc(client-secret-anterior)',
+        solUser: 'enc(FAKEUSER-anterior)',
+        solPasswordEncrypted: 'enc(fake-sol-password-anterior)',
       });
       const cifrado = crearCifrado();
       const repository = new PrismaSireConfigurationRepository(prisma, cifrado);
@@ -77,10 +77,10 @@ describe('PrismaSireConfigurationRepository', () => {
       expect(prisma.sireConfiguration.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: {
-            client_id_enc: 'enc(client-id-anterior)',
-            client_secret_enc: 'enc(client-secret-anterior)',
-            sol_user_enc: 'enc(FAKEUSER)',
-            sol_password_enc: 'enc(fake-sol-password-anterior)',
+            clientId: 'enc(client-id-anterior)',
+            clientSecret: 'enc(client-secret-anterior)',
+            solUser: 'enc(FAKEUSER)',
+            solPasswordEncrypted: 'enc(fake-sol-password-anterior)',
           },
         }),
       );
@@ -88,10 +88,10 @@ describe('PrismaSireConfigurationRepository', () => {
 
     it('erases the stored value when the credential is sent as null', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id-anterior)',
-        client_secret_enc: 'enc(client-secret-anterior)',
-        sol_user_enc: 'enc(FAKEUSER-anterior)',
-        sol_password_enc: 'enc(fake-sol-password-anterior)',
+        clientId: 'enc(client-id-anterior)',
+        clientSecret: 'enc(client-secret-anterior)',
+        solUser: 'enc(FAKEUSER-anterior)',
+        solPasswordEncrypted: 'enc(fake-sol-password-anterior)',
       });
       const cifrado = crearCifrado();
       const repository = new PrismaSireConfigurationRepository(prisma, cifrado);
@@ -101,10 +101,10 @@ describe('PrismaSireConfigurationRepository', () => {
       expect(prisma.sireConfiguration.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: {
-            client_id_enc: 'enc(client-id-anterior)',
-            client_secret_enc: 'enc(client-secret-anterior)',
-            sol_user_enc: 'enc(FAKEUSER-anterior)',
-            sol_password_enc: null,
+            clientId: 'enc(client-id-anterior)',
+            clientSecret: 'enc(client-secret-anterior)',
+            solUser: 'enc(FAKEUSER-anterior)',
+            solPasswordEncrypted: null,
           },
         }),
       );
@@ -118,19 +118,19 @@ describe('PrismaSireConfigurationRepository', () => {
       await repository.save(COMPANY_ID, {});
 
       expect(prisma.sireConfiguration.upsert).toHaveBeenCalledWith({
-        where: { company_id: COMPANY_ID },
+        where: { companyId: COMPANY_ID },
         create: {
-          company_id: COMPANY_ID,
-          client_id_enc: null,
-          client_secret_enc: null,
-          sol_user_enc: null,
-          sol_password_enc: null,
+          companyId: COMPANY_ID,
+          clientId: null,
+          clientSecret: null,
+          solUser: null,
+          solPasswordEncrypted: null,
         },
         update: {
-          client_id_enc: null,
-          client_secret_enc: null,
-          sol_user_enc: null,
-          sol_password_enc: null,
+          clientId: null,
+          clientSecret: null,
+          solUser: null,
+          solPasswordEncrypted: null,
         },
       });
     });
@@ -139,10 +139,10 @@ describe('PrismaSireConfigurationRepository', () => {
   describe('findByCompanyId', () => {
     it('decrypts the stored credentials', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id)',
-        client_secret_enc: 'enc(client-secret)',
-        sol_user_enc: 'enc(FAKEUSER)',
-        sol_password_enc: 'enc(fake-sol-password)',
+        clientId: 'enc(client-id)',
+        clientSecret: 'enc(client-secret)',
+        solUser: 'enc(FAKEUSER)',
+        solPasswordEncrypted: 'enc(fake-sol-password)',
       });
       const cifrado = crearCifrado();
       const repository = new PrismaSireConfigurationRepository(prisma, cifrado);
@@ -167,10 +167,10 @@ describe('PrismaSireConfigurationRepository', () => {
 
     it('treats a credential that cannot be decrypted as missing', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id)',
-        client_secret_enc: 'ciphertext-corrupto',
-        sol_user_enc: 'enc(FAKEUSER)',
-        sol_password_enc: 'enc(fake-sol-password)',
+        clientId: 'enc(client-id)',
+        clientSecret: 'ciphertext-corrupto',
+        solUser: 'enc(FAKEUSER)',
+        solPasswordEncrypted: 'enc(fake-sol-password)',
       });
       const cifrado = crearCifrado();
       (cifrado.decrypt as jest.Mock).mockImplementation((value: string) => {
@@ -193,10 +193,10 @@ describe('PrismaSireConfigurationRepository', () => {
   describe('isConfigured', () => {
     it('answers true when the company has the four credentials', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id)',
-        client_secret_enc: 'enc(client-secret)',
-        sol_user_enc: 'enc(FAKEUSER)',
-        sol_password_enc: 'enc(fake-sol-password)',
+        clientId: 'enc(client-id)',
+        clientSecret: 'enc(client-secret)',
+        solUser: 'enc(FAKEUSER)',
+        solPasswordEncrypted: 'enc(fake-sol-password)',
       });
       const repository = new PrismaSireConfigurationRepository(
         prisma,
@@ -218,10 +218,10 @@ describe('PrismaSireConfigurationRepository', () => {
 
     it('answers false when one of the credentials is missing', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id)',
-        client_secret_enc: 'enc(client-secret)',
-        sol_user_enc: 'enc(FAKEUSER)',
-        sol_password_enc: null,
+        clientId: 'enc(client-id)',
+        clientSecret: 'enc(client-secret)',
+        solUser: 'enc(FAKEUSER)',
+        solPasswordEncrypted: null,
       });
       const repository = new PrismaSireConfigurationRepository(
         prisma,
@@ -233,10 +233,10 @@ describe('PrismaSireConfigurationRepository', () => {
 
     it('answers false when a credential is only blank spaces', async () => {
       const prisma = crearPrisma({
-        client_id_enc: 'enc(client-id)',
-        client_secret_enc: 'enc(client-secret)',
-        sol_user_enc: 'enc(   )',
-        sol_password_enc: 'enc(fake-sol-password)',
+        clientId: 'enc(client-id)',
+        clientSecret: 'enc(client-secret)',
+        solUser: 'enc(   )',
+        solPasswordEncrypted: 'enc(fake-sol-password)',
       });
       const cifrado = crearCifrado();
       const repository = new PrismaSireConfigurationRepository(prisma, cifrado);

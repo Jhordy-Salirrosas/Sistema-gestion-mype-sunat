@@ -1,11 +1,14 @@
 import { UnauthorizedException } from '@nestjs/common';
 import {
+  GUARDS_METADATA,
   HTTP_CODE_METADATA,
   METHOD_METADATA,
   PATH_METADATA,
 } from '@nestjs/common/constants';
 import { HttpStatus, RequestMethod } from '@nestjs/common';
 import { SireConfigurationController } from '../../../src/modules/sire/infrastructure/controllers/sireConfigurationController';
+import { ROLES_KEY } from '../../../src/modules/auth/infrastructure/decorators/rolesDecorator';
+import { RolesGuard } from '../../../src/modules/auth/infrastructure/guards/rolesGuard';
 import type { ConsultarEstadoConfiguracionSireUseCase } from '../../../src/modules/sire/application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import type { GuardarConfiguracionSireUseCase } from '../../../src/modules/sire/application/use-cases/guardarConfiguracionSireUseCase';
 
@@ -65,6 +68,15 @@ describe('SireConfigurationController', () => {
     expect(companyId).toBe('company-id');
   });
 
+  it('restricts the configuration to ADMIN with the roles guard', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, SireConfigurationController),
+    ).toEqual(['ADMIN']);
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, SireConfigurationController),
+    ).toContain(RolesGuard);
+  });
+
   it('answers 200 when the configuration is stored', () => {
     const httpCode = Reflect.getMetadata(
       HTTP_CODE_METADATA,
@@ -119,24 +131,57 @@ describe('SireConfigurationController', () => {
       configured: false,
     });
 
-    await expect(controller.estado(user)).resolves.toEqual({
+    await expect(controller.estado(undefined, user)).resolves.toEqual({
       configured: false,
     });
     expect(consultarEstadoUseCase.execute).toHaveBeenCalledWith('company-id');
   });
 
+  it('lets an ADMIN target another company and keeps its own for non-admin', async () => {
+    (guardarUseCase.execute as jest.Mock).mockResolvedValue({
+      configured: true,
+    });
+    await controller.guardar(
+      { clientId: 'client-id', companyId: 'other-company' },
+      user,
+    );
+    expect(guardarUseCase.execute).toHaveBeenLastCalledWith(
+      'other-company',
+      expect.objectContaining({ companyId: 'other-company' }),
+    );
+
+    await controller.guardar(
+      { clientId: 'client-id', companyId: 'other-company' },
+      { ...user, role: 'CONTADOR' },
+    );
+    expect(guardarUseCase.execute).toHaveBeenLastCalledWith(
+      'company-id',
+      expect.objectContaining({ companyId: 'other-company' }),
+    );
+  });
+
+  it('reads the status of the company requested by an ADMIN', async () => {
+    (consultarEstadoUseCase.execute as jest.Mock).mockResolvedValue({
+      configured: true,
+    });
+
+    await controller.estado('other-company', user);
+
+    expect(consultarEstadoUseCase.execute).toHaveBeenCalledWith('other-company');
+  });
+
   it('rejects the state query when the session has no company', async () => {
-    await expect(controller.estado(undefined)).rejects.toBeInstanceOf(
+    await expect(controller.estado(undefined, undefined)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
     await expect(
-      controller.estado({
+      controller.estado(undefined, {
         ...user,
         companyId: undefined as unknown as string,
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(
-      controller.estado({
+      controller.estado(undefined, {
         ...user,
         companyId: '',
       }),

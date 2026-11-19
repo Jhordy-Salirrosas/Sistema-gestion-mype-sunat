@@ -56,6 +56,20 @@ export class SupabaseSireFileStorage implements SireFileStoragePort {
     this.bucket = bucket;
   }
 
+  async leer(ruta: string): Promise<Buffer> {
+    const { data, error } = await this.client.storage
+      .from(this.bucket)
+      .download(ruta);
+
+    if (error || !data) {
+      throw new Error(
+        `Supabase Storage no pudo leer el archivo: ${error?.message ?? 'sin datos'}`,
+      );
+    }
+
+    return Buffer.from(await data.arrayBuffer());
+  }
+
   async guardar(archivo: SireArchivoAGrabar): Promise<SireArchivoGuardado> {
     const ruta = construirRutaSire(
       archivo.companyId,

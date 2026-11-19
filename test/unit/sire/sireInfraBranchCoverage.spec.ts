@@ -20,7 +20,10 @@ import { sanitizarNombreArchivo } from '../../../src/modules/sire/infrastructure
 import { SireReadOnlyPeriodsClient } from '../../../src/modules/sire/infrastructure/sunat/sireReadOnlyPeriodsClient';
 import { MockSireSunatGateway } from '../../../src/modules/sire/infrastructure/sunat/mockSireSunatGateway';
 import { UnsupportedSireSunatGateway } from '../../../src/modules/sire/infrastructure/sunat/unsupportedSireSunatGateway';
-import { SIRE_FILE_STORAGE_PORT } from '../../../src/modules/sire/domain/ports/sireFileStoragePort';
+import {
+  SIRE_FILE_STORAGE_PORT,
+  type SireFileStoragePort,
+} from '../../../src/modules/sire/domain/ports/sireFileStoragePort';
 import { SIRE_SUNAT_GATEWAY } from '../../../src/modules/sire/domain/ports/sireSunatGatewayPort';
 import { SireModule } from '../../../src/modules/sire/sireModule';
 
@@ -55,10 +58,30 @@ function crearRepository(): SireMenuRepository {
     marcarReporteEnProceso: jest.fn().mockResolvedValue(undefined),
     completarReporte: jest.fn().mockResolvedValue(undefined),
     fallarReporte: jest.fn().mockResolvedValue(undefined),
+    buscarImportacionPorMessageId: jest.fn().mockResolvedValue({
+      id: 'importacion-id',
+      periodo: '202401',
+      libro: 'RCE_COMPRAS',
+      nombre_archivo: 'LE20601030013-RCE-202401.txt',
+      ruta_archivo: 'ruta/archivo.txt',
+      backend_almacen: 'LOCAL',
+    }),
     buscarReportePorMessageId: jest.fn().mockResolvedValue({
       ticket: '12345678',
     }),
   } as unknown as SireMenuRepository;
+}
+
+function crearStorage(): SireFileStoragePort {
+  return {
+    leer: jest
+      .fn()
+      .mockResolvedValue(
+        Buffer.from(
+          '20601030013|F001|1|100|18|118\n20601030013|F001|2|50|9|59',
+        ),
+      ),
+  } as unknown as SireFileStoragePort;
 }
 
 function crearQueue(conDeadLetterQueue: boolean): QueueDouble {
@@ -77,7 +100,11 @@ function crearConsumidor(
   queue: QueueDouble,
   repository: SireMenuRepository,
 ): SireImportJobConsumer {
-  return new SireImportJobConsumer(queue as unknown as QueueService, repository);
+  return new SireImportJobConsumer(
+    queue as unknown as QueueService,
+    repository,
+    crearStorage(),
+  );
 }
 
 describe('SireImportJobConsumer branch coverage', () => {
@@ -199,7 +226,7 @@ describe('SireImportJobConsumer branch coverage', () => {
     );
   });
 
-  it('uses the default simulation delay when the configured delay is not a number', async () => {
+  it('uses the default simulation delay for reports when the configured delay is not a number', async () => {
     process.env['SIRE_SIMULACION_DELAY_MS'] = 'no-es-un-numero';
     const esperarSpy = jest
       .spyOn(
@@ -211,10 +238,10 @@ describe('SireImportJobConsumer branch coverage', () => {
       .mockResolvedValue(undefined);
     const repository = crearRepository();
 
-    await crearConsumidor(crearQueue(true), repository).process(jobImportacion);
+    await crearConsumidor(crearQueue(true), repository).process(jobReporte);
 
     expect(esperarSpy).toHaveBeenCalledWith(SIRE_SIMULACION_DELAY_MS);
-    expect(repository.completarImportacion).toHaveBeenCalled();
+    expect(repository.completarReporte).toHaveBeenCalled();
   });
 });
 

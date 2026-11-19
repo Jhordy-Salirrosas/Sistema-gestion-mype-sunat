@@ -53,6 +53,9 @@ describe('almacenamiento de archivos SIRE', () => {
       expect(resultado.bytes).toBe(contenido.length);
       expect(resultado.hash).toMatch(/^[a-f0-9]{64}$/);
       expect(await readFile(resultado.ruta, 'utf8')).toBe('contenido de la propuesta');
+      await expect(storage.leer(resultado.ruta, 'LOCAL')).resolves.toEqual(
+        contenido,
+      );
     });
   });
 
@@ -72,9 +75,11 @@ describe('almacenamiento de archivos SIRE', () => {
           backend: 'SUPABASE',
           bytes: 8,
         }),
+        leer: jest.fn().mockResolvedValue(Buffer.from('remoto')),
       };
       const respaldo: SireFileStoragePort = {
         guardar: jest.fn(),
+        leer: jest.fn(),
       };
 
       const resultado = await new ResilientSireFileStorage(
@@ -89,6 +94,7 @@ describe('almacenamiento de archivos SIRE', () => {
     it('falls back to the local storage when the primary one fails', async () => {
       const principal: SireFileStoragePort = {
         guardar: jest.fn().mockRejectedValue(new Error('bucket no existe')),
+        leer: jest.fn(),
       };
       const respaldo: SireFileStoragePort = {
         guardar: jest.fn().mockResolvedValue({
@@ -97,6 +103,7 @@ describe('almacenamiento de archivos SIRE', () => {
           backend: 'LOCAL',
           bytes: 8,
         }),
+        leer: jest.fn(),
       };
 
       const resultado = await new ResilientSireFileStorage(
@@ -116,6 +123,7 @@ describe('almacenamiento de archivos SIRE', () => {
           backend: 'LOCAL',
           bytes: 8,
         }),
+        leer: jest.fn(),
       };
 
       const resultado = await new ResilientSireFileStorage(
@@ -124,6 +132,27 @@ describe('almacenamiento de archivos SIRE', () => {
       ).guardar(archivo);
 
       expect(resultado.backend).toBe('LOCAL');
+    });
+
+    it('reads from the storage that matches the persisted backend', async () => {
+      const principal: SireFileStoragePort = {
+        guardar: jest.fn(),
+        leer: jest.fn().mockResolvedValue(Buffer.from('supabase')),
+      };
+      const respaldo: SireFileStoragePort = {
+        guardar: jest.fn(),
+        leer: jest.fn().mockResolvedValue(Buffer.from('local')),
+      };
+      const storage = new ResilientSireFileStorage(principal, respaldo);
+
+      await expect(storage.leer('ruta-remota', 'SUPABASE')).resolves.toEqual(
+        Buffer.from('supabase'),
+      );
+      await expect(storage.leer('ruta-local', 'LOCAL')).resolves.toEqual(
+        Buffer.from('local'),
+      );
+      expect(principal.leer).toHaveBeenCalledWith('ruta-remota', 'SUPABASE');
+      expect(respaldo.leer).toHaveBeenCalledWith('ruta-local', 'LOCAL');
     });
 
     it('reports the reason of the fallback to the caller', async () => {
