@@ -11,6 +11,7 @@ describe('UpdateCompanyConfigurationDto', () => {
     await expect(
       validar({
         businessName: 'Demo SAC',
+        tradeName: 'Demo Comercial',
         direccion: 'AV. SIEMPRE VIVA 123',
         estado: 'ACTIVO',
         condicion: 'HABIDO',
@@ -33,6 +34,18 @@ describe('UpdateCompanyConfigurationDto', () => {
 
   it('rejects a business name longer than 200 characters', async () => {
     const errors = await validar({ businessName: 'x'.repeat(201) });
+
+    expect(errors).not.toHaveLength(0);
+  });
+
+  it('rejects a blank trade name', async () => {
+    const errors = await validar({ tradeName: '' });
+
+    expect(errors).not.toHaveLength(0);
+  });
+
+  it('rejects a trade name longer than 200 characters', async () => {
+    const errors = await validar({ tradeName: 'x'.repeat(201) });
 
     expect(errors).not.toHaveLength(0);
   });

@@ -40,6 +40,7 @@ export class PrismaCompanyConfigurationRepository
       where: { company_id: companyId },
       select: {
         business_name: true,
+        trade_name: true,
         direccion: true,
         estado: true,
         condicion: true,
@@ -51,10 +52,8 @@ export class PrismaCompanyConfigurationRepository
 
     return {
       ruc: company.ruc,
-      businessName:
-        configuration?.business_name ??
-        company.trade_name ??
-        company.legal_name,
+      businessName: configuration?.business_name ?? company.legal_name,
+      tradeName: configuration?.trade_name ?? company.trade_name,
       direccion: configuration?.direccion ?? company.domicilio_fiscal,
       estado: configuration?.estado ?? null,
       condicion: configuration?.condicion ?? null,
@@ -88,6 +87,7 @@ export class PrismaCompanyConfigurationRepository
       create: {
         company_id: companyId,
         business_name: changes.businessName ?? null,
+        trade_name: changes.tradeName ?? null,
         direccion: changes.direccion ?? null,
         estado: changes.estado ?? null,
         condicion: changes.condicion ?? null,
@@ -98,6 +98,9 @@ export class PrismaCompanyConfigurationRepository
       update: {
         ...(changes.businessName !== undefined
           ? { business_name: changes.businessName }
+          : {}),
+        ...(changes.tradeName !== undefined
+          ? { trade_name: changes.tradeName }
           : {}),
         ...(changes.direccion !== undefined
           ? { direccion: changes.direccion }
@@ -114,6 +117,7 @@ export class PrismaCompanyConfigurationRepository
       },
       select: {
         business_name: true,
+        trade_name: true,
         direccion: true,
         estado: true,
         condicion: true,
@@ -125,8 +129,8 @@ export class PrismaCompanyConfigurationRepository
 
     return {
       ruc: company.ruc,
-      businessName:
-        row.business_name ?? company.trade_name ?? company.legal_name,
+      businessName: row.business_name ?? company.legal_name,
+      tradeName: row.trade_name ?? company.trade_name,
       direccion: row.direccion ?? company.domicilio_fiscal,
       estado: row.estado,
       condicion: row.condicion,

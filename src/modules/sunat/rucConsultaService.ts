@@ -11,6 +11,7 @@ import { esRucValido } from '../invoices/domain/rules/taxpayerIdValidator';
 export interface ConsultaRucResponse {
   ruc: string;
   razonSocial: string;
+  nombreComercial: string | null;
   estadoContribuyente: string;
   condicionDomicilio: string;
   ubigeo: string | null;
@@ -29,6 +30,8 @@ interface RucProviderPayload {
   direccion?: unknown;
   razonSocial?: unknown;
   razon_social?: unknown;
+  nombreComercial?: unknown;
+  nombre_comercial?: unknown;
   estadoContribuyente?: unknown;
   estado_contribuyente?: unknown;
   condicionDomicilio?: unknown;
@@ -44,6 +47,7 @@ interface NormalizedRucData {
   ruc: string;
   source: string;
   razonSocial: string;
+  nombreComercial: string | null;
   estadoContribuyente: string;
   condicionDomicilio: string;
   ubigeo: string | null;
@@ -74,6 +78,7 @@ export class RucConsultaService {
       create: {
         ruc: data.ruc,
         razon_social: data.razonSocial,
+        nombre_comercial: data.nombreComercial,
         estado_contribuyente: data.estadoContribuyente,
         condicion_domicilio: data.condicionDomicilio,
         ubigeo: data.ubigeo,
@@ -84,6 +89,7 @@ export class RucConsultaService {
       },
       update: {
         razon_social: data.razonSocial,
+        nombre_comercial: data.nombreComercial,
         estado_contribuyente: data.estadoContribuyente,
         condicion_domicilio: data.condicionDomicilio,
         ubigeo: data.ubigeo,
@@ -227,6 +233,9 @@ export class RucConsultaService {
       ruc,
       source,
       razonSocial,
+      nombreComercial: this.optionalText(
+        data.nombreComercial ?? data.nombre_comercial,
+      ),
       estadoContribuyente,
       condicionDomicilio,
       ubigeo: this.optionalText(data.ubigeo),
@@ -269,6 +278,7 @@ export class RucConsultaService {
     row: {
       ruc: string;
       razon_social: string;
+      nombre_comercial: string | null;
       estado_contribuyente: string;
       condicion_domicilio: string;
       ubigeo: string | null;
@@ -282,6 +292,7 @@ export class RucConsultaService {
     return {
       ruc: row.ruc,
       razonSocial: row.razon_social,
+      nombreComercial: row.nombre_comercial,
       estadoContribuyente: row.estado_contribuyente,
       condicionDomicilio: row.condicion_domicilio,
       ubigeo: row.ubigeo,

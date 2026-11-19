@@ -17,6 +17,7 @@ describe('CompanyRucValidationController', () => {
     service.consultar.mockResolvedValue({
       ruc: '20601030013',
       razonSocial: 'REXTIE S.A.C.',
+      nombreComercial: 'REXTIE',
       estadoContribuyente: 'ACTIVO',
       condicionDomicilio: 'HABIDO',
       direccionFiscal: 'AV. SIEMPRE VIVA 123',
@@ -30,6 +31,7 @@ describe('CompanyRucValidationController', () => {
     await expect(controller.validar('20601030013')).resolves.toEqual({
       ruc: '20601030013',
       razonSocial: 'REXTIE S.A.C.',
+      nombreComercial: 'REXTIE',
       estadoContribuyente: 'ACTIVO',
       condicionDomicilio: 'HABIDO',
       direccionFiscal: 'AV. SIEMPRE VIVA 123',
@@ -49,6 +51,7 @@ describe('CompanyRucValidationController', () => {
     service.consultar.mockResolvedValue({
       ruc: '20601030013',
       razonSocial: 'REXTIE S.A.C.',
+      nombreComercial: null,
       estadoContribuyente: 'ACTIVO',
       condicionDomicilio: 'HABIDO',
       direccionFiscal: null,
@@ -61,6 +64,7 @@ describe('CompanyRucValidationController', () => {
 
     await expect(controller.validar('20601030013')).resolves.toMatchObject({
       razonSocial: 'REXTIE S.A.C.',
+      nombreComercial: null,
       direccion: null,
       estado: 'ACTIVO',
       condicion: 'HABIDO',

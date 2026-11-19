@@ -138,6 +138,7 @@ model PadronRucCache {
   id                    String   @id @default(uuid())
   ruc                   String   @unique @db.VarChar(11)
   razon_social          String
+  nombre_comercial      String?
   estado_contribuyente  String
   condicion_domicilio   String
   ubigeo                String?  @db.VarChar(6)
