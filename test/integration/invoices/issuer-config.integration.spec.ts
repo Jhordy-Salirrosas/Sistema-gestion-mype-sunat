@@ -98,8 +98,8 @@ const enabled = process.env.RUN_D1_DB_TESTS === '1';
           id,
           ruc: `${index + 2}${Date.now().toString().slice(-10)}`,
           legal_name: 'Obviously Fake D1 Fixture',
-          sol_user: 'legacy-fake',
-          sol_pass_encrypted: 'legacy-fake',
+          sunat_issuer_username: 'legacy-fake',
+          sunat_issuer_password_enc: 'legacy-fake',
         })),
       });
     });
@@ -126,7 +126,7 @@ const enabled = process.env.RUN_D1_DB_TESTS === '1';
         entorno: 'MOCK',
       });
       const row = await prisma.company.findUniqueOrThrow({ where: { id: a } });
-      expect(row.sol_pass_encrypted).not.toContain(secret);
+      expect(row.sunat_issuer_password_enc).not.toContain(secret);
       const fresh = new IssuerConfigResolver(
         prisma,
         new IssuerConfigEncryption(),
@@ -228,7 +228,7 @@ const enabled = process.env.RUN_D1_DB_TESTS === '1';
       await writer.save(a, { sol_user: 'FAKE', sol_password: secret });
       await prisma.company.update({
         where: { id: a },
-        data: { sol_pass_encrypted: 'tampered' },
+        data: { sunat_issuer_password_enc: 'tampered' },
       });
       const response = await get().expect(400);
       expect(response.text).toContain('ISSUER_CONFIG_DECRYPTION_FAILED');
@@ -280,8 +280,8 @@ const enabled = process.env.RUN_D1_DB_TESTS === '1';
       const company = await prisma.company.findUniqueOrThrow({
         where: { id: a },
       });
-      expect(company.sol_user).toBe('legacy-fake');
-      expect(company.sol_pass_encrypted).toBe('legacy-fake');
+    expect(company.sunat_issuer_username).toBe('legacy-fake');
+    expect(company.sunat_issuer_password_enc).toBe('legacy-fake');
       expect((await resolver.resolve(a)).sol?.password).toBe(
         'obviously-fake-backup',
       );

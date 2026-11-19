@@ -12,7 +12,7 @@ const url = process.env.TEST_DATABASE_URL;
     if (!url || !['localhost', '127.0.0.1'].includes(new URL(url).hostname)) throw new Error('Solo PostgreSQL local aislado');
     process.env.DATABASE_URL = url;
     db = new PrismaService(); await db.$connect(); company = randomUUID();
-    await db.company.create({ data: { id: company, ruc: '2' + Date.now().toString().slice(-10), legal_name: 'Empresa ficticia', sol_user: 'fake', sol_pass_encrypted: 'fake', ...fakeFiscalAddress } });
+    await db.company.create({ data: { id: company, ruc: '2' + Date.now().toString().slice(-10), legal_name: 'Empresa ficticia', sunat_issuer_username: 'fake', sunat_issuer_password_enc: 'fake', ...fakeFiscalAddress } });
     await db.inventoryWarehouse.create({ data: { company_id: company, warehouse_code: 'ALM-01', description: 'Prueba' } });
     await db.inventoryProduct.create({ data: { company_id: company, sku: 'SERV', description: 'Servicio', sale_price: 118, tax_affectation: '10', sunat_unit_code: 'NIU', is_inventory: false } });
     await db.invoiceSeries.create({ data: { company_id: company, document_type: '01', series: 'F001', current_correlative: 69 } });

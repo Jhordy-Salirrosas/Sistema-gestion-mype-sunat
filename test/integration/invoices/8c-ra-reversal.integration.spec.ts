@@ -32,7 +32,7 @@ const url = process.env.TEST_DATABASE_URL;
  });
  beforeEach(async () => {
   company = randomUUID();
-  await db.company.create({ data: { id: company, ruc: '2'+Date.now().toString().slice(-10), legal_name: 'Empresa prueba P3', sol_user: 'fake', sol_pass_encrypted: 'fake', ...fakeFiscalAddress } });
+  await db.company.create({ data: { id: company, ruc: '2'+Date.now().toString().slice(-10), legal_name: 'Empresa prueba P3', sunat_issuer_username: 'fake', sunat_issuer_password_enc: 'fake', ...fakeFiscalAddress } });
   const warehouse = await db.inventoryWarehouse.create({ data: { company_id: company, warehouse_code: 'ALM-01', description: 'Prueba' } });
   await db.inventoryProduct.create({ data: { company_id: company, sku: 'MAT', description: 'Producto', is_inventory: true, sale_price: 11.8, tax_affectation: '10', sunat_unit_code: 'NIU' } });
   origin = (await db.invoice.create({ data: { company_id: company, ruc_emisor: '20100070970', tipo_comprobante: '01', serie: 'F001', correlativo: 69, monto_total: 118, fecha_emision: new Date('2026-11-10'), estado: 'ACEPTADO', customer_identity_type: '6', customer_identity_number: '20100070970', payload_ubl: { almacen: 'ALM-01' },

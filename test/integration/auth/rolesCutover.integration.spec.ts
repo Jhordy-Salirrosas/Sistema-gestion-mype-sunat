@@ -55,7 +55,7 @@ const cutover = '20261118000200_roles_text_cutover';
     await admin.query(`CREATE DATABASE "${template}"`); migrate(template, true);
     const seed = new Client({ connectionString: url(template) }); await seed.connect();
     try {
-      await seed.query(`INSERT INTO companies(id,ruc,legal_name,sol_user,sol_pass_encrypted,updated_at) VALUES('local-company','20000000001','Empresa de prueba','local','local',now());
+      await seed.query(`INSERT INTO companies(id,ruc,legal_name,sunat_issuer_username,sunat_issuer_password_enc,updated_at) VALUES('local-company','20000000001','Empresa de prueba','local','local',now());
         INSERT INTO users(id,company_id,email,password_hash,full_name,role,updated_at) SELECT 'user-'||r,'local-company',lower(r)||'@example.invalid','hash-sintetico','Persona local',r::"Role",now() FROM unnest(ARRAY['ADMIN','CONTADOR','OPERADOR_FACTURACION','OPERADOR_ADUANAS','AUDITOR']) r;
         INSERT INTO role_module_permissions(id,company_id,role,module_code,can_view,can_write,updated_at) SELECT 'm-'||role,'local-company',role,'M1',role::text<>'AUDITOR',role::text<>'CONTADOR',now() FROM users;
         INSERT INTO role_action_permissions(id,company_id,role,action_code,allowed,updated_at) SELECT 'a-'||role,'local-company',role,'INVOICE_FORCE_RESEND',role::text='OPERADOR_FACTURACION',now() FROM users;`);
@@ -144,7 +144,7 @@ const cutover = '20261118000200_roles_text_cutover';
     migrate(current); pg = new Client({ connectionString: url(current) }); await pg.connect(); db = prisma(current);
     await assertJournal(); expect((await pg.query('SELECT count(*)::int n FROM permission_menu_catalog')).rows[0].n).toBe(73);
     const { initializeCompanyRoles } = await import('../../../src/modules/auth/application/services/roleCatalogService');
-    await db.$transaction(async tx => { await tx.company.create({ data: { id: 'new-company', ruc: '20000000002', legal_name: 'Nueva local', sol_user: 'local', sol_pass_encrypted: 'local' } }); await initializeCompanyRoles(tx, 'new-company'); await tx.user.create({ data: { company_id: 'new-company', email: 'nuevo@example.invalid', full_name: 'Nuevo', password_hash: 'hash', role: 'ADMIN' } }); });
+    await db.$transaction(async tx => { await tx.company.create({ data: { id: 'new-company', ruc: '20000000002', legal_name: 'Nueva local', sunat_issuer_username: 'local', sunat_issuer_password_enc: 'local' } }); await initializeCompanyRoles(tx, 'new-company'); await tx.user.create({ data: { company_id: 'new-company', email: 'nuevo@example.invalid', full_name: 'Nuevo', password_hash: 'hash', role: 'ADMIN' } }); });
     expect(await db.companyRole.count({ where: { company_id: 'new-company' } })).toBe(5);
   });
   it.each([

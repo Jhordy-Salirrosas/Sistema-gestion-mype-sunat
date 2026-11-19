@@ -23,8 +23,8 @@ describeWithDatabase('SIRE dashboard PostgreSQL aggregation', () => {
       data: {
         ruc: `20${Math.floor(100_000_000 + Math.random() * 899_999_999)}`,
         legal_name: `RESILIENCE TEST ${randomUUID()}`,
-        sol_user: 'test-user',
-        sol_pass_encrypted: 'test-encrypted',
+        sunat_issuer_username: 'test-user',
+        sunat_issuer_password_enc: 'test-encrypted',
       },
     });
     companyIds.push(company.id);

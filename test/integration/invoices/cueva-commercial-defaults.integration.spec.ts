@@ -20,7 +20,7 @@ const url = process.env.TEST_DATABASE_URL;
     const create = sql.slice(sql.indexOf('CREATE TABLE'), sql.indexOf('\nCOMMIT;'));
     await db.$executeRawUnsafe(create);
     for (const prefix of ['20','21']) {
-      const c = await db.company.create({data:{ruc:prefix+Date.now().toString().slice(-9),legal_name:'Empresa local',sol_user:'FAKE',sol_pass_encrypted:'fake'}});
+      const c = await db.company.create({data:{ruc:prefix+Date.now().toString().slice(-9),legal_name:'Empresa local',sunat_issuer_username:'FAKE',sunat_issuer_password_enc:'fake'}});
       if (prefix === '20') id = c.id; else otra = c.id;
     }
     const module = await Test.createTestingModule({imports:cuevaAuthTestImports,controllers:[InvoiceCommercialDefaultsController],providers:[InvoiceCommercialDefaultsService,

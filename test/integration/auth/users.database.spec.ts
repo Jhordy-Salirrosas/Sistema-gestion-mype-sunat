@@ -12,7 +12,7 @@ import type { PrismaService } from '../../../src/database/prismaService';
  let db:PrismaService;let a:string;let b:string;let service:CreateUserService;let email:string;
  const hasher=new NativeCryptoHasherAdapter();const password='StrongPass123!';
  beforeAll(async()=>{db=await rolesDatabase();service=new CreateUserService(db,hasher);email=`${randomUUID()}@example.invalid`;
-  for(const key of ['a','b']){const id=randomUUID();await db.company.create({data:{id,ruc:'2'+BigInt('0x'+id.replaceAll('-','').slice(0,9)).toString().padStart(10,'0').slice(-10),legal_name:'Alta usuarios '+key,sol_user:'local',sol_pass_encrypted:'local'}});await db.$transaction(tx=>initializeCompanyRoles(tx,id));if(key==='a')a=id;else b=id;}
+  for(const key of ['a','b']){const id=randomUUID();await db.company.create({data:{id,ruc:'2'+BigInt('0x'+id.replaceAll('-','').slice(0,9)).toString().padStart(10,'0').slice(-10),legal_name:'Alta usuarios '+key,sunat_issuer_username:'local',sunat_issuer_password_enc:'local'}});await db.$transaction(tx=>initializeCompanyRoles(tx,id));if(key==='a')a=id;else b=id;}
  });
  afterAll(async()=>{if(db){await db.auditLog.deleteMany({where:{company_id:{in:[a,b].filter(Boolean)}}});await db.roleMenuPermission.deleteMany({where:{company_id:{in:[a,b].filter(Boolean)}}});const ids=[a,b].filter(Boolean);await db.user.deleteMany({where:{company_id:{in:ids}}});await db.company.deleteMany({where:{id:{in:ids}}});await db.$disconnect();}});
  it('persiste hash compatible y el usuario inicia sesión inmediatamente con empresa y rol correctos',async()=>{

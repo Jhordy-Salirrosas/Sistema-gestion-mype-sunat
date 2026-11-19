@@ -12,7 +12,7 @@ const dbUrl = process.env.TEST_DATABASE_URL;
     process.env.DATABASE_URL = dbUrl; process.env.PG_BOSS_URL = dbUrl;
     prisma = new PrismaService(); await prisma.$connect(); queue = new QueueService(); await queue.onModuleInit();
     boss = (queue as unknown as { boss: PgBoss }).boss;
-    companyId = (await prisma.company.create({ data: { ruc: `20${Date.now().toString().slice(-9)}`, legal_name: 'Prueba DLQ M1', sol_user: 'MODDATOS', sol_pass_encrypted: 'prueba-local', } })).id;
+    companyId = (await prisma.company.create({ data: { ruc: `20${Date.now().toString().slice(-9)}`, legal_name: 'Prueba DLQ M1', sunat_issuer_username: 'MODDATOS', sunat_issuer_password_enc: 'prueba-local', } })).id;
     invoiceId = randomUUID();
     await prisma.invoice.create({ data: { id: invoiceId, company_id: companyId, ruc_emisor: '20614142503', tipo_comprobante: '01', serie: 'F001', correlativo: 57,
       monto_total: 118, fecha_emision: new Date('2026-11-10'), estado: 'EN_COLA', payload_ubl: {}, transport_uncertain: null } });

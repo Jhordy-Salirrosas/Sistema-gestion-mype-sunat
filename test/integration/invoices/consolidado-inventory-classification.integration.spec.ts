@@ -7,7 +7,7 @@ const url=process.env.TEST_DATABASE_URL;
  let db:PrismaService,c:string,p:string,w:string;const old=process.env.DATABASE_URL;
  beforeAll(async()=>{
   if(!url||!['localhost','127.0.0.1'].includes(new URL(url).hostname))throw new Error('Solo base local');process.env.DATABASE_URL=url;db=new PrismaService();await db.$connect();c=randomUUID();
-  await db.company.create({data:{id:c,ruc:'2'+Date.now().toString().slice(-10),legal_name:'Consolidado ficticio',sol_user:'fake',sol_pass_encrypted:'fake'}});
+  await db.company.create({data:{id:c,ruc:'2'+Date.now().toString().slice(-10),legal_name:'Consolidado ficticio',sunat_issuer_username:'fake',sunat_issuer_password_enc:'fake'}});
   p=(await db.inventoryProduct.create({data:{company_id:c,sku:'SKU',description:'Producto',is_inventory:true}})).id;
   w=(await db.inventoryWarehouse.create({data:{company_id:c,warehouse_code:'ALM-01',description:'Local'}})).id;
  });

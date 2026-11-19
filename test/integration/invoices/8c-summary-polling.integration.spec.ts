@@ -15,7 +15,7 @@ const url=process.env.TEST_DATABASE_URL;
  });
  beforeEach(async()=>{
   h=summaryDispatchHarness();company=randomUUID();id=randomUUID();h.job.companyId=company;
-  await db.company.create({data:{id:company,ruc:'2'+Date.now().toString().slice(-10),legal_name:'Polling ficticio',sol_user:'fake',sol_pass_encrypted:'fake'}});
+  await db.company.create({data:{id:company,ruc:'2'+Date.now().toString().slice(-10),legal_name:'Polling ficticio',sunat_issuer_username:'fake',sunat_issuer_password_enc:'fake'}});
   await db.invoiceAggregate.create({data:{...h.row,id,company_id:company,state:'POLLING',ticket:'T',fingerprint:randomUUID(),reference_date:'2026-11-11',generation_date:'2026-11-11',members:[],result:{polling:{attempts:0,nextAt:new Date().toISOString()}}}});
   h.client.getStatus.mockResolvedValue({statusCode:'98',enProceso:true,contenido:null});store=new SummaryAggregateStore(db,queue);
  });

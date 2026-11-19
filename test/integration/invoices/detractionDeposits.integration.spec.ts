@@ -8,7 +8,7 @@ const dbUrl = process.env.TEST_DATABASE_URL;
  const originalDb = process.env.DATABASE_URL;
  beforeAll(async () => {
   process.env.DATABASE_URL = dbUrl; db = new PrismaService(); await db.$connect();
-  companyId = (await db.company.create({data:{ruc:`20${Date.now().toString().slice(-9)}`,legal_name:'Pruebas depósitos',sol_user:'MODDATOS',sol_pass_encrypted:'local'}})).id;
+  companyId = (await db.company.create({data:{ruc:`20${Date.now().toString().slice(-9)}`,legal_name:'Pruebas depósitos',sunat_issuer_username:'MODDATOS',sunat_issuer_password_enc:'local'}})).id;
   service = new InvoiceDetractionService(db);
  });
  beforeEach(async () => {

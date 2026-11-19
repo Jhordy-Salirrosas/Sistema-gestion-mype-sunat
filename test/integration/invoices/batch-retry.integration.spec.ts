@@ -17,8 +17,8 @@ const url=process.env.TEST_DATABASE_URL;
  beforeAll(async()=>{
   if(!url || !['localhost','127.0.0.1'].includes(new URL(url).hostname))throw Error('Solo PostgreSQL local');
   process.env.DATABASE_URL=url;process.env.PG_BOSS_URL=url;db=new PrismaService();await db.$connect();queue=new QueueService();await queue.onModuleInit();boss=(queue as any).boss;
-  company=(await db.company.create({data:{ruc:`20${Date.now().toString().slice(-9)}`,legal_name:'Prueba local de lote',sol_user:'FAKE',sol_pass_encrypted:'obviously-fake'}})).id;
-  otra=(await db.company.create({data:{ruc:`21${Date.now().toString().slice(-9)}`,legal_name:'Otra empresa local',sol_user:'FAKE',sol_pass_encrypted:'obviously-fake'}})).id;
+  company=(await db.company.create({data:{ruc:`20${Date.now().toString().slice(-9)}`,legal_name:'Prueba local de lote',sunat_issuer_username:'FAKE',sunat_issuer_password_enc:'obviously-fake'}})).id;
+  otra=(await db.company.create({data:{ruc:`21${Date.now().toString().slice(-9)}`,legal_name:'Otra empresa local',sunat_issuer_username:'FAKE',sunat_issuer_password_enc:'obviously-fake'}})).id;
   for(const [i,estado,incierto] of [[0,'ERROR_RED',false],[1,'ERROR_RED',true],[2,'RECHAZADO',false],[3,'ERROR_RED',false],[4,'ERROR_RED',false]] as const){
    const id=randomUUID();ids.push(id);await db.invoice.create({data:{id,company_id:i===4?otra:company,ruc_emisor:'20000000001',tipo_comprobante:'01',serie:'F001',correlativo:i+1,estado,fecha_emision:new Date('2026-11-13'),monto_total:118,payload_ubl:{},transport_uncertain:incierto,...(i===2?{cdr_sunat:{responseCode:'3105',description:'Rechazo de prueba'}}:{})}});
   }
