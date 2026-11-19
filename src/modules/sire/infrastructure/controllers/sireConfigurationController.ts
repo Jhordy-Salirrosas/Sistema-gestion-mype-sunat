@@ -11,9 +11,9 @@ import {
 import { CurrentUser } from '../../../../common/decorators';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import type {
-  SireConfiguracionEstadoResponse,
+import {
   SireConfiguracionRequestDto,
+  type SireConfiguracionEstadoResponse,
 } from '../../application/dto/sireConfigurationDto';
 import { ConsultarEstadoConfiguracionSireUseCase } from '../../application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import { GuardarConfiguracionSireUseCase } from '../../application/use-cases/guardarConfiguracionSireUseCase';

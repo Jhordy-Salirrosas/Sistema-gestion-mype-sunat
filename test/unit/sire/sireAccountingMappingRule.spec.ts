@@ -140,4 +140,28 @@ describe('sireAccountingMappingRule', () => {
       { cuenta: '421', nombre: 'Cuentas por pagar comerciales', debe: 0, haber: 18 },
     ]);
   });
+
+  it('usa IGV_VENTAS e IGV_COMPRAS por libro y conserva IGV como alias legado', () => {
+    const mappings: SireAccountingMappingEntry[] = [
+      { tipoOperacion: 'IGV_VENTAS', cuentaContable: '40113' },
+      { tipoOperacion: 'IGV_COMPRAS', cuentaContable: '40112' },
+    ];
+
+    expect(
+      buildSireAccountingLines('VENTAS', totals, mappings).find((line) => line.cuenta.startsWith('401'))?.cuenta,
+    ).toBe('40113');
+    expect(
+      buildSireAccountingLines('COMPRAS', totals, mappings).find((line) => line.cuenta.startsWith('401'))?.cuenta,
+    ).toBe('40112');
+
+    const legado: SireAccountingMappingEntry[] = [
+      { tipoOperacion: 'IGV', cuentaContable: '40111' },
+    ];
+    expect(
+      buildSireAccountingLines('VENTAS', totals, legado).find((line) => line.cuenta === '40111')?.haber,
+    ).toBe(18);
+    expect(
+      buildSireAccountingLines('COMPRAS', totals, legado).find((line) => line.cuenta === '40111')?.debe,
+    ).toBe(18);
+  });
 });

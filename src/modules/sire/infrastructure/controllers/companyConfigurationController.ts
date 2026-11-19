@@ -9,9 +9,9 @@ import {
 import { CurrentUser } from '../../../../common/decorators';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import type {
-  CompanyConfigurationResponse,
+import {
   UpdateCompanyConfigurationDto,
+  type CompanyConfigurationResponse,
 } from '../../application/dto/companyConfigurationDto';
 import { GetCompanyConfigurationUseCase } from '../../application/use-cases/getCompanyConfigurationUseCase';
 import { UpdateCompanyConfigurationUseCase } from '../../application/use-cases/updateCompanyConfigurationUseCase';
