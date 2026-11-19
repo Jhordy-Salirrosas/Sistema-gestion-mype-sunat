@@ -550,6 +550,16 @@ export class PurchasesService {
     return compra;
   }
 
+  private async marcarCuotasPagadas(companyId: string, purchaseId: string, pagado: number) {
+    const cuotas = await this.prisma.purchasePaymentSchedule.findMany({ where: { company_id: companyId, purchase_id: purchaseId, status: 'PROGRAMADO' }, orderBy: { scheduled_date: 'asc' } });
+    let acumulado = 0;
+    for (const cuota of cuotas) {
+      acumulado += Number(cuota.amount);
+      if (acumulado > pagado + 0.005) break;
+      await this.prisma.purchasePaymentSchedule.update({ where: { id: cuota.id }, data: { status: 'PAGADO', paid_at: new Date() } });
+    }
+  }
+
   async supplierStatement(companyId: string, supplierDoc: string) {
     const compras = await this.prisma.nationalPurchase.findMany({
       where: { company_id: companyId, supplier_doc_number: supplierDoc.trim(), status: { not: 'ANULADA' } },
@@ -761,6 +771,7 @@ export class PurchasesService {
       return creado;
     });
 
+    await this.marcarCuotasPagadas(companyId, id, nuevoPagado);
     if (this.accounting) {
       const porOrdenPago = new Map<number, string>(reglasPago.map((r: any) => [Number(r.line_order), String(r.account_code)]));
       const cuentaCxp = porOrdenPago.get(1);
