@@ -22,6 +22,9 @@ import {
   UpsertPortDto,
   UpdateExchangeRateDto,
   UpsertCustomsServiceDto,
+  UpsertCustomsOfficeDto,
+  UpsertAuthorizedBankDto,
+  UpsertVuceEntityDto,
 } from '../dto/masterDataDto';
 
 /**
@@ -955,6 +958,94 @@ export class MasterDataService {
 
     return this.prisma.inventoryProduct.update({
       where: { id: existing.id },
+      data: { is_active: false },
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Aduanas SUNAT (Catálogo 09)
+  // -------------------------------------------------------------------------
+  listCustomsOffices() {
+    return this.prisma.customsOffice.findMany({
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  upsertCustomsOffice(dto: UpsertCustomsOfficeDto) {
+    const code = dto.code.trim();
+    const data = {
+      name: dto.name.trim(),
+      is_active: dto.isActive ?? true,
+    };
+    return this.prisma.customsOffice.upsert({
+      where: { code },
+      update: data,
+      create: { code, ...data },
+    });
+  }
+
+  deleteCustomsOffice(code: string) {
+    return this.prisma.customsOffice.update({
+      where: { code: code.trim() },
+      data: { is_active: false },
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Bancos Autorizados SUNAT (Catálogo 03)
+  // -------------------------------------------------------------------------
+  listAuthorizedBanks() {
+    return this.prisma.authorizedBank.findMany({
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  upsertAuthorizedBank(dto: UpsertAuthorizedBankDto) {
+    const code = dto.code.trim();
+    const data = {
+      name: dto.name.trim(),
+      is_active: dto.isActive ?? true,
+    };
+    return this.prisma.authorizedBank.upsert({
+      where: { code },
+      update: data,
+      create: { code, ...data },
+    });
+  }
+
+  deleteAuthorizedBank(code: string) {
+    return this.prisma.authorizedBank.update({
+      where: { code: code.trim() },
+      data: { is_active: false },
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Entidades VUCE
+  // -------------------------------------------------------------------------
+  listVuceEntities() {
+    return this.prisma.vuceEntity.findMany({
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  upsertVuceEntity(dto: UpsertVuceEntityDto) {
+    const code = dto.code.trim();
+    const data = {
+      name: dto.name.trim(),
+      sector: dto.sector.trim(),
+      is_active: dto.isActive ?? true,
+    };
+    return this.prisma.vuceEntity.upsert({
+      where: { code },
+      update: data,
+      create: { code, ...data },
+    });
+  }
+
+  deleteVuceEntity(code: string) {
+    return this.prisma.vuceEntity.update({
+      where: { code: code.trim() },
       data: { is_active: false },
     });
   }

@@ -233,3 +233,37 @@ model AccountingMapping {
   @@index([company_id, process_code])
   @@map("accounting_mappings")
 }
+
+/// Catálogo de aduanas operativas SUNAT (Catálogo 09).
+model CustomsOffice {
+  code       String   @id // 118 Callao Marítimo, 235 Callao Aéreo, 370 Chancay, etc.
+  name       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("customs_offices")
+}
+
+/// Catálogo de bancos autorizados para pago y teledespacho aduanero (Catálogo 03 SUNAT).
+model AuthorizedBank {
+  code       String   @id // 002 BCP, 011 BBVA, etc.
+  name       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("authorized_banks")
+}
+
+/// Catálogo de entidades gubernamentales de control previo / VUCE.
+model VuceEntity {
+  code       String   @id // 08 MTC, 03 DIGEMID, etc.
+  name       String
+  sector     String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("vuce_entities")
+}

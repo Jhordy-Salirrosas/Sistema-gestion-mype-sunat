@@ -10,8 +10,10 @@ import { CustomsSirePurchasesController } from './infrastructure/controllers/cus
 import { MasterDataController } from './infrastructure/controllers/masterDataController';
 import { MasterDataService } from './application/services/masterDataService';
 import { ImportOrderController } from './infrastructure/controllers/importOrderController';
+import { ImportQuotationController } from './infrastructure/controllers/importQuotationController';
 import { ForeignSupplierController } from './infrastructure/controllers/foreignSupplierController';
 import { ImportOrderService } from './application/services/importOrderService';
+import { ImportQuotationService } from './application/services/importQuotationService';
 import { ForeignSupplierService } from './application/services/foreignSupplierService';
 import { CustomsAccountingController } from './infrastructure/controllers/customsAccountingController';
 import { CustomsAccountingService } from './application/services/customsAccountingService';
@@ -62,12 +64,14 @@ import { NestCustomsEventPublisherAdapter } from './infrastructure/adapters/nest
     GoodsReceiptController,
     CustomsSirePurchasesController,
     MasterDataController,
+    ImportQuotationController,
     ImportOrderController,
     ForeignSupplierController,
     CustomsAccountingController,
   ],
   providers: [
     MasterDataService,
+    ImportQuotationService,
     ImportOrderService,
     ForeignSupplierService,
     CustomsAccountingService,
