@@ -30,6 +30,9 @@ import {
   UpsertPortDto,
   UpdateExchangeRateDto,
   UpsertCustomsServiceDto,
+  UpsertCustomsOfficeDto,
+  UpsertAuthorizedBankDto,
+  UpsertVuceEntityDto,
 } from '../../application/dto/masterDataDto';
 
 /**
@@ -288,6 +291,54 @@ export class MasterDataController {
     @Param('sku') sku: string,
   ) {
     return this.masterData.deleteCustomsService(this.requireCompany(companyId), sku);
+  }
+
+  // Aduanas SUNAT
+  @Get('customs-offices')
+  listCustomsOffices() {
+    return this.masterData.listCustomsOffices();
+  }
+
+  @Put('customs-offices')
+  upsertCustomsOffice(@Body() dto: UpsertCustomsOfficeDto) {
+    return this.masterData.upsertCustomsOffice(dto);
+  }
+
+  @Delete('customs-offices/:code')
+  deleteCustomsOffice(@Param('code') code: string) {
+    return this.masterData.deleteCustomsOffice(code);
+  }
+
+  // Bancos autorizados
+  @Get('authorized-banks')
+  listAuthorizedBanks() {
+    return this.masterData.listAuthorizedBanks();
+  }
+
+  @Put('authorized-banks')
+  upsertAuthorizedBank(@Body() dto: UpsertAuthorizedBankDto) {
+    return this.masterData.upsertAuthorizedBank(dto);
+  }
+
+  @Delete('authorized-banks/:code')
+  deleteAuthorizedBank(@Param('code') code: string) {
+    return this.masterData.deleteAuthorizedBank(code);
+  }
+
+  // Entidades VUCE
+  @Get('vuce-entities')
+  listVuceEntities() {
+    return this.masterData.listVuceEntities();
+  }
+
+  @Put('vuce-entities')
+  upsertVuceEntity(@Body() dto: UpsertVuceEntityDto) {
+    return this.masterData.upsertVuceEntity(dto);
+  }
+
+  @Delete('vuce-entities/:code')
+  deleteVuceEntity(@Param('code') code: string) {
+    return this.masterData.deleteVuceEntity(code);
   }
 
   private requireCompany(companyId?: string): string {

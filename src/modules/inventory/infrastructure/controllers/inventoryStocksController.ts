@@ -251,6 +251,7 @@ export class InventoryStocksController {
       id: p.id,
       sku: p.sku,
       description: p.description,
+      barcode: p.barcode || undefined,
       isService: Boolean(p.is_service),
       isInventory: Boolean(p.is_inventory),
       unitCode: p.sunat_unit_code || 'NIU',
