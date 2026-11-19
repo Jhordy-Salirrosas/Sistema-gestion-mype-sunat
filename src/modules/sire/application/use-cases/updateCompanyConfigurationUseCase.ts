@@ -58,6 +58,13 @@ export class UpdateCompanyConfigurationUseCase {
       );
     }
 
+    if (dto.tradeName !== undefined) {
+      changes.tradeName = this.requiredText(
+        dto.tradeName,
+        'El nombre comercial no puede estar vacío.',
+      );
+    }
+
     if (dto.direccion !== undefined) {
       changes.direccion = this.requiredText(
         dto.direccion,

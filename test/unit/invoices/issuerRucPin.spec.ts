@@ -113,3 +113,21 @@ it('certificado y firma real de prueba aceptan el pin y rechazan el RUC comparti
   expect(signatures.verifySignature(signed)).toBe(true);
   expect(() => certificates.getCertificate({ ...pinned, ruc: COMPANY_RUC })).toThrow('RUC no coincide');
 });
+
+it('en producción exige SOL persistido y no cae a variables de entorno', async () => {
+  process.env.NODE_ENV = 'production';
+  delete process.env.SUNAT_SOL_USER;
+  delete process.env.SUNAT_SOL_PASSWORD;
+  Object.assign(h.company, { issuer_sol_configured: false, issuer_config_activated_at: new Date(), issuer_ruc: null });
+  await expect(h.resolver.resolve(h.company.id)).resolves.toMatchObject({ sol: null });
+});
+
+it('en producción migra la credencial del entorno a la empresa una sola vez', async () => {
+  process.env.NODE_ENV = 'production';
+  process.env.SUNAT_SOL_USER = 'MODDATOS';
+  process.env.SUNAT_SOL_PASSWORD = 'clave-sol';
+  Object.assign(h.company, { issuer_sol_configured: false, issuer_config_activated_at: new Date(), issuer_ruc: null });
+  const contexto = await h.resolver.resolve(h.company.id);
+  expect(contexto).toMatchObject({ solSource: 'company', sol: { username: `${COMPANY_RUC}MODDATOS` } });
+  expect(h.db.company.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ issuer_sol_configured: true, sol_user: 'MODDATOS' }) }));
+});

@@ -32,8 +32,8 @@ describe('AuthModule SOL cipher provider', () => {
     expect(cipherProvider?.useFactory?.()).toBeInstanceOf(SolCredentialCipher);
 
     delete process.env.SOL_CREDENTIALS_ENCRYPTION_KEY;
-    expect(() => cipherProvider?.useFactory?.()).toThrow(
-      /clave Base64 válida de 32 bytes/,
-    );
+    const sinClave = cipherProvider?.useFactory?.() as SolCredentialCipher;
+    expect(sinClave).toBeInstanceOf(SolCredentialCipher);
+    expect(() => sinClave.encrypt('x')).toThrow(/no está configurada/);
   });
 });

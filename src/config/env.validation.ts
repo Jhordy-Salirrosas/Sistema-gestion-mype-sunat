@@ -60,16 +60,24 @@ class EnvironmentVariables {
   })
   JWT_SECRET: string;
 
+  /**
+   * Clave de cifrado de credenciales SOL.
+   *
+   * Ya no es obligatoria para arrancar: las credenciales viven cifradas en
+   * `companies` y la ausencia de esta clave solo inhabilita escribir nuevas
+   * credenciales, no el resto de la aplicación.
+   */
   @IsString()
-  @IsNotEmpty({
-    message:
-      'SOL_CREDENTIALS_ENCRYPTION_KEY es obligatoria para proteger credenciales SOL',
-  })
-  SOL_CREDENTIALS_ENCRYPTION_KEY: string;
+  @IsOptional()
+  SOL_CREDENTIALS_ENCRYPTION_KEY?: string;
 
+  /**
+   * RUC del emisor legado. La identidad fiscal se resuelve desde la empresa;
+   * esta variable solo se conserva para despliegues antiguos.
+   */
   @IsString()
-  @IsNotEmpty({ message: 'RUC_EMISOR es obligatorio' })
-  RUC_EMISOR: string;
+  @IsOptional()
+  RUC_EMISOR?: string;
 
   @IsString()
   @IsNotEmpty({

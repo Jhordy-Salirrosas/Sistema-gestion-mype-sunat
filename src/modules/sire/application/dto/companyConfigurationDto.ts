@@ -24,6 +24,13 @@ export class UpdateCompanyConfigurationDto {
   @MaxLength(200)
   businessName?: string;
 
+  /** Nombre comercial de la empresa. */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  tradeName?: string;
+
   /** Dirección fiscal devuelta por la consulta RUC de SUNAT. */
   @IsOptional()
   @IsString()
@@ -79,6 +86,7 @@ export class UpdateCompanyConfigurationDto {
 export interface CompanyConfigurationResponse {
   ruc: string;
   businessName: string | null;
+  tradeName: string | null;
   direccion: string | null;
   estado: string | null;
   condicion: string | null;

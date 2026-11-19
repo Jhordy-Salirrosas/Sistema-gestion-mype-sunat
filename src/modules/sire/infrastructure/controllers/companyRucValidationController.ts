@@ -31,6 +31,8 @@ export class CompanyRucValidationController {
       const data = await this.rucConsultaService.consultar(ruc);
       return {
         ...data,
+        razonSocial: data.razonSocial,
+        nombreComercial: data.nombreComercial ?? null,
         direccion: data.direccionFiscal,
         estado: data.estadoContribuyente,
         condicion: data.condicionDomicilio,

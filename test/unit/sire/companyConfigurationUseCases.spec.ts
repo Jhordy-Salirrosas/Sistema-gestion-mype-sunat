@@ -21,6 +21,7 @@ describe('GetCompanyConfigurationUseCase', () => {
     repository.findByCompanyId.mockResolvedValue({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
@@ -33,6 +34,7 @@ describe('GetCompanyConfigurationUseCase', () => {
     await expect(useCase.execute(COMPANY_ID)).resolves.toEqual({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
@@ -68,6 +70,7 @@ describe('UpdateCompanyConfigurationUseCase', () => {
     repository.update.mockResolvedValue({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
@@ -78,6 +81,7 @@ describe('UpdateCompanyConfigurationUseCase', () => {
 
     await useCase.execute(COMPANY_ID, {
       businessName: '  Demo SAC  ',
+      tradeName: '  Demo Comercial  ',
       direccion: '  AV. SIEMPRE VIVA 123  ',
       estado: ' activo ',
       condicion: ' habido ',
@@ -88,6 +92,7 @@ describe('UpdateCompanyConfigurationUseCase', () => {
 
     expect(repository.update).toHaveBeenCalledWith(COMPANY_ID, {
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
@@ -126,6 +131,15 @@ describe('UpdateCompanyConfigurationUseCase', () => {
 
     await expect(
       useCase.execute(COMPANY_ID, { businessName: '   ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank trade name', async () => {
+    const { repository, useCase } = crearCaso();
+
+    await expect(
+      useCase.execute(COMPANY_ID, { tradeName: '   ' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.update).not.toHaveBeenCalled();
   });

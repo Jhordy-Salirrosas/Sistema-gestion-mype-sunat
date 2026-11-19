@@ -302,6 +302,28 @@ describe('AccountingController', () => {
     expect(closePeriodUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11');
   });
 
+  it('pasa la marca de anulación del cierre al reabrir un período', async () => {
+    reopenPeriodUseCase.execute.mockResolvedValue({ period: { period: '2026-11' }, advertencias: [] } as never);
+
+    await controller.reopenPeriod('2026-11', { motivo: 'Ajuste', anularCierre: true }, 'comp-1');
+
+    expect(reopenPeriodUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', {
+      motivo: 'Ajuste',
+      anularCierre: true,
+    });
+  });
+
+  it('no marca la anulación cuando no se pide', async () => {
+    reopenPeriodUseCase.execute.mockResolvedValue({ period: { period: '2026-11' }, advertencias: [] } as never);
+
+    await controller.reopenPeriod('2026-11', { motivo: 'Ajuste' }, 'comp-1');
+
+    expect(reopenPeriodUseCase.execute).toHaveBeenCalledWith('comp-1', '2026-11', {
+      motivo: 'Ajuste',
+      anularCierre: false,
+    });
+  });
+
   it('delega el libro mayor y el balance de comprobación', async () => {
     const ledger = { period: '2026-11', accountCode: '1211', accountName: 'CxC', nature: 'Deudora' as const, openingBalance: 0, movements: [], totalDebit: 0, totalCredit: 0, closingBalance: 0 };
     const balance = { period: '2026-11', rows: [], totalDebit: 0, totalCredit: 0 };

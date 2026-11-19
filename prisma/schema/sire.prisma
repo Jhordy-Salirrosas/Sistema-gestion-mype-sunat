@@ -110,6 +110,7 @@ model CompanyConfiguration {
   id                   String   @id @default(uuid())
   company_id           String   @unique
   business_name        String?
+  trade_name           String?
   direccion            String?
   estado               String?
   condicion            String?

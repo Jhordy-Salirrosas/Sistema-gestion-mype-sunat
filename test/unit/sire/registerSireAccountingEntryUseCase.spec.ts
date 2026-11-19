@@ -2,11 +2,13 @@ import { NotFoundException } from '@nestjs/common';
 import { RegisterSireAccountingEntryUseCase } from '../../../src/modules/sire/application/use-cases/registerSireAccountingEntryUseCase';
 import type { ISireAccountingMappingRepositoryPort } from '../../../src/modules/sire/domain/ports/sireAccountingMappingRepositoryPort';
 import type { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
+import type { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 
 describe('RegisterSireAccountingEntryUseCase', () => {
   const entry = { id: 'entry-1' };
   let mappings: jest.Mocked<ISireAccountingMappingRepositoryPort>;
   let accounting: { execute: jest.Mock };
+  let accountingAccounts: { execute: jest.Mock };
 
   beforeEach(() => {
     mappings = {
@@ -20,12 +22,22 @@ describe('RegisterSireAccountingEntryUseCase', () => {
       upsertMany: jest.fn(),
     };
     accounting = { execute: jest.fn().mockResolvedValue(entry) };
+    accountingAccounts = {
+      execute: jest.fn().mockResolvedValue([
+        { code: '121', name: 'Clientes nacionales', isActive: true },
+        { code: '701', name: 'Ingresos por ventas', isActive: true },
+        { code: '40111', name: 'IGV por pagar', isActive: true },
+        { code: '421', name: 'Proveedores nacionales', isActive: true },
+        { code: '601', name: 'Gastos por compras', isActive: true },
+      ]),
+    };
   });
 
   function createUseCase() {
     return new RegisterSireAccountingEntryUseCase(
       mappings,
       accounting as unknown as GenerateAccountingEntryUseCase,
+      accountingAccounts as unknown as ListAccountingAccountsUseCase,
     );
   }
 
@@ -85,26 +97,27 @@ describe('RegisterSireAccountingEntryUseCase', () => {
         {
           lineOrder: 1,
           accountCode: '121',
-          accountName: 'Cuentas por cobrar comerciales',
+          accountName: 'Clientes nacionales',
           debitAmount: 118,
           creditAmount: 0,
         },
         {
           lineOrder: 2,
           accountCode: '701',
-          accountName: 'Ventas de mercaderías',
+          accountName: 'Ingresos por ventas',
           debitAmount: 0,
           creditAmount: 100,
         },
         {
           lineOrder: 3,
           accountCode: '40111',
-          accountName: 'IGV cuenta propia',
+          accountName: 'IGV por pagar',
           debitAmount: 0,
           creditAmount: 18,
         },
       ],
     });
+    expect(accountingAccounts.execute).toHaveBeenCalledWith(true);
   });
 
   it('genera el asiento de compras con las cuentas del mapeo', async () => {
@@ -122,9 +135,21 @@ describe('RegisterSireAccountingEntryUseCase', () => {
         glosa: 'Asiento de conciliación SIRE compras 202601',
         idempotencyKey: 'sire-202601-RCE_COMPRAS',
         lines: [
-          expect.objectContaining({ accountCode: '601', debitAmount: 100 }),
-          expect.objectContaining({ accountCode: '40111', debitAmount: 18 }),
-          expect.objectContaining({ accountCode: '421', creditAmount: 118 }),
+          expect.objectContaining({
+            accountCode: '601',
+            accountName: 'Gastos por compras',
+            debitAmount: 100,
+          }),
+          expect.objectContaining({
+            accountCode: '40111',
+            accountName: 'IGV por pagar',
+            debitAmount: 18,
+          }),
+          expect.objectContaining({
+            accountCode: '421',
+            accountName: 'Proveedores nacionales',
+            creditAmount: 118,
+          }),
         ],
       }),
     );

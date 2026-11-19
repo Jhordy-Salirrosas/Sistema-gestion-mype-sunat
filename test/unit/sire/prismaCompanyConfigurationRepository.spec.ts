@@ -13,6 +13,7 @@ const COMPANY_ROW = {
 
 const CONFIGURATION_ROW = {
   business_name: 'Demo SAC',
+  trade_name: 'Demo Comercial',
   direccion: 'AV. SIEMPRE VIVA 123',
   estado: 'ACTIVO',
   condicion: 'HABIDO',
@@ -31,6 +32,7 @@ const COMPANY_SELECT = {
 
 const CONFIGURATION_SELECT = {
   business_name: true,
+  trade_name: true,
   direccion: true,
   estado: true,
   condicion: true,
@@ -67,6 +69,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
       await expect(repository.findByCompanyId(COMPANY_ID)).resolves.toEqual({
         ruc: '20123456789',
         businessName: 'Demo SAC',
+        tradeName: 'Demo Comercial',
         direccion: 'AV. SIEMPRE VIVA 123',
         estado: 'ACTIVO',
         condicion: 'HABIDO',
@@ -92,7 +95,8 @@ describe('PrismaCompanyConfigurationRepository', () => {
 
       await expect(repository.findByCompanyId(COMPANY_ID)).resolves.toEqual({
         ruc: '20123456789',
-        businessName: 'DEMO SAC',
+        businessName: 'DEMO SOCIEDAD ANONIMA CERRADA',
+        tradeName: 'DEMO SAC',
         direccion: 'AV. LEGAL 123',
         estado: null,
         condicion: null,
@@ -102,7 +106,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
       });
     });
 
-    it('uses the legal name when the trade name is missing', async () => {
+    it('returns a null trade name when neither source has it', async () => {
       const prisma = crearPrisma();
       prisma.company.findUnique.mockResolvedValue({
         ...COMPANY_ROW,
@@ -115,6 +119,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
         repository.findByCompanyId(COMPANY_ID),
       ).resolves.toMatchObject({
         businessName: 'DEMO SOCIEDAD ANONIMA CERRADA',
+        tradeName: null,
       });
     });
 
@@ -145,6 +150,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
       prisma.company.findUnique.mockResolvedValue(COMPANY_ROW);
       prisma.companyConfiguration.upsert.mockResolvedValue({
         business_name: null,
+        trade_name: null,
         direccion: null,
         estado: null,
         condicion: null,
@@ -156,7 +162,8 @@ describe('PrismaCompanyConfigurationRepository', () => {
 
       await expect(repository.update(COMPANY_ID, {})).resolves.toEqual({
         ruc: '20123456789',
-        businessName: 'DEMO SAC',
+        businessName: 'DEMO SOCIEDAD ANONIMA CERRADA',
+        tradeName: 'DEMO SAC',
         direccion: 'AV. LEGAL 123',
         estado: null,
         condicion: null,
@@ -169,6 +176,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
         create: {
           company_id: COMPANY_ID,
           business_name: null,
+          trade_name: null,
           direccion: null,
           estado: null,
           condicion: null,
@@ -192,6 +200,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
       await expect(
         repository.update(COMPANY_ID, {
           businessName: 'Demo SAC',
+          tradeName: 'Demo Comercial',
           direccion: 'AV. SIEMPRE VIVA 123',
           estado: 'ACTIVO',
           condicion: 'HABIDO',
@@ -202,6 +211,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
       ).resolves.toEqual({
         ruc: '20123456789',
         businessName: 'Demo SAC',
+        tradeName: 'Demo Comercial',
         direccion: 'AV. SIEMPRE VIVA 123',
         estado: 'ACTIVO',
         condicion: 'HABIDO',
@@ -213,6 +223,7 @@ describe('PrismaCompanyConfigurationRepository', () => {
         expect.objectContaining({
           update: {
             business_name: 'Demo SAC',
+            trade_name: 'Demo Comercial',
             direccion: 'AV. SIEMPRE VIVA 123',
             estado: 'ACTIVO',
             condicion: 'HABIDO',
@@ -220,6 +231,23 @@ describe('PrismaCompanyConfigurationRepository', () => {
             es_agente_retencion: false,
             series: ['F001', 'B001'],
           },
+        }),
+      );
+    });
+
+    it('updates only the trade name when the other fields were not sent', async () => {
+      const prisma = crearPrisma();
+      prisma.company.findUnique.mockResolvedValue(COMPANY_ROW);
+      prisma.companyConfiguration.upsert.mockResolvedValue(
+        CONFIGURATION_ROW,
+      );
+      const repository = new PrismaCompanyConfigurationRepository(prisma);
+
+      await repository.update(COMPANY_ID, { tradeName: 'Demo Comercial' });
+
+      expect(prisma.companyConfiguration.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: { trade_name: 'Demo Comercial' },
         }),
       );
     });

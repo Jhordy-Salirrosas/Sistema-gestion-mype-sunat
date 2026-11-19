@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ListAccountingAccountsUseCase } from '../../../accounting/application/use-cases/listAccountingAccountsUseCase';
 import type { SireAccountingMappingResponse } from '../dto/sireAccountingMappingDto';
 import {
   SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT,
@@ -18,12 +19,17 @@ import {
  * actualiza según el par `(empresa, tipo de operación)`. Los tipos repetidos
  * con la misma cuenta se deduplican; con cuentas distintas se rechazan para
  * no dejar el mapeo ambiguo.
+ *
+ * Las cuentas se validan contra el catálogo PCGE real (`accounting_accounts`):
+ * no se aceptan códigos inventados ni cuentas inactivas. Este mapeo vive en
+ * `sire_accounting_mappings` y es exclusivo del módulo SIRE.
  */
 @Injectable()
 export class SaveSireAccountingMappingsUseCase {
   constructor(
     @Inject(SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT)
     private readonly repository: ISireAccountingMappingRepositoryPort,
+    private readonly accountingAccounts: ListAccountingAccountsUseCase,
   ) {}
 
   async execute(
@@ -37,12 +43,36 @@ export class SaveSireAccountingMappingsUseCase {
     }
 
     const normalized = this.normalize(mappings);
+    await this.assertAccountsExist(normalized);
+
     const saved = await this.repository.upsertMany(companyId, normalized);
     if (!saved) {
       throw new NotFoundException('Empresa no encontrada.');
     }
 
     return saved;
+  }
+
+  /**
+   * Comprueba que cada cuenta exista y esté activa en el catálogo PCGE.
+   *
+   * El catálogo es global y oficial; la empresa solo elige qué cuenta usar
+   * para cada concepto SIRE.
+   */
+  private async assertAccountsExist(
+    mappings: readonly SireAccountingMappingEntry[],
+  ): Promise<void> {
+    const accounts = await this.accountingAccounts.execute(false);
+    const activeCodes = new Set(accounts.map((account) => account.code));
+    const invalid = mappings
+      .map((mapping) => mapping.cuentaContable)
+      .filter((code) => !activeCodes.has(code));
+
+    if (invalid.length > 0) {
+      throw new BadRequestException(
+        `Las cuentas ${[...new Set(invalid)].join(', ')} no existen o están inactivas en el Plan de Cuentas (PCGE).`,
+      );
+    }
   }
 
   private normalize(

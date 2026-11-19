@@ -14,6 +14,7 @@ describe('ReopenAccountingPeriodUseCase', () => {
     existsBySourceReference: jest.fn().mockResolvedValue(tieneCierre),
     openPeriod: jest.fn().mockResolvedValue({ period: '2026-11', status: 'ABIERTO' }),
     registrarReapertura: jest.fn().mockResolvedValue(undefined),
+    anularAsientoCierre: jest.fn().mockResolvedValue(1),
   });
 
   it('reabre el período y registra el motivo', async () => {
@@ -58,6 +59,37 @@ describe('ReopenAccountingPeriodUseCase', () => {
 
     await expect(caso.execute('c1', '2026-11', { motivo: 'Motivo suficientemente largo' })).rejects.toThrow(
       'asiento de cierre',
+    );
+  });
+
+  it('anula el asiento de cierre cuando se pide explícitamente', async () => {
+    const repo = crear([{ period: '2026-11', status: 'CERRADO' }], true);
+    const caso = new ReopenAccountingPeriodUseCase(repo as never);
+
+    await caso.execute('c1', '2026-11', {
+      motivo: 'Ajuste por factura omitida',
+      anularCierre: true,
+    });
+
+    expect(repo.anularAsientoCierre).toHaveBeenCalledWith('c1', 2026);
+    expect(repo.openPeriod).toHaveBeenCalledWith('c1', 2026, 11);
+  });
+
+  it('no anula nada cuando no hay asiento de cierre', async () => {
+    const repo = crear([{ period: '2026-11', status: 'CERRADO' }]);
+    const caso = new ReopenAccountingPeriodUseCase(repo as never);
+
+    await caso.execute('c1', '2026-11', { motivo: 'Motivo suficientemente largo' });
+
+    expect(repo.anularAsientoCierre).not.toHaveBeenCalled();
+  });
+
+  it('pide marcar la anulación en lugar de rechazar sin salida', async () => {
+    const repo = crear([{ period: '2026-11', status: 'CERRADO' }], true);
+    const caso = new ReopenAccountingPeriodUseCase(repo as never);
+
+    await expect(caso.execute('c1', '2026-11', { motivo: 'Motivo suficientemente largo' })).rejects.toThrow(
+      'Marca "Anular el asiento de cierre"',
     );
   });
 

@@ -31,6 +31,7 @@ describe('CompanyConfigurationController', () => {
     (getUseCase.execute as jest.Mock).mockResolvedValue({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
@@ -42,6 +43,7 @@ describe('CompanyConfigurationController', () => {
     await expect(controller.obtener(user)).resolves.toEqual({
       ruc: '20123456789',
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',
@@ -55,6 +57,7 @@ describe('CompanyConfigurationController', () => {
   it('updates the configuration of the authenticated company', async () => {
     const dto = {
       businessName: 'Demo SAC',
+      tradeName: 'Demo Comercial',
       direccion: 'AV. SIEMPRE VIVA 123',
       estado: 'ACTIVO',
       condicion: 'HABIDO',

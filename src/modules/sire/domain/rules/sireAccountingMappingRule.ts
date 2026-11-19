@@ -59,8 +59,21 @@ export function sumSireRecordTotals(
   );
 }
 
-export function accountDisplayName(cuenta: string): string {
-  return ACCOUNT_NAMES[cuenta] ?? `Cuenta contable ${cuenta}`;
+/**
+ * Nombre visible de la cuenta.
+ *
+ * Prioriza el nombre real del catálogo PCGE (`accounting_accounts`); el mapa
+ * local queda solo como respaldo para pruebas o catálogos incompletos.
+ */
+export function accountDisplayName(
+  cuenta: string,
+  accountNames?: ReadonlyMap<string, string>,
+): string {
+  return (
+    accountNames?.get(cuenta) ??
+    ACCOUNT_NAMES[cuenta] ??
+    `Cuenta contable ${cuenta}`
+  );
 }
 
 function resolveAccount(
@@ -99,6 +112,7 @@ export function buildSireAccountingLines(
   kind: SireAccountingBookKind,
   totals: SireAccountingTotals,
   mappings: ReadonlyArray<SireAccountingMappingEntry>,
+  accountNames?: ReadonlyMap<string, string>,
 ): SireAccountingLinePreview[] {
   const base = Math.max(0, roundSireAmount(totals.taxableBase));
   const rawIgv = Math.max(0, roundSireAmount(totals.igvAmount));
@@ -127,19 +141,19 @@ export function buildSireAccountingLines(
     const lines: SireAccountingLinePreview[] = [
       {
         cuenta: totalAccount,
-        nombre: accountDisplayName(totalAccount),
+        nombre: accountDisplayName(totalAccount, accountNames),
         debe: total,
         haber: 0,
       },
       {
         cuenta: baseAccount,
-        nombre: accountDisplayName(baseAccount),
+        nombre: accountDisplayName(baseAccount, accountNames),
         debe: 0,
         haber: safeBase,
       },
       {
         cuenta: igvAccount,
-        nombre: accountDisplayName(igvAccount),
+        nombre: accountDisplayName(igvAccount, accountNames),
         debe: 0,
         haber: igv,
       },
@@ -162,19 +176,19 @@ export function buildSireAccountingLines(
   const lines: SireAccountingLinePreview[] = [
     {
       cuenta: baseAccount,
-      nombre: accountDisplayName(baseAccount),
+      nombre: accountDisplayName(baseAccount, accountNames),
       debe: safeBase,
       haber: 0,
     },
     {
       cuenta: igvAccount,
-      nombre: accountDisplayName(igvAccount),
+      nombre: accountDisplayName(igvAccount, accountNames),
       debe: igv,
       haber: 0,
     },
     {
       cuenta: totalAccount,
-      nombre: accountDisplayName(totalAccount),
+      nombre: accountDisplayName(totalAccount, accountNames),
       debe: 0,
       haber: total,
     },

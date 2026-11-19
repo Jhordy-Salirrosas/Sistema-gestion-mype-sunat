@@ -343,6 +343,20 @@ export class PrismaAccountingRepository implements IAccountingRepositoryPort {
     });
   }
 
+  /** Anula el asiento de cierre del ejercicio para poder reabrir un mes. */
+  async anularAsientoCierre(companyId: string, year: number) {
+    const resultado = await this.prisma.accountingEntry.updateMany({
+      where: {
+        company_id: companyId,
+        source_module: 'CLOSING',
+        source_reference_id: `CIERRE-${year}`,
+        status: { not: 'ANULADO' },
+      },
+      data: { status: 'ANULADO' },
+    });
+    return resultado.count;
+  }
+
   /** Saldo por cuenta de los asientos del año, para la vista previa del cierre. */
   async saldosDeResultado(companyId: string, year: number) {
     const entradas = await this.prisma.accountingEntry.findMany({

@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ListAccountingAccountsUseCase } from '../../../accounting/application/use-cases/listAccountingAccountsUseCase';
 import type { SireLibroMenu } from '../dto/sireMenuQueryDto';
 import type {
   SireAccountingPreviewEntry,
@@ -43,6 +44,7 @@ export class GetSireAccountingPreviewUseCase {
     private readonly totalsRepository: ISireAccountingPreviewRepositoryPort,
     @Inject(SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT)
     private readonly mappingRepository: ISireAccountingMappingRepositoryPort,
+    private readonly accountingAccounts: ListAccountingAccountsUseCase,
   ) {}
 
   async execute(
@@ -50,21 +52,25 @@ export class GetSireAccountingPreviewUseCase {
     period: string,
     libro?: SireLibroMenu,
   ): Promise<SireAccountingPreviewResponse> {
-    const [totals, mappings] = await Promise.all([
+    const [totals, mappings, accounts] = await Promise.all([
       this.totalsRepository.findPeriodTotals(companyId, period),
       this.mappingRepository.findAll(companyId),
+      this.accountingAccounts.execute(true),
     ]);
 
     if (mappings === null) {
       throw new NotFoundException('Empresa no encontrada.');
     }
 
+    const accountNames = new Map(
+      accounts.map((account) => [account.code, account.name]),
+    );
     const selected = libro
       ? totals.filter((book) => book.bookType === libro)
       : totals;
 
     const asientos = selected
-      .map((book) => this.toEntry(book, period, mappings))
+      .map((book) => this.toEntry(book, period, mappings, accountNames))
       .filter((entry): entry is SireAccountingPreviewEntry => entry !== null);
 
     if (asientos.length === 0) {
@@ -83,9 +89,10 @@ export class GetSireAccountingPreviewUseCase {
       tipoOperacion: string;
       cuentaContable: string;
     }>,
+    accountNames: ReadonlyMap<string, string>,
   ): SireAccountingPreviewEntry | null {
     const kind = BOOK_KIND[book.bookType];
-    const lineas = buildSireAccountingLines(kind, book, mappings);
+    const lineas = buildSireAccountingLines(kind, book, mappings, accountNames);
     if (lineas.length === 0) return null;
 
     return {

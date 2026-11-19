@@ -1,3 +1,4 @@
+import { InvoicePaymentPanel } from '../components/InvoicePaymentPanel';
 import { useCommercialDefaults, permittedDefault } from '../hooks/useCommercialDefaults';
 import { useInvoiceDatePermission } from '../hooks/useInvoiceDatePermission';
 import { enfocarBusquedaProducto, colocarProductoEnFilaVacia } from '../lib/invoiceEmptyRow';
@@ -63,7 +64,6 @@ import {
   AlertDescription,
   AlertTitle,
   Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
@@ -503,6 +503,32 @@ export default function InvoiceEmissionPage() {
     }
   };
 
+  // Ajuste visual al espacio real: cabecera, avisos y zoom no ocultan la liquidación.
+  const panelPagoRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const panel = panelPagoRef.current;
+    if (!panel) return;
+    let frame = 0;
+    const ajustar = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const disponible = window.innerHeight - Math.max(16, panel.getBoundingClientRect().top) - 16;
+        panel.style.setProperty('--emision-panel-altura', `${Math.max(0, disponible)}px`);
+      });
+    };
+    ajustar();
+    window.addEventListener('resize', ajustar);
+    window.addEventListener('scroll', ajustar, true);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(ajustar);
+    if (formRef.current) observer?.observe(formRef.current);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', ajustar);
+      window.removeEventListener('scroll', ajustar, true);
+    };
+  }, []);
+
   const teclado = useInvoiceKeyboard(agregarItem, () => formRef.current?.requestSubmit(), enviando || !puedeOperar, formRef);
   return (
     <Page>
@@ -512,161 +538,17 @@ export default function InvoiceEmissionPage() {
       />
 
       {defaultsError && <p role="alert">No se pudo leer el pago predeterminado. Verifique la forma y el medio antes de emitir.</p>}
-      <form ref={formRef} onKeyDown={teclado.handler} onSubmit={emitir} className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
-        <div className="xl:col-span-2">{teclado.ayuda}</div>
-        <div className="min-w-0 space-y-6">
+      <form ref={formRef} onKeyDown={teclado.handler} onSubmit={emitir} className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+        <div className="lg:col-span-2">{teclado.ayuda}</div>
+        <section aria-labelledby="emision-operacion" className="min-w-0 space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <FileText className="h-4 w-4 text-primary" />
-                Datos del comprobante y del cliente
+              <CardTitle id="emision-operacion" className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4 text-primary" /> Operación
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="tipo-cpe"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Tipo de comprobante
-                  </label>
-                  <select
-                    id="tipo-cpe"
-                    value={tipo}
-                    onChange={(e) => {
-                      setTipo(e.target.value as '01' | '03');
-                      if (e.target.value === '03') { setFormaPago('Contado'); setCuotas([]); }
-                      setResultado(null);
-                    }}
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="01">Factura Electrónica</option>
-                    <option value="03">Boleta de Venta Electrónica</option>
-                  </select>
-                  <label htmlFor="serie-cpe">Serie configurada</label>
-                  <select id="serie-cpe" value={serieActual} onChange={e => setSerieElegida(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-                    {!seriesDelTipo.length && <option value="">{estadoConfiguracion === 'cargando' ? 'Cargando configuración…' : estadoConfiguracion === 'error' ? 'No se pudo cargar la configuración' : 'Sin serie activa'}</option>}
-                    {seriesDelTipo.map(s => <option key={s.series} value={s.series}>{s.series}</option>)}
-                  </select>
-                  <InvoiceNextNumber cargando={estadoConfiguracion === 'cargando'} error={estadoConfiguracion === 'error'} serie={serieActual} actual={seriesDelTipo.find(s => s.series === serieActual)?.current_correlative} />
-                </div>
-
-                {/*
-                  D9 · Fecha de emisión editable, precargada con hoy en Lima.
-                  Antes era un `useState` congelado: la venta del viernes que se
-                  registra el lunes no se podía fechar el viernes. El tope
-                  superior es hoy y el inferior, el plazo del resumen diario
-                  (regla 2957), porque fuera de él la boleta nace sin forma de
-                  informarse.
-                */}
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="fecha-emision"
-                    className="text-xs font-medium text-foreground"
-                  >
-                    Fecha de emisión
-                  </label>
-                  <Input
-                    id="fecha-emision"
-                    type="date"
-                    min={minimoDeFechaEmision(undefined, tipo)}
-                    max={topeDeFechaEmision()}
-                    value={fechaEmision}
-                    readOnly={!canEditDate}
-                    aria-describedby={!canEditDate ? 'fecha-emision-permiso' : undefined}
-                    onChange={(e) => { if (canEditDate) cambiarFecha(e.target.value); }}
-                  />
-                  {dateExplanation && <PageText id="fecha-emision-permiso" variant="caption">{dateExplanation}</PageText>}
-                  {problemaFecha && (
-                    <PageText variant="error">{problemaFecha}</PageText>
-                  )}
-                  {!problemaFecha && formaPago === 'Credito' && cuotas.length > 0 && (
-                    <PageText variant="caption">
-                      Los vencimientos conservan su plazo respecto de la nueva
-                      fecha.
-                    </PageText>
-                  )}
-                </div>
-              </div>
-
-              <RetencionMaestro spot={detraccion.monto > 0} documento={clienteDoc} razonSocial={clienteRazonSocial} valor={agenteRetencion}
-                onChange={(valor, correccion) => { setAgenteRetencion(valor); setCorreccionRetencion(correccion); }} />
-
-              {/*
-                HU-10: forma de pago. Antes esta pantalla mandaba siempre
-                'Contado' y el selector solo existía en el modal de la bandeja,
-                así que una venta al crédito no se podía emitir desde aquí.
-                Al pasar a Crédito se reparte el neto pendiente en una cuota
-                por defecto, que el usuario puede editar abajo.
-              */}
-              <div className="space-y-1.5">
-                <span className="text-xs font-medium text-foreground">
-                  Forma de pago
-                </span>
-                <div className="flex gap-2">
-                  {(['Contado', 'Credito'] as const).map((forma) => {
-                    const creditoHabilitado =
-                      tipo === '01' && clienteSeleccionado?.tieneCredito === true;
-                    return (
-                      <Button
-                        key={forma}
-                        type="button"
-                        size="sm"
-                        disabled={forma === 'Credito' && !creditoHabilitado}
-                        variant={formaPago === forma ? 'default' : 'outline'}
-                        onClick={() => {
-                          if (forma === 'Credito' && !creditoHabilitado) return;
-                          setFormaPago(forma);
-                          setCuotas(
-                            forma === 'Credito'
-                              ? repartirEnCuotas(netoPendiente, 1, fechaEmision)
-                              : [],
-                          );
-                        }}
-                      >
-                        {forma === 'Credito' ? 'Crédito' : 'Contado'}
-                      </Button>
-                    );
-                  })}
-                </div>
-                {clienteSeleccionado?.tieneCredito !== true && (
-                  <PageText variant="caption">
-                    La venta al crédito con cuotas solo se habilita para
-                    clientes con crédito registrado en el maestro.
-                  </PageText>
-                )}
-              </div>
-
-              {formaPago === 'Contado' && (
-                <label className="space-y-1.5 text-xs font-medium text-foreground">
-                  Medio de pago
-                  <select aria-label="Medio de pago" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-normal" value={medioPago} onChange={(e) => setMedioPago(e.target.value as import('../types/invoiceEmision.types').MedioPagoVenta)}>
-                    <option value="EFECTIVO">Efectivo</option>
-                    <option value="YAPE">Yape</option>
-                    <option value="PLIN">Plin</option>
-                    <option value="TARJETA">Tarjeta</option>
-                    <option value="TRANSFERENCIA">Transferencia</option>
-                    <option value="DEPOSITO">Depósito</option>
-                    <option value="CHEQUE">Cheque</option>
-                  </select>
-                </label>
-              )}
-
-              {formaPago === 'Credito' && (
-                <CreditInstallmentsEditor
-                  cuotas={cuotas}
-                  netoPendiente={netoPendiente}
-                  fechaEmision={fechaEmision}
-                  onCambiar={setCuotas}
-                />
-              )}
-
-              {/*
-                El docente: el cliente "que no lo escriba, que lo busque". Este
-                campo busca en la cartera de la empresa y rellena documento y
-                razón social.
-              */}
+              <h3 className="text-sm font-medium">Cliente</h3>
               <CustomerLookupField
                 unico={tipo === '03'}
                 documento={clienteDoc}
@@ -728,20 +610,22 @@ export default function InvoiceEmissionPage() {
               </div>
               {rucAutofill.aviso && <PageText role="status" className="sm:col-span-2">{rucAutofill.aviso}</PageText>}
 
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                <InvoiceWarehouseSelect value={almacen} onChange={setAlmacen} />
+                <div className="min-w-0 space-y-1.5 text-sm font-medium">
+                  <label htmlFor="serie-cpe">Serie configurada</label>
+                  <select id="serie-cpe" value={serieActual} onChange={e => setSerieElegida(e.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
+                    {!seriesDelTipo.length && <option value="">{estadoConfiguracion === 'cargando' ? 'Cargando configuración…' : estadoConfiguracion === 'error' ? 'No se pudo cargar la configuración' : 'Sin serie activa'}</option>}
+                    {seriesDelTipo.map(s => <option key={s.series} value={s.series}>{s.series}</option>)}
+                  </select>
+                  <InvoiceNextNumber cargando={estadoConfiguracion === 'cargando'} error={estadoConfiguracion === 'error'} serie={serieActual} actual={seriesDelTipo.find(s => s.series === serieActual)?.current_correlative} />
+                </div>
+              </div>
             </CardContent>
           </Card>
-
-        </div>
-        <div className="min-w-0 space-y-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">
-                Detalle de bienes y servicios
-              </CardTitle>
-
-            </CardHeader>
-            <CardContent>
-              <InvoiceWarehouseSelect value={almacen} onChange={setAlmacen} />
+            <CardHeader><CardTitle className="text-base">Detalle de bienes y servicios</CardTitle></CardHeader>
+            <CardContent className="min-w-0 space-y-4">
               <InvoiceItemsGrid codigoSoloCatalogo tipo={tipo} catalogoEstado={catalogoEstado}
                 items={items}
                 onCambiar={cambiarItem}
@@ -759,26 +643,89 @@ export default function InvoiceEmissionPage() {
               />
             </CardContent>
           </Card>
+        </section>
 
-          <div className="flex justify-end">
-            <InvoiceWriteButton
-              type="submit"
-              size="lg"
-              disabled={enviando}
-              className="min-w-[200px]"
-            >
-              <Send className="mr-2 h-4 w-4" />
-              {enviando ? 'Emitiendo…' : 'Emitir comprobante'}
-            </InvoiceWriteButton>
-          </div>
-        </div>
-
-        <div className="min-w-0 space-y-6 xl:col-start-2">
-          <Card className="bg-muted/30">
-            <CardHeader>
-              <CardTitle className="text-base">Liquidación</CardTitle>
+        <section ref={panelPagoRef} aria-labelledby="emision-facturacion" className="min-w-0 lg:sticky lg:top-4">
+          <Card className="gap-0 overflow-y-auto lg:max-h-[var(--emision-panel-altura,calc(100dvh-7rem))]">
+            <CardHeader className="pb-4">
+              <CardTitle id="emision-facturacion" className="text-base">Facturación y pago</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="min-h-0 space-y-4 overflow-y-auto pb-4">
+              <div className="space-y-1.5">
+                  <label
+                    htmlFor="tipo-cpe"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Tipo de comprobante
+                  </label>
+                  <select
+                    id="tipo-cpe"
+                    value={tipo}
+                    onChange={(e) => {
+                      setTipo(e.target.value as '01' | '03');
+                      if (e.target.value === '03') { setFormaPago('Contado'); setCuotas([]); }
+                      setResultado(null);
+                    }}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="01">Factura Electrónica</option>
+                    <option value="03">Boleta de Venta Electrónica</option>
+                  </select>
+
+              </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="fecha-emision"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Fecha de emisión
+                  </label>
+                  <Input
+                    id="fecha-emision"
+                    type="date"
+                    min={minimoDeFechaEmision(undefined, tipo)}
+                    max={topeDeFechaEmision()}
+                    value={fechaEmision}
+                    readOnly={!canEditDate}
+                    aria-describedby={!canEditDate ? 'fecha-emision-permiso' : undefined}
+                    onChange={(e) => { if (canEditDate) cambiarFecha(e.target.value); }}
+                  />
+                  {dateExplanation && <PageText id="fecha-emision-permiso" variant="caption">{dateExplanation}</PageText>}
+                  {problemaFecha && (
+                    <PageText variant="error">{problemaFecha}</PageText>
+                  )}
+                  {!problemaFecha && formaPago === 'Credito' && cuotas.length > 0 && (
+                    <PageText variant="caption">
+                      Los vencimientos conservan su plazo respecto de la nueva
+                      fecha.
+                    </PageText>
+                  )}
+                </div>
+              <RetencionMaestro spot={detraccion.monto > 0} documento={clienteDoc} razonSocial={clienteRazonSocial} valor={agenteRetencion}
+                onChange={(valor, correccion) => { setAgenteRetencion(valor); setCorreccionRetencion(correccion); }} />
+              <InvoicePaymentPanel
+                formaPago={formaPago}
+                medioPago={medioPago}
+                creditoHabilitado={tipo === '01' && clienteSeleccionado?.tieneCredito === true}
+                pagoDirecto={pagoSegunDeposito(importeTotal, detraccion.monto, retencion).pagoDirecto}
+                onCambiar={(forma, medio) => {
+                  setFormaPago(forma);
+                  if (medio) setMedioPago(medio);
+                  setCuotas(forma === 'Credito' ? repartirEnCuotas(netoPendiente, 1, fechaEmision) : []);
+                }}
+              />
+              {formaPago === 'Credito' && (
+                <CreditInstallmentsEditor
+                  cuotas={cuotas}
+                  netoPendiente={netoPendiente}
+                  fechaEmision={fechaEmision}
+                  onCambiar={setCuotas}
+                />
+              )}
+            </CardContent>
+            <div className="shrink-0 space-y-4 border-t bg-muted/30 px-6 py-4">
+              <h3 className="text-sm font-semibold">Liquidación</h3>
+              <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Op. gravada</span>
                 <span>S/ {porAfectacion.GRAVADA.toFixed(2)}</span>
@@ -852,9 +799,19 @@ export default function InvoiceEmissionPage() {
                   <span>S/ {pagoSegunDeposito(importeTotal, detraccion.monto, retencion).pagoDirecto.toFixed(2)}</span>
                 </div>
               )}
-            </CardContent>
+              </div>
+            <InvoiceWriteButton
+              type="submit"
+              aria-label={enviando ? 'Emitiendo…' : 'Emitir comprobante'}
+              size="lg"
+              disabled={enviando}
+              className="w-full"
+            >
+              <Send className="mr-2 h-4 w-4" />
+              {enviando ? 'Emitiendo…' : 'Emitir'}
+            </InvoiceWriteButton>
+            </div>
           </Card>
-
           {resultado && (
             <Alert variant={resultado.ok ? 'info' : 'destructive'}>
               <AlertTitle>
@@ -877,6 +834,10 @@ export default function InvoiceEmissionPage() {
               </AlertDescription>
             </Alert>
           )}
+        </section>
+        <div aria-label="Resumen de pago" className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-lg border bg-background px-4 py-3 shadow-lg lg:hidden">
+          <span className="text-sm font-medium">Total a pagar</span>
+          <span className="flex items-baseline gap-1 font-semibold tabular-nums text-primary"><span>S/</span><span>{pagoSegunDeposito(importeTotal, detraccion.monto, retencion).pagoDirecto.toFixed(2)}</span></span>
         </div>
       </form>
     </Page>

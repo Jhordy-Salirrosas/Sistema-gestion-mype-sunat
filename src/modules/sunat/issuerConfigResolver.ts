@@ -135,7 +135,28 @@ export class IssuerConfigResolver {
       const resolved = Object.freeze({ ...fallback, sol });
       return commercialProfile ? Object.freeze({ ...resolved, commercialProfile }) : resolved;
     }
-    const hasSol = company.issuer_sol_configured === true;
+    let hasSol = company.issuer_sol_configured === true;
+    // Migración única: la credencial del despliegue se persiste cifrada en la
+    // empresa y deja de depender de Render en las siguientes lecturas.
+    if (!hasSol && process.env.NODE_ENV === 'production') {
+      const user = process.env.SUNAT_SOL_USER?.trim();
+      const pass = process.env.SUNAT_SOL_PASSWORD;
+      if (user && pass) {
+      await this.prisma.company.update({
+        where: { id: company.id },
+        data: {
+          sol_user: user,
+          sol_pass_encrypted: this.encryption.encrypt(pass, company.id, 'sol_pass_encrypted'),
+          issuer_sol_configured: true,
+          issuer_config_version: company.issuer_config_version ?? undefined,
+        },
+      });
+      company.sol_user = user;
+      company.sol_pass_encrypted = this.encryption.encrypt(pass, company.id, 'sol_pass_encrypted');
+      company.issuer_sol_configured = true;
+      hasSol = true;
+      }
+    }
     if (hasSol && !(company.sol_user && company.sol_pass_encrypted))
       throw new BadRequestException('ISSUER_SOL_GROUP_INCOMPLETE');
     const sol = hasSol
@@ -147,7 +168,9 @@ export class IssuerConfigResolver {
             'sol_pass_encrypted',
           ),
         })
-      : deploymentSol();
+      : process.env.NODE_ENV === 'production'
+        ? null
+        : deploymentSol();
     const hasCert = company.issuer_cert_configured === true;
     let certificate = fallback.certificate;
     if (hasCert) {
