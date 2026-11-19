@@ -17,6 +17,16 @@ import {
  * autenticada y no se puede cambiar desde la pantalla de configuración.
  */
 export class UpdateCompanyConfigurationDto {
+  /**
+   * Empresa destino. Solo un ADMIN puede usar una empresa distinta a la del
+   * token; para el resto se ignora y se usa la empresa autenticada.
+   */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  companyId?: string;
+
   /** Nombre con el que se muestran los reportes de la empresa. */
   @IsOptional()
   @IsString()
@@ -93,4 +103,13 @@ export interface CompanyConfigurationResponse {
   ubigeo: string | null;
   esAgenteRetencion: boolean | null;
   series: string[];
+}
+
+/** Empresa disponible para el selector Multi-RUC del ADMIN. */
+export interface CompanyListItem {
+  id: string;
+  ruc: string;
+  razonSocial: string;
+  nombreComercial: string | null;
+  activa: boolean;
 }

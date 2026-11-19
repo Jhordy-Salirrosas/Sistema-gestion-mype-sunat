@@ -69,6 +69,7 @@ import { CompanyConfigurationController } from './infrastructure/controllers/com
 import { SireAccountingMappingController } from './infrastructure/controllers/sireAccountingMappingController';
 import { GetCompanyConfigurationUseCase } from './application/use-cases/getCompanyConfigurationUseCase';
 import { UpdateCompanyConfigurationUseCase } from './application/use-cases/updateCompanyConfigurationUseCase';
+import { ListCompaniesUseCase } from './application/use-cases/listCompaniesUseCase';
 import { GetSireAccountingMappingsUseCase } from './application/use-cases/getSireAccountingMappingsUseCase';
 import { SaveSireAccountingMappingsUseCase } from './application/use-cases/saveSireAccountingMappingsUseCase';
 import { COMPANY_CONFIGURATION_REPOSITORY_PORT } from './domain/ports/companyConfigurationRepositoryPort';
@@ -140,6 +141,7 @@ import { PrismaSireAccountingPreviewRepository } from './infrastructure/persiste
     ConsultarEstadoConfiguracionSireUseCase,
     GetCompanyConfigurationUseCase,
     UpdateCompanyConfigurationUseCase,
+    ListCompaniesUseCase,
     GetSireAccountingMappingsUseCase,
     SaveSireAccountingMappingsUseCase,
     RegisterSireAccountingEntryUseCase,
@@ -159,7 +161,7 @@ import { PrismaSireAccountingPreviewRepository } from './infrastructure/persiste
     {
       /**
        * Las credenciales SIRE de la empresa se guardan cifradas: el
-       * adaptador es el único punto que conoce el cifrado.
+       * adaptador es el Ãºnico punto que conoce el cifrado.
        */
       provide: SIRE_CONFIGURATION_REPOSITORY_PORT,
       useExisting: PrismaSireConfigurationRepository,
