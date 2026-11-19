@@ -30,4 +30,8 @@ export class SireAccountingMappingItemDto {
 export interface SireAccountingMappingResponse {
   tipoOperacion: string;
   cuentaContable: string;
+  /** Nombre real de la cuenta en el catálogo PCGE de la base de datos. */
+  cuentaNombre?: string | null;
+  /** Indica si la cuenta existe y está activa en el catálogo PCGE. */
+  cuentaActiva?: boolean;
 }

@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { ListAccountingAccountsUseCase } from '../../../accounting/application/use-cases/listAccountingAccountsUseCase';
 import type { AccountingEntryEntity } from '../../../accounting/domain/entities/accountingEntryEntity';
 import type { SireLibroMenu } from '../dto/sireMenuQueryDto';
 import type { SireRecord } from '../../domain/entities/sireProposalEntity';
@@ -41,6 +42,7 @@ export class RegisterSireAccountingEntryUseCase {
     @Inject(SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT)
     private readonly mappingRepository: ISireAccountingMappingRepositoryPort,
     private readonly accountingEntries: GenerateAccountingEntryUseCase,
+    private readonly accountingAccounts: ListAccountingAccountsUseCase,
   ) {}
 
   async execute(
@@ -60,13 +62,24 @@ export class RegisterSireAccountingEntryUseCase {
       return null;
     }
 
-    const mappings = await this.mappingRepository.findAll(companyId);
+    const [mappings, accounts] = await Promise.all([
+      this.mappingRepository.findAll(companyId),
+      this.accountingAccounts.execute(true),
+    ]);
     if (mappings === null) {
       throw new NotFoundException('Empresa no encontrada.');
     }
 
+    const accountNames = new Map(
+      accounts.map((account) => [account.code, account.name]),
+    );
     const kind = BOOK_KIND[libro];
-    const lines = buildSireAccountingLines(kind, totals, mappings);
+    const lines = buildSireAccountingLines(
+      kind,
+      totals,
+      mappings,
+      accountNames,
+    );
     if (lines.length === 0) return null;
 
     return this.accountingEntries.execute({

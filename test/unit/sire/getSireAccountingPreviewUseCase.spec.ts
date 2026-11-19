@@ -2,10 +2,12 @@ import { NotFoundException } from '@nestjs/common';
 import { GetSireAccountingPreviewUseCase } from '../../../src/modules/sire/application/use-cases/getSireAccountingPreviewUseCase';
 import type { ISireAccountingPreviewRepositoryPort } from '../../../src/modules/sire/domain/ports/sireAccountingPreviewRepositoryPort';
 import type { ISireAccountingMappingRepositoryPort } from '../../../src/modules/sire/domain/ports/sireAccountingMappingRepositoryPort';
+import type { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
 
 describe('GetSireAccountingPreviewUseCase', () => {
   let totalsRepository: jest.Mocked<ISireAccountingPreviewRepositoryPort>;
   let mappingRepository: jest.Mocked<ISireAccountingMappingRepositoryPort>;
+  let accountingAccounts: ListAccountingAccountsUseCase & { execute: jest.Mock };
   let useCase: GetSireAccountingPreviewUseCase;
 
   beforeEach(() => {
@@ -37,9 +39,19 @@ describe('GetSireAccountingPreviewUseCase', () => {
       ]),
       upsertMany: jest.fn(),
     };
+    accountingAccounts = {
+      execute: jest.fn().mockResolvedValue([
+        { code: '121', name: 'Clientes nacionales', element: '1', nature: 'Deudora', parentCode: null, level: 3, isActive: true },
+        { code: '421', name: 'Proveedores nacionales', element: '4', nature: 'Acreedora', parentCode: null, level: 3, isActive: true },
+        { code: '701', name: 'Ingresos por ventas', element: '7', nature: 'Acreedora', parentCode: null, level: 3, isActive: true },
+        { code: '601', name: 'Gastos por compras', element: '6', nature: 'Deudora', parentCode: null, level: 3, isActive: true },
+        { code: '40111', name: 'IGV por pagar', element: '4', nature: 'Acreedora', parentCode: null, level: 5, isActive: true },
+      ]),
+    } as unknown as ListAccountingAccountsUseCase & { execute: jest.Mock };
     useCase = new GetSireAccountingPreviewUseCase(
       totalsRepository,
       mappingRepository,
+      accountingAccounts,
     );
   });
 
@@ -59,10 +71,11 @@ describe('GetSireAccountingPreviewUseCase', () => {
       totales: { base: 1000, igv: 180, total: 1180, comprobantes: 4 },
     });
     expect(result.asientos[0].lineas).toEqual([
-      expect.objectContaining({ cuenta: '121', debe: 1180 }),
-      expect.objectContaining({ cuenta: '701', haber: 1000 }),
-      expect.objectContaining({ cuenta: '40111', haber: 180 }),
+      expect.objectContaining({ cuenta: '121', nombre: 'Clientes nacionales', debe: 1180 }),
+      expect.objectContaining({ cuenta: '701', nombre: 'Ingresos por ventas', haber: 1000 }),
+      expect.objectContaining({ cuenta: '40111', nombre: 'IGV por pagar', haber: 180 }),
     ]);
+    expect(accountingAccounts.execute).toHaveBeenCalledWith(true);
     expect(result.asientos[1]).toMatchObject({
       libro: 'RCE_COMPRAS',
       glosa: 'Asiento SIRE compras 202602',
