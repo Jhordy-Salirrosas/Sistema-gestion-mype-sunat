@@ -47,4 +47,10 @@ describe('SolCredentialCipher', () => {
       /formato cifrado válido/,
     );
   });
+
+  it('permite arrancar sin clave, pero bloquea operaciones SOL', () => {
+    const cipher = new SolCredentialCipher('');
+    expect(() => cipher.encrypt('x')).toThrow('no está configurada');
+    expect(() => cipher.decrypt('sol:v1:AAAAAAAAAAAAAAAA:AAAAAAAAAAAAAAAAAAAAAA==:AAAA')).toThrow('no está configurada');
+  });
 });

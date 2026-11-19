@@ -7,9 +7,15 @@ const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 
 export class SolCredentialCipher implements SolCredentialCipherPort {
-  private readonly key: Buffer;
+  private readonly key: Buffer | null;
 
   constructor(encodedKey: string) {
+    // La clave es opcional para arrancar: si falta, solo se bloquean las
+    // operaciones que cifran/descifran credenciales SOL, no toda la API.
+    if (!encodedKey) {
+      this.key = null;
+      return;
+    }
     const key = Buffer.from(encodedKey, 'base64');
     if (key.length !== KEY_LENGTH || key.toString('base64') !== encodedKey) {
       throw new Error(
@@ -19,9 +25,14 @@ export class SolCredentialCipher implements SolCredentialCipherPort {
     this.key = key;
   }
 
+  private requiredKey(): Buffer {
+    if (!this.key) throw new Error('SOL_CREDENTIALS_ENCRYPTION_KEY no está configurada.');
+    return this.key;
+  }
+
   encrypt(plainText: string): string {
     const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    const cipher = createCipheriv('aes-256-gcm', this.requiredKey(), iv);
     const encrypted = Buffer.concat([
       cipher.update(plainText, 'utf8'),
       cipher.final(),
@@ -64,8 +75,9 @@ export class SolCredentialCipher implements SolCredentialCipherPort {
       );
     }
 
+    const key = this.requiredKey();
     try {
-      const decipher = createDecipheriv('aes-256-gcm', this.key, iv);
+      const decipher = createDecipheriv('aes-256-gcm', key, iv);
       decipher.setAuthTag(authTag);
       return Buffer.concat([
         decipher.update(encrypted),
