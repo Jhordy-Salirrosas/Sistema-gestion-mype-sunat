@@ -1,4 +1,5 @@
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
+import { ClientSafeHttpException } from '../../../src/common/exceptions/clientSafeHttpException';
 import { DniConsultaService } from '../../../src/modules/sunat/dniConsultaService';
 
 const config = { get: jest.fn((key: string, def?: unknown) => key === 'DECOLECTA_API_TOKEN' ? 'token' : def) } as any;
@@ -26,11 +27,11 @@ describe('DniConsultaService', () => {
 
   it('falla sin token, con red caída o proveedor 500', async () => {
     const sinToken = new DniConsultaService({ get: jest.fn(() => undefined) } as any);
-    await expect(sinToken.consultar('12345678')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(sinToken.consultar('12345678')).rejects.toBeInstanceOf(ClientSafeHttpException);
     jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('sin red'));
-    await expect(service.consultar('12345678')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(service.consultar('12345678')).rejects.toBeInstanceOf(ClientSafeHttpException);
     jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 500 } as Response);
-    await expect(service.consultar('12345678')).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(service.consultar('12345678')).rejects.toBeInstanceOf(ClientSafeHttpException);
     jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 401 } as Response);
     await expect(service.consultar('12345678')).rejects.toThrow('token');
     jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 429 } as Response);
