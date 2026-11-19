@@ -60,6 +60,7 @@ model Company {
   national_purchases    NationalPurchase[]
   purchase_orders       PurchaseOrder[]
   supplier_credit_notes SupplierCreditNote[]
+  purchase_payment_schedules PurchasePaymentSchedule[]
   sales_quotes          SalesQuote[]
   cash_closures         CashClosure[]
   sire_proposals        SireProposal[]

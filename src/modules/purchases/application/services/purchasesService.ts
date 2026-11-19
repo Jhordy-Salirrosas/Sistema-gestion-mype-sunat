@@ -551,6 +551,7 @@ export class PurchasesService {
   }
 
   private async marcarCuotasPagadas(companyId: string, purchaseId: string, pagado: number) {
+    if (!this.prisma.purchasePaymentSchedule) return;
     const cuotas = await this.prisma.purchasePaymentSchedule.findMany({ where: { company_id: companyId, purchase_id: purchaseId, status: 'PROGRAMADO' }, orderBy: { scheduled_date: 'asc' } });
     let acumulado = 0;
     for (const cuota of cuotas) {
