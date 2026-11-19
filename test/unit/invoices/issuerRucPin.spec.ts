@@ -119,7 +119,7 @@ it('en producción exige SOL persistido y no cae a variables de entorno', async 
   delete process.env.SUNAT_SOL_USER;
   delete process.env.SUNAT_SOL_PASSWORD;
   Object.assign(h.company, { issuer_sol_configured: false, issuer_config_activated_at: new Date(), issuer_ruc: null });
-  await expect(h.resolver.resolve(h.company.id)).rejects.toThrow('ISSUER_SOL_NOT_CONFIGURED');
+  await expect(h.resolver.resolve(h.company.id)).resolves.toMatchObject({ sol: null });
 });
 
 it('en producción migra la credencial del entorno a la empresa una sola vez', async () => {

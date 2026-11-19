@@ -253,4 +253,16 @@ describe('Validación de Variables de Entorno (TT-10)', () => {
 
     expect(() => validate(mockMissingJwtConfig)).toThrow(/JWT_SECRET/);
   });
+
+  it('arranca sin RUC_EMISOR ni clave SOL porque la identidad vive en la empresa', () => {
+    const result = validate({
+      DATABASE_URL: 'postgres://valid-database',
+      API_KEY: 'clave-falsa',
+      JWT_SECRET: 'jwt-secreto-seguro-de-prueba',
+      CERT_PASSWORD: '123',
+      CERT_BASE64: 'base64',
+    });
+    expect(result.RUC_EMISOR).toBeUndefined();
+    expect(result.SOL_CREDENTIALS_ENCRYPTION_KEY).toBeUndefined();
+  });
 });
