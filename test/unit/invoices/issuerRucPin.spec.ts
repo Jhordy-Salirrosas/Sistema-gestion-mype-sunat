@@ -113,3 +113,11 @@ it('certificado y firma real de prueba aceptan el pin y rechazan el RUC comparti
   expect(signatures.verifySignature(signed)).toBe(true);
   expect(() => certificates.getCertificate({ ...pinned, ruc: COMPANY_RUC })).toThrow('RUC no coincide');
 });
+
+it('en producción exige SOL persistido y no cae a variables de entorno', async () => {
+  process.env.NODE_ENV = 'production';
+  delete process.env.SUNAT_SOL_USER;
+  delete process.env.SUNAT_SOL_PASSWORD;
+  Object.assign(h.company, { issuer_sol_configured: false, issuer_config_activated_at: new Date(), issuer_ruc: null });
+  await expect(h.resolver.resolve(h.company.id)).rejects.toThrow('ISSUER_SOL_NOT_CONFIGURED');
+});
