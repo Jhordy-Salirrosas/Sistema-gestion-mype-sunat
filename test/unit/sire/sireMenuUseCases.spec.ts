@@ -10,7 +10,10 @@ import {
   ConsultarImportacionSireUseCase,
 } from '../../../src/modules/sire/application/use-cases/conciliarPeriodoSireUseCase';
 import { ObtenerResumenSireUseCase } from '../../../src/modules/sire/application/use-cases/obtenerResumenSireUseCase';
-import { ConsultarReporteSireUseCase } from '../../../src/modules/sire/application/use-cases/reportarSireUseCase';
+import {
+  ConsultarReporteSireUseCase,
+  ReportarSireUseCase,
+} from '../../../src/modules/sire/application/use-cases/reportarSireUseCase';
 import { ObtenerHistorialSireUseCase } from '../../../src/modules/sire/application/use-cases/obtenerHistorialSireUseCase';
 import { friendlySireJobFailureMessage } from '../../../src/modules/sire/domain/rules/sireJobFailureMessages';
 import type { SireMenuRepository } from '../../../src/modules/sire/infrastructure/persistence/sireMenuRepository';
@@ -31,7 +34,17 @@ function crearRepository() {
     buscarImportacionPorMessageId: jest.fn(),
     listarImportaciones: jest.fn().mockResolvedValue([]),
     contarImportaciones: jest.fn().mockResolvedValue(0),
+    crearConciliacion: jest
+      .fn()
+      .mockResolvedValue({
+        id: 'conciliacion-id',
+        created_at: new Date('2026-01-06T10:00:00.000Z'),
+      }),
     contarConciliaciones: jest.fn().mockResolvedValue(0),
+    crearReporte: jest.fn().mockResolvedValue({
+      id: 'reporte-id',
+      created_at: new Date('2026-01-07T10:00:00.000Z'),
+    }),
     marcarReporteEnProceso: jest.fn().mockResolvedValue(undefined),
     completarReporte: jest.fn().mockResolvedValue(undefined),
     fallarReporte: jest.fn().mockResolvedValue(undefined),
@@ -197,7 +210,7 @@ describe('ImportarPropuestaSireUseCase', () => {
 });
 
 describe('ConciliarPeriodoSireUseCase', () => {
-  it('reads the imports of the period and returns the result without persisting it', async () => {
+  it('reads the imports of the period, returns the mock and stores the result', async () => {
     const repository = crearRepository();
     (repository.listarImportaciones as jest.Mock).mockResolvedValue([
       { id: 'a', periodo: '202401', libro: 'RCE_COMPRAS', nombre_archivo: 'LE1', estado: 'COMPLETED', created_at: new Date() },
@@ -215,11 +228,14 @@ describe('ConciliarPeriodoSireUseCase', () => {
     );
     expect(resultado.resumen.totalComprobantes).toBe(8);
     expect(resultado.comprobantes).toHaveLength(8);
-    expect(resultado.conciliacionId).toBeNull();
-    expect(
-      (repository as unknown as { crearConciliacion?: unknown })
-        .crearConciliacion,
-    ).toBeUndefined();
+    expect(repository.crearConciliacion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: COMPANY_ID,
+        periodo: '202401',
+        conciliados: resultado.resumen.conciliados,
+        diferencias: resultado.resumen.diferencias,
+      }),
+    );
   });
 
   it('defaults the book to RVIE_VENTAS when the request does not send one', async () => {
@@ -369,7 +385,47 @@ describe('ObtenerResumenSireUseCase', () => {
   });
 });
 
-describe('ConsultarReporteSireUseCase', () => {
+describe('ReportarSireUseCase', () => {
+  it('registers the report, returns the ticket and enqueues the job', async () => {
+    const repository = crearRepository();
+    const queue = crearQueue();
+
+    const resultado = await new ReportarSireUseCase(
+      repository,
+      queue,
+    ).execute(COMPANY_ID, { periodo: '202401', libro: 'RCE_COMPRAS' });
+
+    expect(resultado.ticket).toMatch(/^\d{8}$/);
+    expect(resultado.estado).toBe('PENDING');
+    expect(queue.enqueueSireImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipo: 'REPORTE',
+        registroId: 'reporte-id',
+        periodo: '202401',
+      }),
+    );
+  });
+
+  it('fails the report when the queue is not available', async () => {
+    const repository = crearRepository();
+    const queue = crearQueue();
+    (queue.enqueueSireImport as jest.Mock).mockRejectedValue(
+      new Error('sin cola'),
+    );
+
+    await expect(
+      new ReportarSireUseCase(repository, queue).execute(COMPANY_ID, {
+        periodo: '202401',
+        libro: 'RCE_COMPRAS',
+      }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(repository.fallarReporte).toHaveBeenCalledWith(
+      'reporte-id',
+      'QUEUE_ENQUEUE_FAILED',
+    );
+  });
+
   it('returns the state of a report for the polling endpoint', async () => {
     const repository = crearRepository();
     (repository.buscarReportePorMessageId as jest.Mock).mockResolvedValue({

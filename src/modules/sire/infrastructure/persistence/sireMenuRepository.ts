@@ -27,6 +27,24 @@ export interface CrearImportacionParams {
   bytes: number;
 }
 
+/** Datos para crear el registro de una conciliación. */
+export interface CrearConciliacionParams {
+  companyId: string;
+  periodo: string;
+  conciliados: number;
+  diferencias: number;
+  detalle: unknown;
+}
+
+/** Datos para crear el registro de un reporte. */
+export interface CrearReporteParams {
+  companyId: string;
+  periodo: string;
+  libro: SireLibroMenu;
+  messageId: string;
+  ticket: string | null;
+}
+
 /**
  * Acceso a las tablas del menú SIRE.
  *
@@ -177,10 +195,45 @@ export class SireMenuRepository {
     });
   }
 
+  async crearConciliacion(
+    params: CrearConciliacionParams,
+  ): Promise<{ id: string; created_at: Date }> {
+    const registro = await this.prisma.sireConciliacion.create({
+      data: {
+        company_id: params.companyId,
+        periodo: params.periodo,
+        conciliados: params.conciliados,
+        diferencias: params.diferencias,
+        detalle: params.detalle as Prisma.InputJsonValue,
+      },
+      select: { id: true, created_at: true },
+    });
+
+    return { id: registro.id, created_at: registro.created_at };
+  }
+
   async contarConciliaciones(companyId: string, periodo?: string): Promise<number> {
     return this.prisma.sireConciliacion.count({
       where: { company_id: companyId, ...(periodo ? { periodo } : {}) },
     });
+  }
+
+  async crearReporte(
+    params: CrearReporteParams,
+  ): Promise<{ id: string; created_at: Date }> {
+    const registro = await this.prisma.sireReporte.create({
+      data: {
+        company_id: params.companyId,
+        periodo: params.periodo,
+        libro: params.libro,
+        estado: 'PENDING',
+        message_id: params.messageId,
+        ticket: params.ticket,
+      },
+      select: { id: true, created_at: true },
+    });
+
+    return { id: registro.id, created_at: registro.created_at };
   }
 
   async marcarReporteEnProceso(id: string): Promise<void> {

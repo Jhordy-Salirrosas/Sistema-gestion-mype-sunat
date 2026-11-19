@@ -35,6 +35,21 @@ export class SirePeriodoQueryDto {
 }
 
 /**
+ * Cuerpo del envío del libro a SUNAT (`POST /api/v1/sire/reportar`).
+ */
+export class SireReporteRequestDto {
+  @IsString()
+  @Matches(SIRE_PERIODO_REGEX, {
+    message: 'El periodo debe tener el formato AAAAMM.',
+  })
+  periodo!: string;
+
+  @IsString()
+  @IsIn(SIRE_LIBROS_MENU)
+  libro!: SireLibroMenu;
+}
+
+/**
  * Cuerpo de la importación de una propuesta (`POST /api/v1/sire/importar`).
  *
  * Periodo y libro son opcionales a propósito: si no llegan, se deducen del

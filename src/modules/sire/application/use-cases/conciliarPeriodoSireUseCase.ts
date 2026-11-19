@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { toDomainBookType } from '../sireBookType';
 import type { SireLibroMenu } from '../dto/sireMenuQueryDto';
 import type {
@@ -11,18 +11,33 @@ import {
 } from '../../domain/rules/sireMockDataRule';
 import { friendlySireJobFailureMessage } from '../../domain/rules/sireJobFailureMessages';
 import { SireMenuRepository } from '../../infrastructure/persistence/sireMenuRepository';
+import {
+  SIRE_REPOSITORY_PORT,
+  type ISireRepositoryPort,
+} from '../../domain/ports/sireRepositoryPort';
+import { RegisterSireAccountingEntryUseCase } from './registerSireAccountingEntryUseCase';
 
 /**
  * Conciliación de un periodo.
  *
- * SOLO LECTURA: lee las importaciones del periodo y devuelve un resultado
- * simulado con la forma del cruce real. No persiste nada y no genera asientos:
- * la contabilidad es la única encargada de crear asientos a partir de estos
- * datos.
+ * POR QUÉ ES UNA SIMULACIÓN
+ *
+ * El cruce contra SUNAT todavía no está disponible en este módulo: la
+ * conciliación lee las importaciones del periodo y devuelve un resultado
+ * SIMULADO con la misma forma que tendría el cruce real (resumen + lista de
+ * comprobantes). El resultado se persiste en `sire_conciliaciones` para poder
+ * auditarlo y para que el historial lo muestre.
  */
 @Injectable()
 export class ConciliarPeriodoSireUseCase {
-  constructor(private readonly repository: SireMenuRepository) {}
+  constructor(
+    private readonly repository: SireMenuRepository,
+    @Optional()
+    @Inject(SIRE_REPOSITORY_PORT)
+    private readonly sireRepository?: ISireRepositoryPort,
+    @Optional()
+    private readonly registerAccounting?: RegisterSireAccountingEntryUseCase,
+  ) {}
 
   async execute(
     companyId: string,
@@ -43,13 +58,38 @@ export class ConciliarPeriodoSireUseCase {
     );
     const resumen = calcularResumenSimulado(periodo, libroDomain, comprobantes);
 
+    const registro = await this.repository.crearConciliacion({
+      companyId,
+      periodo,
+      conciliados: resumen.conciliados,
+      diferencias: resumen.diferencias,
+      detalle: { resumen, comprobantes },
+    });
+
+    const libroConciliado = libro ?? 'RVIE_VENTAS';
+    if (this.sireRepository && this.registerAccounting) {
+      const propuestas = await this.sireRepository.findProposalsByPeriod(
+        companyId,
+        periodo,
+        toDomainBookType(libroConciliado),
+      );
+      if (propuestas.length > 0) {
+        await this.registerAccounting.execute(
+          companyId,
+          periodo,
+          libroConciliado,
+          propuestas,
+        );
+      }
+    }
+
     return {
-      conciliacionId: null,
+      conciliacionId: registro.id,
       periodo,
       libro: libro ?? 'RVIE_VENTAS',
       resumen,
       comprobantes,
-      createdAt: new Date().toISOString(),
+      createdAt: registro.created_at.toISOString(),
     };
   }
 }

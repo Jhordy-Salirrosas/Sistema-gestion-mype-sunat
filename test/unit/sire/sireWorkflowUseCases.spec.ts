@@ -1,3 +1,4 @@
+import { CloseFiscalPeriodUseCase } from '../../../src/modules/sire/application/use-cases/closeFiscalPeriodUseCase';
 import { ExportSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/exportSireProposalUseCase';
 import { GetReconciliationHistoryUseCase } from '../../../src/modules/sire/application/use-cases/getReconciliationHistoryUseCase';
 import { IngestSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/ingestSireProposalUseCase';
@@ -130,6 +131,19 @@ describe('SIRE workflow use cases', () => {
       'tenant-1',
       '202603',
       'RVIE',
+    );
+  });
+
+  it('closes a period only within the authenticated company', async () => {
+    const useCase = new CloseFiscalPeriodUseCase(repository);
+    await useCase.execute(
+      { period: '202603', bookType: 'RCE_COMPRAS' },
+      'tenant-2',
+    );
+    expect(repository.closeFiscalPeriod).toHaveBeenCalledWith(
+      'tenant-2',
+      '202603',
+      'RCE',
     );
   });
 

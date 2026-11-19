@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/authModule';
+import { AccountingModule } from '../accounting/accountingModule';
 import { SunatModule } from '../sunat/sunatModule';
 import { SireController } from './infrastructure/controllers/sireController';
 import { ReconcileSireUseCase } from './application/use-cases/reconcileSireUseCase';
@@ -12,6 +13,7 @@ import { SireTxtWriterAdapter } from './infrastructure/parsers/sireTxtWriterAdap
 import { IngestSireProposalUseCase } from './application/use-cases/ingestSireProposalUseCase';
 import { ExportSireProposalUseCase } from './application/use-cases/exportSireProposalUseCase';
 import { GetReconciliationHistoryUseCase } from './application/use-cases/getReconciliationHistoryUseCase';
+import { CloseFiscalPeriodUseCase } from './application/use-cases/closeFiscalPeriodUseCase';
 import { ResilienceStateModule } from '../resilience/application/resilienceStateModule';
 import { SireDashboardMetricsService } from './application/sireDashboardMetricsService';
 import { SireDashboardMetricsRepository } from './infrastructure/persistence/sireDashboardMetricsRepository';
@@ -24,10 +26,17 @@ import {
 import { UploadSireReportUseCase } from './application/use-cases/uploadSireReportUseCase';
 import { SireReportFileParser } from './infrastructure/parsers/sireReportFileParser';
 import { GetSireProposalUseCase } from './application/use-cases/getSireProposalUseCase';
+import { ExcludeSireRecordUseCase } from './application/use-cases/excludeSireRecordUseCase';
+import { ReplaceSireProposalUseCase } from './application/use-cases/replaceSireProposalUseCase';
+import { RegisterSirePreliminaryUseCase } from './application/use-cases/registerSirePreliminaryUseCase';
+import { DeleteSirePreliminaryUseCase } from './application/use-cases/deleteSirePreliminaryUseCase';
+import { GenerateSireRecordUseCase } from './application/use-cases/generateSireRecordUseCase';
 import { SireTicketManagerService } from './application/sireTicketManagerService';
 import { SIRE_SUNAT_GATEWAY } from './domain/ports/sireSunatGatewayPort';
 import { UnsupportedSireSunatGateway } from './infrastructure/sunat/unsupportedSireSunatGateway';
 import { MockSireSunatGateway } from './infrastructure/sunat/mockSireSunatGateway';
+import { AcceptSireProposalUseCase } from './application/use-cases/acceptSireProposalUseCase';
+import { RestoreSireRecordUseCase } from './application/use-cases/restoreSireRecordUseCase';
 import { selectSireSunatGateway } from './infrastructure/sunat/sireGatewaySelector';
 import { ManualSireConsultationController } from './infrastructure/controllers/manualSireConsultationController';
 import { SimulateManualSireConsultationUseCase } from './application/use-cases/simulateManualSireConsultationUseCase';
@@ -45,7 +54,10 @@ import {
   ConsultarImportacionSireUseCase,
 } from './application/use-cases/conciliarPeriodoSireUseCase';
 import { ObtenerResumenSireUseCase } from './application/use-cases/obtenerResumenSireUseCase';
-import { ConsultarReporteSireUseCase } from './application/use-cases/reportarSireUseCase';
+import {
+  ConsultarReporteSireUseCase,
+  ReportarSireUseCase,
+} from './application/use-cases/reportarSireUseCase';
 import { ObtenerHistorialSireUseCase } from './application/use-cases/obtenerHistorialSireUseCase';
 import { crearSireFileStorage } from './infrastructure/storage/sireFileStorageSelector';
 import { SireConfigurationController } from './infrastructure/controllers/sireConfigurationController';
@@ -63,6 +75,7 @@ import { COMPANY_CONFIGURATION_REPOSITORY_PORT } from './domain/ports/companyCon
 import { SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT } from './domain/ports/sireAccountingMappingRepositoryPort';
 import { PrismaCompanyConfigurationRepository } from './infrastructure/persistence/prismaCompanyConfigurationRepository';
 import { PrismaSireAccountingMappingRepository } from './infrastructure/persistence/prismaSireAccountingMappingRepository';
+import { RegisterSireAccountingEntryUseCase } from './application/use-cases/registerSireAccountingEntryUseCase';
 import { GetSireAccountingPreviewUseCase } from './application/use-cases/getSireAccountingPreviewUseCase';
 import { CompanyRucValidationController } from './infrastructure/controllers/companyRucValidationController';
 import { SireAccountingPreviewController } from './infrastructure/controllers/sireAccountingPreviewController';
@@ -74,6 +87,7 @@ import { PrismaSireAccountingPreviewRepository } from './infrastructure/persiste
     AuthModule,
     QueueModule,
     ResilienceStateModule,
+    AccountingModule,
     SunatModule,
   ],
   controllers: [
@@ -96,12 +110,20 @@ import { PrismaSireAccountingPreviewRepository } from './infrastructure/persiste
     IngestSireProposalUseCase,
     ExportSireProposalUseCase,
     GetReconciliationHistoryUseCase,
+    CloseFiscalPeriodUseCase,
     SireDashboardMetricsService,
     SireDashboardMetricsRepository,
     UploadSireReportUseCase,
     SireReportFileParser,
     GetSireProposalUseCase,
+    ExcludeSireRecordUseCase,
+    ReplaceSireProposalUseCase,
+    RegisterSirePreliminaryUseCase,
+    DeleteSirePreliminaryUseCase,
+    GenerateSireRecordUseCase,
     SireTicketManagerService,
+    AcceptSireProposalUseCase,
+    RestoreSireRecordUseCase,
     SimulateManualSireConsultationUseCase,
     SireReadOnlyPeriodsClient,
     SirePeriodsJobConsumer,
@@ -111,6 +133,7 @@ import { PrismaSireAccountingPreviewRepository } from './infrastructure/persiste
     ConciliarPeriodoSireUseCase,
     ConsultarImportacionSireUseCase,
     ObtenerResumenSireUseCase,
+    ReportarSireUseCase,
     ConsultarReporteSireUseCase,
     ObtenerHistorialSireUseCase,
     GuardarConfiguracionSireUseCase,
@@ -119,6 +142,7 @@ import { PrismaSireAccountingPreviewRepository } from './infrastructure/persiste
     UpdateCompanyConfigurationUseCase,
     GetSireAccountingMappingsUseCase,
     SaveSireAccountingMappingsUseCase,
+    RegisterSireAccountingEntryUseCase,
     GetSireAccountingPreviewUseCase,
     PrismaSireConfigurationRepository,
     PrismaCompanyConfigurationRepository,

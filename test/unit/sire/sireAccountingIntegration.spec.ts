@@ -1,63 +1,115 @@
 import { ReconcileSireUseCase } from '../../../src/modules/sire/application/use-cases/reconcileSireUseCase';
 import { ConciliarPeriodoSireUseCase } from '../../../src/modules/sire/application/use-cases/conciliarPeriodoSireUseCase';
 import type { ISireRepositoryPort } from '../../../src/modules/sire/domain/ports/sireRepositoryPort';
-import type { SireMenuRepository } from '../../../src/modules/sire/infrastructure/persistence/sireMenuRepository';
+import type { RegisterSireAccountingEntryUseCase } from '../../../src/modules/sire/application/use-cases/registerSireAccountingEntryUseCase';
 
-describe('SIRE - contabilidad solo como datos', () => {
-  it('la conciliación local no depende de contabilidad ni genera asientos', async () => {
+const record = {
+  emitterRuc: '20100070970',
+  documentType: '01',
+  series: 'F001',
+  correlative: '00000001',
+  taxableBase: 100,
+  igvAmount: 18,
+  totalAmount: 118,
+};
+
+describe('Integración SIRE - contabilidad', () => {
+  it('registra el asiento al conciliar registros locales', async () => {
     const repository = {
       ensurePeriodOpen: jest.fn(),
       findProposalsByPeriod: jest.fn().mockResolvedValue([]),
       saveReconciliationResult: jest.fn(),
     } as unknown as ISireRepositoryPort;
+    const accounting = { execute: jest.fn().mockResolvedValue(null) };
+    const useCase = new ReconcileSireUseCase(
+      repository,
+      accounting as unknown as RegisterSireAccountingEntryUseCase,
+    );
 
-    const useCase = new ReconcileSireUseCase(repository);
-
-    expect(ReconcileSireUseCase.length).toBe(1);
     await useCase.execute(
       {
         period: '202603',
         bookType: 'RVIE_VENTAS',
-        localRecords: [],
+        localRecords: [record],
       },
       'company-1',
     );
 
-    expect(repository.saveReconciliationResult).toHaveBeenCalled();
+    expect(accounting.execute).toHaveBeenCalledWith(
+      'company-1',
+      '202603',
+      'RVIE_VENTAS',
+      [record],
+    );
   });
 
-  it('el GET de conciliación solo lee las importaciones y devuelve los datos', async () => {
+  it('registra el asiento al conciliar el menú con propuestas importadas', async () => {
     const repository = {
-      listarImportaciones: jest.fn().mockResolvedValue([
+      listarImportaciones: jest.fn().mockResolvedValue([]),
+      crearConciliacion: jest.fn().mockResolvedValue({
+        id: 'conciliacion-1',
+        created_at: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+    };
+    const sireRepository = {
+      findProposalsByPeriod: jest.fn().mockResolvedValue([
         {
-          id: 'importacion-1',
-          periodo: '202603',
-          libro: 'RVIE_VENTAS',
-          nombre_archivo: 'LE1.txt',
-          estado: 'COMPLETED',
-          created_at: new Date('2026-03-01T00:00:00.000Z'),
+          ...record,
+          companyId: 'company-1',
+          period: '202603',
+          bookType: 'RVIE',
+          carSunat: 'CAR-1',
+          issueDate: new Date('2026-03-01'),
         },
       ]),
-    } as unknown as SireMenuRepository;
+    };
+    const accounting = { execute: jest.fn().mockResolvedValue(null) };
+    const useCase = new ConciliarPeriodoSireUseCase(
+      repository as never,
+      sireRepository as unknown as ISireRepositoryPort,
+      accounting as unknown as RegisterSireAccountingEntryUseCase,
+    );
 
-    const useCase = new ConciliarPeriodoSireUseCase(repository);
+    await useCase.execute('company-1', '202603', 'RVIE_VENTAS');
 
-    const resultado = await useCase.execute(
+    expect(sireRepository.findProposalsByPeriod).toHaveBeenCalledWith(
+      'company-1',
+      '202603',
+      'RVIE',
+    );
+    expect(accounting.execute).toHaveBeenCalledWith(
       'company-1',
       '202603',
       'RVIE_VENTAS',
+      expect.arrayContaining([expect.objectContaining({ totalAmount: 118 })]),
+    );
+  });
+
+  it('no registra asientos si el periodo no tiene propuestas', async () => {
+    const repository = {
+      listarImportaciones: jest.fn().mockResolvedValue([]),
+      crearConciliacion: jest.fn().mockResolvedValue({
+        id: 'conciliacion-1',
+        created_at: new Date('2026-03-01T00:00:00.000Z'),
+      }),
+    };
+    const sireRepository = {
+      findProposalsByPeriod: jest.fn().mockResolvedValue([]),
+    };
+    const accounting = { execute: jest.fn() };
+    const useCase = new ConciliarPeriodoSireUseCase(
+      repository as never,
+      sireRepository as unknown as ISireRepositoryPort,
+      accounting as unknown as RegisterSireAccountingEntryUseCase,
     );
 
-    expect(resultado.conciliacionId).toBeNull();
-    expect(resultado.periodo).toBe('202603');
-    expect(repository.listarImportaciones).toHaveBeenCalledWith(
+    await useCase.execute('company-1', '202603', null);
+
+    expect(sireRepository.findProposalsByPeriod).toHaveBeenCalledWith(
       'company-1',
       '202603',
-      'RVIE_VENTAS',
+      'RVIE',
     );
-    expect(
-      (repository as unknown as { crearConciliacion?: unknown })
-        .crearConciliacion,
-    ).toBeUndefined();
+    expect(accounting.execute).not.toHaveBeenCalled();
   });
 });
