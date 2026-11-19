@@ -32,6 +32,15 @@ describe('MasterDataController', () => {
       listCustomsServices: jest.fn().mockResolvedValue([]),
       upsertCustomsService: jest.fn().mockResolvedValue({ id: 'srv-1' }),
       deleteCustomsService: jest.fn().mockResolvedValue({ success: true }),
+      listCustomsOffices: jest.fn().mockResolvedValue([]),
+      upsertCustomsOffice: jest.fn().mockResolvedValue({ code: '118' }),
+      deleteCustomsOffice: jest.fn().mockResolvedValue({ code: '118' }),
+      listAuthorizedBanks: jest.fn().mockResolvedValue([]),
+      upsertAuthorizedBank: jest.fn().mockResolvedValue({ code: '002' }),
+      deleteAuthorizedBank: jest.fn().mockResolvedValue({ code: '002' }),
+      listVuceEntities: jest.fn().mockResolvedValue([]),
+      upsertVuceEntity: jest.fn().mockResolvedValue({ code: 'DIGESA' }),
+      deleteVuceEntity: jest.fn().mockResolvedValue({ code: 'DIGESA' }),
     };
 
     controller = new MasterDataController(mockService);
@@ -89,12 +98,33 @@ describe('MasterDataController', () => {
     await controller.upsertCustomsService(comp, { sku: 'SRV-TEST', name: 'Test', defaultCost: 100 });
     await controller.deleteCustomsService(comp, 'SRV-TEST');
 
+    await controller.listCustomsOffices();
+    await controller.upsertCustomsOffice({ code: '118', name: 'Maritima Callao' });
+    await controller.deleteCustomsOffice('118');
+
+    await controller.listAuthorizedBanks();
+    await controller.upsertAuthorizedBank({ code: '002', name: 'BCP' });
+    await controller.deleteAuthorizedBank('002');
+
+    await controller.listVuceEntities();
+    await controller.upsertVuceEntity({ code: 'DIGESA', name: 'DIGESA', sector: 'SALUD' });
+    await controller.deleteVuceEntity('DIGESA');
+
     expect(mockService.listCurrencies).toHaveBeenCalled();
     expect(mockService.listPartners).toHaveBeenCalledWith(comp, 'supplier', 'tech');
     expect(mockService.upsertAccountingMapping).toHaveBeenCalled();
     expect(mockService.listCustomsServices).toHaveBeenCalledWith(comp);
     expect(mockService.upsertCustomsService).toHaveBeenCalledWith(comp, { sku: 'SRV-TEST', name: 'Test', defaultCost: 100 });
     expect(mockService.deleteCustomsService).toHaveBeenCalledWith(comp, 'SRV-TEST');
+    expect(mockService.listCustomsOffices).toHaveBeenCalled();
+    expect(mockService.upsertCustomsOffice).toHaveBeenCalledWith({ code: '118', name: 'Maritima Callao' });
+    expect(mockService.deleteCustomsOffice).toHaveBeenCalledWith('118');
+    expect(mockService.listAuthorizedBanks).toHaveBeenCalled();
+    expect(mockService.upsertAuthorizedBank).toHaveBeenCalledWith({ code: '002', name: 'BCP' });
+    expect(mockService.deleteAuthorizedBank).toHaveBeenCalledWith('002');
+    expect(mockService.listVuceEntities).toHaveBeenCalled();
+    expect(mockService.upsertVuceEntity).toHaveBeenCalledWith({ code: 'DIGESA', name: 'DIGESA', sector: 'SALUD' });
+    expect(mockService.deleteVuceEntity).toHaveBeenCalledWith('DIGESA');
   });
 });
 

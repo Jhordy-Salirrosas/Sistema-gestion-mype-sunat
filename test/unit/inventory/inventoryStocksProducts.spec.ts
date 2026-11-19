@@ -31,6 +31,7 @@ describe('InventoryStocksController - listAllProducts', () => {
         id: 'p-1',
         sku: 'POR-120',
         description: 'Porcelanato',
+        barcode: '7751234567890',
         is_service: false,
         is_inventory: true,
         sunat_unit_code: 'NIU',
@@ -68,6 +69,7 @@ describe('InventoryStocksController - listAllProducts', () => {
     });
     expect(result).toHaveLength(2);
     expect(result[0].isInventory).toBe(true);
+    expect(result[0].barcode).toBe('7751234567890');
     expect(result[0].costPrice).toBe(25.5);
     expect(result[0].hasDetraction).toBe(true);
     expect(result[0].detractionCode).toBe('009');
