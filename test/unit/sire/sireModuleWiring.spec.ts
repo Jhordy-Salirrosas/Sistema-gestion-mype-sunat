@@ -38,6 +38,28 @@ describe('SireModule', () => {
     );
   });
 
+  it('no registra casos de uso de escritura, envío ni generación de asientos', () => {
+    const names = providers.map((provider) =>
+      typeof provider === 'function' ? provider.name : '',
+    );
+    const forbidden = [
+      'AcceptSireProposalUseCase',
+      'ReplaceSireProposalUseCase',
+      'RegisterSirePreliminaryUseCase',
+      'DeleteSirePreliminaryUseCase',
+      'GenerateSireRecordUseCase',
+      'ExcludeSireRecordUseCase',
+      'RestoreSireRecordUseCase',
+      'CloseFiscalPeriodUseCase',
+      'RegisterSireAccountingEntryUseCase',
+      'ReportarSireUseCase',
+    ];
+
+    for (const name of forbidden) {
+      expect(names).not.toContain(name);
+    }
+  });
+
   it('binds the configuration port to the Prisma adapter', () => {
     const binding = providers.find(
       (provider) =>

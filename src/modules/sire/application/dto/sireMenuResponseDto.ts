@@ -55,7 +55,8 @@ export interface SireTrabajoEstadoRespuesta {
  * Respuesta de la conciliación de un periodo.
  */
 export interface SireConciliacionRespuesta {
-  conciliacionId: string;
+  /** La conciliación es de solo lectura: no se persiste un registro nuevo. */
+  conciliacionId: string | null;
   periodo: string;
   libro: SireLibroMenu;
   resumen: SireResumenSimulado;
@@ -71,17 +72,6 @@ export interface SireResumenRespuesta {
   importaciones: number;
   conciliaciones: number;
   reportes: number;
-}
-
-/** Respuesta del envío del libro a SUNAT. */
-export interface SireReporteRespuesta {
-  messageId: string;
-  reporteId: string;
-  periodo: string;
-  libro: SireLibroMenu;
-  estado: SireEstadoTrabajo;
-  ticket: string | null;
-  createdAt: string;
 }
 
 /**

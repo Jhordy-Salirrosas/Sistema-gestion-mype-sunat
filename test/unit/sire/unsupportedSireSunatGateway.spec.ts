@@ -10,11 +10,18 @@ describe('UnsupportedSireSunatGateway', () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it('does not simulate successful production operations', async () => {
-    const gateway = new UnsupportedSireSunatGateway();
+  it('does not expose any operation that writes to SUNAT', () => {
+    const gateway = new UnsupportedSireSunatGateway() as unknown as Record<
+      string,
+      unknown
+    >;
 
-    await expect(
-      gateway.generateRecord('company-test', '202610', 'RVIE'),
-    ).rejects.toMatchObject({ status: 503 });
+    expect(gateway.acceptProposal).toBeUndefined();
+    expect(gateway.replaceProposal).toBeUndefined();
+    expect(gateway.registerPreliminary).toBeUndefined();
+    expect(gateway.deletePreliminary).toBeUndefined();
+    expect(gateway.generateRecord).toBeUndefined();
+    expect(gateway.excludeRecord).toBeUndefined();
+    expect(gateway.restoreRecord).toBeUndefined();
   });
 });

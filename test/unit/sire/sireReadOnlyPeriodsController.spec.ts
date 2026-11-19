@@ -380,6 +380,31 @@ describe('SireReadOnlyPeriodsController', () => {
     });
   });
 
+  it('explains the missing credentials with the configured friendly message', async () => {
+    (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
+      id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      company_id: user.companyId,
+      book_code: '140000',
+      status: 'FAILED',
+      result: null,
+      error_code: 'CREDENTIALS_UNAVAILABLE',
+      created_at: new Date('2026-11-08T12:00:00Z'),
+      completed_at: new Date('2026-11-08T12:01:00Z'),
+    });
+
+    const response = await controller.getStatus(
+      'c5a31a3d-460a-46e7-9a3e-9057a31d0098',
+      user,
+    );
+
+    expect(response).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'CREDENTIALS_UNAVAILABLE',
+      message:
+        'La empresa no tiene credenciales SIRE configuradas. Configúralas antes de consultar los períodos.',
+    });
+  });
+
   it('informs the same queue message in the status endpoint', async () => {
     (prisma.sirePeriodQuery.findFirst as jest.Mock).mockResolvedValue({
       id: 'c5a31a3d-460a-46e7-9a3e-9057a31d0098',

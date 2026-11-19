@@ -2,12 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Post,
-  Param,
   Query,
   Res,
   UnauthorizedException,
@@ -23,7 +21,6 @@ import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { ReconcilePeriodDto } from '../../application/dto/reconcilePeriodDto';
 import { SireHistoryQueryDto } from '../../application/dto/sireHistoryQueryDto';
 import { SirePeriodBookDto } from '../../application/dto/sirePeriodBookDto';
-import { CloseFiscalPeriodUseCase } from '../../application/use-cases/closeFiscalPeriodUseCase';
 import { ExportSireProposalUseCase } from '../../application/use-cases/exportSireProposalUseCase';
 import { GetReconciliationHistoryUseCase } from '../../application/use-cases/getReconciliationHistoryUseCase';
 import { IngestSireProposalUseCase } from '../../application/use-cases/ingestSireProposalUseCase';
@@ -32,22 +29,11 @@ import type { ReconcileResultDto } from '../../application/dto/reconcileResultDt
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { UploadSireReportUseCase } from '../../application/use-cases/uploadSireReportUseCase';
 import { GetSireProposalUseCase } from '../../application/use-cases/getSireProposalUseCase';
-import { ExcludeSireRecordUseCase } from '../../application/use-cases/excludeSireRecordUseCase';
-import { ReplaceSireProposalUseCase } from '../../application/use-cases/replaceSireProposalUseCase';
-import { RegisterSirePreliminaryUseCase } from '../../application/use-cases/registerSirePreliminaryUseCase';
-import { DeleteSirePreliminaryUseCase } from '../../application/use-cases/deleteSirePreliminaryUseCase';
-import { GenerateSireRecordUseCase } from '../../application/use-cases/generateSireRecordUseCase';
 import { SireTicketManagerService } from '../../application/sireTicketManagerService';
-import {
-  SireProvisionalActionDto,
-  AcceptSirePeriodDto,
-} from '../../application/dto/sireProvisionalActionDto';
 import {
   SireProvisionalQueryDto,
   toPeriodBookDto,
 } from '../../application/dto/sireProvisionalQueryDto';
-import { AcceptSireProposalUseCase } from '../../application/use-cases/acceptSireProposalUseCase';
-import { RestoreSireRecordUseCase } from '../../application/use-cases/restoreSireRecordUseCase';
 
 interface UploadedSireFile {
   originalname: string;
@@ -92,6 +78,15 @@ const reportUploadOptions = {
   },
 };
 
+/**
+ * Operaciones LOCALES del módulo SIRE.
+ *
+ * Este controlador no emite nada a SUNAT: solo importa archivos, reconcilia
+ * datos locales, exporta la propuesta y consulta el estado guardado. Las
+ * acciones de aceptar, reemplazar, registrar preliminares, generar registros,
+ * cerrar períodos y reportar se eliminaron porque la integración SIRE es
+ * estrictamente de solo lectura.
+ */
 @Controller(['api/v1/sire', 'sire'])
 @UseGuards(AuthGuard)
 export class SireController {
@@ -100,17 +95,9 @@ export class SireController {
     private readonly ingestUseCase: IngestSireProposalUseCase,
     private readonly exportUseCase: ExportSireProposalUseCase,
     private readonly historyUseCase: GetReconciliationHistoryUseCase,
-    private readonly closeUseCase: CloseFiscalPeriodUseCase,
     private readonly uploadReportUseCase: UploadSireReportUseCase,
     private readonly getProposalUseCase: GetSireProposalUseCase,
-    private readonly excludeRecordUseCase: ExcludeSireRecordUseCase,
-    private readonly replaceProposalUseCase: ReplaceSireProposalUseCase,
-    private readonly registerPreliminaryUseCase: RegisterSirePreliminaryUseCase,
-    private readonly deletePreliminaryUseCase: DeleteSirePreliminaryUseCase,
-    private readonly generateRecordUseCase: GenerateSireRecordUseCase,
     private readonly ticketManager: SireTicketManagerService,
-    private readonly acceptProposalUseCase: AcceptSireProposalUseCase,
-    private readonly restoreRecordUseCase: RestoreSireRecordUseCase,
   ) {}
 
   private requireCompany(user?: TokenPayload): string {
@@ -161,14 +148,6 @@ export class SireController {
     );
   }
 
-  @Post('proposal')
-  async getProposal(
-    @Body() dto: SirePeriodBookDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.getProposalUseCase.execute(dto, this.requireCompany(user));
-  }
-
   @Get('propuesta')
   async getPropuesta(
     @Query() query: SireProvisionalQueryDto,
@@ -177,38 +156,6 @@ export class SireController {
     return this.getProposalUseCase.execute(
       toPeriodBookDto(query),
       this.requireCompany(user),
-    );
-  }
-
-  @Post('excluir')
-  async exclude(
-    @Body() dto: SireProvisionalActionDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    const companyId = this.requireCompany(user);
-    return this.excludeRecordUseCase.execute(companyId, dto.proposalId, user?.sub ?? '');
-  }
-
-  @Post('restaurar')
-  async restore(
-    @Body() dto: SireProvisionalActionDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.restoreRecordUseCase.execute(
-      this.requireCompany(user),
-      dto.proposalId,
-    );
-  }
-
-  @Post('aceptar')
-  async accept(
-    @Body() dto: AcceptSirePeriodDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.acceptProposalUseCase.execute(
-      dto,
-      this.requireCompany(user),
-      dto.confirmed,
     );
   }
 
@@ -224,53 +171,6 @@ export class SireController {
     return { period: dto.period, bookType: dto.bookType, state: period?.state ?? 'SIN_PROPUESTA', records };
   }
 
-  @Post('preliminar')
-  async registerPreliminar(
-    @Body() dto: SirePeriodBookDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.registerPreliminaryUseCase.execute(dto, this.requireCompany(user));
-  }
-
-  @Delete('proposal/:proposalId')
-  async excludeProposal(
-    @Param('proposalId') proposalId: string,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    const currentUser = user;
-    return this.excludeRecordUseCase.execute(
-      this.requireCompany(currentUser),
-      proposalId,
-      currentUser?.sub ?? '',
-    );
-  }
-
-  @Post('proposal/replace')
-  @UseInterceptors(FileInterceptor('file', txtUploadOptions))
-  async replaceProposal(
-    @Body() dto: SirePeriodBookDto,
-    @UploadedFile() file: UploadedSireFile | undefined,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    if (!file?.buffer) throw new BadRequestException('Falta el archivo TXT.');
-    return this.replaceProposalUseCase.execute(
-      dto,
-      this.requireCompany(user),
-      file.buffer,
-    );
-  }
-
-  @Post('reemplazo')
-  @UseInterceptors(FileInterceptor('file', txtUploadOptions))
-  async reemplazo(
-    @Body() dto: SirePeriodBookDto,
-    @UploadedFile() file: UploadedSireFile | undefined,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    if (!file?.buffer) throw new BadRequestException('Falta el archivo TXT.');
-    return this.replaceProposalUseCase.execute(dto, this.requireCompany(user), file.buffer);
-  }
-
   @Get('generado')
   async getGenerado(
     @Query() query: SireProvisionalQueryDto,
@@ -281,51 +181,6 @@ export class SireController {
     const period = await this.ticketManager.getPeriod(companyId, dto.period, dto.bookType);
     const records = await this.ticketManager.getRecords(companyId, dto.period, dto.bookType);
     return { period: dto.period, bookType: dto.bookType, state: period?.state ?? 'SIN_REGISTRO', records };
-  }
-
-  @Get('status')
-  async status(
-    @Query() query: SireProvisionalQueryDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    const dto = toPeriodBookDto(query);
-    return this.ticketManager.poll(this.requireCompany(user), dto.period, dto.bookType);
-  }
-
-  @Post('preliminary')
-  async registerPreliminary(
-    @Body() dto: SirePeriodBookDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.registerPreliminaryUseCase.execute(dto, this.requireCompany(user));
-  }
-
-  @Delete('preliminary')
-  async deletePreliminary(
-    @Body() dto: SirePeriodBookDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.deletePreliminaryUseCase.execute(dto, this.requireCompany(user));
-  }
-
-  @Post('generate')
-  async generate(
-    @Body() dto: SirePeriodBookDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.generateRecordUseCase.execute(dto, this.requireCompany(user));
-  }
-
-  @Post('tickets/:period/poll')
-  async pollTicket(
-    @Param('period') period: string,
-    @Query('bookType') bookType: 'RVIE_VENTAS' | 'RCE_COMPRAS',
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    if (!['RVIE_VENTAS', 'RCE_COMPRAS'].includes(bookType)) {
-      throw new BadRequestException('El tipo de libro no es válido.');
-    }
-    return this.ticketManager.poll(this.requireCompany(user), period, bookType);
   }
 
   @Post('export')
@@ -352,14 +207,5 @@ export class SireController {
     @CurrentUser() user?: TokenPayload,
   ) {
     return this.historyUseCase.execute(query, this.requireCompany(user));
-  }
-
-  @Post('close')
-  @HttpCode(HttpStatus.OK)
-  async close(
-    @Body() dto: SirePeriodBookDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.closeUseCase.execute(dto, this.requireCompany(user));
   }
 }

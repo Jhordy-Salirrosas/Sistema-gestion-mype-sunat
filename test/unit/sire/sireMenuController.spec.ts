@@ -12,7 +12,6 @@ import {
   SireHistorialQueryDto,
   SireImportacionRequestDto,
   SirePeriodoQueryDto,
-  SireReporteRequestDto,
 } from '../../../src/modules/sire/application/dto/sireMenuQueryDto';
 import { SireMenuController } from '../../../src/modules/sire/infrastructure/controllers/sireMenuController';
 
@@ -30,7 +29,6 @@ function crearController() {
   const conciliar = { execute: jest.fn().mockResolvedValue({ conciliacionId: 'c1' }) };
   const consultarImportacion = { execute: jest.fn().mockResolvedValue({ estado: 'PENDING' }) };
   const resumen = { execute: jest.fn().mockResolvedValue({ periodo: '202401' }) };
-  const reportar = { execute: jest.fn().mockResolvedValue({ messageId: 'm2' }) };
   const consultarReporte = { execute: jest.fn().mockResolvedValue({ estado: 'PENDING' }) };
   const historial = { execute: jest.fn().mockResolvedValue({ total: 0, filas: [] }) };
   const users = {
@@ -42,7 +40,6 @@ function crearController() {
     conciliar as never,
     consultarImportacion as never,
     resumen as never,
-    reportar as never,
     consultarReporte as never,
     historial as never,
     users as unknown as IUserRepositoryPort,
@@ -54,7 +51,6 @@ function crearController() {
     conciliar,
     consultarImportacion,
     resumen,
-    reportar,
     consultarReporte,
     historial,
     users,
@@ -64,6 +60,13 @@ function crearController() {
 describe('SireMenuController', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('no expone el endpoint de envío de libros a SUNAT', () => {
+    const { controller } = crearController();
+    const controllerAsRecord = controller as unknown as Record<string, unknown>;
+
+    expect(controllerAsRecord.reportar).toBeUndefined();
   });
 
   it('imports a proposal with the RUC taken from the session, never from the request', async () => {
@@ -136,10 +139,6 @@ describe('SireMenuController', () => {
     await expect(controller.resumen({ periodo: '202401' }, userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(controller.resumen({ periodo: '202401' })).rejects.toBeInstanceOf(UnauthorizedException);
 
-    await expect(controller.reportar({ periodo: '202401', libro: 'RVIE_VENTAS' }, undefined)).rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(controller.reportar({ periodo: '202401', libro: 'RVIE_VENTAS' }, userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(controller.reportar({ periodo: '202401', libro: 'RVIE_VENTAS' })).rejects.toBeInstanceOf(UnauthorizedException);
-
     await expect(controller.estadoReporte('m2', undefined)).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(controller.estadoReporte('m2', userSinEmpresa)).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(controller.estadoReporte('m2')).rejects.toBeInstanceOf(UnauthorizedException);
@@ -172,20 +171,6 @@ describe('SireMenuController', () => {
     await controller.resumen({ periodo: '202401' }, USUARIO);
 
     expect(resumen.execute).toHaveBeenCalledWith('company-id', '202401', null);
-  });
-
-  it('sends the book to SUNAT and returns the ticket', async () => {
-    const { controller, reportar } = crearController();
-
-    await controller.reportar(
-      { periodo: '202401', libro: 'RVIE_VENTAS' },
-      USUARIO,
-    );
-
-    expect(reportar.execute).toHaveBeenCalledWith('company-id', {
-      periodo: '202401',
-      libro: 'RVIE_VENTAS',
-    });
   });
 
   it('answers the polling of an import and of a report', async () => {
@@ -305,15 +290,6 @@ describe('DTOs del menú SIRE', () => {
         plainToInstance(SirePeriodoQueryDto, {
           periodo: '202401',
           libro: 'RCE_COMPRAS',
-        }),
-      ),
-    ).resolves.toHaveLength(0);
-
-    await expect(
-      validate(
-        plainToInstance(SireReporteRequestDto, {
-          periodo: '202401',
-          libro: 'RVIE_VENTAS',
         }),
       ),
     ).resolves.toHaveLength(0);

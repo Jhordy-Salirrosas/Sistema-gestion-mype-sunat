@@ -14,16 +14,11 @@ import { ImportarPropuestaSireUseCase } from '../../../src/modules/sire/applicat
 import { IngestSireProposalUseCase } from '../../../src/modules/sire/application/use-cases/ingestSireProposalUseCase';
 import { ObtenerResumenSireUseCase } from '../../../src/modules/sire/application/use-cases/obtenerResumenSireUseCase';
 import { ReconcileSireUseCase } from '../../../src/modules/sire/application/use-cases/reconcileSireUseCase';
-import {
-  ConsultarReporteSireUseCase,
-  ReportarSireUseCase,
-} from '../../../src/modules/sire/application/use-cases/reportarSireUseCase';
-import { RestoreSireRecordUseCase } from '../../../src/modules/sire/application/use-cases/restoreSireRecordUseCase';
+import { ConsultarReporteSireUseCase } from '../../../src/modules/sire/application/use-cases/reportarSireUseCase';
 import type { ISireExporterPort } from '../../../src/modules/sire/domain/ports/sireExporterPort';
 import type { ISireParserPort } from '../../../src/modules/sire/domain/ports/sireParserPort';
 import type { ISireRepositoryPort } from '../../../src/modules/sire/domain/ports/sireRepositoryPort';
 import type { SireFileStoragePort } from '../../../src/modules/sire/domain/ports/sireFileStoragePort';
-import type { SireSunatGatewayPort } from '../../../src/modules/sire/domain/ports/sireSunatGatewayPort';
 import { validarNombreArchivoSire } from '../../../src/modules/sire/domain/rules/sireFileNameRule';
 import type { SireMenuRepository } from '../../../src/modules/sire/infrastructure/persistence/sireMenuRepository';
 import { ResilienceStateService } from '../../../src/modules/resilience/application/resilienceStateService';
@@ -381,49 +376,6 @@ describe('SIRE use case branch coverage', () => {
     });
   });
 
-  describe('ReportarSireUseCase', () => {
-    it('still reports the queue failure when the report cannot be marked as failed', async () => {
-      const repository = crearRepositoryMenu() as unknown as SireMenuRepository;
-      const queue = crearQueue() as unknown as QueueService;
-      (queue.enqueueSireImport as jest.Mock).mockRejectedValue(
-        new Error('sin cola'),
-      );
-      (repository.fallarReporte as jest.Mock).mockRejectedValue(
-        new Error('la base de datos no responde'),
-      );
-      const useCase = new ReportarSireUseCase(repository, queue);
-
-      await expect(
-        useCase.execute(COMPANY_ID, {
-          periodo: '202401',
-          libro: 'RCE_COMPRAS',
-        }),
-      ).rejects.toBeInstanceOf(ServiceUnavailableException);
-      expect(repository.fallarReporte).toHaveBeenCalledWith(
-        'reporte-id',
-        'QUEUE_ENQUEUE_FAILED',
-      );
-    });
-  });
-
-  describe('RestoreSireRecordUseCase', () => {
-    it('rejects the restore when the proposal does not exist', async () => {
-      const repository = {
-        getProposal: jest.fn().mockResolvedValue(null),
-        restoreProposal: jest.fn(),
-      } as unknown as ISireRepositoryPort;
-      const sunat = {
-        restoreRecord: jest.fn(),
-      } as unknown as SireSunatGatewayPort;
-      const useCase = new RestoreSireRecordUseCase(repository, sunat);
-
-      await expect(
-        useCase.execute(COMPANY_ID, 'proposal-inexistente'),
-      ).rejects.toBeInstanceOf(NotFoundException);
-      expect(sunat.restoreRecord).not.toHaveBeenCalled();
-    });
-  });
-
   describe('SireDashboardMetricsService', () => {
     function crearServicio() {
       const history = {
@@ -473,25 +425,15 @@ describe('SIRE use case branch coverage', () => {
 
   describe('SireTicketManagerService', () => {
     function crearDependencias() {
-      const repository = {
+      return {
         getPeriod: jest.fn(),
         getPeriodProposals: jest.fn().mockResolvedValue([]),
-        setPeriodState: jest.fn().mockResolvedValue(undefined),
       };
-      const sunat = {
-        getTicketStatus: jest
-          .fn()
-          .mockResolvedValue({ ticket: 'T-1', status: 'TERMINADO' }),
-      };
-      return { repository, sunat };
     }
 
     it('returns the proposals of the period for the requested book', async () => {
-      const { repository, sunat } = crearDependencias();
-      const manager = new SireTicketManagerService(
-        repository as never,
-        sunat as never,
-      );
+      const repository = crearDependencias();
+      const manager = new SireTicketManagerService(repository as never);
 
       await manager.getRecords(COMPANY_ID, '202611', 'RCE_COMPRAS');
 
@@ -502,28 +444,17 @@ describe('SIRE use case branch coverage', () => {
       );
     });
 
-    it('keeps the proposal state when the ticket is neither a generation nor a preliminary registration', async () => {
-      const { repository, sunat } = crearDependencias();
+    it('returns the local state of the period without calling SUNAT', async () => {
+      const repository = crearDependencias();
       repository.getPeriod.mockResolvedValue({
         id: 'p',
-        state: 'PROCESANDO',
-        ticket: 'T-1',
-        ticketOperation: 'PROPUESTA',
+        state: 'PROPUESTA',
       });
-      const manager = new SireTicketManagerService(
-        repository as never,
-        sunat as never,
-      );
+      const manager = new SireTicketManagerService(repository as never);
 
-      const result = await manager.poll(COMPANY_ID, '202611', 'RCE_COMPRAS');
-
-      expect(result).toMatchObject({ status: 'TERMINADO', state: 'PROPUESTA' });
-      expect(repository.setPeriodState).toHaveBeenCalledWith(
-        COMPANY_ID,
-        '202611',
-        'RCE',
-        'PROPUESTA',
-      );
+      await expect(
+        manager.getPeriod(COMPANY_ID, '202611', 'RCE_COMPRAS'),
+      ).resolves.toEqual({ id: 'p', state: 'PROPUESTA' });
     });
   });
 });

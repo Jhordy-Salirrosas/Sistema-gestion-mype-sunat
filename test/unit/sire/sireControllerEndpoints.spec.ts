@@ -36,17 +36,9 @@ describe('SireController - endpoints y filtros de carga', () => {
     ingest: { execute: jest.fn() },
     export: { execute: jest.fn() },
     history: { execute: jest.fn() },
-    close: { execute: jest.fn() },
     uploadReport: { execute: jest.fn() },
     getProposal: { execute: jest.fn() },
-    exclude: { execute: jest.fn() },
-    replace: { execute: jest.fn() },
-    register: { execute: jest.fn() },
-    remove: { execute: jest.fn() },
-    generate: { execute: jest.fn() },
-    tickets: { getPeriod: jest.fn(), getRecords: jest.fn(), poll: jest.fn() },
-    accept: { execute: jest.fn() },
-    restore: { execute: jest.fn() },
+    tickets: { getPeriod: jest.fn(), getRecords: jest.fn() },
   };
 
   let controller: SireController;
@@ -58,17 +50,9 @@ describe('SireController - endpoints y filtros de carga', () => {
       casos.ingest as never,
       casos.export as never,
       casos.history as never,
-      casos.close as never,
       casos.uploadReport as never,
       casos.getProposal as never,
-      casos.exclude as never,
-      casos.replace as never,
-      casos.register as never,
-      casos.remove as never,
-      casos.generate as never,
       casos.tickets as never,
-      casos.accept as never,
-      casos.restore as never,
     );
   });
 
@@ -97,64 +81,14 @@ describe('SireController - endpoints y filtros de carga', () => {
     });
   });
 
-  describe('reemplazo de la propuesta', () => {
-    it('delega el reemplazo del archivo TXT', async () => {
-      const file = {
-        originalname: 'propuesta.txt',
-        mimetype: 'text/plain',
-        buffer: Buffer.from('contenido'),
-      };
-
-      await controller.replaceProposal(DTO, file, USER);
-
-      expect(casos.replace.execute).toHaveBeenCalledWith(
-        DTO,
-        'company-1',
-        file.buffer,
+  describe('operaciones locales del contrato', () => {
+    it('devuelve la propuesta por GET', async () => {
+      await controller.getPropuesta(
+        { ruc: '20123456789', periodo: '202610', libro: 'RCE' },
+        USER,
       );
-    });
-
-    it('rechaza el reemplazo cuando no llega el archivo', async () => {
-      await expect(
-        controller.replaceProposal(DTO, undefined, USER),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(casos.replace.execute).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('operaciones del contrato', () => {
-    it('devuelve la propuesta por POST', async () => {
-      await controller.getProposal(DTO, USER);
 
       expect(casos.getProposal.execute).toHaveBeenCalledWith(DTO, 'company-1');
-    });
-
-    it('excluye la propuesta por su identificador', async () => {
-      await controller.excludeProposal('proposal-1', USER);
-
-      expect(casos.exclude.execute).toHaveBeenCalledWith(
-        'company-1',
-        'proposal-1',
-        'user-1',
-      );
-    });
-
-    it('registra la propuesta preliminar', async () => {
-      await controller.registerPreliminary(DTO, USER);
-
-      expect(casos.register.execute).toHaveBeenCalledWith(DTO, 'company-1');
-    });
-
-    it('genera el registro de la propuesta', async () => {
-      await controller.generate(DTO, USER);
-
-      expect(casos.generate.execute).toHaveBeenCalledWith(DTO, 'company-1');
-    });
-
-    it('cierra el periodo fiscal', async () => {
-      await controller.close(DTO, USER);
-
-      expect(casos.close.execute).toHaveBeenCalledWith(DTO, 'company-1');
     });
 
     it('devuelve el historial de conciliaciones', async () => {
@@ -163,25 +97,6 @@ describe('SireController - endpoints y filtros de carga', () => {
       await controller.history(query, USER);
 
       expect(casos.history.execute).toHaveBeenCalledWith(query, 'company-1');
-    });
-  });
-
-  describe('sondeo del ticket', () => {
-    it('sondea el ticket de un libro válido', async () => {
-      await controller.pollTicket('202610', 'RCE_COMPRAS', USER);
-
-      expect(casos.tickets.poll).toHaveBeenCalledWith(
-        'company-1',
-        '202610',
-        'RCE_COMPRAS',
-      );
-    });
-
-    it('rechaza un tipo de libro que no existe', async () => {
-      await expect(
-        controller.pollTicket('202610', 'OTRO' as never, USER),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(casos.tickets.poll).not.toHaveBeenCalled();
     });
   });
 

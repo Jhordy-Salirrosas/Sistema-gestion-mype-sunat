@@ -191,67 +191,7 @@ describe('SireMenuRepository', () => {
     });
   });
 
-  describe('conciliaciones', () => {
-    it('stores the reconciliation with its detail', async () => {
-      (prisma.sireConciliacion.create as jest.Mock).mockResolvedValue({
-        id: 'conciliacion-id',
-        created_at: new Date('2026-01-06T10:00:00.000Z'),
-      });
-
-      await expect(
-        repository.crearConciliacion({
-          companyId: COMPANY_ID,
-          periodo: '202401',
-          conciliados: 7,
-          diferencias: 1,
-          detalle: { resumen: {}, comprobantes: [] },
-        }),
-      ).resolves.toEqual({
-        id: 'conciliacion-id',
-        created_at: new Date('2026-01-06T10:00:00.000Z'),
-      });
-
-      expect(prisma.sireConciliacion.create).toHaveBeenCalledWith({
-        data: {
-          company_id: COMPANY_ID,
-          periodo: '202401',
-          conciliados: 7,
-          diferencias: 1,
-          detalle: { resumen: {}, comprobantes: [] },
-        },
-        select: { id: true, created_at: true },
-      });
-    });
-  });
-
   describe('reportes', () => {
-    it('registers the report pending', async () => {
-      (prisma.sireReporte.create as jest.Mock).mockResolvedValue({
-        id: 'reporte-id',
-        created_at: new Date('2026-01-07T10:00:00.000Z'),
-      });
-
-      await repository.crearReporte({
-        companyId: COMPANY_ID,
-        periodo: '202401',
-        libro: 'RCE_COMPRAS',
-        messageId: 'message-id',
-        ticket: null,
-      });
-
-      expect(prisma.sireReporte.create).toHaveBeenCalledWith({
-        data: {
-          company_id: COMPANY_ID,
-          periodo: '202401',
-          libro: 'RCE_COMPRAS',
-          estado: 'PENDING',
-          message_id: 'message-id',
-          ticket: null,
-        },
-        select: { id: true, created_at: true },
-      });
-    });
-
     it('changes the state of a report', async () => {
       await repository.marcarReporteEnProceso('reporte-id');
       await repository.completarReporte('reporte-id', '12345678');

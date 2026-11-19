@@ -33,7 +33,6 @@ import {
   SireHistorialQueryDto,
   SireImportacionRequestDto,
   SirePeriodoQueryDto,
-  SireReporteRequestDto,
 } from '../../application/dto/sireMenuQueryDto';
 import {
   ConciliarPeriodoSireUseCase,
@@ -42,10 +41,7 @@ import {
 import { ImportarPropuestaSireUseCase } from '../../application/use-cases/importarPropuestaSireUseCase';
 import { ObtenerHistorialSireUseCase } from '../../application/use-cases/obtenerHistorialSireUseCase';
 import { ObtenerResumenSireUseCase } from '../../application/use-cases/obtenerResumenSireUseCase';
-import {
-  ConsultarReporteSireUseCase,
-  ReportarSireUseCase,
-} from '../../application/use-cases/reportarSireUseCase';
+import { ConsultarReporteSireUseCase } from '../../application/use-cases/reportarSireUseCase';
 import { SIRE_EXTENSIONES_PERMITIDAS } from '../../domain/rules/sireFileNameRule';
 
 /** Archivo recibido por `multipart/form-data`. */
@@ -86,11 +82,11 @@ const opcionesSubidaSire = {
 };
 
 /**
- * Menú SIRE: importación, conciliación, resumen, reporte e historial.
+ * Menú SIRE: importación, conciliación, resumen y consultas de historial.
  *
  * Es un controlador aparte del de SIRE "clásico" y del de consulta de
- * períodos para que los flujos del menú no se mezclen con los existentes: este
- * solo expone los cinco endpoints que la pantalla necesita.
+ * períodos para que los flujos del menú no se mezclen con los existentes.
+ * No expone ningún envío a SUNAT.
  */
 @Controller('api/v1/sire')
 @UseGuards(AuthGuard)
@@ -100,7 +96,6 @@ export class SireMenuController {
     private readonly conciliarUseCase: ConciliarPeriodoSireUseCase,
     private readonly consultarImportacionUseCase: ConsultarImportacionSireUseCase,
     private readonly resumenUseCase: ObtenerResumenSireUseCase,
-    private readonly reportarUseCase: ReportarSireUseCase,
     private readonly consultarReporteUseCase: ConsultarReporteSireUseCase,
     private readonly historialUseCase: ObtenerHistorialSireUseCase,
     @Inject(USER_REPOSITORY_PORT)
@@ -176,21 +171,11 @@ export class SireMenuController {
   }
 
   /**
-   * Envía el libro conciliado a SUNAT.
-   *
-   * Devuelve 202 con el ticket y el `messageId` para el sondeo.
-   */
-  @Post('reportar')
-  @HttpCode(HttpStatus.ACCEPTED)
-  async reportar(
-    @Body() dto: SireReporteRequestDto,
-    @CurrentUser() user?: TokenPayload,
-  ) {
-    return this.reportarUseCase.execute(this.requireCompany(user), dto);
-  }
-
-  /**
    * Estado de un reporte en curso.
+   *
+   * El envío de libros a SUNAT se eliminó: SIRE es de solo lectura y la
+   * contabilidad es la encargada de decidir qué se reporta. Este GET se
+   * conserva para poder consultar el estado de registros históricos.
    */
   @Get('reportar/estado/:messageId')
   async estadoReporte(
