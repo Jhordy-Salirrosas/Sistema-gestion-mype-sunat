@@ -20,7 +20,7 @@ import { InvoiceTableRow } from './InvoiceTableRow';
 
 interface InvoiceTableProps {
   comprobantes: readonly ComprobanteDemo[];
-  /** Presentación exclusiva de la bandeja de Facturas y Boletas. */
+  /** Presentación de Facturas y Boletas y de Notas, sin acciones por fila. */
   sinAcciones?: boolean;
   /** Mensaje mostrado cuando el filtro no devuelve resultados. */
   mensajeVacio?: string;

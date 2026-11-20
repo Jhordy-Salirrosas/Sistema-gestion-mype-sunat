@@ -35,14 +35,14 @@ it('F3 Error de red selecciona solo filas ERROR_RED tras el mapper real', () => 
   expect(opcion).toBeTruthy();
   expect(aplicarFiltros(filas.map(aComprobanteDemo), { busqueda: '', estado: opcion.value, desde: '', hasta: '' }).map((c) => c.id)).toEqual(['2']);
 });
-it('F4 la pestaña y la lista usan el mismo conjunto al buscar', async () => {
+it('F4 la lista filtra el conjunto sin la franja de pestañas', async () => {
   const q = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); queries.push(q);
   render(<QueryClientProvider client={q}><MemoryRouter initialEntries={['/invoices']}><InvoiceList /></MemoryRouter></QueryClientProvider>);
   await screen.findByText('Cliente uno');
-  const tab = screen.getByRole('tab', { name: /Facturas y Boletas/ });
-  expect(within(tab).getByText('2')).toBeTruthy();
+  expect(screen.queryByRole('tablist', { name: 'Apartados del módulo de facturación' })).toBeNull();
+  expect(screen.getAllByRole('row')).toHaveLength(3);
   fireEvent.change(screen.getByLabelText('Buscar comprobantes'), { target: { value: 'Cliente dos' } });
-  expect(within(tab).getByText('1')).toBeTruthy();
+  expect(screen.getAllByRole('row')).toHaveLength(2);
   expect(screen.queryByText('Cliente uno')).toBeNull();
   expect(screen.getByText('Cliente dos')).toBeTruthy();
 });

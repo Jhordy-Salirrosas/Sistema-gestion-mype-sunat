@@ -10,8 +10,8 @@ import { useAuthStore } from '@/stores/authStore';
 /**
  * Orquestador de la vista principal del módulo de Facturación (M1).
  *
- * Integra las tarjetas KPI fiscales, la navegación por los cuatro apartados
- * oficiales, la barra de filtros, la grilla enriquecida de comprobantes y los
+ * Integra las tarjetas KPI fiscales, la barra de filtros,
+ * la grilla enriquecida de comprobantes y los
  * modales de emisión y auditoría CDR.
  *
  * Los filtros y el apartado activo se aplican al conjunto sobre el que se
@@ -28,8 +28,6 @@ import {
   AlertDescription,
   AlertTitle,
   PageHeader,
-  Tabs,
-  TabsContent,
 } from '@/components/ui';
 import { extractApiErrorMessage } from '@/lib/apiErrors';
 import { formatCurrency } from '@/lib/formatters';
@@ -37,13 +35,7 @@ import type { ComprobanteDemo } from './data/invoiceDemoTypes';
 import { InvoiceCombinedSummary } from './components/InvoiceCombinedSummary';
 import { InvoiceKpiCards } from './components/InvoiceKpiCards';
 import { InvoiceDemoNotice } from './components/InvoiceDemoNotice';
-import {
-  InvoiceTabsNav,
-  RUTA_POR_TAB,
-  contarPorTab,
-  tabDesdeRuta,
-  type InvoiceTabId,
-} from './components/InvoiceTabsNav';
+import { INVOICE_SECTION_ROUTES, sectionFromPath, type InvoiceSectionId } from './lib/invoiceSections';
 import {
   InvoiceFiltersBar,
   type InvoiceFiltros,
@@ -83,7 +75,7 @@ export const fechaLocalIso = (d: Date): string => {
 /** Indica si el usuario está viendo un subconjunto y no el periodo completo. */
 const hayFiltrosActivos = (
   filtros: InvoiceFiltros,
-  tab: InvoiceTabId,
+  tab: InvoiceSectionId,
 ): boolean =>
   tab !== 'comprobantes' ||
   filtros.busqueda.trim() !== '' ||
@@ -104,8 +96,9 @@ export const InvoiceList = () => {
   const { data: configuracionFiscal, recargar: recargarConfiguracion, cargando: configuracionCargando, error: errorConfiguracion } = useInvoiceConfig(ruc);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
-  const activeTab = tabDesdeRuta(pathname);
-  const incluirNotas=activeTab==='comprobantes'&&new URLSearchParams(search).get('incluir_notas')==='1';
+  const activeSection = sectionFromPath(pathname);
+  const detalleModal = activeSection === 'comprobantes' || activeSection === 'notas';
+  const incluirNotas=activeSection==='comprobantes'&&new URLSearchParams(search).get('incluir_notas')==='1';
   const [filtros, setFiltros] = useInvoiceFiltros();
   const [modalEmision, setModalEmision] = useState<TipoEmision | null>(null);
   const { data: productosEmision = [] } = useQuery({
@@ -146,12 +139,10 @@ export const InvoiceList = () => {
     [pagina],
   );
 
-  const conteo = useMemo(() => contarPorTab(aplicarFiltros(comprobantes, filtros)), [comprobantes, filtros]);
-
   /** Lote filtrado que alimenta KPIs, monitor y grilla. */
   const visibles = useMemo(
-    () => aplicarFiltros(incluirNotas?comprobantes.filter(c=>['01','03','07','08'].includes(c.tipo)):porApartado(comprobantes, activeTab), filtros),
-    [comprobantes, activeTab, filtros, incluirNotas],
+    () => aplicarFiltros(incluirNotas?comprobantes.filter(c=>['01','03','07','08'].includes(c.tipo)):porApartado(comprobantes, activeSection), filtros),
+    [comprobantes, activeSection, filtros, incluirNotas],
   );
 
   const resumen = useMemo(
@@ -179,7 +170,7 @@ export const InvoiceList = () => {
       setModalEmision(null);
       void refetch();
       void recargarConfiguracion();
-      navigate(RUTA_POR_TAB.comprobantes);
+      navigate(INVOICE_SECTION_ROUTES.comprobantes);
       setFiltros({ ...FILTROS_INICIALES });
     },
     [navigate, refetch, recargarConfiguracion],
@@ -212,7 +203,7 @@ export const InvoiceList = () => {
     <InvoiceTable
       key={JSON.stringify(filtros)}
       comprobantes={documentos}
-      sinAcciones={activeTab === 'comprobantes'}
+      sinAcciones={detalleModal}
       mensajeVacio={
         isLoading
           ? 'Cargando comprobantes…'
@@ -263,14 +254,7 @@ export const InvoiceList = () => {
         </Alert>
       )}
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(valor) =>
-          navigate({ pathname: RUTA_POR_TAB[valor as InvoiceTabId], search })
-        }
-      >
-        <InvoiceTabsNav conteo={conteo} />
-
+      <div className="flex flex-col gap-2">
         <InvoiceFiltersBar
           filtros={filtros}
           onFiltrosChange={setFiltros}
@@ -286,11 +270,11 @@ export const InvoiceList = () => {
 
       {isLoading ? (
         <InvoiceWait label="Cargando indicadores…" skeleton />
-      ) : !isError && activeTab !== 'notas' ? (
-        <InvoiceKpiCards mostrarNotas={false} resumen={resumen} filtrado={hayFiltrosActivos(filtros, activeTab)} />
+      ) : !isError && activeSection !== 'notas' ? (
+        <InvoiceKpiCards mostrarNotas={false} resumen={resumen} filtrado={hayFiltrosActivos(filtros, activeSection)} />
       ) : null}
 
-      {activeTab === 'comprobantes' && !isLoading && !isError && (
+      {activeSection === 'comprobantes' && !isLoading && !isError && (
         <InvoiceCombinedSummary resumen={resumenCombinado} />
       )}
 
@@ -298,12 +282,12 @@ export const InvoiceList = () => {
 
 
 
-        <TabsContent value="comprobantes">
+        {activeSection === 'comprobantes' && <section className="flex-1 outline-none">
           {incluirNotas&&<button className="mb-3 rounded border px-3 py-2 text-sm" onClick={()=>{const params=new URLSearchParams(search);params.delete('incluir_notas');navigate({pathname,search:params.toString()},{replace:true});}}>Tipos: facturas, boletas y notas · Quitar filtro</button>}
           {grilla()}
-        </TabsContent>
+        </section>}
 
-        <TabsContent value="notas">
+        {activeSection === 'notas' && <section className="flex-1 outline-none">
           {([
             {
               tipo: '07', titulo: 'Notas de crédito',
@@ -327,24 +311,24 @@ export const InvoiceList = () => {
               </section>
             );
           })}
-        </TabsContent>
+        </section>}
 
-        <TabsContent value="bajas">
+        {activeSection === 'bajas' && <section className="flex-1 outline-none">
           {grilla('No hay bajas ni resúmenes diarios en el periodo.')}
-        </TabsContent>
-      </Tabs>
+        </section>}
+      </div>
 
       {visor && (
         <InvoiceCdrModal
-          lateral={activeTab !== 'comprobantes'}
-          onReintentarCdr={activeTab === 'comprobantes' ? reintentarCdr : undefined}
+          lateral={!detalleModal}
+          onReintentarCdr={detalleModal ? reintentarCdr : undefined}
           onActualizado={reflejarDetalle}
           comprobante={visor.comprobante}
           modoInicial={visor.modo}
           onCerrar={() => {
             const id = visor.comprobante.id;
             setVisor(null);
-            if (activeTab === 'comprobantes') requestAnimationFrame(() => {
+            if (detalleModal) requestAnimationFrame(() => {
               Array.from(document.querySelectorAll<HTMLElement>('[data-invoice-id]')).find(row => row.dataset.invoiceId === id)?.focus();
             });
           }}

@@ -69,10 +69,26 @@ it.each([true,false])('el reintento trasladado al modal conserva la guarda de tr
  else expect(within(modal).queryByRole('button',{name:'Reintentar CDR'})).toBeNull();
 });
 
-it('Notas conserva su columna de acciones y su presentación lateral',async()=>{
- factura={...factura,tipoComprobante:'07',serie:'FC01',numero:'FC01-00000097'};
+it.each((['07','08'] as const).flatMap(tipo=>(['clic','Enter','Espacio'] as const).map(entrada=>({tipo,entrada}))))('Notas $tipo abre modal sin acciones mediante $entrada, conservando capacidades y cierre',async({tipo,entrada})=>{
+ const serie=tipo==='07'?'FC01':'FD01';factura={...factura,tipoComprobante:tipo,serie,numero:`${serie}-00000097`};
  const row=await mount('/invoices/notas');const table=row.closest('table')!;
- expect(within(table).getAllByRole('columnheader').at(-1)).toHaveTextContent('Acciones');
- const user=userEvent.setup();await user.click(within(row).getByRole('button',{name:'Ver'}));
- expect(await screen.findByRole('region',{name:/FC01-00000097/})).toBeVisible();expect(screen.queryByRole('dialog')).toBeNull();
+ expect(within(table).getAllByRole('columnheader')).toHaveLength(9);expect(within(table).getAllByRole('columnheader').at(-1)).toHaveTextContent('Estado CDR');expect(within(row).queryByRole('button')).toBeNull();expect(within(row).queryByText('Más acciones')).toBeNull();
+ expect(screen.queryByRole('tablist',{name:'Apartados del módulo de facturación'})).toBeNull();expect(screen.queryByRole('tab')).toBeNull();
+ const user=userEvent.setup();if(entrada==='clic')await user.click(within(row).getByText('Cliente de prueba'));else{row.focus();await user.keyboard(entrada==='Enter'?'{Enter}':' ');}
+ const modal=await screen.findByRole('dialog',{name:new RegExp(`${serie}-00000097`)});expect(screen.queryByRole('region',{name:new RegExp(`${serie}-00000097`)})).toBeNull();
+ expect(within(modal).getByRole('tab',{name:'Auditoría CDR'})).toBeVisible();expect(within(modal).getByRole('tab',{name:'Visor XML UBL 2.1'})).toBeVisible();
+ expect(await within(modal).findByRole('button',{name:'Reprocesar puente'})).toBeVisible();
+ for(const label of ['Descargar XML Oficial','Descargar PDF Homologado','Descargar CDR'])await waitFor(()=>expect(within(modal).getByRole('button',{name:label})).toBeEnabled());
+ if(entrada==='clic')await user.click(document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')!);else if(entrada==='Enter')await user.click(within(modal).getByRole('button',{name:'Cerrar'}));else await user.keyboard('{Escape}');
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());await waitFor(()=>expect(row).toHaveFocus());
+});
+
+it('Facturas y Boletas no muestra la franja de navegación del módulo',async()=>{
+ await mount();expect(screen.queryByRole('tablist',{name:'Apartados del módulo de facturación'})).toBeNull();expect(screen.queryByRole('tab')).toBeNull();
+});
+
+it.each(['07','08'])('Notas %s conserva el reintento de la fila dentro del modal',async tipo=>{
+ const serie=tipo==='07'?'FC01':'FD01';factura={...factura,tipoComprobante:tipo,serie,numero:`${serie}-00000097`,estadoBackend:'ERROR_RED',cdrStatus:'SIN_CONFIRMAR',cdrCodigo:undefined,transporteAcreditado:true};
+ const row=await mount('/invoices/notas');const user=userEvent.setup();await user.click(row);const modal=await screen.findByRole('dialog');
+ const retry=await within(modal).findByRole('button',{name:'Reintentar CDR'});await waitFor(()=>expect(retry).toBeEnabled());await user.click(retry);await waitFor(()=>expect(invoicesApi.retryCdr).toHaveBeenCalledWith('invoice'));
 });

@@ -1,70 +1,79 @@
-# Ferry — Bandeja de comprobantes y detalle modal
+# Ferry — Bandejas de comprobantes y Notas con detalle modal
 
 - Rama: `ferry/m1-bandeja-modal`.
 - Front destino: `CarlosSoles/Fronted-sistema-mype-sunat`.
-- Base obligatoria del front, sincronizada y verificada: **`6ea2c1f6ce72651c8e98dff5ad66ad13dd32f875`** (main, PR #364).
+- Base obligatoria del front: **`6ea2c1f6ce72651c8e98dff5ad66ad13dd32f875`** (main, PR #364).
 - Base del repositorio de transporte: `627e29f56e4f090d06b2349f58a63408773ffcf6`.
+- Entrega inicial: `65bc8bd62bd6bc4be9df37b1b451d68e92284257`. Esta ampliación se entrega en un único commit posterior sobre la misma rama.
 
-## Cambio
+## Resultado acumulado y ampliación
 
-En Facturas y Boletas, la tabla termina en **Estado CDR**, sin columna Acciones,
-botón Ver ni menú Más acciones. La columna y sus controles se omiten del DOM.
-Cualquier celda de la fila abre el detalle existente en un modal centrado con
-fondo atenuado. La fila conserva el acceso por teclado (Enter y Espacio).
+Facturas y Boletas y las dos listas de Notas (crédito y débito) terminan en
+**Estado CDR**, sin columna Acciones, botón Ver ni menú por fila. La fila
+completa abre el detalle existente en una ventana emergente centrada con fondo
+atenuado, mediante clic, Enter o Espacio.
 
-Se reutiliza InvoiceCdrModal: número, cliente, estado, Reprocesar puente cuando
-corresponde, pestañas Auditoría CDR y Visor XML UBL 2.1, descargas oficiales de
-XML/PDF/CDR y Cerrar. Se conserva la pestaña inicial que ya abría la fila.
-El reintento de CDR que estaba en la fila se traslada también al modal, con la
-misma condición de transporte y el mismo InvoiceWriteButton/flujo existente.
-No se pierde ninguna descarga ni acción de la fila.
+El detalle conserva número, cliente, estado, Reprocesar puente cuando corresponde,
+las pestañas Auditoría CDR y Visor XML UBL 2.1 y las descargas oficiales XML/PDF/CDR.
+El reintento de CDR se conserva dentro del modal con las mismas guardas y el mismo
+flujo de servicio. Cerrar, Escape y clic en el fondo cierran la ventana y devuelven
+el foco a la fila. No se pierde ninguna capacidad de las acciones retiradas.
 
-El modal se cierra con Cerrar, Escape o clic en el fondo; se devuelve el foco a
-la fila. El encabezado del diálogo queda correctamente asociado para lectores
-de pantalla. La variante sin acciones solo se activa en la bandeja principal;
-Notas y Bajas conservan su presentación y acciones previas.
+La ampliación elimina la franja InvoiceTabsNav y sus conteos en ambas vistas.
+Se retiran el componente y el contador exclusivos de esa franja. La identificación
+por ruta y la agrupación de documentos siguen utilizándose: se conservan en
+`lib/invoiceSections.ts`, sin interfaz de navegación ni conteos. No quedan
+referencias al componente ni a sus exportaciones anteriores en código o pruebas.
 
-No cambian filtros, ordenación, paginación, distintivos, consultas, servicios,
-tipos de API, payloads ni reglas. No se modifica ningún archivo de back.
-Las opciones añadidas a componentes son exclusivamente de presentación.
+Se conservan los grupos, conteos y subtotales propios de las listas de Notas.
+Las pestañas internas de trabajo de Anulación y Resúmenes no se modifican.
+Tampoco cambian el menú lateral, filtros, ordenación, paginación, distintivos,
+servicios, tipos de API, payloads, reglas ni archivos del back.
 
-## Delta real contra la base del front
+## Delta acumulado contra la base del front
 
-| Archivo | Cambio |
-| --- | --- |
-| `src/modules/invoices/InvoiceList.tsx` | Activa la variante sin acciones y el modal solo en Facturas y Boletas; conserva callbacks y retorno de foco. |
-| `src/modules/invoices/components/InvoiceTable.tsx` | Variante optativa sin la última columna; ajusta el colspan del vacío. Orden y paginación permanecen iguales. |
-| `src/modules/invoices/components/InvoiceTableRow.tsx` | Omite la celda de acciones en esa variante; clic de fila y teclado reutilizan la apertura existente. |
-| `src/modules/invoices/components/InvoiceCdrModal.tsx` | Reutiliza la ventana emergente existente, corrige su asociación de título y admite el reintento trasladado de la fila. Variante lateral conservada para las otras pantallas. |
-| `test/unit/modules/invoices/invoiceCazaBandeja.test.tsx` | Actualiza el recorrido de bandeja para abrir desde la fila y descargar dentro del modal. Mantiene las verificaciones de importes y actualización de estado. |
-| `test/unit/modules/invoices/invoiceBandejaModal.test.tsx` | Nuevo: ausencia de acciones, clic en distintas celdas, Enter, tres cierres, descargas, condición de reintento y regresión de Notas. |
+| Estado | Archivo | Finalidad |
+| --- | --- | --- |
+| M | `src/modules/invoices/InvoiceList.tsx` | Modal y variante sin acciones en ambas vistas; retira la franja y su contador. |
+| M | `src/modules/invoices/components/InvoiceTable.tsx` | Variante sin columna de acciones y colspan del estado vacío. |
+| M | `src/modules/invoices/components/InvoiceTableRow.tsx` | Omite las acciones; apertura desde fila y retorno de foco. |
+| M | `src/modules/invoices/components/InvoiceCdrModal.tsx` | Conserva el detalle, descargas y guardas; incorpora el reintento de CDR de la fila. |
+| D | `src/modules/invoices/components/InvoiceTabsNav.tsx` | Retira la franja y sus ayudantes exclusivos. |
+| M | `src/modules/invoices/lib/invoiceFilters.ts` | Usa la agrupación conservada en la utilidad sin interfaz. |
+| A | `src/modules/invoices/lib/invoiceSections.ts` | Conserva rutas, tipos por apartado e identificación de vista. |
+| M | `test/unit/modules/invoices/bandeja-ui.test.tsx` | Sustituye la navegación por la franja por la comprobación de rutas y agrupación. |
+| M | `test/unit/modules/invoices/invoiceCazaBandeja.test.tsx` | Apertura desde fila, descargas internas y ausencia de franja; conserva importes y estados. |
+| M | `test/unit/modules/invoices/invoiceNotasSeparadas.test.tsx` | Ausencia de franja; conserva conteos y subtotales de Notas. |
+| A | `test/unit/modules/invoices/invoiceBandejaModal.test.tsx` | Bandeja y NC/ND: clic, Enter/Espacio, cierres, retorno de foco, descargas, puente y reintento. |
+| D | `test/unit/modules/invoices/invoiceTabsNav.test.tsx` | Retira las pruebas exclusivas del componente eliminado. |
+| A | `test/unit/modules/invoices/invoiceSections.test.ts` | Verifica rutas y equivalencia de la agrupación por tipo. |
 
 ## Verificaciones
 
-- Suite completa del front: **223 archivos, 1645 pruebas aprobadas, 0 fallidas, 0 omitidas**.
-- Doce casos nuevos específicos; pruebas existentes de bandeja adaptadas sin
-  cambiar sus expectativas de importes ni de actualización del estado.
-- Build de producción `npm run build`: **aprobado**, TypeScript y Vite.
-- ESLint en los seis archivos: **0 errores**; conserva dos advertencias
-  preexistentes de InvoiceList (exportación para Fast Refresh y dependencia
-  setFiltros del callback existente).
-- Navegador Chromium local con respuestas simuladas: **15 casos**, combinando
-  1440/1280/1024/768/360px con Cerrar/Escape/fondo. Modal centrado, fondo atenuado,
-  tabla de nueve columnas y sin desbordamiento ni errores de ejecución.
-- Comprobadas las pestañas y las tres descargas por sus flujos existentes.
-- Regresión de Notas: conserva Acciones y detalle lateral, sin modal nuevo.
-- `git diff --check`: aprobado. Los seis archivos del ferry coinciden byte a
-  byte con el árbol probado.
-- Servicios, modelos de API, payloads, rutas, estilos y archivos del back:
-  sin modificaciones.
+- Entrega inicial: 223 archivos y 1645 pruebas aprobadas, sin fallos ni omisiones.
+- Ampliación: **223 archivos, 1660 pruebas aprobadas, 0 fallidas y 0 omitidas**.
+- Build de producción `npm run build`: aprobado (TypeScript y Vite).
+- ESLint en los once archivos transportados: 0 errores; conserva las dos
+  advertencias preexistentes de InvoiceList (Fast Refresh y dependencia setFiltros).
+- Cobertura funcional de la ampliación: NC y ND abren con clic, Enter y Espacio;
+  conservan pestañas, descargas, puente y reintento; cierran con Cerrar, Escape y
+  fondo. Las dos vistas carecen de franja. Se mantienen las pruebas de conteos,
+  subtotales y los recorridos existentes de Anulación y Resúmenes.
+- `git diff --check`: aprobado. Los once archivos transportados coinciden byte a
+  byte con el árbol probado; `SHA256SUMS` verifica estos archivos y el manifiesto.
 
 ## Aplicación
 
-Copiar los **seis archivos** de `frontend/` a sus mismas rutas del repositorio
-front, comparando con la base indicada si main incorpora cambios posteriores.
-El inventario del ferry contiene únicamente este delta. Los archivos de
-ferries anteriores retirados de la rama de transporte **no deben eliminarse
-del repositorio del front**.
+Copiar los **once archivos** de `frontend/` a sus mismas rutas en el front.
+Además, eliminar expresamente estos **dos archivos de la base del front**;
+no se transportan archivos vacíos como sustitutos:
 
-`SHA256SUMS` verifica este manifiesto y todos los archivos transportados.
+```sh
+git rm src/modules/invoices/components/InvoiceTabsNav.tsx
+git rm test/unit/modules/invoices/invoiceTabsNav.test.tsx
+```
+
+Comparar con la base indicada si el front incorpora cambios posteriores.
+No eliminar otros archivos por no estar incluidos en este ferry de delta.
+Verificar desde la raíz de la rama de transporte con `sha256sum -c SHA256SUMS`.
 Sin PRs, merges, despliegues ni acceso a datos de producción.
