@@ -103,7 +103,8 @@ function resolveAccount(
  *  - COMPRAS: contrapartida del haber (por defecto, cuentas por pagar).
  *  - BASE_VENTAS / BASE_COMPRAS: cuenta de ingresos o gastos.
  *  - BASE: se usa como respaldo de las dos anteriores.
- *  - IGV: cuenta del impuesto.
+ *  - IGV_VENTAS / IGV_COMPRAS: cuenta del impuesto por libro; `IGV` queda como
+ *    alias legado para empresas que ya tenían un único mapeo.
  *
  * El IGV se ajusta contra el total para que el asiento siempre cuadre, incluso
  * si la importación trae diferencias de redondeo.
@@ -119,12 +120,6 @@ export function buildSireAccountingLines(
   let total = roundSireAmount(totals.totalAmount);
   if (total <= 0) total = roundSireAmount(base + rawIgv);
 
-  const igvAccount = resolveAccount(
-    mappings,
-    ['IGV'],
-    SIRE_ACCOUNTING_DEFAULT_ACCOUNTS.IGV,
-  );
-
   if (kind === 'VENTAS') {
     const totalAccount = resolveAccount(
       mappings,
@@ -135,6 +130,11 @@ export function buildSireAccountingLines(
       mappings,
       ['BASE_VENTAS', 'BASE'],
       SIRE_ACCOUNTING_DEFAULT_ACCOUNTS.BASE_VENTAS,
+    );
+    const igvAccount = resolveAccount(
+      mappings,
+      ['IGV_VENTAS', 'IGV'],
+      SIRE_ACCOUNTING_DEFAULT_ACCOUNTS.IGV,
     );
     const safeBase = Math.min(base, total);
     const igv = roundSireAmount(total - safeBase);
@@ -170,6 +170,11 @@ export function buildSireAccountingLines(
     mappings,
     ['BASE_COMPRAS', 'BASE'],
     SIRE_ACCOUNTING_DEFAULT_ACCOUNTS.BASE_COMPRAS,
+  );
+  const igvAccount = resolveAccount(
+    mappings,
+    ['IGV_COMPRAS', 'IGV'],
+    SIRE_ACCOUNTING_DEFAULT_ACCOUNTS.IGV,
   );
   const safeBase = Math.min(base, total);
   const igv = roundSireAmount(total - safeBase);

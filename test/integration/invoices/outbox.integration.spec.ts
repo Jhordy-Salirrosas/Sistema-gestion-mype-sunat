@@ -149,8 +149,8 @@ describe('Transactional Outbox: rollback y concurrencia (TA-13)', () => {
         legal_name: 'EMPRESA DE PRUEBA TA-13 S.A.C.',
         // La ingesta valida el emisor antes de reservar el correlativo.
         ...fakeFiscalAddress,
-        sol_user: 'MODDATOS',
-        sol_pass_encrypted: 'cifrado-de-prueba',
+        sunat_issuer_username: 'MODDATOS',
+        sunat_issuer_password_enc: 'cifrado-de-prueba',
       },
     });
     companyId = company.id;

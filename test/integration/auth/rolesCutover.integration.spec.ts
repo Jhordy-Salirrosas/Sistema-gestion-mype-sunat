@@ -144,7 +144,7 @@ const cutover = '20261118000200_roles_text_cutover';
     migrate(current); pg = new Client({ connectionString: url(current) }); await pg.connect(); db = prisma(current);
     await assertJournal(); expect((await pg.query('SELECT count(*)::int n FROM permission_menu_catalog')).rows[0].n).toBe(73);
     const { initializeCompanyRoles } = await import('../../../src/modules/auth/application/services/roleCatalogService');
-    await db.$transaction(async tx => { await tx.company.create({ data: { id: 'new-company', ruc: '20000000002', legal_name: 'Nueva local', sol_user: 'local', sol_pass_encrypted: 'local' } }); await initializeCompanyRoles(tx, 'new-company'); await tx.user.create({ data: { company_id: 'new-company', email: 'nuevo@example.invalid', full_name: 'Nuevo', password_hash: 'hash', role: 'ADMIN' } }); });
+    await db.$transaction(async tx => { await tx.company.create({ data: { id: 'new-company', ruc: '20000000002', legal_name: 'Nueva local', sunat_issuer_username: 'local', sunat_issuer_password_enc: 'local' } }); await initializeCompanyRoles(tx, 'new-company'); await tx.user.create({ data: { company_id: 'new-company', email: 'nuevo@example.invalid', full_name: 'Nuevo', password_hash: 'hash', role: 'ADMIN' } }); });
     expect(await db.companyRole.count({ where: { company_id: 'new-company' } })).toBe(5);
   });
   it.each([

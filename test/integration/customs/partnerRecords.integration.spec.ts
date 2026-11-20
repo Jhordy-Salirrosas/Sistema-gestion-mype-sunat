@@ -4,7 +4,7 @@ const url=process.env.TEST_DATABASE_URL;
 (url?describe:describe.skip)('pestañas de terceros con PostgreSQL local',()=>{
  let db:PrismaService;let service:MasterDataService;let company:string;let partner:string;const old=process.env.DATABASE_URL;
  beforeAll(async()=>{process.env.DATABASE_URL=url;db=new PrismaService();await db.$connect();service=new MasterDataService(db);
- company=(await db.company.create({data:{ruc:`20${Date.now().toString().slice(-9)}`,legal_name:'Prueba terceros',sol_user:'MODDATOS',sol_pass_encrypted:'local'}})).id;
+ company=(await db.company.create({data:{ruc:`20${Date.now().toString().slice(-9)}`,legal_name:'Prueba terceros',sunat_issuer_username:'MODDATOS',sunat_issuer_password_enc:'local'}})).id;
  partner=(await db.businessPartner.create({data:{company_id:company,doc_type:'6',doc_number:'204813697',legal_name:'Empresa Demo'}})).id;});
  afterAll(async()=>{if(company){await db.businessPartner.deleteMany({where:{company_id:company}});await db.company.delete({where:{id:company}});}await db?.$disconnect();if(old===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=old;});
  it.each([

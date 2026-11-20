@@ -63,7 +63,7 @@ const cases = ['07', '08'].flatMap(tipo => ['pantalla', 'fiscal'].map(route => (
   });
   beforeEach(async () => {
     company = randomUUID();
-    await db.company.create({ data: { id: company, ruc:'20000000001',issuer_ruc:'20000000001',legal_name:'Emisor HTTP local',sol_user:'FAKE',sol_pass_encrypted:'fake',...fakeFiscalAddress } });
+    await db.company.create({ data: { id: company, ruc:'20000000001',issuer_ruc:'20000000001',legal_name:'Emisor HTTP local',sunat_issuer_username:'FAKE',sunat_issuer_password_enc:'fake',...fakeFiscalAddress } });
     await db.companyRole.create({data:{company_id:company,code:'ADMIN',name:'Administrador',is_system:true}});
     const user = await db.user.create({data:{company_id:company,email:`${company}@example.invalid`,password_hash:'not-a-login-password',full_name:'Actor de pruebas',role:'ADMIN'}});
     token = actor.signToken({sub:user.id,email:user.email,companyId:company,role:'ADMIN'});

@@ -12,8 +12,6 @@ describe('CompanyEntity', () => {
       solPassEncrypted: 'enc-pass-123',
       certStorageUrl: 'https://storage.supabase.com/certs/cert.pfx',
       certPassEncrypted: 'enc-cert-pass',
-      sireClientIdEnc: 'sire-id-enc',
-      sireClientSecretEnc: 'sire-secret-enc',
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -27,8 +25,6 @@ describe('CompanyEntity', () => {
     expect(company.solPassEncrypted).toBe('enc-pass-123');
     expect(company.certStorageUrl).toBe('https://storage.supabase.com/certs/cert.pfx');
     expect(company.certPassEncrypted).toBe('enc-cert-pass');
-    expect(company.sireClientIdEnc).toBe('sire-id-enc');
-    expect(company.sireClientSecretEnc).toBe('sire-secret-enc');
     expect(company.isActive).toBe(true);
     expect(company.isActiveCompany()).toBe(true);
     expect(company.createdAt).toBe(now);
@@ -48,8 +44,6 @@ describe('CompanyEntity', () => {
     expect(company.tradeName).toBeNull();
     expect(company.certStorageUrl).toBeNull();
     expect(company.certPassEncrypted).toBeNull();
-    expect(company.sireClientIdEnc).toBeNull();
-    expect(company.sireClientSecretEnc).toBeNull();
     expect(company.isActive).toBe(false);
     expect(company.isActiveCompany()).toBe(false);
   });

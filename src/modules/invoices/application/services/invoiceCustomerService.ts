@@ -140,4 +140,24 @@ export class InvoiceCustomerService {
 
     return [...filtrarCartera(cartera, texto)];
   }
+
+  async credito(companyId: string, documentType: string, documentNumber: string) {
+    const cliente = await this.prisma.businessPartner.findFirst({
+      where: { company_id: companyId, doc_type: documentType, doc_number: documentNumber, is_active: true },
+      select: { has_credit: true, credit_limit: true },
+    });
+    if (!cliente) return { hasCredit: false, creditLimit: null, used: 0, available: null };
+    const facturas = await this.prisma.invoice.findMany({
+      where: { company_id: companyId, customer_identity_type: documentType, customer_identity_number: documentNumber,
+        tipo_comprobante: { in: ['01', '03'] }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } },
+      select: { id: true, monto_total: true },
+    });
+    const ids = facturas.map((f) => f.id);
+    const cobros = ids.length ? await this.prisma.collection.aggregate({ where: { company_id: companyId, invoice_id: { in: ids }, status: { not: 'ANULADO' } }, _sum: { amount: true } }) : { _sum: { amount: 0 } };
+    const notas = ids.length ? await this.prisma.invoice.aggregate({ where: { company_id: companyId, tipo_comprobante: '07', referenced_invoice_id: { in: ids }, estado: { in: ['ACEPTADO', 'OBSERVADO'] } }, _sum: { monto_total: true } }) : { _sum: { monto_total: 0 } };
+    const facturado = facturas.reduce((sum, f) => sum + Number(f.monto_total), 0);
+    const used = Math.max(0, Math.round((facturado - Number(cobros._sum.amount ?? 0) - Number(notas._sum.monto_total ?? 0)) * 100) / 100);
+    const limit = cliente.credit_limit == null ? null : Number(cliente.credit_limit);
+    return { hasCredit: cliente.has_credit === true, creditLimit: limit, used, available: limit == null ? null : Math.max(0, Math.round((limit - used) * 100) / 100) };
+  }
 }

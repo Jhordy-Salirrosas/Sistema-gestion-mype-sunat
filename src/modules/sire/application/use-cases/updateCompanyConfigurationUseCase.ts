@@ -18,7 +18,7 @@ import {
  * Actualiza las variables globales de la empresa autenticada.
  *
  * El RUC nunca se modifica: solo se devuelve. Las series se normalizan a
- * mayúsculas y se deduplican porque SUNAT las distingue por ese formato.
+ * mayÃºsculas y se deduplican porque SUNAT las distingue por ese formato.
  */
 @Injectable()
 export class UpdateCompanyConfigurationUseCase {
@@ -34,7 +34,7 @@ export class UpdateCompanyConfigurationUseCase {
     const changes = this.normalize(dto);
     if (Object.keys(changes).length === 0) {
       throw new BadRequestException(
-        'No se recibió ningún dato de la empresa para actualizar.',
+        'No se recibiÃ³ ningÃºn dato de la empresa para actualizar.',
       );
     }
 
@@ -51,59 +51,59 @@ export class UpdateCompanyConfigurationUseCase {
   ): CompanyConfigurationChanges {
     const changes: CompanyConfigurationChanges = {};
 
-    if (dto.businessName !== undefined) {
+    if (dto.businessName != null) {
       changes.businessName = this.requiredText(
         dto.businessName,
-        'El nombre de la empresa no puede estar vacío.',
+        'El nombre de la empresa no puede estar vacÃ­o.',
       );
     }
 
-    if (dto.tradeName !== undefined) {
+    if (dto.tradeName != null) {
       changes.tradeName = this.requiredText(
         dto.tradeName,
-        'El nombre comercial no puede estar vacío.',
+        'El nombre comercial no puede estar vacÃ­o.',
       );
     }
 
-    if (dto.direccion !== undefined) {
+    if (dto.direccion != null) {
       changes.direccion = this.requiredText(
         dto.direccion,
-        'La dirección no puede estar vacía.',
+        'La direcciÃ³n no puede estar vacÃ­a.',
       );
     }
 
-    if (dto.estado !== undefined) {
+    if (dto.estado != null) {
       changes.estado = this.requiredText(
         dto.estado,
-        'El estado del contribuyente no puede estar vacío.',
+        'El estado del contribuyente no puede estar vacÃ­o.',
       ).toUpperCase();
     }
 
-    if (dto.condicion !== undefined) {
+    if (dto.condicion != null) {
       changes.condicion = this.requiredText(
         dto.condicion,
-        'La condición del domicilio no puede estar vacía.',
+        'La condiciÃ³n del domicilio no puede estar vacÃ­a.',
       ).toUpperCase();
     }
 
-    if (dto.ubigeo !== undefined) {
+    if (dto.ubigeo != null) {
       const ubigeo = this.requiredText(
         dto.ubigeo,
-        'El ubigeo no puede estar vacío.',
+        'El ubigeo no puede estar vacÃ­o.',
       );
       if (!/^\d{6}$/.test(ubigeo)) {
         throw new BadRequestException(
-          'El ubigeo debe tener exactamente 6 dígitos.',
+          'El ubigeo debe tener exactamente 6 dÃ­gitos.',
         );
       }
       changes.ubigeo = ubigeo;
     }
 
-    if (dto.esAgenteRetencion !== undefined) {
+    if (dto.esAgenteRetencion != null) {
       changes.esAgenteRetencion = dto.esAgenteRetencion;
     }
 
-    if (dto.series !== undefined) {
+    if (dto.series != null) {
       changes.series = this.normalizeSeries(dto.series);
     }
 

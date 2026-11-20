@@ -23,7 +23,7 @@ suite('M1 agregados: reserva durable, identidad y transacción real', () => {
     if (!url || !['127.0.0.1', 'localhost'].includes(new URL(url).hostname)) throw new Error('Solo base local desechable');
     process.env.DATABASE_URL = url; db = new PrismaService(); await db.$connect();
     company = randomUUID(); other = randomUUID();
-    await db.company.createMany({ data: [{ id: company, ruc, legal_name: 'Emisor ficticio', sol_user: 'fake', sol_pass_encrypted: 'fake' }, { id: other, ruc: '20000000002', legal_name: 'Otro ficticio', sol_user: 'fake', sol_pass_encrypted: 'fake' }] });
+    await db.company.createMany({ data: [{ id: company, ruc, legal_name: 'Emisor ficticio', sunat_issuer_username: 'fake', sunat_issuer_password_enc: 'fake' }, { id: other, ruc: '20000000002', legal_name: 'Otro ficticio', sunat_issuer_username: 'fake', sunat_issuer_password_enc: 'fake' }] });
   });
   beforeEach(async () => {
     await db.invoiceAggregate.deleteMany({ where: { company_id: { in: [company, other] } } });

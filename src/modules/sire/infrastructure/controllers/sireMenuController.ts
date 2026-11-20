@@ -17,13 +17,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CurrentUser } from '../../../../common/decorators';
+import { CurrentUser, Roles } from '../../../../common/decorators';
 import {
   USER_REPOSITORY_PORT,
   type IUserRepositoryPort,
 } from '../../../auth/domain/ports/userRepositoryPort';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
 import type {
   SireHistorialRespuesta,
   SireImportacionRespuesta,
@@ -47,6 +48,7 @@ import {
   ReportarSireUseCase,
 } from '../../application/use-cases/reportarSireUseCase';
 import { SIRE_EXTENSIONES_PERMITIDAS } from '../../domain/rules/sireFileNameRule';
+import { SIRE_OPERATION_ROLES } from '../../application/sireAccess';
 
 /** Archivo recibido por `multipart/form-data`. */
 interface ArchivoSireSubido {
@@ -93,7 +95,8 @@ const opcionesSubidaSire = {
  * solo expone los cinco endpoints que la pantalla necesita.
  */
 @Controller('api/v1/sire')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(...SIRE_OPERATION_ROLES)
 export class SireMenuController {
   constructor(
     private readonly importarUseCase: ImportarPropuestaSireUseCase,

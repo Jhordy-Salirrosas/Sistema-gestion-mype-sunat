@@ -40,8 +40,8 @@ describe('AuthSeeder (prisma/seeds/auth.seed.ts)', () => {
         create: expect.objectContaining({
           ruc: '20601234567',
           legal_name: 'SYNC-SUNAT DEMO MYPE S.A.C.',
-          sol_user: 'DEMO_SOL_USER',
-          sol_pass_encrypted: expect.stringMatching(/^sol:v1:/),
+          sunat_issuer_username: 'DEMO_SOL_USER',
+          sunat_issuer_password_enc: expect.stringMatching(/^sol:v1:/),
         }),
       }),
     );

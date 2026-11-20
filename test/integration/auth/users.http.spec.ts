@@ -20,7 +20,7 @@ beforeAll(async()=>{
  db.user={findFirst:jest.fn(async({where})=>users.get(typeof where.email==='string'?where.email:where.email.equals)??null),
   create:jest.fn(async({data})=>{if(users.has(data.email))throw {code:'P2002'};const row={id:randomUUID(),...data};users.set(data.email,row);return row;}),
  };
- db.company={findUnique:jest.fn(async({where})=>({id:where.id,ruc:'20601234567',legal_name:'Empresa pruebas',sol_user:'local',sol_pass_encrypted:'local',is_active:true}))};
+ db.company={findUnique:jest.fn(async({where})=>({id:where.id,ruc:'20601234567',legal_name:'Empresa pruebas',sunat_issuer_username:'local',sunat_issuer_password_enc:'local',is_active:true}))};
  db.refreshToken={create:jest.fn(async({data})=>({id:randomUUID(),...data}))};
  const login=new LoginUseCase(new PrismaUserRepositoryAdapter(db),hasher,tokens,{resolve:jest.fn(async p=>p)} as never);
  ({app}=await permissionsHttpApp([AuthController],db,[CreateUserService,{provide:HASHER_PORT,useValue:hasher},{provide:LoginUseCase,useValue:login},{provide:TOKEN_SERVICE_PORT,useValue:tokens}]));

@@ -97,8 +97,6 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       solPassEncrypted: 'MODDATOS',
       certStorageUrl: null,
       certPassEncrypted: null,
-      sireClientIdEnc: null,
-      sireClientSecretEnc: null,
       isActive: true,
     });
   }
@@ -124,8 +122,6 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       solPassEncrypted: 'MODDATOS',
       certStorageUrl: null,
       certPassEncrypted: null,
-      sireClientIdEnc: null,
-      sireClientSecretEnc: null,
       isActive: true,
     });
   }
@@ -140,8 +136,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
           ruc: params.company.ruc,
           legal_name: params.company.legalName,
           trade_name: params.company.tradeName,
-          sol_user: params.company.solUser,
-          sol_pass_encrypted: params.company.solPassEncrypted,
+          sunat_issuer_username: params.company.solUser,
+          sunat_issuer_password_enc: params.company.solPassEncrypted,
           cert_storage_url: params.company.certStorageUrl,
           cert_pass_encrypted: params.company.certPassEncrypted,
           is_active: params.company.isActive,
@@ -343,12 +339,10 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     ruc: string;
     legal_name: string;
     trade_name: string | null;
-    sol_user: string;
-    sol_pass_encrypted: string;
+    sunat_issuer_username: string;
+    sunat_issuer_password_enc: string;
     cert_storage_url: string | null;
     cert_pass_encrypted: string | null;
-    sire_client_id_enc: string | null;
-    sire_client_secret_enc: string | null;
     is_active: boolean;
     created_at?: Date;
     updated_at?: Date;
@@ -358,12 +352,10 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       ruc: raw.ruc,
       legalName: raw.legal_name,
       tradeName: raw.trade_name,
-      solUser: raw.sol_user,
-      solPassEncrypted: raw.sol_pass_encrypted,
+      solUser: raw.sunat_issuer_username,
+      solPassEncrypted: raw.sunat_issuer_password_enc,
       certStorageUrl: raw.cert_storage_url,
       certPassEncrypted: raw.cert_pass_encrypted,
-      sireClientIdEnc: raw.sire_client_id_enc,
-      sireClientSecretEnc: raw.sire_client_secret_enc,
       isActive: raw.is_active,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,

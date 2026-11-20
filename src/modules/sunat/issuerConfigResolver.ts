@@ -86,7 +86,21 @@ export class IssuerConfigResolver {
       where: { id: companyId },
     });
     if (!company) throw new NotFoundException('ISSUER_COMPANY_NOT_FOUND');
-    return this.fromCompany(company, this.prisma);
+    const legacyShape = company as unknown as Record<string, unknown>;
+    return this.fromCompany(
+      {
+        ...company,
+        sol_user: String(
+          legacyShape['sunat_issuer_username'] ?? legacyShape['sol_user'] ?? '',
+        ),
+        sol_pass_encrypted: String(
+          legacyShape['sunat_issuer_password_enc'] ??
+            legacyShape['sol_pass_encrypted'] ??
+            '',
+        ),
+      },
+      this.prisma,
+    );
   }
 
   async fromCompany(
@@ -142,17 +156,22 @@ export class IssuerConfigResolver {
       const user = process.env.SUNAT_SOL_USER?.trim();
       const pass = process.env.SUNAT_SOL_PASSWORD;
       if (user && pass) {
+      const encryptedPass = this.encryption.encrypt(
+        pass,
+        company.id,
+        'sol_pass_encrypted',
+      );
       await this.prisma.company.update({
         where: { id: company.id },
         data: {
-          sol_user: user,
-          sol_pass_encrypted: this.encryption.encrypt(pass, company.id, 'sol_pass_encrypted'),
+          sunat_issuer_username: user,
+          sunat_issuer_password_enc: encryptedPass,
           issuer_sol_configured: true,
           issuer_config_version: company.issuer_config_version ?? undefined,
         },
       });
       company.sol_user = user;
-      company.sol_pass_encrypted = this.encryption.encrypt(pass, company.id, 'sol_pass_encrypted');
+      company.sol_pass_encrypted = encryptedPass;
       company.issuer_sol_configured = true;
       hasSol = true;
       }

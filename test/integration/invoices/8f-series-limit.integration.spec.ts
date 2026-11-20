@@ -7,7 +7,7 @@ const url=process.env.TEST_DATABASE_URL;
  beforeAll(async()=>{
   if(!url || !['localhost','127.0.0.1'].includes(new URL(url).hostname))throw Error('Solo base local');
   process.env.DATABASE_URL=url;db=new PrismaService();await db.$connect();company=randomUUID();
-  await db.company.create({data:{id:company,ruc:'2'+Date.now().toString().slice(-10),legal_name:'Empresa ficticia',sol_user:'fake',sol_pass_encrypted:'fake'}});
+  await db.company.create({data:{id:company,ruc:'2'+Date.now().toString().slice(-10),legal_name:'Empresa ficticia',sunat_issuer_username:'fake',sunat_issuer_password_enc:'fake'}});
   await db.invoiceSeries.create({data:{company_id:company,document_type:'01',series:'F001',current_correlative:99999998}});
  });
  afterAll(async()=>{if(db){await db.invoiceSeries.deleteMany({where:{company_id:company}});await db.company.delete({where:{id:company}});await db.$disconnect();}if(old===undefined)delete process.env.DATABASE_URL;else process.env.DATABASE_URL=old;});

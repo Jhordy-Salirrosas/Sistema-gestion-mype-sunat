@@ -2,6 +2,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { CompanyConfigurationController } from '../../../src/modules/sire/infrastructure/controllers/companyConfigurationController';
 import type { GetCompanyConfigurationUseCase } from '../../../src/modules/sire/application/use-cases/getCompanyConfigurationUseCase';
 import type { UpdateCompanyConfigurationUseCase } from '../../../src/modules/sire/application/use-cases/updateCompanyConfigurationUseCase';
+import type { ListCompaniesUseCase } from '../../../src/modules/sire/application/use-cases/listCompaniesUseCase';
 
 describe('CompanyConfigurationController', () => {
   const user = {
@@ -17,10 +18,14 @@ describe('CompanyConfigurationController', () => {
   const updateUseCase = {
     execute: jest.fn(),
   } as unknown as UpdateCompanyConfigurationUseCase;
+  const listUseCase = {
+    execute: jest.fn(),
+  } as unknown as ListCompaniesUseCase;
 
   const controller = new CompanyConfigurationController(
     getUseCase,
     updateUseCase,
+    listUseCase,
   );
 
   beforeEach(() => {
@@ -75,6 +80,46 @@ describe('CompanyConfigurationController', () => {
       ...dto,
     });
     expect(updateUseCase.execute).toHaveBeenCalledWith('company-id', dto);
+  });
+
+  it('lists companies for the Multi-RUC selector', async () => {
+    (listUseCase.execute as jest.Mock).mockResolvedValue([
+      {
+        id: 'company-1',
+        ruc: '20123456789',
+        razonSocial: 'Demo SAC',
+        nombreComercial: 'Demo',
+        activa: true,
+      },
+    ]);
+
+    await expect(controller.listar()).resolves.toEqual([
+      {
+        id: 'company-1',
+        ruc: '20123456789',
+        razonSocial: 'Demo SAC',
+        nombreComercial: 'Demo',
+        activa: true,
+      },
+    ]);
+    expect(listUseCase.execute).toHaveBeenCalledWith();
+  });
+
+  it('allows ADMIN to read/write another company with companyId', async () => {
+    (getUseCase.execute as jest.Mock).mockResolvedValue({ ruc: '20999999999' });
+    (updateUseCase.execute as jest.Mock).mockResolvedValue({ ruc: '20999999999' });
+
+    await controller.obtener(user, 'company-2');
+    expect(getUseCase.execute).toHaveBeenCalledWith('company-2');
+
+    await controller.actualizar(
+      { companyId: 'company-2', businessName: 'Otra empresa' },
+      user,
+    );
+    expect(updateUseCase.execute).toHaveBeenCalledWith(
+      'company-2',
+      expect.objectContaining({ companyId: 'company-2' }),
+    );
   });
 
   it('rejects reads without company in the session', async () => {

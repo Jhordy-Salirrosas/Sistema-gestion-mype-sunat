@@ -12,6 +12,7 @@ export const CONFIGURATION_WRITE_PREFIXES = [
   '/api/v1/accounting/accounts', '/api/v1/accounting/rules',
   '/api/v1/accounting/mappings', '/api/v1/accounting/treasury-accounts',
   '/api/v1/inventory/kardex/config', '/api/v1/sire/configuracion',
+  '/api/v1/empresa/configuracion',
   '/api/v1/invoices/config', '/api/v1/invoices/series',
   '/api/v1/invoices/commercial-defaults',
 ];

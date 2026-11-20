@@ -5,28 +5,32 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  UnauthorizedException,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser } from '../../../../common/decorators';
+import { CurrentUser, Roles } from '../../../../common/decorators';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
-import type {
-  SireConfiguracionEstadoResponse,
-  SireConfiguracionRequestDto,
-} from '../../application/dto/sireConfigurationDto';
+import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
+import type { SireConfiguracionEstadoResponse } from '../../application/dto/sireConfigurationDto';
+import { SireConfiguracionRequestDto } from '../../application/dto/sireConfigurationDto';
 import { ConsultarEstadoConfiguracionSireUseCase } from '../../application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import { GuardarConfiguracionSireUseCase } from '../../application/use-cases/guardarConfiguracionSireUseCase';
+import {
+  resolveSireCompanyId,
+  SIRE_CONFIG_ROLES,
+} from '../../application/sireAccess';
 
 /**
- * Configuración SIRE/SUNAT de la empresa.
+ * Configuración SIRE/SUNAT por empresa (Multi-RUC).
  *
- * Las credenciales se guardan una sola vez y cifradas: el frontend no las
- * vuelve a enviar y el backend las resuelve desde la base de datos cuando un
- * trabajo necesita hablar con SUNAT.
+ * Las credenciales se guardan cifradas en `SireConfiguration`. Un ADMIN puede
+ * administrar cualquier empresa enviando `companyId`; los demás roles solo
+ * operan sobre la empresa de su token.
  */
 @Controller('api/v1/sire')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(...SIRE_CONFIG_ROLES)
 export class SireConfigurationController {
   constructor(
     private readonly guardarUseCase: GuardarConfiguracionSireUseCase,
@@ -44,7 +48,10 @@ export class SireConfigurationController {
     @Body() dto: SireConfiguracionRequestDto,
     @CurrentUser() user?: TokenPayload,
   ): Promise<SireConfiguracionEstadoResponse> {
-    return this.guardarUseCase.execute(this.requireCompany(user), dto);
+    return this.guardarUseCase.execute(
+      resolveSireCompanyId(user, dto.companyId),
+      dto,
+    );
   }
 
   /**
@@ -52,23 +59,12 @@ export class SireConfigurationController {
    */
   @Get('configuracion/status')
   async estado(
+    @Query('companyId') companyId?: string,
     @CurrentUser() user?: TokenPayload,
   ): Promise<SireConfiguracionEstadoResponse> {
-    return this.consultarEstadoUseCase.execute(this.requireCompany(user));
+    return this.consultarEstadoUseCase.execute(
+      resolveSireCompanyId(user, companyId),
+    );
   }
 
-  /**
-   * Empresa de la sesión.
-   *
-   * Las credenciales siempre pertenecen a la empresa autenticada: nunca a la
-   * que el cliente indique en el cuerpo de la petición.
-   */
-  private requireCompany(user?: TokenPayload): string {
-    if (!user?.companyId) {
-      throw new UnauthorizedException(
-        'La empresa del usuario no está definida.',
-      );
-    }
-    return user.companyId;
-  }
 }

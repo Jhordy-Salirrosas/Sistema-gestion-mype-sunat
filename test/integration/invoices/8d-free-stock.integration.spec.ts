@@ -17,7 +17,7 @@ const url = process.env.TEST_DATABASE_URL;
  });
  beforeEach(async()=>{
   queue.enqueueInvoiceInTx.mockClear();company=randomUUID();ruc='2'+Date.now().toString().slice(-10);
-  await db.company.create({data:{id:company,ruc,legal_name:'Empresa ficticia',sol_user:'fake',sol_pass_encrypted:'fake',...fakeFiscalAddress}});
+  await db.company.create({data:{id:company,ruc,legal_name:'Empresa ficticia',sunat_issuer_username:'fake',sunat_issuer_password_enc:'fake',...fakeFiscalAddress}});
   await db.inventoryWarehouse.create({data:{company_id:company,warehouse_code:'ALM-01',description:'Prueba'}});
   await db.inventoryProduct.create({data:{company_id:company,sku:'CEM-001',description:'Cemento',is_inventory:true,sale_price:118,tax_affectation:'10',sunat_unit_code:'NIU'}});
   await db.invoiceSeries.create({data:{company_id:company,document_type:'01',series:'F001'}});

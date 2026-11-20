@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { ClientSafeHttpException } from '../../common/exceptions/clientSafeHttpException';
 import { ConfigService } from '@nestjs/config';
 
 export interface ConsultaDniResponse {
@@ -13,6 +14,11 @@ export interface ConsultaDniResponse {
 
 interface DniPayload {
   dni?: unknown;
+  first_name?: unknown;
+  first_last_name?: unknown;
+  second_last_name?: unknown;
+  full_name?: unknown;
+  document_number?: unknown;
   numero_documento?: unknown;
   numeroDocumento?: unknown;
   nombres?: unknown;
@@ -37,7 +43,7 @@ export class DniConsultaService {
     }
     const token = this.config.get<string>('DECOLECTA_DNI_API_TOKEN') ?? this.config.get<string>('DECOLECTA_API_TOKEN') ?? this.config.get<string>('SUNAT_RUC_SERVICE_API_KEY');
     if (!token) {
-      throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_NOT_CONFIGURED', message: 'Configure DECOLECTA_API_TOKEN para consultar DNI.' });
+      throw new ClientSafeHttpException(503, 'Configure DECOLECTA_DNI_API_TOKEN o DECOLECTA_API_TOKEN para consultar DNI.');
     }
     const template = this.config.get<string>('DECOLECTA_DNI_API_URL')
       ?? 'https://api.decolecta.com/v1/reniec/dni?numero={dni}';
@@ -47,24 +53,24 @@ export class DniConsultaService {
       response = await fetch(url, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(this.config.get<number>('SUNAT_TIMEOUT_MS', 30000)) });
     } catch (error) {
       this.logger.warn(`Proveedor DNI no disponible: ${error instanceof Error ? error.message : String(error)}`);
-      throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_UNAVAILABLE', message: 'No fue posible consultar el proveedor de DNI.' });
+      throw new ClientSafeHttpException(503, 'No fue posible conectar con el proveedor de DNI. Reintente en unos segundos.');
     }
     if (!response.ok) {
       if (response.status === 404 || response.status === 422) throw new BadRequestException({ code: 'DNI_NO_ENCONTRADO', message: 'El DNI no fue encontrado en RENIEC.' });
-      if (response.status === 401 || response.status === 403) throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_UNAUTHORIZED', message: 'El token de Decolecta no tiene acceso a DNI o no está configurado.' });
-      if (response.status === 429) throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_RATE_LIMIT', message: 'Se agotó el límite de consultas DNI de Decolecta.' });
-      throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_UNAVAILABLE', message: 'El proveedor de DNI no respondió correctamente.' });
+      if (response.status === 401 || response.status === 403) throw new ClientSafeHttpException(503, 'Decolecta rechazó el token: no tiene acceso a DNI o el plan no lo incluye.');
+      if (response.status === 429) throw new ClientSafeHttpException(503, 'Se agotó el límite de consultas DNI de Decolecta. Intente más tarde.');
+      throw new ClientSafeHttpException(503, 'El proveedor de DNI no respondió correctamente. Intente más tarde.');
     }
     const data = await response.json().catch(() => null) as DniPayload | null;
-    if (!data || typeof data !== 'object') throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_INVALID_RESPONSE', message: 'El proveedor de DNI devolvió una respuesta inválida.' });
-    const recibido = this.text(data.dni ?? data.numero_documento ?? data.numeroDocumento) || dni;
-    if (recibido !== dni) throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_INVALID_RESPONSE', message: 'La respuesta no corresponde al DNI consultado.' });
-    const nombres = this.text(data.nombres);
-    const apellidoPaterno = this.text(data.apellido_paterno ?? data.apellidoPaterno);
-    const apellidoMaterno = this.text(data.apellido_materno ?? data.apellidoMaterno);
-    const nombreCompleto = this.text(data.nombre_completo ?? data.nombreCompleto)
+    if (!data || typeof data !== 'object') throw new ClientSafeHttpException(503, 'El proveedor de DNI devolvió una respuesta inválida.');
+    const recibido = this.text(data.document_number ?? data.dni ?? data.numero_documento ?? data.numeroDocumento) || dni;
+    if (recibido !== dni) throw new ClientSafeHttpException(503, 'La respuesta del proveedor no corresponde al DNI consultado.');
+    const nombres = this.text(data.first_name ?? data.nombres);
+    const apellidoPaterno = this.text(data.first_last_name ?? data.apellido_paterno ?? data.apellidoPaterno);
+    const apellidoMaterno = this.text(data.second_last_name ?? data.apellido_materno ?? data.apellidoMaterno);
+    const nombreCompleto = this.text(data.full_name ?? data.nombre_completo ?? data.nombreCompleto)
       || [nombres, apellidoPaterno, apellidoMaterno].filter(Boolean).join(' ').trim();
-    if (!nombreCompleto) throw new ServiceUnavailableException({ code: 'DNI_PROVIDER_INVALID_RESPONSE', message: 'La respuesta no contiene el nombre completo.' });
+    if (!nombreCompleto) throw new ClientSafeHttpException(503, 'La respuesta del proveedor no contiene el nombre completo.');
     return { dni, nombres, apellidoPaterno, apellidoMaterno, nombreCompleto, fechaConsulta: new Date().toISOString(), source: 'decolecta' };
   }
 

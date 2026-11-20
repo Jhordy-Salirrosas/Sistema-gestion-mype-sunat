@@ -35,8 +35,8 @@ describe('PrismaSireAccountingMappingRepository', () => {
       const prisma = crearPrisma();
       prisma.company.findUnique.mockResolvedValue({ id: COMPANY_ID });
       prisma.sireAccountingMapping.findMany.mockResolvedValue([
-        { tipo_operacion: 'IGV', cuenta_contable: '401' },
-        { tipo_operacion: 'VENTAS', cuenta_contable: '701' },
+        { tipoOperacion: 'IGV', cuentaContable: '401' },
+        { tipoOperacion: 'VENTAS', cuentaContable: '701' },
       ]);
       const repository = new PrismaSireAccountingMappingRepository(prisma);
 
@@ -45,9 +45,9 @@ describe('PrismaSireAccountingMappingRepository', () => {
         { tipoOperacion: 'VENTAS', cuentaContable: '701' },
       ]);
       expect(prisma.sireAccountingMapping.findMany).toHaveBeenCalledWith({
-        where: { company_id: COMPANY_ID },
-        orderBy: { tipo_operacion: 'asc' },
-        select: { tipo_operacion: true, cuenta_contable: true },
+        where: { companyId: COMPANY_ID },
+        orderBy: { tipoOperacion: 'asc' },
+        select: { tipoOperacion: true, cuentaContable: true },
       });
     });
   });
@@ -71,16 +71,16 @@ describe('PrismaSireAccountingMappingRepository', () => {
       prisma.company.findUnique.mockResolvedValue({ id: COMPANY_ID });
       prisma.sireAccountingMapping.upsert
         .mockResolvedValueOnce({
-          tipo_operacion: 'IGV',
-          cuenta_contable: '401',
+          tipoOperacion: 'IGV',
+          cuentaContable: '401',
         })
         .mockResolvedValueOnce({
-          tipo_operacion: 'VENTAS',
-          cuenta_contable: '701',
+          tipoOperacion: 'VENTAS',
+          cuentaContable: '701',
         });
       prisma.$transaction.mockResolvedValue([
-        { tipo_operacion: 'IGV', cuenta_contable: '401' },
-        { tipo_operacion: 'VENTAS', cuenta_contable: '701' },
+        { tipoOperacion: 'IGV', cuentaContable: '401' },
+        { tipoOperacion: 'VENTAS', cuentaContable: '701' },
       ]);
       const repository = new PrismaSireAccountingMappingRepository(prisma);
 
@@ -95,33 +95,33 @@ describe('PrismaSireAccountingMappingRepository', () => {
       ]);
       expect(prisma.sireAccountingMapping.upsert).toHaveBeenNthCalledWith(1, {
         where: {
-          company_id_tipo_operacion: {
-            company_id: COMPANY_ID,
-            tipo_operacion: 'IGV',
+          companyId_tipoOperacion: {
+            companyId: COMPANY_ID,
+            tipoOperacion: 'IGV',
           },
         },
         create: {
-          company_id: COMPANY_ID,
-          tipo_operacion: 'IGV',
-          cuenta_contable: '401',
+          companyId: COMPANY_ID,
+          tipoOperacion: 'IGV',
+          cuentaContable: '401',
         },
-        update: { cuenta_contable: '401' },
-        select: { tipo_operacion: true, cuenta_contable: true },
+        update: { cuentaContable: '401' },
+        select: { tipoOperacion: true, cuentaContable: true },
       });
       expect(prisma.sireAccountingMapping.upsert).toHaveBeenNthCalledWith(2, {
         where: {
-          company_id_tipo_operacion: {
-            company_id: COMPANY_ID,
-            tipo_operacion: 'VENTAS',
+          companyId_tipoOperacion: {
+            companyId: COMPANY_ID,
+            tipoOperacion: 'VENTAS',
           },
         },
         create: {
-          company_id: COMPANY_ID,
-          tipo_operacion: 'VENTAS',
-          cuenta_contable: '701',
+          companyId: COMPANY_ID,
+          tipoOperacion: 'VENTAS',
+          cuentaContable: '701',
         },
-        update: { cuenta_contable: '701' },
-        select: { tipo_operacion: true, cuenta_contable: true },
+        update: { cuentaContable: '701' },
+        select: { tipoOperacion: true, cuentaContable: true },
       });
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });

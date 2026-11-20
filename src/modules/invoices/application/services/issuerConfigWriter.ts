@@ -130,8 +130,8 @@ export class IssuerConfigWriter {
           departamento_fiscal: input.departamento_fiscal === undefined ? company.departamento_fiscal : input.departamento_fiscal?.trim() || null,
           provincia_fiscal: input.provincia_fiscal === undefined ? company.provincia_fiscal : input.provincia_fiscal?.trim() || null,
           distrito_fiscal: input.distrito_fiscal === undefined ? company.distrito_fiscal : input.distrito_fiscal?.trim() || null,
-          sol_user: company.sol_user,
-          sol_pass_encrypted: company.sol_pass_encrypted,
+          sunat_issuer_username: company.sunat_issuer_username,
+          sunat_issuer_password_enc: company.sunat_issuer_password_enc,
           cert_storage_url: company.cert_storage_url,
           cert_pass_encrypted: company.cert_pass_encrypted,
           issuer_sol_configured: company.issuer_sol_configured,
@@ -165,9 +165,10 @@ export class IssuerConfigWriter {
             throw new BadRequestException('ISSUER_CERT_GROUP_INCOMPLETE');
           data.issuer_cert_configured = true;
         }
-        if (supplied(input.sol_user)) data.sol_user = input.sol_user!.trim();
+        if (supplied(input.sol_user))
+          data.sunat_issuer_username = input.sol_user!.trim();
         if (supplied(input.sol_password))
-          data.sol_pass_encrypted = this.encryption.encrypt(
+          data.sunat_issuer_password_enc = this.encryption.encrypt(
             input.sol_password!,
             companyId,
             'sol_pass_encrypted',
@@ -200,7 +201,12 @@ export class IssuerConfigWriter {
           data.cert_storage_url = `private:${id}`;
         }
         const context = await this.resolver.fromCompany(
-          { ...company, ...data },
+          {
+            ...company,
+            ...data,
+            sol_user: data.sunat_issuer_username,
+            sol_pass_encrypted: data.sunat_issuer_password_enc,
+          },
           tx,
         );
         if (

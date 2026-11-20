@@ -86,13 +86,13 @@ describe('D1 issuer configuration write boundary', () => {
     });
     expect(h.db.$queryRaw).toHaveBeenCalledTimes(1);
     expect(h.company).toMatchObject({
-      sol_user: 'FAKE_SOL',
+      sunat_issuer_username: 'FAKE_SOL',
       issuer_sol_configured: true,
       issuer_cert_configured: true,
       issuer_environment: 'BETA',
     });
     expect(h.company.cert_storage_url).toMatch(/^private:/);
-    expect(h.company.sol_pass_encrypted).not.toContain('obviously-fake-sol');
+    expect(h.company.sunat_issuer_password_enc).not.toContain('obviously-fake-sol');
     expect(h.company.cert_pass_encrypted).not.toContain('obviously-fake-p12');
     expect((await h.resolver.resolve(h.company.id)).certificate).toEqual({
       base64: 'ZmFrZQ==',
@@ -125,13 +125,13 @@ describe('D1 issuer configuration write boundary', () => {
       cert_password: 'fake-certificate-password',
     });
     const saved = {
-      sol: h.company.sol_pass_encrypted,
+      sol: h.company.sunat_issuer_password_enc,
       cert: h.company.cert_pass_encrypted,
       ref: h.company.cert_storage_url,
     };
     h.certificates.validarYCargarCertificado.mockClear();
     await h.writer.save(h.company.id, partial);
-    expect(h.company.sol_pass_encrypted).toBe(saved.sol);
+    expect(h.company.sunat_issuer_password_enc).toBe(saved.sol);
     expect(h.company.cert_pass_encrypted).toBe(saved.cert);
     expect(h.company.cert_storage_url).toBe(saved.ref);
     expect(h.company.issuer_environment).toBe('MOCK');
@@ -140,7 +140,7 @@ describe('D1 issuer configuration write boundary', () => {
   it('preserves inactive legacy values without interpreting them as ciphertext', async () => {
     delete process.env.ISSUER_CONFIG_ENCRYPTION_KEY;
     await h.writer.save(h.company.id, { entorno: 'MOCK' });
-    expect(h.company.sol_pass_encrypted).toBe('fake-legacy-unmanaged');
+    expect(h.company.sunat_issuer_password_enc).toBe('fake-legacy-unmanaged');
     expect((await h.resolver.resolve(h.company.id)).sol?.password).toBe(
       'obviously-fake-backup',
     );
@@ -219,10 +219,10 @@ describe('D1 issuer configuration write boundary', () => {
       sol_user: 'FAKE',
       sol_password: 'fake-password',
     });
-    const encrypted = h.company.sol_pass_encrypted;
+    const encrypted = h.company.sunat_issuer_password_enc;
     await h.writer.save(h.company.id, { action: 'reset' });
     expect(h.company.issuer_config_activated_at).toBeNull();
-    expect(h.company.sol_pass_encrypted).toBe(encrypted);
+    expect(h.company.sunat_issuer_password_enc).toBe(encrypted);
     expect((await h.resolver.resolve(h.company.id)).source).toBe('deployment');
     await h.writer.save(h.company.id, { entorno: 'BETA' });
     expect((await h.resolver.resolve(h.company.id)).sol?.password).toBe(

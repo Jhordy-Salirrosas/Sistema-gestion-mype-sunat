@@ -104,6 +104,16 @@ export class InvoiceQueryController {
    * Sin `q` devuelve la cartera completa, que es lo que necesita el
    * desplegable al abrirse.
    */
+  @Get('customers/credit')
+  async customerCredit(
+    @CurrentCompany() companyId: string,
+    @Query('documentType') documentType: string,
+    @Query('documentNumber') documentNumber: string,
+  ) {
+    if (!documentType || !documentNumber) throw new BadRequestException('Documento requerido.');
+    return this.clientes.credito(companyId, documentType, documentNumber);
+  }
+
   @Get('customers/lookup')
   buscarClientes(
     @CurrentCompany() companyId: string,

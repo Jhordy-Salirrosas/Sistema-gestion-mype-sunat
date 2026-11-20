@@ -84,15 +84,15 @@ enum SireJobStatus {
  * llega a la base de datos ni a la cola.
  */
 model SireConfiguration {
-  id               String   @id @default(uuid())
-  company_id       String   @unique
-  company          Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  client_id_enc    String?
-  client_secret_enc String?
-  sol_user_enc     String?
-  sol_password_enc String?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  companyId            String   @unique @map("company_id")
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId             String?  @map("client_id_enc")
+  clientSecret         String?  @map("client_secret_enc")
+  solUser              String?  @map("sol_user_enc")
+  solPasswordEncrypted String?  @map("sol_password_enc")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("sire_configurations")
 }
@@ -132,14 +132,14 @@ model CompanyConfiguration {
  */
 model SireAccountingMapping {
   id              String   @id @default(uuid())
-  company_id      String
-  tipo_operacion  String
-  cuenta_contable String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  companyId       String   @map("company_id")
+  tipoOperacion   String   @map("tipo_operacion")
+  cuentaContable  String   @map("cuenta_contable")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
-  @@unique([company_id, tipo_operacion])
-  @@index([company_id])
+  @@unique([companyId, tipoOperacion])
+  @@index([companyId])
   @@map("sire_accounting_mappings")
 }
 

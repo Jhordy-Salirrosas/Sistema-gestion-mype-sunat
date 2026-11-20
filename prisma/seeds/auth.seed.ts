@@ -64,8 +64,8 @@ export async function seedAuth(prisma: PrismaClient) {
     update: {
       legal_name: DEMO_COMPANY.legalName,
       trade_name: DEMO_COMPANY.tradeName,
-      sol_user: DEMO_COMPANY.solUser,
-      sol_pass_encrypted: solPasswordEncrypted,
+      sunat_issuer_username: DEMO_COMPANY.solUser,
+      sunat_issuer_password_enc: solPasswordEncrypted,
       is_active: DEMO_COMPANY.isActive,
     },
     create: {
@@ -73,8 +73,8 @@ export async function seedAuth(prisma: PrismaClient) {
       ruc: DEMO_COMPANY.ruc,
       legal_name: DEMO_COMPANY.legalName,
       trade_name: DEMO_COMPANY.tradeName,
-      sol_user: DEMO_COMPANY.solUser,
-      sol_pass_encrypted: solPasswordEncrypted,
+      sunat_issuer_username: DEMO_COMPANY.solUser,
+      sunat_issuer_password_enc: solPasswordEncrypted,
       is_active: DEMO_COMPANY.isActive,
     },
   });

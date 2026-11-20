@@ -13,7 +13,7 @@ const dbUrl = process.env.TEST_DATABASE_URL;
  const hoy = fechaFiscalLima(); const ruc = '20000000001';
  beforeAll(async () => {
   process.env.DATABASE_URL = dbUrl; db = new PrismaService(); await db.$connect();
-  companyId = (await db.company.create({ data: { ruc: `20${Date.now().toString().slice(-9)}`, issuer_ruc: ruc, legal_name: 'Prueba RC', sol_user: 'MODDATOS', sol_pass_encrypted: 'local' } })).id;
+  companyId = (await db.company.create({ data: { ruc: `20${Date.now().toString().slice(-9)}`, issuer_ruc: ruc, legal_name: 'Prueba RC', sunat_issuer_username: 'MODDATOS', sunat_issuer_password_enc: 'local' } })).id;
   originId = (await db.invoice.create({ data: { company_id: companyId, ruc_emisor: ruc, tipo_comprobante: '03', serie: 'B001', correlativo: 1, fecha_emision: new Date(hoy), estado: 'ACEPTADO', monto_total: 236, payload_ubl: fiscal8d('10', 0, '03').payload as never } })).id;
  });
  afterAll(async () => {

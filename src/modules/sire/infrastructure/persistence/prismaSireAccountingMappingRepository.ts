@@ -6,14 +6,14 @@ import type {
 } from '../../domain/ports/sireAccountingMappingRepositoryPort';
 
 interface SireAccountingMappingRow {
-  tipo_operacion: string;
-  cuenta_contable: string;
+  tipoOperacion: string;
+  cuentaContable: string;
 }
 
 /**
  * Adaptador del mapeo contable SIRE sobre Prisma.
  *
- * El guardado masivo usa el índice único `(company_id, tipo_operacion)` para
+ * El guardado masivo usa el índice único `(companyId, tipoOperacion)` para
  * hacer upsert de cada concepto en una sola transacción.
  */
 @Injectable()
@@ -31,11 +31,11 @@ export class PrismaSireAccountingMappingRepository
     }
 
     const rows = await this.prisma.sireAccountingMapping.findMany({
-      where: { company_id: companyId },
-      orderBy: { tipo_operacion: 'asc' },
+      where: { companyId },
+      orderBy: { tipoOperacion: 'asc' },
       select: {
-        tipo_operacion: true,
-        cuenta_contable: true,
+        tipoOperacion: true,
+        cuentaContable: true,
       },
     });
 
@@ -55,22 +55,22 @@ export class PrismaSireAccountingMappingRepository
       mappings.map((mapping) =>
         this.prisma.sireAccountingMapping.upsert({
           where: {
-            company_id_tipo_operacion: {
-              company_id: companyId,
-              tipo_operacion: mapping.tipoOperacion,
+            companyId_tipoOperacion: {
+              companyId,
+              tipoOperacion: mapping.tipoOperacion,
             },
           },
           create: {
-            company_id: companyId,
-            tipo_operacion: mapping.tipoOperacion,
-            cuenta_contable: mapping.cuentaContable,
+            companyId,
+            tipoOperacion: mapping.tipoOperacion,
+            cuentaContable: mapping.cuentaContable,
           },
           update: {
-            cuenta_contable: mapping.cuentaContable,
+            cuentaContable: mapping.cuentaContable,
           },
           select: {
-            tipo_operacion: true,
-            cuenta_contable: true,
+            tipoOperacion: true,
+            cuentaContable: true,
           },
         }),
       ),
@@ -90,8 +90,8 @@ export class PrismaSireAccountingMappingRepository
 
   private toEntry(row: SireAccountingMappingRow): SireAccountingMappingEntry {
     return {
-      tipoOperacion: row.tipo_operacion,
-      cuentaContable: row.cuenta_contable,
+      tipoOperacion: row.tipoOperacion,
+      cuentaContable: row.cuentaContable,
     };
   }
 }

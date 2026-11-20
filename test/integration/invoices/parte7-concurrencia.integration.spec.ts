@@ -17,7 +17,7 @@ const url = process.env.TEST_DATABASE_URL;
  beforeAll(async () => {
   if (!url || !['127.0.0.1', 'localhost'].includes(new URL(url).hostname)) throw new Error('Solo PostgreSQL local aislado');
   process.env.DATABASE_URL = url; db = new PrismaService(); await db.$connect(); company = randomUUID();
-  await db.company.create({ data: { id: company, ruc: '2'+Date.now().toString().slice(-10), legal_name: 'Parte7 ficticia', sol_user: 'fake', sol_pass_encrypted: 'fake' } });
+  await db.company.create({ data: { id: company, ruc: '2'+Date.now().toString().slice(-10), legal_name: 'Parte7 ficticia', sunat_issuer_username: 'fake', sunat_issuer_password_enc: 'fake' } });
   warehouse = (await db.inventoryWarehouse.create({ data: { company_id: company, warehouse_code: 'ALM-02', description: 'Local ficticio' } })).id;
   product = (await db.inventoryProduct.create({ data: { company_id: company, sku: 'CEM', description: 'Cemento', sale_price: 118, tax_affectation: '10' } })).id;
   await db.inventoryBalance.create({ data: { company_id: company, warehouse_id: warehouse, product_id: product, current_stock: 1, average_unit_cost: 10, total_inventory_value: 10 } });
