@@ -106,6 +106,8 @@ export interface CdrDto {
 
 /** Detalle completo de un comprobante (GET /invoices/:id). */
 export interface ComprobanteDetalleDto extends ComprobanteListadoDto {
+  /** Almacén con el que se emitió; la devolución debe reingresar allí. */
+  almacen?: string;
   lineas_origen: Array<{
     codigo: string | null; descripcion: string | null; unidad: string | null;
     cantidad: number | null; valor_unitario: number | null;
