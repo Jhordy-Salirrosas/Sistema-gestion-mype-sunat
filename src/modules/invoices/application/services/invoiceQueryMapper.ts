@@ -362,7 +362,6 @@ export function lineasDelPayload(payload: unknown): ComprobanteDetalleDto['linea
 
 export function aDetalle(fila: FilaDetalle): ComprobanteDetalleDto {  return {
     ...aListado(fila),
-    almacen: (() => { const p = fila.payload_ubl; if (!p || typeof p !== 'object' || Array.isArray(p)) return undefined; const a = (p as Record<string, unknown>).almacen; return typeof a === 'string' && a.trim() ? a.trim().toUpperCase() : undefined; })(),
     lineas_origen: lineasDelPayload(fila.payload_ubl),
     ruc_emisor: fila.ruc_emisor,
     base_imponible: numero(fila.taxable_operations),

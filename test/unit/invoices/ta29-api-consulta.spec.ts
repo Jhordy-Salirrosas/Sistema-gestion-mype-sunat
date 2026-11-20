@@ -557,10 +557,4 @@ describe('TA-29 referencia de la nota al documento afectado', () => {
     );
     expect(queue.enqueueInvoiceInTx).not.toHaveBeenCalled();
   });
-
-it('el detalle expone el almacén del payload para devoluciones', () => {
-  const base = { ...filaListado(), ruc_emisor: '20601012341', taxable_operations: 100, total_igv: 18, cdr_sunat: null, created_at: new Date(), updated_at: new Date(), history: [] };
-  expect(aDetalle({ ...base, payload_ubl: { almacen: 'alm-02' } } as any).almacen).toBe('ALM-02');
-  expect(aDetalle({ ...base, payload_ubl: {} } as any).almacen).toBeUndefined();
-});
 });
