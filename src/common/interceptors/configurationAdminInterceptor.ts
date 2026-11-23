@@ -1,4 +1,5 @@
 import { CallHandler, ExecutionContext, ForbiddenException, Injectable, NestInterceptor, UnauthorizedException } from '@nestjs/common';
+import { normalizeRoleCode } from '../../modules/auth/domain/roleNormalization';
 const WRITES = new Set(['POST','PUT','PATCH','DELETE']);
 /** Solo configuración, nunca operación (asientos, cierres, compras o emisión).
  * Los GET de catálogos, series/checklist y maestro se comparten con formularios.
@@ -26,7 +27,7 @@ export class ConfigurationAdminInterceptor implements NestInterceptor {
       request.method === 'GET' && belongs(path,'/api/v1/sire/configuracion');
     if (reserved) {
       if (!request.user) throw new UnauthorizedException('Autenticación requerida.');
-      if (request.user.role !== 'ADMIN') throw new ForbiddenException('La configuración global solo puede ser administrada por ADMIN.');
+      if (normalizeRoleCode(request.user.role) !== 'ADMIN') throw new ForbiddenException('La configuración global solo puede ser administrada por ADMIN.');
     }
     return next.handle();
   }

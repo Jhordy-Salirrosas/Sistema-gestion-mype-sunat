@@ -6,6 +6,13 @@ const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 
+export class SolCredentialCipherUnavailableError extends Error {
+  constructor() {
+    super('SOL_CREDENTIALS_ENCRYPTION_KEY no está configurada.');
+    this.name = 'SolCredentialCipherUnavailableError';
+  }
+}
+
 export class SolCredentialCipher implements SolCredentialCipherPort {
   private readonly key: Buffer | null;
 
@@ -26,7 +33,7 @@ export class SolCredentialCipher implements SolCredentialCipherPort {
   }
 
   private requiredKey(): Buffer {
-    if (!this.key) throw new Error('SOL_CREDENTIALS_ENCRYPTION_KEY no está configurada.');
+    if (!this.key) throw new SolCredentialCipherUnavailableError();
     return this.key;
   }
 

@@ -1,9 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ClientSafeHttpException } from '../../../../common/exceptions';
 import { PrismaService } from '../../../../database/prismaService';
 import {
   SOL_CREDENTIAL_CIPHER,
   type SolCredentialCipherPort,
 } from '../../../auth/domain/ports/solCredentialCipherPort';
+import { SolCredentialCipherUnavailableError } from '../../../auth/infrastructure/security/solCredentialCipher';
 import type {
   ISireConfigurationRepositoryPort,
   SireConfigurationCredentials,
@@ -21,6 +23,8 @@ import type {
 export class PrismaSireConfigurationRepository
   implements ISireConfigurationRepositoryPort
 {
+  private readonly logger = new Logger(PrismaSireConfigurationRepository.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(SOL_CREDENTIAL_CIPHER)
@@ -28,6 +32,31 @@ export class PrismaSireConfigurationRepository
   ) {}
 
   async save(
+    companyId: string,
+    credentials: SireConfigurationCredentials,
+  ): Promise<void> {
+    try {
+      await this.persist(companyId, credentials);
+    } catch (error) {
+      const prismaCode = this.prismaCode(error);
+      this.logger.error(
+        `No se pudo guardar SireConfiguration (companyId=${companyId}, error=${this.errorName(error)}, prismaCode=${prismaCode ?? 'n/a'}).`,
+      );
+
+      if (error instanceof SolCredentialCipherUnavailableError) {
+        throw new ClientSafeHttpException(
+          503,
+          'El cifrado de credenciales SIRE no está configurado en el servidor. Contacta al administrador.',
+        );
+      }
+      if (prismaCode === 'P2003') {
+        throw new NotFoundException('La empresa indicada no existe.');
+      }
+      throw error;
+    }
+  }
+
+  private async persist(
     companyId: string,
     credentials: SireConfigurationCredentials,
   ): Promise<void> {
@@ -65,6 +94,18 @@ export class PrismaSireConfigurationRepository
       create: { companyId, ...data },
       update: data,
     });
+  }
+
+  private prismaCode(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+      return undefined;
+    }
+    const code = (error as { code?: unknown }).code;
+    return typeof code === 'string' && /^P\d{4}$/.test(code) ? code : undefined;
+  }
+
+  private errorName(error: unknown): string {
+    return error instanceof Error ? error.name : typeof error;
   }
 
   async findByCompanyId(

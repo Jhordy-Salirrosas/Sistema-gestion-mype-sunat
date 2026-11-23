@@ -2,11 +2,13 @@ import { mkdtempSync, rmSync, copyFileSync, writeFileSync, symlinkSync } from 'n
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { archivoPadronOficial } from '../../../src/modules/invoices/application/services/retentionSeedSource';
+const soportaSymlinks=(()=>{const probe=mkdtempSync(join(tmpdir(),'8f-symlink-'));try{symlinkSync(resolve('scripts/data/agentes-retencion.example.csv'),join(probe,'probe.csv'));return true;}catch{return false;}finally{rmSync(probe,{recursive:true,force:true});}})();
+const itSymlink=soportaSymlinks?it:it.skip;
 let dir:string;
 beforeEach(()=>{dir=mkdtempSync(join(tmpdir(),'8f-padron-'));});
 afterEach(()=>rmSync(dir,{recursive:true,force:true}));
 it.each([undefined,'','  '])('exige ruta explícita (%s)',ruta=>{expect(()=>archivoPadronOficial(ruta)).toThrow('Debe indicar explícitamente la ruta');});
 it('rechaza el ejemplo sin conectar a base',()=>{expect(()=>archivoPadronOficial('scripts/data/agentes-retencion.example.csv')).toThrow('archivo de ejemplo');});
-it('rechaza un enlace al ejemplo',()=>{const link=join(dir,'oficial.csv');symlinkSync(resolve('scripts/data/agentes-retencion.example.csv'),link);expect(()=>archivoPadronOficial(link)).toThrow('archivo de ejemplo');});
+itSymlink('rechaza un enlace al ejemplo',()=>{const link=join(dir,'oficial.csv');symlinkSync(resolve('scripts/data/agentes-retencion.example.csv'),link);expect(()=>archivoPadronOficial(link)).toThrow('archivo de ejemplo');});
 it('rechaza el ejemplo copiado con otro nombre',()=>{const copy=join(dir,'oficial.csv');copyFileSync('scripts/data/agentes-retencion.example.csv',copy);expect(()=>archivoPadronOficial(copy)).toThrow('archivo de ejemplo');});
 it('acepta ruta explícita de otro contenido sin importar ni verificar procedencia por sí sola',()=>{const file=join(dir,'padron-verificado.csv');writeFileSync(file,'contenido ficticio distinto para probar selección de ruta');expect(archivoPadronOficial(file)).toBe(file);});

@@ -6,4 +6,5 @@
 # coincidir, haciendo fallar la suite en Linux y en Windows indistintamente.
 # Se guardan y se entregan byte a byte, siempre.
 assets/sunat-xsl/** -text
+assets/sunat-sfs/** -text
 test/fixtures/xsl/** -text

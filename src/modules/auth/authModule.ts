@@ -3,7 +3,7 @@ import { SessionMembershipService } from './application/services/sessionMembersh
 import { CapabilityGuard } from './infrastructure/guards/capabilityGuard';
 import { RolesController } from './infrastructure/controllers/rolesController';
 import { RoleCatalogService } from './application/services/roleCatalogService';
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { PrismaModule } from '../../database/prismaModule';
 import { AuthController } from './infrastructure/controllers/authController';
 import { LoginUseCase } from './application/use-cases/loginUseCase';
@@ -54,13 +54,18 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
       provide: TOKEN_SERVICE_PORT,
       useClass: NativeJwtAdapter,
     },
-    {
-      provide: SOL_CREDENTIAL_CIPHER,
-      useFactory: () =>
-        new SolCredentialCipher(
-          process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '',
-        ),
-    },
+      {
+        provide: SOL_CREDENTIAL_CIPHER,
+        useFactory: () => {
+          const key = process.env['SOL_CREDENTIALS_ENCRYPTION_KEY'] ?? '';
+          if (!key) {
+            new Logger('AuthModule').warn(
+              'SOL_CREDENTIALS_ENCRYPTION_KEY no configurada: no se podrán guardar credenciales SIRE/SOL.',
+            );
+          }
+          return new SolCredentialCipher(key);
+        },
+      },
     SessionMembershipService,
     CapabilityGuard,
     MenuPermissionsService,

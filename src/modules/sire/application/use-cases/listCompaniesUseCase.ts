@@ -29,6 +29,7 @@ export class ListCompaniesUseCase {
     return companies.map((company) => ({
       id: company.id,
       ruc: company.ruc,
+      legalName: company.legal_name,
       razonSocial: company.legal_name,
       nombreComercial: company.trade_name ?? null,
       activa: company.is_active,

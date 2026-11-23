@@ -37,7 +37,7 @@ export class CompanyConfigurationController {
   ) {}
 
   @Get('listar')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'ADMINISTRADOR')
   async listar(): Promise<CompanyListItem[]> {
     return this.listUseCase.execute();
   }

@@ -71,7 +71,7 @@ describe('SireConfigurationController', () => {
   it('restricts the configuration to ADMIN with the roles guard', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, SireConfigurationController),
-    ).toEqual(['ADMIN']);
+    ).toEqual(['ADMIN', 'ADMINISTRADOR']);
     expect(
       Reflect.getMetadata(GUARDS_METADATA, SireConfigurationController),
     ).toContain(RolesGuard);

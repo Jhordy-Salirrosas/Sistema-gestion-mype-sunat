@@ -9,6 +9,7 @@ import { separarBolsasGratuitas } from '../../../src/modules/invoices/freeBagXml
 import { referenciaGratuita, totalesGratuitos } from '../../../src/modules/invoices/freeOperationReference';
 import { SignatureService } from '../../../src/modules/sunat/signature.service';
 import { ejecutarSfs } from '../../../src/modules/invoices/application/services/sunatSfsRunner';
+import { sfsPythonCommand } from '../../../src/modules/invoices/application/services/sunatSfsRuntime';
 import { fakeIssuerCertificate } from '../../fixtures/fakeIssuerCertificate';
 import { fiscal8d, issuer8d } from '../../fixtures/8dFiscalHarness';
 import hashes from '../../fixtures/b8-unchanged-xml-hashes.json';
@@ -34,7 +35,7 @@ expr=x.xpath('//xsl:call-template[xsl:with-param[@name="errorCodeValidate" and @
 doc=etree.fromstring(sys.stdin.buffer.read())
 lines=doc.findall('cac:InvoiceLine',ns)
 print(json.dumps({'3105':[l.find('cac:TaxTotal',ns).xpath(expr,namespaces=ns) for l in lines], '3236':[s.xpath('number(cbc:BaseUnitMeasure) != round(number(../../cbc:InvoicedQuantity))',namespaces=ns) for l in lines for s in l.xpath('cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:ID="7152"]',namespaces=ns)]}))`;
- const r=spawnSync('python3',['-c',script],{input:xml,encoding:'utf8'});expect(r.status).toBe(0);
+ const r=spawnSync(sfsPythonCommand(),['-c',script],{input:xml,encoding:'utf8'});expect(r.status).toBe(0);
  const result=JSON.parse(r.stdout);expect(result['3105']).not.toContain(true);expect(result['3236']).not.toContain(true);
 }
 it.each([

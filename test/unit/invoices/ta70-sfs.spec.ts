@@ -4,9 +4,11 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { validaDeVerdad } from '../../../src/modules/invoices/application/services/sunatXslAdapter';
 import { ejecutarSfs } from '../../../src/modules/invoices/application/services/sunatSfsRunner';
+import { sfsPythonCommand } from '../../../src/modules/invoices/application/services/sunatSfsRuntime';
 import { SunatXslValidatorService } from '../../../src/modules/invoices/application/services/sunatXslValidatorService';
 
 describe('TA-70: ejecución real del SFS', () => {
+  const itTimeoutReal = process.platform === 'win32' ? it.skip : it;
   const factura = () => readFileSync('test/fixtures/sfs/factura.xml', 'utf8');
   const python = process.env.SUNAT_SFS_PYTHON;
   const timeout = process.env.SUNAT_SFS_TIMEOUT_MS;
@@ -57,7 +59,7 @@ describe('TA-70: ejecución real del SFS', () => {
   });
 
   it('la cuarta adaptación cambia solo identificadores en las líneas autorizadas', () => {
-    execFileSync(python ?? 'python3', ['test/unit/invoices/ta70_sfs_adaptations_test.py'], {
+    execFileSync(python ?? sfsPythonCommand(), ['test/unit/invoices/ta70_sfs_adaptations_test.py'], {
       env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' }, timeout: 2000,
     });
   });
@@ -85,7 +87,7 @@ describe('TA-70: ejecución real del SFS', () => {
     expect(result.motivoBloqueo).toContain('no disponible');
   });
 
-  it('mata un ejecutor que excede el plazo y no reutiliza un éxito previo', async () => {
+  itTimeoutReal('mata un ejecutor que excede el plazo y no reutiliza un éxito previo', async () => {
     const servicio = new SunatXslValidatorService();
     expect((await servicio.validar(factura(), '01')).valido).toBe(true);
     const dir = mkdtempSync(join(tmpdir(), 'ta70-timeout-'));

@@ -40,4 +40,12 @@ describe('RolesGuard', () => {
     const ctx = createMockContext('OPERADOR');
     expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
   });
+
+  it('accepts ADMINISTRADOR as ADMIN with spaces and lowercase', () => {
+    reflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+    expect(guard.canActivate(createMockContext(' administrador '))).toBe(true);
+
+    reflector.getAllAndOverride.mockReturnValue(['ADMINISTRADOR']);
+    expect(guard.canActivate(createMockContext('admin'))).toBe(true);
+  });
 });
