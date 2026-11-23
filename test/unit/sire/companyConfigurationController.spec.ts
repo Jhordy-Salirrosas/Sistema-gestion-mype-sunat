@@ -1,5 +1,13 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { RequestMethod } from '@nestjs/common';
+import {
+  GUARDS_METADATA,
+  METHOD_METADATA,
+  PATH_METADATA,
+} from '@nestjs/common/constants';
 import { CompanyConfigurationController } from '../../../src/modules/sire/infrastructure/controllers/companyConfigurationController';
+import { ROLES_KEY } from '../../../src/modules/auth/infrastructure/decorators/rolesDecorator';
+import { RolesGuard } from '../../../src/modules/auth/infrastructure/guards/rolesGuard';
 import type { GetCompanyConfigurationUseCase } from '../../../src/modules/sire/application/use-cases/getCompanyConfigurationUseCase';
 import type { UpdateCompanyConfigurationUseCase } from '../../../src/modules/sire/application/use-cases/updateCompanyConfigurationUseCase';
 import type { ListCompaniesUseCase } from '../../../src/modules/sire/application/use-cases/listCompaniesUseCase';
@@ -82,11 +90,27 @@ describe('CompanyConfigurationController', () => {
     expect(updateUseCase.execute).toHaveBeenCalledWith('company-id', dto);
   });
 
+  it('exposes GET /empresa/listar protected for ADMIN/ADMINISTRADOR', () => {
+    expect(
+      Reflect.getMetadata(PATH_METADATA, CompanyConfigurationController.prototype.listar),
+    ).toBe('listar');
+    expect(
+      Reflect.getMetadata(METHOD_METADATA, CompanyConfigurationController.prototype.listar),
+    ).toBe(RequestMethod.GET);
+    expect(
+      Reflect.getMetadata(ROLES_KEY, CompanyConfigurationController.prototype.listar),
+    ).toEqual(['ADMIN', 'ADMINISTRADOR']);
+    expect(
+      Reflect.getMetadata(GUARDS_METADATA, CompanyConfigurationController),
+    ).toContain(RolesGuard);
+  });
+
   it('lists companies for the Multi-RUC selector', async () => {
     (listUseCase.execute as jest.Mock).mockResolvedValue([
       {
         id: 'company-1',
         ruc: '20123456789',
+        legalName: 'Demo SAC',
         razonSocial: 'Demo SAC',
         nombreComercial: 'Demo',
         activa: true,
@@ -97,6 +121,7 @@ describe('CompanyConfigurationController', () => {
       {
         id: 'company-1',
         ruc: '20123456789',
+        legalName: 'Demo SAC',
         razonSocial: 'Demo SAC',
         nombreComercial: 'Demo',
         activa: true,

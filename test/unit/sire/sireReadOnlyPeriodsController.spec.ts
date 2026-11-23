@@ -26,6 +26,7 @@ describe('SireReadOnlyPeriodsController', () => {
   } as unknown as IUserRepositoryPort;
   const sireClient = {
     assertConfigured: jest.fn(),
+    assertIntegrationReady: jest.fn(),
   } as unknown as SireReadOnlyPeriodsClient;
   const prisma = {
     sirePeriodQuery: {
@@ -73,7 +74,7 @@ describe('SireReadOnlyPeriodsController', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
     expect(users.findCompanyById).toHaveBeenCalledWith(user.companyId);
-    expect(sireClient.assertConfigured).toHaveBeenCalled();
+    expect(sireClient.assertIntegrationReady).toHaveBeenCalled();
     expect(prisma.sirePeriodQuery.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         id: response.messageId,
@@ -145,7 +146,7 @@ describe('SireReadOnlyPeriodsController', () => {
   });
 
   it('does not enqueue while the integration is disabled', async () => {
-    (sireClient.assertConfigured as jest.Mock).mockImplementationOnce(() => {
+    (sireClient.assertIntegrationReady as jest.Mock).mockImplementationOnce(() => {
       throw new ServiceUnavailableException('disabled');
     });
 

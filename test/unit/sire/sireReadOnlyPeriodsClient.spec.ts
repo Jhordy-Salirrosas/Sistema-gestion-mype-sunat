@@ -448,6 +448,17 @@ describe('SireReadOnlyPeriodsClient', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('confirms readiness without global application credentials', () => {
+    const {
+      SUNAT_CLIENT_ID: _clientId,
+      SUNAT_CLIENT_SECRET: _clientSecret,
+      ...sinCredenciales
+    } = config;
+    const client = createClient(sinCredenciales, jest.fn());
+
+    expect(() => client.assertIntegrationReady()).not.toThrow();
+  });
+
   it('rejects a configuration without an application client id', async () => {
     const { SUNAT_CLIENT_ID: _omitted, ...sinClientId } = config;
     const client = createClient(sinClientId, jest.fn());

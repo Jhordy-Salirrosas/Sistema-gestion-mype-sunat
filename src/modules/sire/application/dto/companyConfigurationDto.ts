@@ -109,6 +109,9 @@ export interface CompanyConfigurationResponse {
 export interface CompanyListItem {
   id: string;
   ruc: string;
+  /** Razón social con el nombre que espera el contrato Multi-RUC. */
+  legalName: string;
+  /** Alias legado en español para consumidores anteriores. */
   razonSocial: string;
   nombreComercial: string | null;
   activa: boolean;

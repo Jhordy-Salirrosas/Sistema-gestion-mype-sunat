@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/rolesDecorator';
+import {
+  hasAnyNormalizedRole,
+  normalizeRoleCode,
+} from '../../domain/roleNormalization';
 import type { UserRole } from '../../domain/entities/userEntity';
 
 @Injectable()
@@ -23,11 +27,12 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    if (!user || !user.role) {
+    if (!user || !user.role || !normalizeRoleCode(user.role)) {
       throw new ForbiddenException('Acceso denegado: Usuario no autenticado.');
     }
 
-    const hasRole = requiredRoles.includes(user.role);
+    // `ADMINISTRADOR` (nombre visible) equivale a `ADMIN` (código técnico).
+    const hasRole = hasAnyNormalizedRole(user.role, requiredRoles);
     if (!hasRole) {
       throw new ForbiddenException(
         `Acceso denegado: Se requiere uno de los roles [${requiredRoles.join(', ')}].`,

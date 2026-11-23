@@ -197,6 +197,19 @@ export class SireReadOnlyPeriodsClient {
     return redactSensitiveValue(await this.parseJson(response), secrets);
   }
 
+  /**
+   * Comprueba que la integración esté habilitada y tenga hosts/tiempo válidos.
+   *
+   * NO exige las credenciales globales: en Multi-RUC cada empresa trae las
+   * suyas desde `SireConfiguration`; el entorno solo es respaldo.
+   */
+  assertIntegrationReady(): void {
+    this.assertIntegrationEnabled();
+    this.readSunatUrl('SIRE_AUTH_HOST', SUNAT_AUTH_HOST);
+    this.readSunatUrl('SIRE_API_HOST', SUNAT_API_HOST);
+    this.readTimeoutMs();
+  }
+
   assertConfigured(): void {
     this.getValidatedConfig();
   }

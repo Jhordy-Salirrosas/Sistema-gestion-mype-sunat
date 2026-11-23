@@ -85,7 +85,7 @@ describe('SireAccountingMappingController', () => {
   it('restricts the mapping to ADMIN with the roles guard', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, SireAccountingMappingController),
-    ).toEqual(['ADMIN']);
+    ).toEqual(['ADMIN', 'ADMINISTRADOR']);
     expect(
       Reflect.getMetadata(GUARDS_METADATA, SireAccountingMappingController),
     ).toContain(RolesGuard);

@@ -219,7 +219,7 @@ export class SireReadOnlyPeriodsController {
    */
   private assertIntegrationEnabled(): void {
     try {
-      this.sireClient.assertConfigured();
+      this.sireClient.assertIntegrationReady();
     } catch (error) {
       this.logger.error(
         `La consulta de períodos SIRE no está operativa: ${describeErrorSafely(error)}`,

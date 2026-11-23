@@ -1,8 +1,14 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { normalizeRoleCode } from '../../auth/domain/roleNormalization';
 import type { TokenPayload } from '../../auth/domain/ports/tokenServicePort';
 
-/** Solo ADMIN administra credenciales y mapeo contable SIRE. */
-export const SIRE_CONFIG_ROLES = ['ADMIN'] as const;
+/**
+ * Solo ADMIN/ADMINISTRADOR administra credenciales y mapeo contable SIRE.
+ *
+ * El alias se declara explícitamente porque algunos tokens llevan el nombre
+ * visible en lugar del código técnico.
+ */
+export const SIRE_CONFIG_ROLES = ['ADMIN', 'ADMINISTRADOR'] as const;
 
 /**
  * Roles operativos del SIRE.
@@ -34,7 +40,7 @@ export function resolveSireCompanyId(
   }
 
   const requested = requestedCompanyId?.trim();
-  if (user.role === 'ADMIN' && requested) {
+  if (normalizeRoleCode(user.role) === 'ADMIN' && requested) {
     return requested;
   }
 

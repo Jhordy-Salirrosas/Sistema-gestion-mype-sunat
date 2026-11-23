@@ -30,6 +30,7 @@ describe('ListCompaniesUseCase', () => {
       {
         id: 'company-2',
         ruc: '20123456789',
+        legalName: 'Demo SAC',
         razonSocial: 'Demo SAC',
         nombreComercial: 'Demo',
         activa: true,
@@ -37,6 +38,7 @@ describe('ListCompaniesUseCase', () => {
       {
         id: 'company-1',
         ruc: '20999999999',
+        legalName: 'Otra SAC',
         razonSocial: 'Otra SAC',
         nombreComercial: null,
         activa: true,
