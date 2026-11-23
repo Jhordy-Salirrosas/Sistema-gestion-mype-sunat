@@ -1,5 +1,8 @@
+import { NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../../../src/database/prismaService';
 import type { SolCredentialCipherPort } from '../../../src/modules/auth/domain/ports/solCredentialCipherPort';
+import { SolCredentialCipherUnavailableError } from '../../../src/modules/auth/infrastructure/security/solCredentialCipher';
+import { ClientSafeHttpException } from '../../../src/common/exceptions';
 import { PrismaSireConfigurationRepository } from '../../../src/modules/sire/infrastructure/persistence/prismaSireConfigurationRepository';
 
 const COMPANY_ID = 'company-id';
@@ -133,6 +136,42 @@ describe('PrismaSireConfigurationRepository', () => {
           solPasswordEncrypted: null,
         },
       });
+    });
+
+    it('answers 503 instead of 500 when the encryption key is missing', async () => {
+      const prisma = crearPrisma(null);
+      const cifrado = {
+        encrypt: jest.fn(() => {
+          throw new SolCredentialCipherUnavailableError();
+        }),
+        decrypt: jest.fn(),
+      } as unknown as SolCredentialCipherPort;
+      const repository = new PrismaSireConfigurationRepository(prisma, cifrado);
+
+      await expect(
+        repository.save(COMPANY_ID, { clientId: 'client-id' }),
+      ).rejects.toMatchObject({
+        statusCode: 503,
+        clientMessage:
+          'El cifrado de credenciales SIRE no está configurado en el servidor. Contacta al administrador.',
+      });
+      await expect(
+        repository.save(COMPANY_ID, { clientId: 'client-id' }),
+      ).rejects.toBeInstanceOf(ClientSafeHttpException);
+      expect(prisma.sireConfiguration.upsert).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 when the company does not exist', async () => {
+      const prisma = crearPrisma(null);
+      prisma.sireConfiguration.upsert.mockRejectedValueOnce({ code: 'P2003' });
+      const repository = new PrismaSireConfigurationRepository(
+        prisma,
+        crearCifrado(),
+      );
+
+      await expect(
+        repository.save(COMPANY_ID, { clientId: 'client-id' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
