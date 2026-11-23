@@ -4,3 +4,7 @@ export function sfsTimeoutMs(): number {
   return Number.isSafeInteger(configured) && configured > 0 && configured <= 2_147_483_647
     ? configured : 20_000;
 }
+
+export function sfsPythonCommand(): string {
+  return process.env.SUNAT_SFS_PYTHON ?? (process.platform === 'win32' ? 'py' : 'python3');
+}

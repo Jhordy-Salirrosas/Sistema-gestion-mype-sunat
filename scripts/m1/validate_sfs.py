@@ -9,6 +9,7 @@ import re
 import shutil
 import sys
 import tempfile
+from urllib.parse import unquote, urlparse
 from lxml import etree
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets" / "sunat-sfs" / "commons"
@@ -65,8 +66,13 @@ class Resolver(etree.Resolver):
             path = self.commons / url[len("local:///commons/"):]
         elif "/VALI/commons/" in url:
             path = self.commons / url.rsplit("/VALI/commons/", 1)[1]
+        elif url.startswith("file:"):
+            raw = unquote(urlparse(url).path)
+            if re.match(r"^/[A-Za-z]:", raw):
+                raw = raw[1:]
+            path = Path(raw)
         else:
-            path = Path(url.removeprefix("file://"))
+            path = Path(url)
         path = path.resolve()
         if not path.is_relative_to(self.commons) or not path.is_file():
             raise OSError("Recurso SFS fuera del árbol local o ausente")

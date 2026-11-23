@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { sfsTimeoutMs } from './sunatSfsRuntime';
+import { sfsPythonCommand, sfsTimeoutMs } from './sunatSfsRuntime';
 
 export interface ResultadoSfs {
   completado: true;
@@ -11,7 +11,7 @@ export interface ResultadoSfs {
 export function ejecutarSfs(xml: string, tipo: string): Promise<ResultadoSfs> {
   const timeoutMs = sfsTimeoutMs();
   return new Promise((resolve, reject) => {
-    const child = spawn(process.env.SUNAT_SFS_PYTHON ?? 'python3', [
+    const child = spawn(sfsPythonCommand(), [
       join(process.cwd(), 'scripts', 'm1', 'validate_sfs.py'),
     ], { stdio: ['pipe', 'pipe', 'ignore'] });
     let salida = '';
