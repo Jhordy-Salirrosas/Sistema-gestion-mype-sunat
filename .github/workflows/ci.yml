@@ -81,6 +81,9 @@ jobs:
     name: Lighthouse CI Audit
     runs-on: ubuntu-latest
     needs: build-and-test
+    # El frontend auditado vive fuera de este repositorio. Se mantiene el
+    # reporte de Lighthouse, pero un score externo no debe bloquear el backend.
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
