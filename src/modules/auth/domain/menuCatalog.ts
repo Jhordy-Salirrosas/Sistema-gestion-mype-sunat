@@ -660,6 +660,17 @@ export const MENU_CATALOG: readonly MenuDefinition[] = [
     "reservedAdmin": false
   },
   {
+    "code": "MENU_SIRE_CREDENCIALES",
+    "moduleCode": "M3",
+    "path": "/sire/credenciales",
+    "roles": [
+      "ADMIN"
+    ],
+    "parentCode": null,
+    "sourceLine": 531,
+    "reservedAdmin": false
+  },
+  {
     "code": "MENU_SIRE_CONFIGURACION",
     "moduleCode": "M3",
     "path": "/sire/configuracion",

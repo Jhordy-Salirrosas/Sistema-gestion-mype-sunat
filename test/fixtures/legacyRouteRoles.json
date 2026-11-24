@@ -608,6 +608,16 @@
     "sourceLine": 514
   },
   {
+    "code": "MENU_SIRE_CREDENCIALES",
+    "moduleCode": "M3",
+    "path": "/sire/credenciales",
+    "roles": [
+      "ADMIN"
+    ],
+    "parentCode": null,
+    "sourceLine": 531
+  },
+  {
     "code": "MENU_SIRE_CONFIGURACION",
     "moduleCode": "M3",
     "path": "/sire/configuracion",
