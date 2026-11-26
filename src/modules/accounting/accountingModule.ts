@@ -30,6 +30,7 @@ import { GetBalanceSheetUseCase } from './application/use-cases/getBalanceSheetU
 import { AuditAccountingUseCase } from './application/use-cases/auditAccountingUseCase';
 import { TreasuryAccountsService } from './application/services/treasuryAccountsService';
 import { AccountingCatalogService } from './application/services/accountingCatalogService';
+import { AccountingMappingService } from './application/services/accountingMappingService';
 
 // Importa el token del puerto y tu adaptador de base de datos de Prisma
 import { ACCOUNTING_REPOSITORY_PORT } from './domain/ports/accountingRepositoryPort';
@@ -67,6 +68,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     AuditAccountingUseCase,
     TreasuryAccountsService,
     AccountingCatalogService,
+    AccountingMappingService,
     {
       provide: ACCOUNTING_REPOSITORY_PORT,
       useClass: PrismaAccountingRepository,
@@ -101,6 +103,7 @@ import { PrismaAccountingRepository } from './infrastructure/prismaAccountingRep
     AuditAccountingUseCase,
     TreasuryAccountsService,
     AccountingCatalogService,
+    AccountingMappingService,
   ],
 })
 export class AccountingModule {}

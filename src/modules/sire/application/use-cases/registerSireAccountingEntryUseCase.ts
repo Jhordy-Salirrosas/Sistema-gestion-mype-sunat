@@ -1,6 +1,7 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 import { ListAccountingAccountsUseCase } from '../../../accounting/application/use-cases/listAccountingAccountsUseCase';
+import { AccountingMappingService } from '../../../accounting/application/services/accountingMappingService';
 import type { AccountingEntryEntity } from '../../../accounting/domain/entities/accountingEntryEntity';
 import type { SireLibroMenu } from '../dto/sireMenuQueryDto';
 import type { SireRecord } from '../../domain/entities/sireProposalEntity';
@@ -43,7 +44,33 @@ export class RegisterSireAccountingEntryUseCase {
     private readonly mappingRepository: ISireAccountingMappingRepositoryPort,
     private readonly accountingEntries: GenerateAccountingEntryUseCase,
     private readonly accountingAccounts: ListAccountingAccountsUseCase,
+    @Optional()
+    private readonly accountingMappings?: AccountingMappingService,
   ) {}
+
+  private async inheritedMappings(
+    companyId: string,
+    kind: SireAccountingBookKind,
+  ): Promise<Array<{ tipoOperacion: string; cuentaContable: string }>> {
+    if (!this.accountingMappings) return [];
+    const operation = kind === 'VENTAS' ? 'SIRE_VENTAS' : 'SIRE_COMPRAS';
+    const { accounts } = await this.accountingMappings.getAccountsForOperation(
+      operation,
+      companyId,
+    );
+    if (kind === 'VENTAS') {
+      return [
+        accounts.CXC && { tipoOperacion: 'VENTAS', cuentaContable: accounts.CXC.code },
+        accounts.IGV && { tipoOperacion: 'IGV', cuentaContable: accounts.IGV.code },
+        accounts.INGRESO && { tipoOperacion: 'BASE', cuentaContable: accounts.INGRESO.code },
+      ].filter((item): item is { tipoOperacion: string; cuentaContable: string } => Boolean(item));
+    }
+    return [
+      accounts.CXP && { tipoOperacion: 'COMPRAS', cuentaContable: accounts.CXP.code },
+      accounts.IGV && { tipoOperacion: 'IGV', cuentaContable: accounts.IGV.code },
+      accounts.COMPRA && { tipoOperacion: 'BASE', cuentaContable: accounts.COMPRA.code },
+    ].filter((item): item is { tipoOperacion: string; cuentaContable: string } => Boolean(item));
+  }
 
   async execute(
     companyId: string,
@@ -62,6 +89,7 @@ export class RegisterSireAccountingEntryUseCase {
       return null;
     }
 
+    const kind = BOOK_KIND[libro];
     const [mappings, accounts] = await Promise.all([
       this.mappingRepository.findAll(companyId),
       this.accountingAccounts.execute(true),
@@ -73,11 +101,15 @@ export class RegisterSireAccountingEntryUseCase {
     const accountNames = new Map(
       accounts.map((account) => [account.code, account.name]),
     );
-    const kind = BOOK_KIND[libro];
+    const inherited = await this.inheritedMappings(companyId, kind);
+    for (const mapping of inherited) {
+      const name = accountNames.get(mapping.cuentaContable);
+      if (name) accountNames.set(mapping.cuentaContable, name);
+    }
     const lines = buildSireAccountingLines(
       kind,
       totals,
-      mappings,
+      [...inherited, ...mappings],
       accountNames,
     );
     if (lines.length === 0) return null;

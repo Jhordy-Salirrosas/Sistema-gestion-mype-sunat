@@ -1,5 +1,6 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { ListAccountingAccountsUseCase } from '../../../accounting/application/use-cases/listAccountingAccountsUseCase';
+import { AccountingMappingService } from '../../../accounting/application/services/accountingMappingService';
 import type { SireLibroMenu } from '../dto/sireMenuQueryDto';
 import type {
   SireAccountingPreviewEntry,
@@ -45,6 +46,8 @@ export class GetSireAccountingPreviewUseCase {
     @Inject(SIRE_ACCOUNTING_MAPPING_REPOSITORY_PORT)
     private readonly mappingRepository: ISireAccountingMappingRepositoryPort,
     private readonly accountingAccounts: ListAccountingAccountsUseCase,
+    @Optional()
+    private readonly accountingMappings?: AccountingMappingService,
   ) {}
 
   async execute(
@@ -68,9 +71,14 @@ export class GetSireAccountingPreviewUseCase {
     const selected = libro
       ? totals.filter((book) => book.bookType === libro)
       : totals;
+    const inherited = new Map<string, Array<{ tipoOperacion: string; cuentaContable: string }>>();
+    for (const book of selected) {
+      const kind = BOOK_KIND[book.bookType];
+      inherited.set(book.bookType, await this.inheritedMappings(companyId, kind, accountNames));
+    }
 
     const asientos = selected
-      .map((book) => this.toEntry(book, period, mappings, accountNames))
+      .map((book) => this.toEntry(book, period, [...(inherited.get(book.bookType) ?? []), ...mappings], accountNames))
       .filter((entry): entry is SireAccountingPreviewEntry => entry !== null);
 
     if (asientos.length === 0) {
@@ -80,6 +88,33 @@ export class GetSireAccountingPreviewUseCase {
     }
 
     return { periodo: period, asientos };
+  }
+
+  private async inheritedMappings(
+    companyId: string,
+    kind: SireAccountingBookKind,
+    accountNames: Map<string, string>,
+  ): Promise<Array<{ tipoOperacion: string; cuentaContable: string }>> {
+    if (!this.accountingMappings) return [];
+    const { accounts } = await this.accountingMappings.getAccountsForOperation(
+      kind === 'VENTAS' ? 'SIRE_VENTAS' : 'SIRE_COMPRAS',
+      companyId,
+    );
+    for (const item of Object.values(accounts)) {
+      accountNames.set(item.code, item.name);
+    }
+    if (kind === 'VENTAS') {
+      return [
+        accounts.CXC && { tipoOperacion: 'VENTAS', cuentaContable: accounts.CXC.code },
+        accounts.IGV && { tipoOperacion: 'IGV', cuentaContable: accounts.IGV.code },
+        accounts.INGRESO && { tipoOperacion: 'BASE', cuentaContable: accounts.INGRESO.code },
+      ].filter((item): item is { tipoOperacion: string; cuentaContable: string } => Boolean(item));
+    }
+    return [
+      accounts.CXP && { tipoOperacion: 'COMPRAS', cuentaContable: accounts.CXP.code },
+      accounts.IGV && { tipoOperacion: 'IGV', cuentaContable: accounts.IGV.code },
+      accounts.COMPRA && { tipoOperacion: 'BASE', cuentaContable: accounts.COMPRA.code },
+    ].filter((item): item is { tipoOperacion: string; cuentaContable: string } => Boolean(item));
   }
 
   private toEntry(

@@ -13,6 +13,7 @@ import { PayPurchaseDto } from '../dto/payPurchaseDto';
 import { mapPurchaseRecord } from '../mappers/purchaseResponseMapper';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 import { TreasuryAccountsService } from '../../../accounting/application/services/treasuryAccountsService';
+import { AccountingMappingService } from '../../../accounting/application/services/accountingMappingService';
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
@@ -37,6 +38,8 @@ export class PurchasesService {
     private readonly accounting?: GenerateAccountingEntryUseCase,
     @Optional()
     private readonly tesoreria?: TreasuryAccountsService,
+    @Optional()
+    private readonly accountingMappings?: AccountingMappingService,
   ) {}
 
   async listPurchases(companyId: string) {
@@ -187,7 +190,7 @@ export class PurchasesService {
       throw new BadRequestException('No se puede repetir el mismo producto/SKU en la factura de compra.');
     }
 
-    if (this.accounting) {
+    if (this.accounting && !this.accountingMappings) {
       const reglasCompra = await this.prisma.accountingRule.findMany({
         where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
         orderBy: { line_order: 'asc' },
@@ -881,19 +884,31 @@ export class PurchasesService {
     });
     if (existente) return { asientoGenerado: true };
 
-    const reglas = await this.prisma.accountingRule.findMany({
-      where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
-      orderBy: { line_order: 'asc' },
-    });
-    const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
-    if (![1, 2, 3].every((n) => porOrden.has(n))) {
-      const motivo = 'reglas COMPRA incompletas: se requieren las líneas 1 a 3';
-      this.logger.error(`Compra ${purchase.purchaseNumber} sin reglas COMPRA completas; no se genera asiento.`);
-      return { asientoGenerado: false, motivo };
+    const configured = this.accountingMappings
+      ? (await this.accountingMappings.getAccountsForOperation('COMPRA', companyId)).accounts
+      : undefined;
+    let accGastoCompra: string;
+    let accIgvCredito: string;
+    let accCxp: string;
+    if (configured?.COMPRA && configured?.IGV && configured?.CXP) {
+      accGastoCompra = configured.COMPRA.code;
+      accIgvCredito = configured.IGV.code;
+      accCxp = configured.CXP.code;
+    } else {
+      const reglas = await this.prisma.accountingRule.findMany({
+        where: { company_id: companyId, process_code: 'COMPRA', is_active: true },
+        orderBy: { line_order: 'asc' },
+      });
+      const porOrden = new Map<number, string>(reglas.map((r) => [r.line_order, r.account_code]));
+      if (![1, 2, 3].every((n) => porOrden.has(n))) {
+        const motivo = 'reglas COMPRA incompletas: se requieren las líneas 1 a 3';
+        this.logger.error(`Compra ${purchase.purchaseNumber} sin reglas COMPRA completas; no se genera asiento.`);
+        return { asientoGenerado: false, motivo };
+      }
+      accGastoCompra = porOrden.get(1)!;
+      accIgvCredito = porOrden.get(2)!;
+      accCxp = porOrden.get(3)!;
     }
-    const accGastoCompra = porOrden.get(1)!;
-    const accIgvCredito = porOrden.get(2)!;
-    const accCxp = porOrden.get(3)!;
 
     const periodo = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}`;
     try {

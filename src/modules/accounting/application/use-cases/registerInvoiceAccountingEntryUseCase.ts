@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   ACCOUNTING_REPOSITORY_PORT,
   type IAccountingRepositoryPort,
 } from '../../domain/ports/accountingRepositoryPort';
 import type { AccountingEntryEntity } from '../../domain/entities/accountingEntryEntity';
 import { GenerateAccountingEntryUseCase } from './generateAccountingEntryUseCase';
+import { AccountingMappingService } from '../services/accountingMappingService';
 
 /** Datos mínimos del comprobante aceptado para generar su asiento. */
 export interface InvoiceAccountingInput {
@@ -41,6 +42,8 @@ export class RegisterInvoiceAccountingEntryUseCase {
     @Inject(ACCOUNTING_REPOSITORY_PORT)
     private readonly accountingRepository: IAccountingRepositoryPort,
     private readonly generateEntry: GenerateAccountingEntryUseCase,
+    @Optional()
+    private readonly accountingMappings?: AccountingMappingService,
   ) {}
 
   async execute(
@@ -77,19 +80,28 @@ export class RegisterInvoiceAccountingEntryUseCase {
     }
 
     const otros = redondear(total - base - igv);
+    const configured = this.accountingMappings
+      ? (await this.accountingMappings.getAccountsForOperation('VENTA', input.companyId)).accounts
+      : undefined;
+    const cuentas = {
+      porCobrar: configured?.CXC ?? CUENTAS.porCobrar,
+      ventas: configured?.INGRESO ?? CUENTAS.ventas,
+      igv: configured?.IGV ?? CUENTAS.igv,
+      otrosTributos: CUENTAS.otrosTributos,
+    };
 
     const lines = [
       {
         lineOrder: 1,
-        accountCode: CUENTAS.porCobrar.code,
-        accountName: CUENTAS.porCobrar.name,
+        accountCode: cuentas.porCobrar.code,
+        accountName: cuentas.porCobrar.name,
         debitAmount: total,
         creditAmount: 0,
       },
       {
         lineOrder: 2,
-        accountCode: CUENTAS.ventas.code,
-        accountName: CUENTAS.ventas.name,
+        accountCode: cuentas.ventas.code,
+        accountName: cuentas.ventas.name,
         debitAmount: 0,
         creditAmount: base,
       },
@@ -97,8 +109,8 @@ export class RegisterInvoiceAccountingEntryUseCase {
         ? [
             {
               lineOrder: 3,
-              accountCode: CUENTAS.igv.code,
-              accountName: CUENTAS.igv.name,
+              accountCode: cuentas.igv.code,
+              accountName: cuentas.igv.name,
               debitAmount: 0,
               creditAmount: igv,
             },
@@ -108,8 +120,8 @@ export class RegisterInvoiceAccountingEntryUseCase {
         ? [
             {
               lineOrder: 4,
-              accountCode: CUENTAS.otrosTributos.code,
-              accountName: CUENTAS.otrosTributos.name,
+              accountCode: cuentas.otrosTributos.code,
+              accountName: cuentas.otrosTributos.name,
               debitAmount: 0,
               creditAmount: otros,
             },
