@@ -128,7 +128,7 @@ const cutover = '20261118000200_roles_text_cutover';
     const preservedRefresh = new RefreshTokenUseCase(new PrismaUserRepositoryAdapter(db), preservedTokens, new SessionMembershipService(db));
     for (const session of auth) expect(preservedTokens.verifyToken((await preservedRefresh.execute(session.refreshToken)).accessToken)?.role).toBe(session.role);
     expect(await customRolesEnabled(db)).toBe(false);
-    expect((await pg.query('SELECT count(*)::int n FROM permission_menu_catalog')).rows[0].n).toBe(73);
+    expect((await pg.query('SELECT count(*)::int n FROM permission_menu_catalog')).rows[0].n).toBe(74);
     expect((await pg.query('SELECT count(*)::int n FROM role_menu_permissions')).rows[0].n).toBe(365);
     expect((await pg.query("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='public' AND tablename IN('users','role_module_permissions','role_action_permissions') ORDER BY indexname")).rows).toEqual(indexes);
     await assertJournal(); expect(migrate(current)).toContain('No pending migrations');
@@ -142,7 +142,7 @@ const cutover = '20261118000200_roles_text_cutover';
   it('reproduce todas las migraciones desde cero y usa el cliente texto para una empresa nueva', async () => {
     await db.$disconnect(); await pg.end(); await admin.query(`DROP DATABASE "${current}"`); await admin.query(`CREATE DATABASE "${current}"`);
     migrate(current); pg = new Client({ connectionString: url(current) }); await pg.connect(); db = prisma(current);
-    await assertJournal(); expect((await pg.query('SELECT count(*)::int n FROM permission_menu_catalog')).rows[0].n).toBe(73);
+    await assertJournal(); expect((await pg.query('SELECT count(*)::int n FROM permission_menu_catalog')).rows[0].n).toBe(74);
     const { initializeCompanyRoles } = await import('../../../src/modules/auth/application/services/roleCatalogService');
     await db.$transaction(async tx => { await tx.company.create({ data: { id: 'new-company', ruc: '20000000002', legal_name: 'Nueva local', sunat_issuer_username: 'local', sunat_issuer_password_enc: 'local' } }); await initializeCompanyRoles(tx, 'new-company'); await tx.user.create({ data: { company_id: 'new-company', email: 'nuevo@example.invalid', full_name: 'Nuevo', password_hash: 'hash', role: 'ADMIN' } }); });
     expect(await db.companyRole.count({ where: { company_id: 'new-company' } })).toBe(5);

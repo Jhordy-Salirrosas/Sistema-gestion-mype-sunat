@@ -38,7 +38,7 @@
     "diag:rechazos": "node scripts/diagnostico-rechazos.js",
     "prestart": "prisma generate",
     "prestart:dev": "prisma generate",
-    "prebuild": "prisma generate",
+    "prebuild": "prisma generate && node scripts/render-prisma-migrate.mjs",
     "seed:retencion": "npx tsx scripts/seed-retention-agents.ts"
   },
   "dependencies": {
