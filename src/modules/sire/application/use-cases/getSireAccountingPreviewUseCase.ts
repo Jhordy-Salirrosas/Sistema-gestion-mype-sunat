@@ -19,6 +19,7 @@ import {
   buildSireAccountingLines,
   type SireAccountingBookKind,
 } from '../../domain/rules/sireAccountingMappingRule';
+import { inheritSireAccountingMappings } from '../sireAccountingInheritance';
 
 const BOOK_KIND: Record<SireLibroMenu, SireAccountingBookKind> = {
   RVIE_VENTAS: 'VENTAS',
@@ -103,18 +104,7 @@ export class GetSireAccountingPreviewUseCase {
     for (const item of Object.values(accounts)) {
       accountNames.set(item.code, item.name);
     }
-    if (kind === 'VENTAS') {
-      return [
-        accounts.CXC && { tipoOperacion: 'VENTAS', cuentaContable: accounts.CXC.code },
-        accounts.IGV && { tipoOperacion: 'IGV', cuentaContable: accounts.IGV.code },
-        accounts.INGRESO && { tipoOperacion: 'BASE', cuentaContable: accounts.INGRESO.code },
-      ].filter((item): item is { tipoOperacion: string; cuentaContable: string } => Boolean(item));
-    }
-    return [
-      accounts.CXP && { tipoOperacion: 'COMPRAS', cuentaContable: accounts.CXP.code },
-      accounts.IGV && { tipoOperacion: 'IGV', cuentaContable: accounts.IGV.code },
-      accounts.COMPRA && { tipoOperacion: 'BASE', cuentaContable: accounts.COMPRA.code },
-    ].filter((item): item is { tipoOperacion: string; cuentaContable: string } => Boolean(item));
+    return inheritSireAccountingMappings(accounts, kind);
   }
 
   private toEntry(

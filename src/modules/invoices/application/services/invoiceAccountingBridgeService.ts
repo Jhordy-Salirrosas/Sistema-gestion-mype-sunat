@@ -144,6 +144,35 @@ export class InvoiceAccountingBridgeService {
     return cuentas;
   }
 
+  /** Resuelve las cuentas del costo con la matriz global y las reglas heredadas. */
+  private async costAccounts(companyId: string): Promise<{
+    cuentaCosto?: string;
+    cuentaInventario?: string;
+  }> {
+    const configured = this.accountingMappings
+      ? (await this.accountingMappings.getAccountsForOperation('VENTA', companyId)).accounts
+      : undefined;
+    if (configured?.COSTO_VENTA?.code && configured?.INVENTARIO?.code) {
+      return {
+        cuentaCosto: configured.COSTO_VENTA.code,
+        cuentaInventario: configured.INVENTARIO.code,
+      };
+    }
+    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+      where: { company_id: companyId, process_code: 'VENTA', is_active: true },
+    })) ?? [];
+    const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+    const reglas = (await (this.prisma as any).accountingRule?.findMany({
+      where: { company_id: companyId, process_code: 'VENTA', is_active: true },
+      orderBy: { line_order: 'asc' },
+    })) ?? [];
+    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    return {
+      cuentaCosto: porOrden.get(10) ?? roles.get('COSTO_VENTA'),
+      cuentaInventario: porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA'),
+    };
+  }
+
   /**
    * Registra el Kardex y el asiento de una factura.
    *
@@ -506,18 +535,7 @@ export class InvoiceAccountingBridgeService {
     const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.total_cost), 0) * 100) / 100;
     if (!Number.isFinite(costo)) { errores.push('Costo de nota: falta costo acreditado.'); return {}; }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
-    const reglas = (await (this.prisma as any).accountingRule?.findMany({
-      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
-      orderBy: { line_order: 'asc' },
-    })) ?? [];
-    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
-    const mappings = await this.prisma.accountingMapping?.findMany({ where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true } }) ?? [];
-    const roles = new Map(mappings.map(m => [m.role_code, m.account_code]));
-    const configured = this.accountingMappings
-      ? (await this.accountingMappings.getAccountsForOperation('VENTA', factura.companyId)).accounts
-      : undefined;
-    const cuentaCosto = configured?.COSTO_VENTA?.code ?? porOrden.get(10) ?? roles.get('COSTO_VENTA');
-    const cuentaInventario = configured?.INVENTARIO?.code ?? porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA');
+    const { cuentaCosto, cuentaInventario } = await this.costAccounts(factura.companyId);
     if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); reverso pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
@@ -567,20 +585,7 @@ export class InvoiceAccountingBridgeService {
     }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
-    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
-      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
-    })) ?? [];
-    const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
-    const reglasCosto = (await (this.prisma as any).accountingRule?.findMany({
-      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
-      orderBy: { line_order: 'asc' },
-    })) ?? [];
-    const porOrden = new Map<number, string>(reglasCosto.map((r: any) => [Number(r.line_order), String(r.account_code)]));
-    const configured = this.accountingMappings
-      ? (await this.accountingMappings.getAccountsForOperation('VENTA', factura.companyId)).accounts
-      : undefined;
-    const cuentaCosto = configured?.COSTO_VENTA?.code ?? porOrden.get(10) ?? roles.get('COSTO_VENTA');
-    const cuentaInventario = configured?.INVENTARIO?.code ?? porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA');
+    const { cuentaCosto, cuentaInventario } = await this.costAccounts(factura.companyId);
     if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); costo pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({

@@ -72,6 +72,42 @@ describe('AccountingMappingService', () => {
     expect(importacion.accounts.CXP_EXTERIOR.code).toBe('42122');
   });
 
+  it('mapea roles legacy y reglas de importación por descripción', async () => {
+    const prisma = prismaMock({
+      accountingMapping: {
+        findMany: jest.fn().mockResolvedValue([
+          { role_code: 'VENTA_GRAVADA', account_code: '70299' },
+        ]),
+      },
+      accountingRule: {
+        findMany: jest.fn().mockResolvedValue([
+          { line_order: 1, description: 'IGV_IMPORTACION', account_code: '40199' },
+        ]),
+      },
+    });
+    const service = new AccountingMappingService(prisma);
+
+    const venta = await service.getAccountsForOperation('VENTA', 'company-1');
+    const importacion = await service.getAccountsForOperation('IMPORTACION', 'company-1');
+
+    expect(venta.accounts.INGRESO.code).toBe('70299');
+    expect(importacion.accounts.IGV_IMPORTACION.code).toBe('40199');
+  });
+
+  it('usa los valores por defecto si el catálogo o las tablas no responden', async () => {
+    const prisma = prismaMock({
+      accountingMapping: { findMany: jest.fn().mockRejectedValue(new Error('sin tabla')) },
+      accountingRule: { findMany: jest.fn().mockRejectedValue(new Error('sin tabla')) },
+      accountingAccount: { findMany: jest.fn().mockRejectedValue(new Error('sin catálogo')) },
+    });
+    const service = new AccountingMappingService(prisma);
+
+    const result = await service.getAccountsForOperation('DESCONOCIDA', 'company-1');
+
+    expect(result.operation).toBe('VENTA');
+    expect(result.accounts.CXC).toMatchObject({ code: '12121' });
+  });
+
   it('prioriza el nombre del catálogo PCGE de la base de datos', async () => {
     const prisma = prismaMock({
       accountingAccount: {
