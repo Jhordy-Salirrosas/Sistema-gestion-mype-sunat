@@ -29,7 +29,8 @@ import { PrismaService } from '../../../../database/prismaService';
 import { RegisterManualMovementUseCase } from '../../../inventory/application/use-cases/registerManualMovementUseCase';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
 import { InventoryCostLayerService } from '../../../inventory/application/services/inventoryCostLayerService';
-import { CUENTAS_VENTA, balanceAsiento, lineasAsientoNotaCredito, lineasAsientoVenta, periodoDe } from './accountingBridge';
+import { AccountingMappingService } from '../../../accounting/application/services/accountingMappingService';
+import { CUENTAS_VENTA, balanceAsiento, lineasAsientoNotaCredito, lineasAsientoVenta, periodoDe, type CuentasVentaOverride } from './accountingBridge';
 import { movimientosDeFactura, type LineaParaKardex } from './kardexBridge';
 
 /** Módulo que se escribe en `source_module` del asiento. */
@@ -113,7 +114,64 @@ export class InvoiceAccountingBridgeService {
     private readonly registroMovimientos: RegisterManualMovementUseCase,
     private readonly generadorAsientos: GenerateAccountingEntryUseCase,
     @Optional() _capas?: InventoryCostLayerService,
+    @Optional() private readonly accountingMappings?: AccountingMappingService,
   ) {}
+
+  /** Traduce la matriz global de la empresa a las claves del puente de venta. */
+  private async cuentasVenta(
+    companyId: string,
+  ): Promise<CuentasVentaOverride | null> {
+    if (!this.accountingMappings) return null;
+    const { accounts } = await this.accountingMappings.getAccountsForOperation(
+      'VENTA',
+      companyId,
+    );
+    const get = (role: string) => {
+      const item = accounts[role];
+      return item ? { codigo: item.code, nombre: item.name } : undefined;
+    };
+    const cuentas: CuentasVentaOverride = {
+      porCobrar: get('CXC'),
+      igv: get('IGV'),
+      gravada: get('INGRESO'),
+      exonerada: get('VENTA_EXONERADA'),
+      inafecta: get('VENTA_INAFECTA'),
+      icbper: get('ICBPER'),
+      detraccion: get('DETRACCION'),
+      porCobrarRetenido: get('RETENCION'),
+      descuento: get('DESCUENTO'),
+    };
+    return cuentas;
+  }
+
+  /** Resuelve las cuentas del costo con la matriz global y las reglas heredadas. */
+  private async costAccounts(companyId: string): Promise<{
+    cuentaCosto?: string;
+    cuentaInventario?: string;
+  }> {
+    const configured = this.accountingMappings
+      ? (await this.accountingMappings.getAccountsForOperation('VENTA', companyId)).accounts
+      : undefined;
+    if (configured?.COSTO_VENTA?.code && configured?.INVENTARIO?.code) {
+      return {
+        cuentaCosto: configured.COSTO_VENTA.code,
+        cuentaInventario: configured.INVENTARIO.code,
+      };
+    }
+    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
+      where: { company_id: companyId, process_code: 'VENTA', is_active: true },
+    })) ?? [];
+    const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
+    const reglas = (await (this.prisma as any).accountingRule?.findMany({
+      where: { company_id: companyId, process_code: 'VENTA', is_active: true },
+      orderBy: { line_order: 'asc' },
+    })) ?? [];
+    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
+    return {
+      cuentaCosto: porOrden.get(10) ?? roles.get('COSTO_VENTA'),
+      cuentaInventario: porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA'),
+    };
+  }
 
   /**
    * Registra el Kardex y el asiento de una factura.
@@ -344,6 +402,7 @@ export class InvoiceAccountingBridgeService {
     const descuento = Math.round(
       (i.gravado + i.igv + i.exonerado + i.inafecto + i.icbper - i.total) * 100,
     ) / 100;
+    const cuentasConfiguradas = await this.cuentasVenta(factura.companyId);
     const mappings = (await (this.prisma as any).accountingMapping?.findMany({
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
     })) ?? [];
@@ -352,7 +411,7 @@ export class InvoiceAccountingBridgeService {
       where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
       orderBy: { line_order: 'asc' },
     })) ?? [];
-    if (reglas.length === 0) {
+    if (reglas.length === 0 && !cuentasConfiguradas) {
       errores.push('Contabilidad: no hay reglas de contabilización para VENTA. Configúrelas antes de emitir.');
       return { asientoOmitido: false };
     }
@@ -372,6 +431,11 @@ export class InvoiceAccountingBridgeService {
       ...(cuentaRegla(8, 'RETENCION', 'IGV - Retenciones') ? { porCobrarRetenido: cuentaRegla(8, 'RETENCION', 'IGV - Retenciones')! } : {}),
       ...(cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos') ? { descuento: cuentaRegla(9, 'DESCUENTO', 'Descuentos concedidos')! } : {}),
     };
+    if (cuentasConfiguradas) {
+      for (const [role, value] of Object.entries(cuentasConfiguradas)) {
+        if (value) (cuentas as Record<string, { codigo: string; nombre: string }>)[role] = value;
+      }
+    }
     // Solo nuevas ventas con snapshot; nunca reclasifica asientos históricos.
     if (['01', '03'].includes(factura.tipoComprobante) && factura.pago?.version === 1 && factura.pago.forma === 'Contado') {
       try {
@@ -471,15 +535,7 @@ export class InvoiceAccountingBridgeService {
     const costo = Math.round(movimientos.reduce((sum, m) => sum + Number(m.total_cost), 0) * 100) / 100;
     if (!Number.isFinite(costo)) { errores.push('Costo de nota: falta costo acreditado.'); return {}; }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
-    const reglas = (await (this.prisma as any).accountingRule?.findMany({
-      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
-      orderBy: { line_order: 'asc' },
-    })) ?? [];
-    const porOrden = new Map<number, string>(reglas.map((r: any) => [Number(r.line_order), String(r.account_code)]));
-    const mappings = await this.prisma.accountingMapping?.findMany({ where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true } }) ?? [];
-    const roles = new Map(mappings.map(m => [m.role_code, m.account_code]));
-    const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
-    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA');
+    const { cuentaCosto, cuentaInventario } = await this.costAccounts(factura.companyId);
     if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); reverso pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({
@@ -529,17 +585,7 @@ export class InvoiceAccountingBridgeService {
     }
     if (costo <= 0) return { costoVenta: 0, asientoCostoOmitido: true };
 
-    const mappings = (await (this.prisma as any).accountingMapping?.findMany({
-      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
-    })) ?? [];
-    const roles = new Map<string, string>(mappings.map((m: any) => [m.role_code, m.account_code]));
-    const reglasCosto = (await (this.prisma as any).accountingRule?.findMany({
-      where: { company_id: factura.companyId, process_code: 'VENTA', is_active: true },
-      orderBy: { line_order: 'asc' },
-    })) ?? [];
-    const porOrden = new Map<number, string>(reglasCosto.map((r: any) => [Number(r.line_order), String(r.account_code)]));
-    const cuentaCosto = porOrden.get(10) ?? roles.get('COSTO_VENTA');
-    const cuentaInventario = porOrden.get(11) ?? roles.get('INVENTARIO') ?? roles.get('INVENTARIO_SALIDA');
+    const { cuentaCosto, cuentaInventario } = await this.costAccounts(factura.companyId);
     if (!cuentaCosto || !cuentaInventario) { errores.push('Contabilidad: mapeo VENTA incompleto (COSTO_VENTA/INVENTARIO); costo pendiente.'); return {}; }
     try {
       const asiento = await this.generadorAsientos.execute({

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../database/prismaService';
 import { GenerateAccountingEntryUseCase } from '../../../accounting/application/use-cases/generateAccountingEntryUseCase';
+import { AccountingMappingService } from '../../../accounting/application/services/accountingMappingService';
 
 export interface CustomsAccountingLine {
   lineOrder: number;
@@ -90,6 +91,7 @@ export class CustomsAccountingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accounting: GenerateAccountingEntryUseCase,
+    private readonly accountingMappings?: AccountingMappingService,
   ) {}
 
   /**
@@ -101,12 +103,17 @@ export class CustomsAccountingService {
     });
 
     const ruleMap = new Map(rules.map((r) => [r.description || '', r.account_code]));
+    const inherited = this.accountingMappings
+      ? (await this.accountingMappings.getAccountsForOperation('IMPORTACION', companyId)).accounts
+      : undefined;
 
     return DEFAULT_MAPPING_RULES.map((def) => {
       const customCode = ruleMap.get(def.roleCode);
+      const configured = inherited?.[def.roleCode];
       return {
         ...def,
-        accountCode: customCode || def.defaultCode,
+        accountCode: customCode || configured?.code || def.defaultCode,
+        accountName: configured?.name ?? def.accountName,
       };
     });
   }

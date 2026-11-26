@@ -3,6 +3,7 @@ import { RegisterSireAccountingEntryUseCase } from '../../../src/modules/sire/ap
 import type { ISireAccountingMappingRepositoryPort } from '../../../src/modules/sire/domain/ports/sireAccountingMappingRepositoryPort';
 import type { GenerateAccountingEntryUseCase } from '../../../src/modules/accounting/application/use-cases/generateAccountingEntryUseCase';
 import type { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
+import type { AccountingMappingService } from '../../../src/modules/accounting/application/services/accountingMappingService';
 
 describe('RegisterSireAccountingEntryUseCase', () => {
   const entry = { id: 'entry-1' };
@@ -33,13 +34,32 @@ describe('RegisterSireAccountingEntryUseCase', () => {
     };
   });
 
-  function createUseCase() {
+  function createUseCase(globalMappings?: AccountingMappingService) {
     return new RegisterSireAccountingEntryUseCase(
       mappings,
       accounting as unknown as GenerateAccountingEntryUseCase,
       accountingAccounts as unknown as ListAccountingAccountsUseCase,
+      globalMappings,
     );
   }
+
+  const globalMappings = {
+    getAccountsForOperation: jest.fn().mockImplementation(async (operation: string) => ({
+      operation,
+      direction: operation === 'SIRE_VENTAS' ? 'SALIDA' : 'ENTRADA',
+      accounts: operation === 'SIRE_VENTAS'
+        ? {
+            CXC: { code: '122', name: 'CxC global' },
+            IGV: { code: '40112', name: 'IGV global' },
+            INGRESO: { code: '702', name: 'Ingreso global' },
+          }
+        : {
+            CXP: { code: '422', name: 'CxP global' },
+            IGV: { code: '40112', name: 'IGV global' },
+            COMPRA: { code: '602', name: 'Compra global' },
+          },
+    })),
+  } as unknown as AccountingMappingService;
 
   const records = [
     {
@@ -150,6 +170,52 @@ describe('RegisterSireAccountingEntryUseCase', () => {
             accountName: 'Proveedores nacionales',
             creditAmount: 118,
           }),
+        ],
+      }),
+    );
+  });
+
+  it('hereda las cuentas globales cuando SIRE no tiene mapeo propio', async () => {
+    mappings.findAll.mockResolvedValue([]);
+
+    await createUseCase(globalMappings).execute(
+      'company-1',
+      '202603',
+      'RVIE_VENTAS',
+      records,
+    );
+
+    expect(globalMappings.getAccountsForOperation).toHaveBeenCalledWith(
+      'SIRE_VENTAS',
+      'company-1',
+    );
+    expect(accounting.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: [
+          expect.objectContaining({ accountCode: '122', debitAmount: 118 }),
+          expect.objectContaining({ accountCode: '702', creditAmount: 100 }),
+          expect.objectContaining({ accountCode: '40112', creditAmount: 18 }),
+        ],
+      }),
+    );
+  });
+
+  it('hereda las cuentas globales de compras', async () => {
+    mappings.findAll.mockResolvedValue([]);
+
+    await createUseCase(globalMappings).execute(
+      'company-1',
+      '202603',
+      'RCE_COMPRAS',
+      records,
+    );
+
+    expect(accounting.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: [
+          expect.objectContaining({ accountCode: '602', debitAmount: 100 }),
+          expect.objectContaining({ accountCode: '40112', debitAmount: 18 }),
+          expect.objectContaining({ accountCode: '422', creditAmount: 118 }),
         ],
       }),
     );

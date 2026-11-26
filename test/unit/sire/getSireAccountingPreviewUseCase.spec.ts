@@ -3,6 +3,7 @@ import { GetSireAccountingPreviewUseCase } from '../../../src/modules/sire/appli
 import type { ISireAccountingPreviewRepositoryPort } from '../../../src/modules/sire/domain/ports/sireAccountingPreviewRepositoryPort';
 import type { ISireAccountingMappingRepositoryPort } from '../../../src/modules/sire/domain/ports/sireAccountingMappingRepositoryPort';
 import type { ListAccountingAccountsUseCase } from '../../../src/modules/accounting/application/use-cases/listAccountingAccountsUseCase';
+import type { AccountingMappingService } from '../../../src/modules/accounting/application/services/accountingMappingService';
 
 describe('GetSireAccountingPreviewUseCase', () => {
   let totalsRepository: jest.Mocked<ISireAccountingPreviewRepositoryPort>;
@@ -82,6 +83,46 @@ describe('GetSireAccountingPreviewUseCase', () => {
     });
     expect(result.asientos[1].lineas[0]).toMatchObject({
       cuenta: '601',
+      debe: 500,
+    });
+  });
+
+  it('hereda las cuentas globales cuando no hay mapeo SIRE propio', async () => {
+    mappingRepository.findAll.mockResolvedValue([]);
+    const globalMappings = {
+      getAccountsForOperation: jest.fn().mockImplementation(async (operation: string) => ({
+        operation,
+        direction: operation === 'SIRE_VENTAS' ? 'SALIDA' : 'ENTRADA',
+        accounts: operation === 'SIRE_VENTAS'
+          ? {
+              CXC: { code: '122', name: 'CxC global' },
+              IGV: { code: '40112', name: 'IGV global' },
+              INGRESO: { code: '702', name: 'Ingreso global' },
+            }
+          : {
+              CXP: { code: '422', name: 'CxP global' },
+              IGV: { code: '40112', name: 'IGV global' },
+              COMPRA: { code: '602', name: 'Compra global' },
+            },
+      })),
+    } as unknown as AccountingMappingService;
+    const inheritedUseCase = new GetSireAccountingPreviewUseCase(
+      totalsRepository,
+      mappingRepository,
+      accountingAccounts,
+      globalMappings,
+    );
+
+    const result = await inheritedUseCase.execute('company-1', '202602');
+
+    expect(result.asientos[0].lineas).toEqual([
+      expect.objectContaining({ cuenta: '122', nombre: 'CxC global', debe: 1180 }),
+      expect.objectContaining({ cuenta: '702', nombre: 'Ingreso global', haber: 1000 }),
+      expect.objectContaining({ cuenta: '40112', nombre: 'IGV global', haber: 180 }),
+    ]);
+    expect(result.asientos[1].lineas[0]).toMatchObject({
+      cuenta: '602',
+      nombre: 'Compra global',
       debe: 500,
     });
   });
