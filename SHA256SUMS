@@ -1,0 +1,3 @@
+fb51e8b143245df7a1b67eff5850b802195049d17acb4e5badd37bdaec86c348  frontend/src/modules/invoices/components/InvoiceItemsGrid.tsx
+2430f86facbdee2c592932d7b90df8a0b98e22bb91f62e3fe397bcabec65389c  frontend/test/unit/modules/invoices/invoiceItemsLayout.test.tsx
+8886572135b61fe51d8748757a2294054913b66b9bf86ddf413b71f1234e1a51  FERRY.md
