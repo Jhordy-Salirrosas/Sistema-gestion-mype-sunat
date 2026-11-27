@@ -9,15 +9,30 @@
 -- depende de estos permisos, así que revocarlos no afecta a la aplicación.
 -- La subida de archivos usa el esquema `storage`, que no se toca aquí.
 --
+-- `anon` y `authenticated` sólo existen en Supabase. En una base limpia (CI,
+-- PostgreSQL local) no existen, y un REVOKE directo falla con
+-- «role "anon" does not exist», tumbando el `migrate deploy`. Por eso se revoca
+-- con SQL dinámico únicamente cuando el rol está presente.
+--
 -- Si algún día se necesita acceso directo desde el navegador, se vuelve a
 -- conceder de forma explícita y por tabla:
 --   GRANT SELECT ON "products" TO anon;
 
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated;
+DO $$
+DECLARE
+  rol text;
+BEGIN
+  FOREACH rol IN ARRAY ARRAY['anon', 'authenticated']::text[] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = rol) THEN
+      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', rol);
+      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', rol);
+      EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', rol);
 
--- Evita que las tablas futuras vuelvan a heredar estos permisos.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
+      -- Evita que las tablas futuras vuelvan a heredar estos permisos.
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', rol);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', rol);
+      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', rol);
+    END IF;
+  END LOOP;
+END
+$$;
