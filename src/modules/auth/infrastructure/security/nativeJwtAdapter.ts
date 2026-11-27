@@ -11,9 +11,15 @@ export class NativeJwtAdapter implements TokenServicePort {
   private readonly secret: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.secret =
-      this.configService.get<string>('JWT_SECRET') ||
-      'secret-clave-segura-desarrollo-sistema-mype-2026';
+    const secret = this.configService.get<string>('JWT_SECRET');
+    // Sin secreto no se firma: un valor por defecto publicado en el repositorio
+    // convertiría un despliegue mal configurado en tokens falsificables.
+    if (!secret || !secret.trim()) {
+      throw new Error(
+        'JWT_SECRET no está configurada. La autenticación no puede arrancar sin un secreto propio.',
+      );
+    }
+    this.secret = secret;
   }
 
   signToken(payload: TokenPayload, expiresInSeconds = 900): string {

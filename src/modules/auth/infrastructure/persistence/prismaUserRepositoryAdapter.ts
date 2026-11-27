@@ -6,14 +6,13 @@ import { DEFAULT_ACCOUNTING_RULES } from '../../../accounting/domain/rules/defau
 import { UserEntity } from '../../domain/entities/userEntity';
 import { CompanyEntity } from '../../domain/entities/companyEntity';
 import { RefreshTokenEntity } from '../../domain/entities/refreshTokenEntity';
+import { OFFLINE_FALLBACK } from './offlineFallback.fixtures';
 import type {
   CreateUserWithCompanyParams,
   UserAuthRecord,
   UserRepositoryPort,
 } from '../../domain/ports/userRepositoryPort';
 
-// Hash genérico compatible con bcrypt para la contraseña demo "Password123!"
-const MOCK_PASSWORD_HASH = '$2a$10$e8R1yYI2e/hF0p.3rR1m0e.8s9Z9v9W9x9y9z9a9b9c9d9e9f';
 
 @Injectable()
 export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
@@ -38,11 +37,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
 
     // Usuario Mock de respaldo para garantizar el login en la exposición
     const mockUser = new UserEntity({
-      id: 'mock-admin-id',
-      companyId: 'mock-company-id',
-      email: email || 'contador@mype.pe',
-      fullName: 'Usuario Demo (Modo Offline)',
-      role: 'ADMIN',
+      id: OFFLINE_FALLBACK.user.id,
+      companyId: OFFLINE_FALLBACK.company.id,
+      email: email || OFFLINE_FALLBACK.user.email,
+      fullName: OFFLINE_FALLBACK.user.fullName,
+      role: OFFLINE_FALLBACK.user.role,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -50,7 +49,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
 
     return {
       user: mockUser,
-      passwordHash: MOCK_PASSWORD_HASH,
+      passwordHash: OFFLINE_FALLBACK.demoPasswordHash,
     };
   }
 
@@ -67,11 +66,11 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     if (this.isProduction()) return null;
 
     return new UserEntity({
-      id: id || 'mock-admin-id',
-      companyId: companyId || 'mock-company-id',
-      email: 'contador@mype.pe',
-      fullName: 'Usuario Demo (Modo Offline)',
-      role: 'ADMIN',
+      id: id || OFFLINE_FALLBACK.user.id,
+      companyId: companyId || OFFLINE_FALLBACK.company.id,
+      email: OFFLINE_FALLBACK.user.email,
+      fullName: OFFLINE_FALLBACK.user.fullName,
+      role: OFFLINE_FALLBACK.user.role,
       isActive: true,
     });
   }
@@ -89,12 +88,12 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     if (this.isProduction()) return null;
 
     return new CompanyEntity({
-      id: 'mock-company-id',
-      ruc: ruc || '20601012341',
-      legalName: 'MYPE CONFECCIONES INDUSTRIALES S.A.C.',
-      tradeName: 'MYPE CONFECCIONES',
-      solUser: 'MODDATOS',
-      solPassEncrypted: 'MODDATOS',
+      id: OFFLINE_FALLBACK.company.id,
+      ruc: ruc || OFFLINE_FALLBACK.company.ruc,
+      legalName: OFFLINE_FALLBACK.company.legalName,
+      tradeName: OFFLINE_FALLBACK.company.tradeName,
+      solUser: '',
+      solPassEncrypted: '',
       certStorageUrl: null,
       certPassEncrypted: null,
       isActive: true,
@@ -114,12 +113,12 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     if (this.isProduction()) return null;
 
     return new CompanyEntity({
-      id: companyId || 'mock-company-id',
-      ruc: '20601012341',
-      legalName: 'MYPE CONFECCIONES INDUSTRIALES S.A.C.',
-      tradeName: 'MYPE CONFECCIONES',
-      solUser: 'MODDATOS',
-      solPassEncrypted: 'MODDATOS',
+      id: companyId || OFFLINE_FALLBACK.company.id,
+      ruc: OFFLINE_FALLBACK.company.ruc,
+      legalName: OFFLINE_FALLBACK.company.legalName,
+      tradeName: OFFLINE_FALLBACK.company.tradeName,
+      solUser: '',
+      solPassEncrypted: '',
       certStorageUrl: null,
       certPassEncrypted: null,
       isActive: true,
@@ -229,7 +228,7 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     } catch (error) {
       if (this.isProduction()) throw error;
       return new RefreshTokenEntity({
-        id: 'mock-refresh-token-id',
+        id: OFFLINE_FALLBACK.refreshTokenId,
         userId,
         tokenHash,
         expiresAt,
@@ -251,8 +250,8 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     if (this.isProduction()) return null;
 
     return new RefreshTokenEntity({
-      id: 'mock-refresh-token-id',
-      userId: 'mock-admin-id',
+      id: OFFLINE_FALLBACK.refreshTokenId,
+      userId: OFFLINE_FALLBACK.user.id,
       tokenHash,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       isRevoked: false,
@@ -303,10 +302,10 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       if (this.isProduction()) throw error;
       return new UserEntity({
         id: userId,
-        companyId: 'mock-company-id',
-        email: 'contador@mype.pe',
+        companyId: OFFLINE_FALLBACK.company.id,
+        email: OFFLINE_FALLBACK.user.email,
         fullName: fullName.trim(),
-        role: 'ADMIN',
+        role: OFFLINE_FALLBACK.user.role,
         isActive: true,
       });
     }
