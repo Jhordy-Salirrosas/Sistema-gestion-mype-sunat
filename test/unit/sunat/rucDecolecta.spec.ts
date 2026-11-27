@@ -49,6 +49,36 @@ describe('RucConsultaService - Decolecta', () => {
     await expect(service().consultar('20601030013')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
+  it('devuelve datos mock y evita el proveedor cuando MOCK_DECOLECTA=true', async () => {
+    const original = process.env.MOCK_DECOLECTA;
+    process.env.MOCK_DECOLECTA = 'true';
+    try {
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock as never;
+      const db = prisma();
+      const service = new RucConsultaService(
+        db as never,
+        config({ DECOLECTA_API_TOKEN: 'tok' }) as never,
+      );
+
+      const response = await service.consultar('20601030013');
+
+      expect(response).toMatchObject({
+        ruc: '20601030013',
+        razonSocial: 'EMPRESA DEMO S.A.C.',
+        estadoContribuyente: 'ACTIVO',
+        condicionDomicilio: 'HABIDO',
+        source: 'mock',
+        cached: false,
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(db.padronRucCache.findUnique).not.toHaveBeenCalled();
+    } finally {
+      if (original === undefined) delete process.env.MOCK_DECOLECTA;
+      else process.env.MOCK_DECOLECTA = original;
+    }
+  });
+
   it('rechaza un RUC inválido antes de consultar al proveedor', async () => {
     const fetchMock = jest.fn();
     global.fetch = fetchMock as never;

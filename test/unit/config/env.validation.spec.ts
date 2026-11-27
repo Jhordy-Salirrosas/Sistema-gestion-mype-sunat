@@ -265,4 +265,43 @@ describe('Validación de Variables de Entorno (TT-10)', () => {
     expect(result.RUC_EMISOR).toBeUndefined();
     expect(result.SOL_CREDENTIALS_ENCRYPTION_KEY).toBeUndefined();
   });
+
+  it('acepta los flags locales y los deja desactivados por defecto', () => {
+    const base = {
+      DATABASE_URL: 'postgres://valid-database',
+      API_KEY: 'clave-falsa',
+      JWT_SECRET: 'jwt-secreto-seguro-de-prueba',
+      CERT_PASSWORD: '123',
+      CERT_BASE64: 'base64',
+    };
+
+    const defaults = validate(base);
+    expect(defaults.MOCK_DECOLECTA).toBe(false);
+    expect(defaults.SKIP_FILE_VALIDATION).toBe(false);
+
+    const enabled = validate({
+      ...base,
+      MOCK_DECOLECTA: 'true',
+      SKIP_FILE_VALIDATION: 'true',
+    });
+    expect(enabled.MOCK_DECOLECTA).toBe(true);
+    expect(enabled.SKIP_FILE_VALIDATION).toBe(true);
+  });
+
+  it('rechaza los flags locales en produccion', () => {
+    const base = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://valid-database',
+      API_KEY: 'clave-falsa',
+      JWT_SECRET: 'jwt-secreto-seguro-de-prueba',
+      CERT_PASSWORD: '123',
+      CERT_BASE64: 'base64',
+    };
+
+    for (const flag of ['MOCK_DECOLECTA', 'SKIP_FILE_VALIDATION'] as const) {
+      expect(() => validate({ ...base, [flag]: 'true' })).toThrow(
+        new RegExp(flag),
+      );
+    }
+  });
 });

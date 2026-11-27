@@ -7,6 +7,7 @@ import { GuardarConfiguracionSireUseCase } from '../../../src/modules/sire/appli
 import { ConsultarEstadoConfiguracionSireUseCase } from '../../../src/modules/sire/application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import { SireMenuController } from '../../../src/modules/sire/infrastructure/controllers/sireMenuController';
 import { SireReadOnlyPeriodsController } from '../../../src/modules/sire/infrastructure/controllers/sireReadOnlyPeriodsController';
+import { SirePeriodsJobConsumer } from '../../../src/modules/sire/infrastructure/queue/sirePeriodsJobConsumer';
 
 describe('SireModule', () => {
   const controllers = Reflect.getMetadata(
@@ -34,6 +35,7 @@ describe('SireModule', () => {
         GuardarConfiguracionSireUseCase,
         ConsultarEstadoConfiguracionSireUseCase,
         PrismaSireConfigurationRepository,
+        SirePeriodsJobConsumer,
       ]),
     );
   });

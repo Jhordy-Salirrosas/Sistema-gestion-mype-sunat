@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { isDevelopmentFlagEnabled } from '../../config/developmentFlags';
 import { PrismaService } from '../../database/prismaService';
 import { esRucValido } from '../invoices/domain/rules/taxpayerIdValidator';
 
@@ -66,6 +67,9 @@ export class RucConsultaService {
 
   async consultar(rucInput: string): Promise<ConsultaRucResponse> {
     const ruc = this.validarRuc(rucInput);
+    if (isDevelopmentFlagEnabled('MOCK_DECOLECTA')) {
+      return this.mockRucResponse(ruc);
+    }
     const cached = await this.prisma.padronRucCache.findUnique({ where: { ruc } });
     const ttlSeconds = this.config.get<number>('SUNAT_RUC_CACHE_TTL_SECONDS', 86400);
     if (cached && Date.now() - cached.consulted_at.getTime() <= ttlSeconds * 1000) {
@@ -100,6 +104,22 @@ export class RucConsultaService {
       },
     });
     return this.toResponse(saved, false);
+  }
+
+  private mockRucResponse(ruc: string): ConsultaRucResponse {
+    return {
+      ruc,
+      razonSocial: 'EMPRESA DEMO S.A.C.',
+      nombreComercial: 'EMPRESA DEMO',
+      estadoContribuyente: 'ACTIVO',
+      condicionDomicilio: 'HABIDO',
+      ubigeo: '150101',
+      direccionFiscal: 'AV. DEMO 123',
+      esAgenteRetencion: false,
+      fechaConsulta: new Date().toISOString(),
+      source: 'mock',
+      cached: false,
+    };
   }
 
   private validarRuc(value: string): string {

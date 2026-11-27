@@ -285,6 +285,22 @@ describe('Filtro de extensiones del archivo SIRE', () => {
     expect(callback).toHaveBeenCalledWith(null, true);
   });
 
+  it('accepts any extension when SKIP_FILE_VALIDATION=true', () => {
+    const original = process.env.SKIP_FILE_VALIDATION;
+    process.env.SKIP_FILE_VALIDATION = 'true';
+    try {
+      const fileFilter = obtenerFileFilter();
+      const callback = jest.fn();
+
+      fileFilter({}, { originalname: 'propuesta.pdf' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(null, true);
+    } finally {
+      if (original === undefined) delete process.env.SKIP_FILE_VALIDATION;
+      else process.env.SKIP_FILE_VALIDATION = original;
+    }
+  });
+
   it('rejects a file with an extension that is not allowed', () => {
     const fileFilter = obtenerFileFilter();
     const callback = jest.fn();

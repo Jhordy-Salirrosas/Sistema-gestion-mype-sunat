@@ -142,6 +142,41 @@ describe('ImportarPropuestaSireUseCase', () => {
     expect(resultado.libro).toBe('RVIE_VENTAS');
   });
 
+  it('accepts any file when SKIP_FILE_VALIDATION=true', async () => {
+    const original = process.env.SKIP_FILE_VALIDATION;
+    process.env.SKIP_FILE_VALIDATION = 'true';
+    try {
+      const repository = crearRepository();
+      const queue = crearQueue();
+      const storage = crearStorage();
+      const useCase = new ImportarPropuestaSireUseCase(
+        repository,
+        queue,
+        storage,
+      );
+
+      const resultado = await useCase.execute(
+        COMPANY_ID,
+        RUC,
+        {},
+        archivo('propuesta-demo.pdf'),
+      );
+
+      expect(resultado).toMatchObject({
+        periodo: expect.stringMatching(/^\d{6}$/),
+        libro: 'RVIE_VENTAS',
+        estado: 'PENDING',
+      });
+      expect(storage.guardar).toHaveBeenCalledWith(
+        expect.objectContaining({ nombreArchivo: 'propuesta-demo.pdf' }),
+      );
+      expect(queue.enqueueSireImport).toHaveBeenCalled();
+    } finally {
+      if (original === undefined) delete process.env.SKIP_FILE_VALIDATION;
+      else process.env.SKIP_FILE_VALIDATION = original;
+    }
+  });
+
   it('rejects a file that does not belong to the company', async () => {
     const repository = crearRepository();
     const queue = crearQueue();

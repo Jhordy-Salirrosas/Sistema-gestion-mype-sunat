@@ -160,6 +160,20 @@ class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   SUNAT_RUC_CACHE_TTL_SECONDS: number = 86400;
+
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  @IsOptional()
+  MOCK_DECOLECTA: boolean = false;
+
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  @IsOptional()
+  SKIP_FILE_VALIDATION: boolean = false;
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -194,6 +208,19 @@ export function validate(config: Record<string, unknown>) {
     throw new Error(
       'SUNAT_SIRE_ENV=mock no está permitido cuando NODE_ENV=production.',
     );
+  }
+
+  if (validatedConfig.NODE_ENV === Environment.Production) {
+    if (validatedConfig.MOCK_DECOLECTA) {
+      throw new Error(
+        'MOCK_DECOLECTA=true no se permite cuando NODE_ENV=production.',
+      );
+    }
+    if (validatedConfig.SKIP_FILE_VALIDATION) {
+      throw new Error(
+        'SKIP_FILE_VALIDATION=true no se permite cuando NODE_ENV=production.',
+      );
+    }
   }
 
   if (validatedConfig.SUNAT_SIRE_INTEGRATION_ENABLED) {
