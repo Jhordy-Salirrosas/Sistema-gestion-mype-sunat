@@ -1,0 +1,185 @@
+import { InvoiceIssueSummary } from './InvoiceIssueSummary';
+import { InvoiceWriteButton } from './InvoiceWriteButton';
+import { numeroVisible } from '../lib/invoiceVisibleNumber';
+/**
+ * Fila de la grilla enriquecida de comprobantes (M1).
+ *
+ * Se extrae de `InvoiceTable` para mantener ambos archivos por debajo del
+ * límite de líneas y aislar las acciones por documento.
+ */
+import {
+  Button,
+  PageText,
+  TableCell,
+  TableRow,
+} from '@/components/ui';
+import { Download, FileCode2, FileCheck2, RefreshCw } from 'lucide-react';
+import { formatCurrency, formatDateToPeru } from '@/lib/formatters';
+import type { ComprobanteDemo } from '../data/invoiceDemoSchema';
+import { InvoiceStatusBadge } from './InvoiceStatusBadge';
+
+/** Etiqueta legible del tipo de comprobante (Catálogo 01). */
+const TIPO_LABEL: Record<ComprobanteDemo['tipo'], string> = {
+  '01': 'Factura',
+  '03': 'Boleta',
+  '07': 'Nota de Crédito',
+  '08': 'Nota de Débito',
+  RA: 'Comunicación de Baja',
+  RC: 'Resumen Diario',
+};
+
+interface InvoiceTableRowProps {
+  comprobante: ComprobanteDemo;
+  sinAcciones?: boolean;
+  onVerXml: (c: ComprobanteDemo) => void;
+  onVerCdr: (c: ComprobanteDemo) => void;
+  onDescargarPdf: (c: ComprobanteDemo) => void;
+  onReintentarCdr: (c: ComprobanteDemo) => void;
+}
+
+export const InvoiceTableRow = ({
+  comprobante: c,
+  sinAcciones = false,
+  onVerXml,
+  onVerCdr,
+  onDescargarPdf,
+  onReintentarCdr,
+}: InvoiceTableRowProps) => {
+  const descuento = c.detraccion + c.retencion;
+
+  return (
+    <TableRow
+      className="cursor-pointer focus-visible:outline-2"
+      tabIndex={0}
+      data-invoice-id={sinAcciones ? c.id : undefined}
+      aria-label={`Ver detalle XML de ${numeroVisible(c.serie, c.correlativo)}`}
+      onClick={(e) => { if (sinAcciones) e.currentTarget.focus(); onVerXml(c); }}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onVerXml(c);
+        }
+      }}
+    >
+      <TableCell>
+        <PageText variant="label">{numeroVisible(c.serie, c.correlativo)}</PageText>
+        <PageText variant="caption">{TIPO_LABEL[c.tipo]}</PageText>
+        <PageText variant="caption">
+          {c.formaPago === 'Credito'
+            ? `Crédito (${c.cuotas.length} cuotas)`
+            : c.formaPago === 'Contado'
+              ? 'Contado'
+              : 'Forma de pago no registrada'}
+        </PageText>
+        {(c.comprobanteOrigen || c.documentoAfectado) && (
+          <PageText variant="caption">
+            Afecta:{' '}
+            {c.comprobanteOrigen?.tipoComprobante === '03'
+              ? 'Boleta '
+              : c.comprobanteOrigen?.tipoComprobante === '01'
+                ? 'Factura '
+                : ''}
+            {c.comprobanteOrigen?.numero ?? c.documentoAfectado}
+            {c.comprobanteOrigen?.montoTotal !== null &&
+            c.comprobanteOrigen?.montoTotal !== undefined
+              ? ` (${formatCurrency(c.comprobanteOrigen.montoTotal, c.comprobanteOrigen.moneda === 'USD' ? 'USD' : 'PEN')})`
+              : ''}
+          </PageText>
+        )}
+      </TableCell>
+
+      <TableCell>{formatDateToPeru(c.fechaEmision)}</TableCell>
+
+      <TableCell>
+        <PageText variant="label">{c.clienteRazonSocial}</PageText>
+        <PageText variant="caption">RUC/DNI: {c.clienteRuc}</PageText>
+      </TableCell>
+      <TableCell align="right">
+        <PageText variant="label">
+          {formatCurrency(c.totalNeto, c.moneda)}
+          {c.importesBandeja?.verificado && c.importesBandeja.icbper>0 && <PageText variant="caption">ICBPER {formatCurrency(c.importesBandeja.icbper,c.moneda)}</PageText>}
+        </PageText>
+      </TableCell>
+
+      <TableCell align="center">{c.moneda}</TableCell>
+
+      <TableCell align="right">
+        {c.importesBandeja?.verificado===false ? <span title="El detalle no permite verificar el desglose">Desglose no verificable</span> : formatCurrency(c.baseImponible, c.moneda)}
+      </TableCell>
+
+      <TableCell align="right">{c.importesBandeja?.verificado===false ? '—' : formatCurrency(c.igv, c.moneda)}</TableCell>
+
+      <TableCell align="right">
+        {descuento > 0 ? (
+          <>
+            {c.detraccion > 0 && (
+              <PageText variant="caption">
+                Detracción {formatCurrency(c.detraccion, c.moneda)}
+              </PageText>
+            )}
+            {c.retencion > 0 && (
+              <PageText variant="caption">
+                Retención {formatCurrency(c.retencion, c.moneda)}
+              </PageText>
+            )}
+          </>
+        ) : (
+          <PageText variant="caption">—</PageText>
+        )}
+      </TableCell>
+
+
+
+      <TableCell align="center">
+        <InvoiceStatusBadge estadoBackend={c.estadoBackend} estado={c.estado} codigo={c.cdrCodigo} resultado={c.resultadoPresentacion} />
+        {c.estado === 'RECHAZADO' && <InvoiceIssueSummary codigo={c.resultadoPresentacion?.codigo ?? c.ultimoErrorCodigo ?? c.cdrCodigo} onVerDetalle={() => onVerXml(c)} />}
+      </TableCell>
+
+      {!sinAcciones && <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-wrap justify-end gap-1">
+          <Button size="sm" variant="outline" onClick={() => onVerXml(c)}>Ver</Button>
+          <details className="relative"><summary className="min-h-8 cursor-pointer rounded border px-2 py-1 text-sm">Más acciones</summary><div className="flex flex-col items-stretch gap-1 p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Ver XML de ${numeroVisible(c.serie, c.correlativo)}`}
+            title="Ver XML"
+            onClick={() => onVerXml(c)}
+          >
+            <FileCode2 aria-hidden="true" />Ver XML
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Ver CDR de ${numeroVisible(c.serie, c.correlativo)}`}
+            title="Ver CDR"
+            onClick={() => onVerCdr(c)}
+          >
+            <FileCheck2 aria-hidden="true" />Ver CDR
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Descargar PDF de ${numeroVisible(c.serie, c.correlativo)}`}
+            title="Descargar PDF"
+            onClick={() => onDescargarPdf(c)}
+          >
+            <Download aria-hidden="true" />Descargar PDF
+          </Button>
+          {c.transporteAcreditado === true && (c.estado === 'RECHAZADO' || c.estado === 'EN_COLA' || c.estado === 'SIN_CONFIRMAR') && (
+            <InvoiceWriteButton
+              variant="ghost"
+              size="sm"
+              aria-label={`Reintentar CDR de ${numeroVisible(c.serie, c.correlativo)}`}
+              title="Reintentar CDR (reencola el comprobante)"
+              onClick={() => onReintentarCdr(c)}
+            >
+              <RefreshCw aria-hidden="true" />Reintentar CDR
+            </InvoiceWriteButton>
+          )}
+          </div></details>
+        </div>
+      </TableCell>}
+    </TableRow>
+  );
+};
