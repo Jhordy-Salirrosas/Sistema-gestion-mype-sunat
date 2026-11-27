@@ -49,7 +49,10 @@ describe('SireConfigurationController', () => {
     };
 
     await expect(controller.guardar(dto, user)).resolves.toEqual({
+      success: true,
+      message: 'Credenciales guardadas',
       configured: true,
+      companyId: 'company-id',
     });
     expect(guardarUseCase.execute).toHaveBeenCalledWith('company-id', dto);
   });

@@ -244,10 +244,8 @@ export class SireImportJobConsumer implements OnModuleInit {
   }
 
   private extraerRuc(nombreArchivo: string, texto: string): string | undefined {
-    return (
-      /\b\d{11}\b/.exec(nombreArchivo)?.[0] ??
-      /\b\d{11}\b/.exec(texto)?.[0]
-    );
+    const ruc = /(?:^|\D)(\d{11})(?=\D|$)/;
+    return ruc.exec(nombreArchivo)?.[1] ?? ruc.exec(texto)?.[1];
   }
 
   private extraerPeriodo(valor: string): string | undefined {

@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../../../../common/decorators';
+import { isDevelopmentFlagEnabled } from '../../../../config/developmentFlags';
 import {
   USER_REPOSITORY_PORT,
   type IUserRepositoryPort,
@@ -73,9 +74,11 @@ const opcionesSubidaSire = {
     file: ArchivoSireSubido,
     callback: (error: Error | null, acceptFile: boolean) => void,
   ) => {
-    const aceptada = SIRE_EXTENSIONES_PERMITIDAS.some((extension) =>
-      file.originalname.toLowerCase().endsWith(extension),
-    );
+    const aceptada =
+      isDevelopmentFlagEnabled('SKIP_FILE_VALIDATION') ||
+      SIRE_EXTENSIONES_PERMITIDAS.some((extension) =>
+        file.originalname.toLowerCase().endsWith(extension),
+      );
     callback(
       aceptada
         ? null

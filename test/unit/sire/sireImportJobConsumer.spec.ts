@@ -16,7 +16,9 @@ const IMPORTACION = {
   libro: 'RCE_COMPRAS' as const,
 };
 
-function crearRepository() {
+function crearRepository(
+  nombreArchivo = 'LE20601030013-RCE-202401.txt',
+) {
   return {
     marcarImportacionEnProceso: jest.fn().mockResolvedValue(undefined),
     completarImportacion: jest.fn().mockResolvedValue(undefined),
@@ -28,7 +30,7 @@ function crearRepository() {
       id: 'importacion-id',
       periodo: '202401',
       libro: 'RCE_COMPRAS',
-      nombre_archivo: 'LE20601030013-RCE-202401.txt',
+      nombre_archivo: nombreArchivo,
       ruta_archivo: 'sire/company-id/202401/archivo.txt',
       backend_almacen: 'LOCAL',
     }),
@@ -142,8 +144,24 @@ describe('SireImportJobConsumer', () => {
     );
   });
 
+  it('extrae el RUC del nombre oficial aunque el contenido no lo repita', async () => {
+    const repository = crearRepository('LE20601030013-RVIE-202401.txt');
+    const consumer = new SireImportJobConsumer(
+      crearQueue(),
+      repository,
+      crearStorage('linea uno\nlinea dos'),
+    );
+
+    await consumer.process(IMPORTACION);
+
+    expect(repository.completarImportacion).toHaveBeenCalledWith(
+      'importacion-id',
+      2,
+    );
+  });
+
   it('marks the import as ARCHIVO_INVALIDO when the RUC is missing', async () => {
-    const repository = crearRepository();
+    const repository = crearRepository('archivo-sin-ruc.txt');
     const consumer = new SireImportJobConsumer(
       crearQueue(),
       repository,

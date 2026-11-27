@@ -6,6 +6,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { isDevelopmentFlagEnabled } from '../../../../config/developmentFlags';
 import {
   SIRE_FILE_STORAGE_PORT,
   type SireFileStoragePort,
@@ -64,17 +65,23 @@ export class ImportarPropuestaSireUseCase {
       throw new BadRequestException('Falta el archivo de la propuesta SIRE.');
     }
 
-    const validacion = validarNombreArchivoSire(archivo.originalname, ruc);
-    if (!validacion.valido) {
-      throw new BadRequestException(
-        validacion.mensaje ??
-          'El nombre del archivo no cumple el formato de una propuesta SIRE.',
-      );
+    const omitirValidacion = isDevelopmentFlagEnabled(
+      'SKIP_FILE_VALIDATION',
+    );
+    if (!omitirValidacion) {
+      const validacion = validarNombreArchivoSire(archivo.originalname, ruc);
+      if (!validacion.valido) {
+        throw new BadRequestException(
+          validacion.mensaje ??
+            'El nombre del archivo no cumple el formato de una propuesta SIRE.',
+        );
+      }
     }
 
     const { periodo, libro } = this.resolverPeriodoYLibro(
       dto,
       archivo.originalname,
+      omitirValidacion,
     );
 
     const messageId = randomUUID();
@@ -155,10 +162,17 @@ export class ImportarPropuestaSireUseCase {
   private resolverPeriodoYLibro(
     dto: SireImportacionRequestDto,
     nombreArchivo: string,
+    omitirValidacion: boolean,
   ): { periodo: string; libro: SireLibroMenu } {
     const delNombre = extraerPeriodoYLibroDelNombre(nombreArchivo);
-    const periodo = dto.periodo ?? delNombre.periodo;
-    const libro = dto.libro ?? delNombre.libro;
+    const periodo =
+      dto.periodo ??
+      delNombre.periodo ??
+      (omitirValidacion ? this.periodoActual() : undefined);
+    const libro =
+      dto.libro ??
+      delNombre.libro ??
+      (omitirValidacion ? 'RVIE_VENTAS' : undefined);
 
     if (!periodo || !libro) {
       throw new BadRequestException(
@@ -167,5 +181,10 @@ export class ImportarPropuestaSireUseCase {
     }
 
     return { periodo, libro };
+  }
+
+  private periodoActual(): string {
+    const hoy = new Date();
+    return `${hoy.getUTCFullYear()}${String(hoy.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 }
