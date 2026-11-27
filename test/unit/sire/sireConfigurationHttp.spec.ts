@@ -74,7 +74,12 @@ describe('SireConfigurationController HTTP', () => {
         solPassword: 'postman-test-pass',
       })
       .expect(200)
-      .expect({ configured: true });
+      .expect({
+        success: true,
+        message: 'Credenciales guardadas',
+        configured: true,
+        companyId: 'company-id',
+      });
 
     expect(guardarUseCase.execute).toHaveBeenCalledWith('company-id', {
       clientId: 'postman-test-client',

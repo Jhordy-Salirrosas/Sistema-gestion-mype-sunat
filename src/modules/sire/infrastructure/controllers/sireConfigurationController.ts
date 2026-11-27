@@ -12,7 +12,10 @@ import { CurrentUser, Roles } from '../../../../common/decorators';
 import type { TokenPayload } from '../../../auth/domain/ports/tokenServicePort';
 import { AuthGuard } from '../../../auth/infrastructure/guards/authGuard';
 import { RolesGuard } from '../../../auth/infrastructure/guards/rolesGuard';
-import type { SireConfiguracionEstadoResponse } from '../../application/dto/sireConfigurationDto';
+import type {
+  SireConfiguracionEstadoResponse,
+  SireConfiguracionGuardadaResponse,
+} from '../../application/dto/sireConfigurationDto';
 import { SireConfiguracionRequestDto } from '../../application/dto/sireConfigurationDto';
 import { ConsultarEstadoConfiguracionSireUseCase } from '../../application/use-cases/consultarEstadoConfiguracionSireUseCase';
 import { GuardarConfiguracionSireUseCase } from '../../application/use-cases/guardarConfiguracionSireUseCase';
@@ -47,11 +50,15 @@ export class SireConfigurationController {
   async guardar(
     @Body() dto: SireConfiguracionRequestDto,
     @CurrentUser() user?: TokenPayload,
-  ): Promise<SireConfiguracionEstadoResponse> {
-    return this.guardarUseCase.execute(
-      resolveSireCompanyId(user, dto.companyId),
-      dto,
-    );
+  ): Promise<SireConfiguracionGuardadaResponse> {
+    const companyId = resolveSireCompanyId(user, dto.companyId);
+    const result = await this.guardarUseCase.execute(companyId, dto);
+    return {
+      success: true,
+      message: 'Credenciales guardadas',
+      configured: result.configured,
+      companyId,
+    };
   }
 
   /**

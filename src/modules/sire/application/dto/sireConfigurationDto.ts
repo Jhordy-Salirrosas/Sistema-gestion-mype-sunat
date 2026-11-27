@@ -59,3 +59,10 @@ export class SireConfiguracionRequestDto {
 export interface SireConfiguracionEstadoResponse {
   configured: boolean;
 }
+
+export interface SireConfiguracionGuardadaResponse
+  extends SireConfiguracionEstadoResponse {
+  success: true;
+  message: string;
+  companyId: string;
+}
