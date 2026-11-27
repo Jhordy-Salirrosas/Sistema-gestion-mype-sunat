@@ -413,38 +413,8 @@ export class InventoryCatalogsService {
       orderBy: { name: 'asc' },
     });
 
-    if (mans.length === 0) {
-      const defaults = [
-        { name: 'UNACEM S.A.A.', country_code: 'PE', website: 'https://www.unacem.com.pe', contact_info: 'RUC 20100132592 - ventas@unacem.com.pe' },
-        { name: 'Yura S.A.', country_code: 'PE', website: 'https://www.yura.com.pe', contact_info: 'RUC 20100180139 - atencion@yura.com.pe' },
-        { name: 'Corporación Aceros Arequipa S.A.', country_code: 'PE', website: 'https://www.acerosarequipa.com', contact_info: 'RUC 20100067644 - ventas@acerosarequipa.com' },
-        { name: 'Empresa Siderúrgica del Perú S.A.A. (Siderperú)', country_code: 'PE', website: 'https://www.siderperu.com.pe', contact_info: 'RUC 20100055204' },
-        { name: 'Mexichem Perú S.A. (Pavco Wavin)', country_code: 'PE', website: 'https://wavin.com/pe', contact_info: 'RUC 20100152941' },
-        { name: 'Tigre Perú Tubos y Conexiones S.A.', country_code: 'PE', website: 'https://www.tigre.pe', contact_info: 'RUC 20519129531' },
-        { name: 'Robert Bosch Perú S.A.', country_code: 'DE', website: 'https://www.bosch-pt.com.pe', contact_info: 'RUC 20100155029 - Herramientas eléctricas' },
-        { name: 'Makita Perú S.A.', country_code: 'JP', website: 'https://www.makita.pe', contact_info: 'RUC 20512803610 - Herramientas industriales' },
-        { name: 'Foshan Nanhai Ceramics Co., Ltd.', country_code: 'CN', website: 'https://www.foshanceramics.com', contact_info: 'Guangdong, China - Proveedor de Porcelanatos' },
-        { name: 'C&A Industrial Steel Co., Ltd.', country_code: 'CN', website: 'https://www.casteel.com', contact_info: 'Hebei, China - Aceros y perfiles' },
-      ];
-
-      for (const mf of defaults) {
-        await this.prisma.inventoryManufacturer.create({
-          data: {
-            company_id: companyId,
-            name: mf.name,
-            country_code: mf.country_code,
-            website: mf.website,
-            contact_info: mf.contact_info,
-          },
-        }).catch(() => {});
-      }
-
-      return this.prisma.inventoryManufacturer.findMany({
-        where: { company_id: companyId, is_active: true },
-        orderBy: { name: 'asc' },
-      });
-    }
-
+    // El catalogo arranca vacio: los fabricantes son datos de la empresa.
+    // Antes se sembraban diez proveedores con RUC real dentro del servicio.
     return mans;
   }
 
