@@ -43,6 +43,7 @@ model Company {
   action_permissions    RoleActionPermission[]
   series                InvoiceSeries[]
   invoices              Invoice[]
+  invoice_commercial_default InvoiceCommercialDefault?
   declarations          CustomsDeclaration[]
   shipments             CustomsShipment[]
   foreign_suppliers     ForeignSupplier[]
