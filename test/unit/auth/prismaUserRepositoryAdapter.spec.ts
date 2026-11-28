@@ -11,8 +11,7 @@ describe('PrismaUserRepositoryAdapter', () => {
     jest.restoreAllMocks();
   });
 
-  it('does not return mock tenants when production lookup finds no user', async () => {
-    process.env.NODE_ENV = 'production';
+  it('no inventa usuarios ni empresas cuando la búsqueda no encuentra nada', async () => {
     const prisma = {
       user: { findFirst: jest.fn().mockResolvedValue(null) },
       company: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -110,43 +109,27 @@ describe('PrismaUserRepositoryAdapter', () => {
     await expect(repository.updateProfile('user-id', 'Demo User')).rejects.toBe(persistenceError);
   });
 
-  it('keeps offline fallback behavior limited to non-production environments', async () => {
+  it('propaga los fallos de base fuera de producción en lugar de devolver datos demo', async () => {
     process.env.NODE_ENV = 'test';
-    const reject = jest.fn().mockRejectedValue(new Error('database unavailable'));
+    const persistenceError = new Error('database unavailable');
+    const reject = jest.fn().mockRejectedValue(persistenceError);
     const repository = new PrismaUserRepositoryAdapter({
       user: { findFirst: reject, update: reject },
       company: { findUnique: reject },
       refreshToken: { create: reject, findFirst: reject, updateMany: reject },
     } as unknown as PrismaService);
 
-    await expect(repository.findByEmail('demo@example.test')).resolves.toMatchObject({
-      user: { id: 'mock-admin-id' },
-    });
-    await expect(repository.findById('', '')).resolves.toMatchObject({
-      id: 'mock-admin-id',
-      companyId: 'mock-company-id',
-    });
-    await expect(repository.findByRuc('')).resolves.toMatchObject({
-      id: 'mock-company-id',
-      ruc: '20601012341',
-    });
-    await expect(repository.findCompanyById('')).resolves.toMatchObject({
-      id: 'mock-company-id',
-    });
-    await expect(repository.findRefreshToken('fake-token-hash')).resolves.toMatchObject({
-      userId: 'mock-admin-id',
-      tokenHash: 'fake-token-hash',
-    });
-    await expect(repository.saveRefreshToken('user-id', 'token-hash', new Date())).resolves.toMatchObject({
-      id: 'mock-refresh-token-id',
-    });
-    await expect(repository.revokeRefreshToken('token-hash')).resolves.toBeUndefined();
-    await expect(repository.revokeAllUserRefreshTokens('user-id')).resolves.toBeUndefined();
-    await expect(repository.updatePassword('user-id', 'password-hash')).resolves.toBeUndefined();
-    await expect(repository.updateProfile('user-id', ' Demo User ')).resolves.toMatchObject({
-      id: 'user-id',
-      fullName: 'Demo User',
-    });
+    // El modo offline se retiró: sin base no hay usuario, empresa ni sesión.
+    await expect(repository.findByEmail('demo@example.test')).rejects.toBe(persistenceError);
+    await expect(repository.findById('user-id')).rejects.toBe(persistenceError);
+    await expect(repository.findByRuc('20100070970')).rejects.toBe(persistenceError);
+    await expect(repository.findCompanyById('company-id')).rejects.toBe(persistenceError);
+    await expect(repository.findRefreshToken('token-hash')).rejects.toBe(persistenceError);
+    await expect(repository.saveRefreshToken('user-id', 'token-hash', new Date())).rejects.toBe(persistenceError);
+    await expect(repository.revokeRefreshToken('token-hash')).rejects.toBe(persistenceError);
+    await expect(repository.revokeAllUserRefreshTokens('user-id')).rejects.toBe(persistenceError);
+    await expect(repository.updatePassword('user-id', 'password-hash')).rejects.toBe(persistenceError);
+    await expect(repository.updateProfile('user-id', 'Demo User')).rejects.toBe(persistenceError);
   });
 
   it('propagates failed registration transactions instead of returning input entities', async () => {

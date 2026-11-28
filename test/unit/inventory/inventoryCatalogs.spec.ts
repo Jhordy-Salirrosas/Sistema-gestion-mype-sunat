@@ -213,9 +213,11 @@ describe('InventoryCatalogsService & Controller (Fase 2 - Mantenedores)', () => 
       expect(await controller.listCategories(companyId)).toEqual([{ code: 'CEM' }]);
       expect(mockPrisma.inventoryCategory.create).toHaveBeenCalled();
 
-      mockPrisma.inventoryManufacturer.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ name: 'UNACEM S.A.A.' }]);
-      expect(await controller.listManufacturers(companyId)).toEqual([{ name: 'UNACEM S.A.A.' }]);
-      expect(mockPrisma.inventoryManufacturer.create).toHaveBeenCalled();
+      // El catalogo de fabricantes ya no se siembra solo: los fabricantes son
+      // datos de la empresa, no constantes del servicio.
+      mockPrisma.inventoryManufacturer.findMany.mockResolvedValueOnce([]);
+      expect(await controller.listManufacturers(companyId)).toEqual([]);
+      expect(mockPrisma.inventoryManufacturer.create).not.toHaveBeenCalled();
 
       mockPrisma.inventoryTag.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ name: 'alta-rotacion' }]);
       expect(await controller.listTags(companyId)).toEqual([{ name: 'alta-rotacion' }]);

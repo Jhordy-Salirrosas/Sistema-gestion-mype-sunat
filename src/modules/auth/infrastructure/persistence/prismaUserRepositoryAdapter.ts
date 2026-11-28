@@ -12,118 +12,52 @@ import type {
   UserRepositoryPort,
 } from '../../domain/ports/userRepositoryPort';
 
-// Hash genérico compatible con bcrypt para la contraseña demo "Password123!"
-const MOCK_PASSWORD_HASH = '$2a$10$e8R1yYI2e/hF0p.3rR1m0e.8s9Z9v9W9x9y9z9a9b9c9d9e9f';
-
+/**
+ * Repositorio de usuarios, empresas y sesiones sobre Prisma.
+ *
+ * No hay respaldo en memoria. Antes existía un «modo offline» que, cuando la
+ * base no respondía y el entorno no era producción, devolvía un usuario y una
+ * empresa ficticios. Ese atajo fue el origen de tres problemas: un login que
+ * aceptaba cualquier contraseña para el usuario mock, datos fiscales
+ * inventados, y una alerta de credencial embebida por el hash de la contraseña
+ * demo. Ahora, si la base falla, el error sube y el login responde con el
+ * mensaje genérico de credenciales.
+ */
 @Injectable()
 export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByEmail(email: string): Promise<UserAuthRecord | null> {
-    try {
-      const raw = await this.prisma.user.findFirst({
-        where: { email: email.trim().toLowerCase() },
-      });
-      if (raw) {
-        return {
-          user: this.mapUser(raw),
-          passwordHash: raw.password_hash,
-        };
-      }
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    // Usuario Mock de respaldo para garantizar el login en la exposición
-    const mockUser = new UserEntity({
-      id: 'mock-admin-id',
-      companyId: 'mock-company-id',
-      email: email || 'contador@mype.pe',
-      fullName: 'Usuario Demo (Modo Offline)',
-      role: 'ADMIN',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const raw = await this.prisma.user.findFirst({
+      where: { email: email.trim().toLowerCase() },
     });
+    if (!raw) return null;
 
     return {
-      user: mockUser,
-      passwordHash: MOCK_PASSWORD_HASH,
+      user: this.mapUser(raw),
+      passwordHash: raw.password_hash,
     };
   }
 
   async findById(id: string, companyId?: string): Promise<UserEntity | null> {
-    try {
-      const raw = await this.prisma.user.findFirst({
-        where: { id, ...(companyId ? { company_id: companyId } : {}) },
-      });
-      if (raw) return this.mapUser(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new UserEntity({
-      id: id || 'mock-admin-id',
-      companyId: companyId || 'mock-company-id',
-      email: 'contador@mype.pe',
-      fullName: 'Usuario Demo (Modo Offline)',
-      role: 'ADMIN',
-      isActive: true,
+    const raw = await this.prisma.user.findFirst({
+      where: { id, ...(companyId ? { company_id: companyId } : {}) },
     });
+    return raw ? this.mapUser(raw) : null;
   }
 
   async findByRuc(ruc: string): Promise<CompanyEntity | null> {
-    try {
-      const raw = await this.prisma.company.findUnique({
-        where: { ruc },
-      });
-      if (raw) return this.mapCompany(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new CompanyEntity({
-      id: 'mock-company-id',
-      ruc: ruc || '20601012341',
-      legalName: 'MYPE CONFECCIONES INDUSTRIALES S.A.C.',
-      tradeName: 'MYPE CONFECCIONES',
-      solUser: 'MODDATOS',
-      solPassEncrypted: 'MODDATOS',
-      certStorageUrl: null,
-      certPassEncrypted: null,
-      isActive: true,
+    const raw = await this.prisma.company.findUnique({
+      where: { ruc },
     });
+    return raw ? this.mapCompany(raw) : null;
   }
 
   async findCompanyById(companyId: string): Promise<CompanyEntity | null> {
-    try {
-      const raw = await this.prisma.company.findUnique({
-        where: { id: companyId },
-      });
-      if (raw) return this.mapCompany(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new CompanyEntity({
-      id: companyId || 'mock-company-id',
-      ruc: '20601012341',
-      legalName: 'MYPE CONFECCIONES INDUSTRIALES S.A.C.',
-      tradeName: 'MYPE CONFECCIONES',
-      solUser: 'MODDATOS',
-      solPassEncrypted: 'MODDATOS',
-      certStorageUrl: null,
-      certPassEncrypted: null,
-      isActive: true,
+    const raw = await this.prisma.company.findUnique({
+      where: { id: companyId },
     });
+    return raw ? this.mapCompany(raw) : null;
   }
 
   async createUserWithCompany(
@@ -216,100 +150,51 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     tokenHash: string,
     expiresAt: Date,
   ): Promise<RefreshTokenEntity> {
-    try {
-      const raw = await this.prisma.refreshToken.create({
-        data: {
-          user_id: userId,
-          token_hash: tokenHash,
-          expires_at: expiresAt,
-          is_revoked: false,
-        },
-      });
-      return this.mapRefreshToken(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-      return new RefreshTokenEntity({
-        id: 'mock-refresh-token-id',
-        userId,
-        tokenHash,
-        expiresAt,
-        isRevoked: false,
-      });
-    }
+    const raw = await this.prisma.refreshToken.create({
+      data: {
+        user_id: userId,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        is_revoked: false,
+      },
+    });
+    return this.mapRefreshToken(raw);
   }
 
   async findRefreshToken(tokenHash: string): Promise<RefreshTokenEntity | null> {
-    try {
-      const raw = await this.prisma.refreshToken.findFirst({
-        where: { token_hash: tokenHash },
-      });
-      if (raw) return this.mapRefreshToken(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new RefreshTokenEntity({
-      id: 'mock-refresh-token-id',
-      userId: 'mock-admin-id',
-      tokenHash,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      isRevoked: false,
+    const raw = await this.prisma.refreshToken.findFirst({
+      where: { token_hash: tokenHash },
     });
+    return raw ? this.mapRefreshToken(raw) : null;
   }
 
   async revokeRefreshToken(tokenHash: string): Promise<void> {
-    try {
-      await this.prisma.refreshToken.updateMany({
-        where: { token_hash: tokenHash },
-        data: { is_revoked: true },
-      });
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
+    await this.prisma.refreshToken.updateMany({
+      where: { token_hash: tokenHash },
+      data: { is_revoked: true },
+    });
   }
 
   async revokeAllUserRefreshTokens(userId: string): Promise<void> {
-    try {
-      await this.prisma.refreshToken.updateMany({
-        where: { user_id: userId },
-        data: { is_revoked: true },
-      });
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
+    await this.prisma.refreshToken.updateMany({
+      where: { user_id: userId },
+      data: { is_revoked: true },
+    });
   }
 
   async updatePassword(userId: string, newPasswordHash: string): Promise<void> {
-    try {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { password_hash: newPasswordHash },
-      });
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password_hash: newPasswordHash },
+    });
   }
 
   async updateProfile(userId: string, fullName: string): Promise<UserEntity> {
-    try {
-      const updated = await this.prisma.user.update({
-        where: { id: userId },
-        data: { full_name: fullName.trim() },
-      });
-      return this.mapUser(updated);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-      return new UserEntity({
-        id: userId,
-        companyId: 'mock-company-id',
-        email: 'contador@mype.pe',
-        fullName: fullName.trim(),
-        role: 'ADMIN',
-        isActive: true,
-      });
-    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { full_name: fullName.trim() },
+    });
+    return this.mapUser(updated);
   }
 
   private mapUser(raw: {
@@ -378,9 +263,5 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       isRevoked: raw.is_revoked,
       createdAt: raw.created_at,
     });
-  }
-
-  private isProduction(): boolean {
-    return process.env.NODE_ENV === 'production';
   }
 }

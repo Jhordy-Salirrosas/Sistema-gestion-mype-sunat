@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  NotFoundException,
   Query,
   UnauthorizedException,
   UseGuards,
@@ -44,7 +45,12 @@ export class CustomsSirePurchasesController {
       where: { id: companyId },
       select: { ruc: true, legal_name: true },
     });
-    const ruc = company?.ruc ?? '20000000001';
+    // Sin empresa no hay RUC: inventar uno generaría un anexo SIRE con datos
+    // fiscales falsos sin que nadie lo note. Se corta aquí.
+    if (!company) {
+      throw new NotFoundException('Empresa no encontrada para el identificador de sesión.');
+    }
+    const ruc = company.ruc;
 
     const declarations = await this.customsRepository.findDeclarationsByCompany(companyId);
     const targetPeriod = `${year}${month.padStart(2, '0')}`;
