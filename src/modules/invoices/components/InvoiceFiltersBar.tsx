@@ -5,7 +5,7 @@ import { errorRangoFechas } from '../lib/invoiceDateRange';
  * Barra de control y acciones del módulo de Facturación (M1).
  *
  * Agrupa el buscador por RUC/DNI o serie-correlativo, el selector de estado
- * CDR, el rango de fechas, el menú de emisión y el botón de actualización.
+ * CDR, el rango de fechas y el botón de actualización.
  */
 import {
   Button,
@@ -22,9 +22,6 @@ import {
 } from '@/components/ui';
 import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { InvoiceEmitMenu, type TipoEmision } from './InvoiceEmitMenu';
-
-export type { TipoEmision };
 
 /** Valores disponibles del filtro por estado CDR. */
 export const FILTROS_ESTADO: ReadonlyArray<{
@@ -51,7 +48,6 @@ interface InvoiceFiltersBarProps {
   onActualizar: () => void;
   actualizando?: boolean;
   ultimaActualizacion?: string | null;
-  onEmitir: (tipo: TipoEmision) => void;
 }
 
 export const InvoiceFiltersBar = ({
@@ -61,9 +57,7 @@ export const InvoiceFiltersBar = ({
   onLimpiar,
   actualizando = false,
   ultimaActualizacion,
-  onEmitir,
 }: InvoiceFiltersBarProps) => {
-  const [menuAbierto, setMenuAbierto] = useState(false);
 
   const [draft, setDraft] = useState<{baseDesde: string; baseHasta: string; desde: string; hasta: string} | null>(null);
   const fechas = draft?.baseDesde === filtros.desde && draft?.baseHasta === filtros.hasta ? draft : filtros;
@@ -75,10 +69,6 @@ export const InvoiceFiltersBar = ({
     if (!errorRangoFechas(nuevas.desde, nuevas.hasta)) onFiltrosChange({...filtros, ...nuevas});
   };
 
-  const emitir = (tipo: TipoEmision) => {
-    setMenuAbierto(false);
-    onEmitir(tipo);
-  };
 
   return (
     <div className="sticky top-0 z-10 space-y-2 rounded-lg bg-background p-1" aria-label="Filtros de comprobantes">
@@ -144,11 +134,6 @@ export const InvoiceFiltersBar = ({
 
         {ultimaActualizacion && <span className="text-xs text-muted-foreground">Actualizado a las {ultimaActualizacion}</span>}
 
-        <InvoiceEmitMenu
-          abierto={menuAbierto}
-          onToggle={() => setMenuAbierto((prev) => !prev)}
-          onEmitir={emitir}
-        />
       </FilterItem>
     </FilterBar>
     <div className="flex flex-wrap gap-2" aria-label="Filtros activos">

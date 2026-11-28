@@ -1,13 +1,12 @@
-import { it,expect,vi,afterEach,beforeEach } from 'vitest';
-import { render,screen,cleanup } from '@testing-library/react';
-import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import Dashboard from '@/modules/invoices/pages/InvoicesDashboardPage';
-import Emision from '@/modules/invoices/pages/InvoiceEmissionPage';
-import { InvoiceEmitModal } from '@/modules/invoices/components/InvoiceEmitModal';
-import { InvoiceAggregateMonitor } from '@/modules/invoices/components/InvoiceAggregateMonitor';
-import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
 import { apiClient } from '@/lib/axios';
+import { InvoiceAggregateMonitor } from '@/modules/invoices/components/InvoiceAggregateMonitor';
+import Emision from '@/modules/invoices/pages/InvoiceEmissionPage';
+import Dashboard from '@/modules/invoices/pages/InvoicesDashboardPage';
+import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,render,screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 vi.mock('@/lib/axios',()=>({apiClient:{get:vi.fn()}}));
 vi.mock('@/modules/invoices/services/inventoryProductsApi',()=>({cargarProductosAlmacen:vi.fn(async()=>[])}));
 vi.mock('@/modules/invoices/services/invoicesApi',()=>({invoicesApi:{getMetrics:vi.fn(),getAlertas:vi.fn(),getAgregados:vi.fn(),buscarClientes:vi.fn(async()=>[])}}));
@@ -25,4 +24,3 @@ it('agregados distingue carga de respuesta vacía',async()=>{let resolver!:(v:ne
 it('agregados fallidos no afirman vacío',async()=>{vi.mocked(invoicesApi.getAgregados).mockRejectedValue(new Error('red'));montar(<InvoiceAggregateMonitor/>);await screen.findByRole('alert');expect(screen.queryByText('No hay agregados registrados.')).toBeNull();});
 it('emisión distingue primera carga y configuración vacía',async()=>{let resolver!:(v:never)=>void;vi.mocked(apiClient.get).mockReturnValue(new Promise(r=>{resolver=r;}));montar(<Emision/>);expect(screen.queryByText('Sin serie activa')).toBeNull();expect(screen.queryByText(/Siguiente: no disponible/)).toBeNull();resolver({data:{series:[]}} as never);expect(await screen.findByText('Sin serie activa')).toBeTruthy();});
 it('emisión fallida no afirma que no hay serie',async()=>{vi.mocked(apiClient.get).mockRejectedValue(new Error('red'));montar(<Emision/>);expect(await screen.findByText('No se pudo cargar la configuración')).toBeTruthy();expect(screen.queryByText('Sin serie activa')).toBeNull();});
-it('modal recibe estado de carga en lugar de número inventado',()=>{vi.mocked(apiClient.get).mockResolvedValue({data:[]});montar(<InvoiceEmitModal configuracionCargando tipoInicial="07" fecha="2026-11-10" existentes={[]} onCerrar={()=>{}} onEmitir={()=>{}}/>);expect(screen.queryByText(/Siguiente: no disponible/)).toBeNull();expect(screen.getByText('Cargando configuración de serie y numeración…')).toBeTruthy();});

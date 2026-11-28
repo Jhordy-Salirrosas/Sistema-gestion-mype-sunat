@@ -1,34 +1,13 @@
-import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
 import { construir } from '@/modules/invoices/data/invoiceDemoTypes';
+import { calcularRetencion,liquidarComprobante } from '@/modules/invoices/lib/invoiceRetentions';
+import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,fireEvent,render,screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach,expect,it,vi } from 'vitest';
+import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
 import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
-import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { liquidarComprobante, calcularRetencion } from '@/modules/invoices/lib/invoiceRetentions';
-import { borradorConLinea as borradorInicial } from '../../../fixtures/invoiceEmissionProduct';
-import { calcularFlujo } from '@/modules/invoices/lib/invoiceFlujoPago';
-import { InvoiceEmitResumen } from '@/modules/invoices/components/InvoiceEmitResumen';
-import type { AfectacionIgv } from '@/modules/invoices/lib/invoiceTaxes';
-const casos: { nombre: string; lineas: { base: number; afectacion: AfectacionIgv }[]; total: number; retencion: number }[] = [
-  { nombre: 'exonerada', lineas: [{ base: 1000, afectacion: 'EXONERADA' }], total: 1000, retencion: 0 },
-  { nombre: 'inafecta', lineas: [{ base: 1500, afectacion: 'INAFECTA' }], total: 1500, retencion: 0 },
-  { nombre: 'exo e inafecta', lineas: [{ base: 1000, afectacion: 'EXONERADA' }, { base: 500, afectacion: 'INAFECTA' }], total: 1500, retencion: 0 },
-  { nombre: 'gratuita', lineas: [{ base: 1000, afectacion: 'GRATUITA' }], total: 0, retencion: 0 },
-  { nombre: 'mixto conserva el paquete', lineas: [{ base: 1000, afectacion: 'GRAVADA' }, { base: 500, afectacion: 'EXONERADA' }], total: 1680, retencion: 50.4 },
-  { nombre: 'gravada pura conserva el paquete', lineas: [{ base: 1000, afectacion: 'GRAVADA' }], total: 1180, retencion: 35.4 },
-];
 afterEach(cleanup);
-it.each(casos)('$nombre: liquidación, flujo y resumen coinciden sin cambiar la base de mixtos', ({ lineas, total, retencion }) => {
-  expect(liquidarComprobante(lineas, { esAgenteRetencion: true })).toMatchObject({ importeTotal: total, montoRetencion: retencion, netoPendientePago: total - retencion });
-  const b = borradorInicial('01', '2026-11-13'); b.agenteRetencion = true;
-  b.items = lineas.map((l, i) => ({ ...b.items[0], clave: String(i), descripcion: 'Bien ficticio', valorUnitario: l.base, afectacion: l.afectacion }));
-  expect(calcularFlujo(b)).toMatchObject({ importeTotal: total, neto: total - retencion });
-  render(<InvoiceEmitResumen borrador={b} />);
-  if (retencion === 0) expect(screen.queryByText(/Retención 3%/)).toBeNull();
-  else expect(screen.getByText(new RegExp(`Retención 3%.*${retencion.toFixed(2).replace('.', '\\.')}`))).toBeTruthy();
-});
 it('el helper respeta base gravada cero y conserva las exclusiones anteriores', () => {
   expect(calcularRetencion(1500, true, 1, 0, 0)).toBe(0);
   expect(calcularRetencion(1680, true, 1, 0, 1000)).toBe(50.4);

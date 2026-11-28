@@ -9,18 +9,15 @@ vi.mock('@/modules/auth/hooks/useActionPermissions', async () => {
 });
 vi.mock('@/modules/invoices/hooks/useInvoiceDatePermission', () => ({ useInvoiceDatePermission: () => ({ canEditDate: true, explanation: undefined }) }));
 vi.mock('@/modules/invoices/services/inventoryProductsApi',()=>({cargarProductosAlmacen:vi.fn(async()=>[{sku:'SERV',descripcion:'Servicio',unidad:'NIU',valorUnitario:100,precioUnitario:118,afectacion:'10',stock:100,vendible:true}])}));
-import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
-import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
-import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { apiClient } from '@/lib/axios';
+import { masterDataApi,type BusinessPartnerRecord } from '@/modules/customs/services/masterDataApi';
 import { CustomerLookupField } from '@/modules/invoices/components/CustomerLookupField';
 import { RetencionMaestro } from '@/modules/invoices/components/RetencionMaestro';
-import { InvoiceEmitModal } from '@/modules/invoices/components/InvoiceEmitModal';
-import { masterDataApi, type BusinessPartnerRecord } from '@/modules/customs/services/masterDataApi';
-import { apiClient } from '@/lib/axios';
 import type { ClienteBuscado } from '@/modules/invoices/lib/invoiceSearch';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 
 vi.mock('@/modules/customs/services/masterDataApi', () => ({ masterDataApi: { getPartners: vi.fn(), getPartner: vi.fn(), createPartner: vi.fn(), updatePartner: vi.fn() } }));
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn() } }));
@@ -102,43 +99,6 @@ it('no reactiva ni selecciona un tercero inactivo al registrar su documento', as
   expect(selected).not.toHaveBeenCalled();
   expect(masterDataApi.createPartner).not.toHaveBeenCalled();
   expect(masterDataApi.updatePartner).not.toHaveBeenCalled();
-});
-it('solo habilita la venta al crédito con cuotas para clientes con crédito registrado en el maestro', async () => {
-  const sinCredito: BusinessPartnerRecord = { ...partner, id: 'c-contado', legal_name: 'Cliente Contado', has_credit: false, payment_terms: 'CONTADO' };
-  const conCredito: BusinessPartnerRecord = { ...partner, id: 'c-credito', doc_number: '20555555551', legal_name: 'Cliente Credito', has_credit: true, payment_terms: '30_DIAS' };
-  vi.mocked(masterDataApi.getPartners).mockResolvedValue([sinCredito, conCredito]);
-  render(<QueryClientProvider client={client}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha="2026-11-06" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
-  const btnCredito = () => screen.getByRole('button', { name: 'Crédito' }) as HTMLButtonElement;
-  expect(btnCredito().disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
-  fireEvent.click(await screen.findByRole('button', { name: /Cliente Contado/ }));
-  expect(btnCredito().disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
-  fireEvent.click(await screen.findByRole('button', { name: /Cliente Credito/ }));
-  expect(btnCredito().disabled).toBe(false);
-  fireEvent.click(btnCredito());
-  expect(screen.getByText(/Pago a crédito en/i)).toBeTruthy();
-});
-it('solo habilita descuentos por línea y globales cuando el cliente admite descuento en el maestro', async () => {
-  const sinDesc: BusinessPartnerRecord = { ...partner, id: 'c-no-desc', legal_name: 'Cliente Sin Descuento', allows_discount: false };
-  const conDesc: BusinessPartnerRecord = { ...partner, id: 'c-si-desc', doc_number: '20555555551', legal_name: 'Cliente Con Descuento', allows_discount: true };
-  vi.mocked(masterDataApi.getPartners).mockResolvedValue([sinDesc, conDesc]);
-  render(<QueryClientProvider client={client}><InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha="2026-11-06" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} /></QueryClientProvider>);
-  await seleccionarProductoPrueba();
-  const descLinea = () => screen.getByLabelText('Tipo de descuento de la línea 1') as HTMLSelectElement;
-  const descGlobal = () => screen.getByLabelText('Descuento global (Catálogo 53)') as HTMLSelectElement;
-  expect(descLinea().disabled).toBe(true);
-  expect(descGlobal().disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
-  fireEvent.click(await screen.findByRole('button', { name: /Cliente Con Descuento/ }));
-  expect(descLinea().disabled).toBe(false);
-  expect(descGlobal().disabled).toBe(false);
-  fireEvent.change(descGlobal(), { target: { value: '02' } });
-  fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente' } });
-  fireEvent.click(await screen.findByRole('button', { name: /Cliente Sin Descuento/ }));
-  expect(descLinea().disabled).toBe(true);
-  expect(descGlobal().disabled).toBe(true);
-  expect(descGlobal().value).toBe('');
 });
 it.each([undefined, null, false, true])('payment_terms no concede crédito cuando has_credit es %s', async has_credit => {
   const { partnerToCustomer } = await import('@/modules/invoices/components/CustomerLookupField');

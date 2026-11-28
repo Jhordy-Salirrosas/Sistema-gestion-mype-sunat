@@ -1,18 +1,13 @@
-import { confirmarRevisionSiAbierta } from '../../../fixtures/invoiceEmissionProduct';
-import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
-import { beforeEach as billingBeforeEach } from 'vitest';
-import { useAuthStore as billingAuth } from '@/stores/authStore';
 import { apiClient } from '@/lib/axios';
-import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import { InvoiceEmitModal } from '@/modules/invoices/components/InvoiceEmitModal';
+import { enqueueInvoiceEmission } from '@/lib/outbox';
 import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
 import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
-import { hoyEnLima } from '@/modules/invoices/lib/invoiceFecha';
-import { enqueueInvoiceEmission } from '@/lib/outbox';
+import { useAuthStore as billingAuth } from '@/stores/authStore';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach,beforeEach,beforeEach as billingBeforeEach,expect,it,vi } from 'vitest';
+import { confirmarRevisionSiAbierta,seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
 
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async (url: string) => ({ data: url === '/invoices/config' ? { series: [{ document_type: '01', series: 'F001', is_active: true }, { document_type: '03', series: 'B001', is_active: true }] } : [] })) } }));
 vi.mock('@/lib/outbox', () => ({ enqueueInvoiceEmission: vi.fn(async () => 'queued') }));
@@ -22,21 +17,19 @@ vi.mock('@/modules/invoices/services/invoicesApi', () => ({ invoicesApi: { busca
 const clients: QueryClient[] = [];
 beforeEach(() => { vi.clearAllMocks(); Object.defineProperty(navigator, 'onLine', { configurable: true, value: true }); });
 afterEach(() => { cleanup(); clients.splice(0).forEach(q => q.clear()); });
-async function montar(via: string, serieEsperada = 'F001') {
+async function montar(serieEsperada = 'F001') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); clients.push(client);
   const onEmitir = vi.fn();
-  render(<QueryClientProvider client={client}><MemoryRouter>{via === 'modal'
-    ? <InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha={hoyEnLima()} existentes={[]} onEmitir={onEmitir} onCerrar={vi.fn()} />
-    : <InvoiceEmissionPage />}</MemoryRouter></QueryClientProvider>);
-  if (via === 'pagina') await waitFor(() => expect((screen.getByLabelText('Serie configurada') as HTMLSelectElement).value).toBe(serieEsperada));
-  fireEvent.change(screen.getByLabelText(via === 'modal' ? 'RUC / DNI del cliente' : 'RUC del cliente'), { target: { value: '20100070970' } });
+  render(<QueryClientProvider client={client}><MemoryRouter>{<InvoiceEmissionPage />}</MemoryRouter></QueryClientProvider>);
+  await waitFor(() => expect((screen.getByLabelText('Serie configurada') as HTMLSelectElement).value).toBe(serieEsperada));
+  fireEvent.change(screen.getByLabelText('RUC del cliente'), { target: { value: '20100070970' } });
   fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente de prueba' } });
   await seleccionarProductoPrueba();
-  return { onEmitir, emitir: () => { fireEvent.click(screen.getByRole('button', { name: via === 'modal' ? 'Emitir Factura' : 'Emitir comprobante' })); confirmarRevisionSiAbierta(); } };
+  return { onEmitir, emitir: () => { fireEvent.click(screen.getByRole('button', { name: 'Emitir comprobante' })); confirmarRevisionSiAbierta(); } };
 }
-it.each(['modal', 'pagina'])('%s: 409 conserva todos los datos y reintentar conserva la clave; editar inicia otro intento', async via => {
+it.each(['pagina'])('%s: 409 conserva todos los datos y reintentar conserva la clave; editar inicia otro intento', async () => {
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue({ response: { status: 409 } });
-  const { onEmitir, emitir } = await montar(via);
+  const { onEmitir, emitir } = await montar();
   emitir();
   await screen.findByText(/Conflicto de emisión \(409\)/);
   const datos = () => [(screen.getByLabelText('Razón social / nombre') as HTMLInputElement).value, screen.getByLabelText('Descripción de la línea 1').textContent, screen.getByLabelText('Valor unitario de la línea 1').textContent];
@@ -54,20 +47,20 @@ it.each(['modal', 'pagina'])('%s: 409 conserva todos los datos y reintentar cons
   await waitFor(() => expect(invoicesApi.emitirComprobante).toHaveBeenCalledTimes(3));
   expect(vi.mocked(invoicesApi.emitirComprobante).mock.calls[2][1]).not.toBe(primera[1]);
 });
-it.each(['modal', 'pagina'])('%s: al perder la red transfiere exactamente la clave del intento a la Outbox', async via => {
+it.each(['pagina'])('%s: al perder la red transfiere exactamente la clave del intento a la Outbox', async () => {
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue(Object.assign(new Error('timeout'), { response: undefined }));
-  const { emitir } = await montar(via);
+  const { emitir } = await montar();
   emitir();
   await waitFor(() => expect(enqueueInvoiceEmission).toHaveBeenCalledTimes(1));
   expect(vi.mocked(enqueueInvoiceEmission).mock.calls[0]).toEqual(vi.mocked(invoicesApi.emitirComprobante).mock.calls[0]);
 });
-it.each(['modal', 'pagina'])('%s: después de un alta exitosa incluso el mismo cuerpo obtiene otra clave', async via => {
+it.each(['pagina'])('%s: después de un alta exitosa incluso el mismo cuerpo obtiene otra clave', async () => {
   vi.mocked(invoicesApi.emitirComprobante).mockResolvedValue({ numero: 'F001-1', monto_total: 118, lineas: [], avisos: [] } as never);
-  const { emitir } = await montar(via);
+  const { emitir } = await montar();
   emitir();
   await waitFor(() => expect(invoicesApi.emitirComprobante).toHaveBeenCalledTimes(1));
-  await waitFor(() => expect((screen.getByRole('button', { name: via === 'modal' ? 'Emitir Factura' : 'Emitir comprobante' }) as HTMLButtonElement).disabled).toBe(false));
-  if (via === 'pagina') {
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Emitir comprobante' }) as HTMLButtonElement).disabled).toBe(false));
+  {
     await seleccionarProductoPrueba();
   }
   emitir();
@@ -81,16 +74,16 @@ it('la página usa la serie activa de configuración aunque no sea F001', async 
     series: [{ document_type: '01', series: 'F087', is_active: true }, { document_type: '01', series: 'F001', is_active: false }],
   } : [] }));
   vi.mocked(invoicesApi.emitirComprobante).mockResolvedValue({ numero: 'F087-1', monto_total: 118, lineas: [], avisos: [] } as never);
-  const { emitir } = await montar('pagina', 'F087');
+  const { emitir } = await montar('F087');
   emitir();
   await waitFor(() => expect(invoicesApi.emitirComprobante).toHaveBeenCalledWith(expect.objectContaining({ serie: 'F087' }), expect.any(String)));
 });
-it.each(['modal', 'pagina'])('%s: envía el almacén elegido y lo conserva al reintentar', async via => {
+it.each(['pagina'])('%s: envía el almacén elegido y lo conserva al reintentar', async () => {
   vi.mocked(apiClient.get).mockImplementation(async url => ({ data: url === '/invoices/warehouses'
     ? [{ warehouse_code: 'ALM-01', description: 'Principal' }, { warehouse_code: 'ALM-02', description: 'Sucursal' }]
     : url === '/invoices/config' ? { series: [{ document_type: '01', series: 'F001', is_active: true }] } : [] }));
   vi.mocked(invoicesApi.emitirComprobante).mockRejectedValue({ response: { status: 409 } });
-  const { emitir } = await montar(via);
+  const { emitir } = await montar();
   await screen.findByRole('option', { name: 'ALM-02 — Sucursal' });
   expect((screen.getByLabelText('Almacén de salida') as HTMLSelectElement).value).toBe('ALM-01');
   fireEvent.change(screen.getByLabelText('Almacén de salida'), { target: { value: 'ALM-02' } });

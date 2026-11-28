@@ -9,15 +9,12 @@ vi.mock('@/modules/auth/hooks/useActionPermissions', async () => {
  return {useActionPermissions:()=>{useAuthStore(s=>s.user);const p=serverSnapshot();return {can:(code:string)=>p.actions.some(a=>a.actionCode===code&&a.allowed),canShow:(code:string)=>p.actions.some(a=>a.actionCode===code&&a.available),ready:true,isLoading:false,isError:false};}};
 });
 vi.mock('@/modules/invoices/hooks/useInvoiceDatePermission', () => ({ useInvoiceDatePermission: () => ({ canEditDate: true, explanation: undefined }) }));
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { erroresCamposLinea } from '@/modules/invoices/lib/invoiceLineFields';
-import { itemVacio } from '@/modules/invoices/lib/invoiceItems';
-import { InvoiceEmitModal } from '@/modules/invoices/components/InvoiceEmitModal';
 import { InvoiceItemsGrid } from '@/modules/invoices/components/InvoiceItemsGrid';
-import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
+import { itemVacio } from '@/modules/invoices/lib/invoiceItems';
+import { erroresCamposLinea } from '@/modules/invoices/lib/invoiceLineFields';
 import { useAuthStore } from '@/stores/authStore';
+import { cleanup,fireEvent,render,screen } from '@testing-library/react';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 vi.mock('@/lib/axios',()=>({apiClient:{get:vi.fn(async()=>({data:[]}))}}));
 beforeEach(()=>useAuthStore.setState({user:{id:'test',email:'test@example.invalid',role:'ADMIN'}}));
 afterEach(cleanup);
@@ -52,17 +49,4 @@ it('admite cero en notas onerosas, exige referencia gratuita y cantidad válida'
  expect(erroresCamposLinea({...item,afectacion:'GRATUITA'},true).valorUnitario).toContain('referencial');
  expect(erroresCamposLinea({...item,cantidad:1.0001},false).cantidad).not.toBe('');
  expect(erroresCamposLinea({...item,valorUnitario:10},false)).toEqual({descripcion:'',cantidad:'',valorUnitario:''});
-});
-it('intento de emisión enfoca la primera línea inválida sin enviar; conserva resumen de errores',()=>{
- const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
- render(<QueryClientProvider client={client}><InvoiceEmitModal tipoInicial="01" seriesConfiguradas={seriesConfiguradasPrueba} fecha="2026-11-13" existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()}/></QueryClientProvider>);
- fireEvent.click(screen.getByRole('button',{name:'Emitir Factura'}));
- expect(screen.getByText('Falta completar')).toBeTruthy();
- expect(screen.queryByLabelText('Descripción de la línea 1')).toBeNull();
- fireEvent.keyDown(screen.getByRole('dialog', { name: 'Emitir Comprobante Electrónico' }),{key:'Escape',code:'Escape'});
- expect(screen.getByRole('dialog', { name: 'Emitir Comprobante Electrónico' })).toBeTruthy();
- fireEvent.keyDown(screen.getByRole('dialog', { name: 'Emitir Comprobante Electrónico' }),{ctrlKey:true,key:'Enter',code:'Enter'});
- fireEvent.click(screen.getByRole('button',{name:'Confirmar emisión revisada'}));
- expect(screen.getByText('Falta completar')).toBeTruthy();
- client.clear();
 });

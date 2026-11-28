@@ -5,14 +5,12 @@ import { InvoiceWait } from './components/InvoiceWait';
 import { InvoiceUxPage as Page } from './components/InvoiceUxPage';
 import { enriquecerImportesBandeja } from './lib/invoiceBandejaAmounts';
 import { useInvoiceRefresh } from './hooks/useInvoiceRefresh';
-import { useInvoiceConfig } from './hooks/useInvoiceConfig';
-import { useAuthStore } from '@/stores/authStore';
 /**
  * Orquestador de la vista principal del módulo de Facturación (M1).
  *
  * Integra las tarjetas KPI fiscales, la barra de filtros,
- * la grilla enriquecida de comprobantes y los
- * modales de emisión y auditoría CDR.
+ * la grilla enriquecida de comprobantes,
+ * el detalle de auditoría CDR y el formulario compartido de notas.
  *
  * Los filtros y el apartado activo se aplican al conjunto sobre el que se
  * calculan los KPI y el monitor Outbox, no solo a la grilla: si el usuario
@@ -35,20 +33,17 @@ import type { ComprobanteDemo } from './data/invoiceDemoTypes';
 import { InvoiceCombinedSummary } from './components/InvoiceCombinedSummary';
 import { InvoiceKpiCards } from './components/InvoiceKpiCards';
 import { InvoiceDemoNotice } from './components/InvoiceDemoNotice';
-import { INVOICE_SECTION_ROUTES, sectionFromPath, type InvoiceSectionId } from './lib/invoiceSections';
+import { sectionFromPath, type InvoiceSectionId } from './lib/invoiceSections';
 import {
   InvoiceFiltersBar,
   type InvoiceFiltros,
 } from './components/InvoiceFiltersBar';
 import { InvoiceTable } from './components/InvoiceTable';
 import { InvoiceCdrModal } from './components/InvoiceCdrModal';
-import { InvoiceEmitModal } from './components/InvoiceEmitModal';
-import type { TipoEmision } from './components/InvoiceEmitMenu';
-import { TIPO_POR_OPCION } from './lib/invoiceEmitTipos';
+import { InvoiceEmissionForm } from './components/InvoiceEmissionForm';
 import { calcularResumenFiscal } from './lib/invoiceMetrics';
 import { aComprobanteDemo } from './lib/invoiceApiMapper';
 import { invoicesApi } from './services/invoicesApi';
-import { cargarProductosAlmacen } from './services/inventoryProductsApi';
 import { aplicarFiltros, porApartado } from './lib/invoiceFilters';
 import { descargarDesdeBackend } from './lib/invoiceDescarga';
 import { useInvoiceFiltros } from './lib/useInvoiceFiltros';
@@ -91,25 +86,14 @@ interface VisorState {
 export const InvoiceList = () => {
   const cache=useQueryClient();
   const reflejarDetalle=useCallback((detalle:Invoice)=>{cache.setQueryData<{data:Invoice[]}>(['invoices',1],prev=>prev?({...prev,data:prev.data.map(item=>item.id===detalle.id?{...item,...detalle,importesBandeja:detalle.importesBandeja??item.importesBandeja}:item)}):prev);},[cache]);
-  const companyId = useAuthStore(state => state.activeCompany?.tenantId);
-  const ruc = useAuthStore(state => state.activeCompany?.ruc) ?? '';
-  const { data: configuracionFiscal, recargar: recargarConfiguracion, cargando: configuracionCargando, error: errorConfiguracion } = useInvoiceConfig(ruc);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const activeSection = sectionFromPath(pathname);
   const detalleModal = activeSection === 'comprobantes' || activeSection === 'notas';
   const incluirNotas=activeSection==='comprobantes'&&new URLSearchParams(search).get('incluir_notas')==='1';
   const [filtros, setFiltros] = useInvoiceFiltros();
-  const [modalEmision, setModalEmision] = useState<TipoEmision | null>(null);
-  const { data: productosEmision = [] } = useQuery({
-    queryKey: ['invoices', 'products', companyId, 'ALM-01'],
-    queryFn: () => cargarProductosAlmacen('ALM-01'),
-    enabled: modalEmision !== null,
-    staleTime: 0,
-  });
   const [visor, setVisor] = useState<VisorState | null>(null);
-  // El modal de emisión muestra su propio error si el backend niega la emisión
-  // (ya emite contra `POST /invoices/emitir`); este aviso queda para un fallo
+  // Este aviso queda para un fallo
   // anterior a esa llamada.
   const [errorEmision] = useState<string | null>(null);
   const [avisoCdr, setAvisoCdr] = useState<string | null>(null);
@@ -155,27 +139,6 @@ export const InvoiceList = () => {
     [comprobantes, filtros],
   );
 
-  /**
-   * Alta real del comprobante: se persiste en el backend y se refresca la
-   * grilla. Si falla, se avisa en pantalla en vez de fingir que se emitió.
-   */
-  /**
-   * Alta real del comprobante. El modal ya emite contra
-   * `POST /invoices/emitir` y devuelve el número que asignó la serie; aquí solo
-   * se refresca la grilla para que aparezca. Si el backend negó la emisión, el
-   * modal lo muestra y esta devolución de llamada no llega.
-   */
-  const agregarComprobante = useCallback(
-    () => {
-      setModalEmision(null);
-      void refetch();
-      void recargarConfiguracion();
-      navigate(INVOICE_SECTION_ROUTES.comprobantes);
-      setFiltros({ ...FILTROS_INICIALES });
-    },
-    [navigate, refetch, recargarConfiguracion],
-  );
-
   /** Reencola un comprobante en error para que el worker vuelva a pedir su CDR. */
   const reintentarCdr = useCallback(
     async (comprobante: ComprobanteDemo) => {
@@ -218,14 +181,11 @@ export const InvoiceList = () => {
     />
   );
 
-  // `toISOString()` devuelve la fecha en UTC: en Lima (UTC-5) después de las
-  // 19:00 retrocedía un día y el comprobante se emitía con fecha de ayer.
-  const fechaHoy = fechaLocalIso(new Date());
 
   return (
-    <Page>
+    <Page className={activeSection === 'notas' ? 'm1-notas-integradas' : undefined}>
       <PageHeader
-        title={incluirNotas?'Comprobantes del periodo':'Facturas y boletas'}
+        title={activeSection === 'notas' ? 'Notas' : incluirNotas ? 'Comprobantes del periodo' : 'Facturas y boletas'}
         description="Emisión, consulta y seguimiento de comprobantes electrónicos sincronizados con SUNAT"
       />
 
@@ -244,6 +204,11 @@ export const InvoiceList = () => {
       )}
 
       {refresco.resultado && <p role={refresco.resultado.ok ? 'status' : 'alert'}>{refresco.resultado.mensaje}</p>}
+      {activeSection === 'notas' && <section aria-labelledby="emision-notas" className="min-w-0 space-y-4">
+        <h2 id="emision-notas" className="text-lg font-semibold">Emisión de notas</h2>
+        <InvoiceEmissionForm soloNotas />
+      </section>}
+      {activeSection === 'notas' && <h2 className="text-lg font-semibold">Notas emitidas</h2>}
       <InvoiceDemoNotice />
       <p className="sr-only" role="status" aria-live="polite">{visibles.length} comprobantes en la vista. {visibles.map(c => `${c.serie}-${c.correlativo}: ${ETIQUETAS_BANDEJA[clasificarBandeja(c)]}`).join('; ')}</p>
 
@@ -262,10 +227,6 @@ export const InvoiceList = () => {
           onActualizar={() => { void refresco.actualizar(); }}
           actualizando={refresco.actualizando}
           ultimaActualizacion={refresco.ultimaActualizacion}
-          onEmitir={(tipo) => {
-            void recargarConfiguracion();
-            setModalEmision(tipo);
-          }}
         />
 
       {isLoading ? (
@@ -287,7 +248,7 @@ export const InvoiceList = () => {
           {grilla()}
         </section>}
 
-        {activeSection === 'notas' && <section className="flex-1 outline-none">
+        {activeSection === 'notas' && <section data-notes-list className="min-w-0 outline-none">
           {([
             {
               tipo: '07', titulo: 'Notas de crédito',
@@ -332,23 +293,6 @@ export const InvoiceList = () => {
               Array.from(document.querySelectorAll<HTMLElement>('[data-invoice-id]')).find(row => row.dataset.invoiceId === id)?.focus();
             });
           }}
-        />
-      )}
-
-      {modalEmision && (
-        <InvoiceEmitModal
-          key={modalEmision}
-          tipoExplicito
-          tipoInicial={TIPO_POR_OPCION[modalEmision]}
-          fecha={fechaHoy}
-          existentes={comprobantes}
-          productos={productosEmision}
-          seriesConfiguradas={configuracionFiscal?.series.map(s => ({ document_type: s.tipoComprobante, series: s.serie, is_active: s.activa, current_correlative: s.siguienteCorrelativo === undefined ? undefined : s.siguienteCorrelativo - 1 }))}
-          perfilComercial={configuracionFiscal?.perfil_comercial}
-          configuracionCargando={configuracionCargando}
-          configuracionError={Boolean(errorConfiguracion)}
-          onEmitir={agregarComprobante}
-          onCerrar={() => setModalEmision(null)}
         />
       )}
     </Page>

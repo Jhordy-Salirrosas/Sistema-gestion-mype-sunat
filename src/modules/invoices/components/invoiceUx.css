@@ -18,3 +18,8 @@
 .m1-ux :is(input,select,textarea) { border-color:var(--input); }
 .m1-ux .text-amber-600 { color:#92400e; }
 .dark .m1-ux .text-amber-600 { color:#fcd34d; }
+
+/* Notas comparte el desplazamiento de AppLayout: ni formulario ni tablas crean otro. */
+.m1-notas-integradas [data-slot=table-container] { max-height:none; overflow:visible; }
+.m1-notas-integradas [data-notes-list] table { width:100%; table-layout:fixed; }
+.m1-notas-integradas [data-notes-list] :is(th,td) { white-space:normal; overflow-wrap:anywhere; }

@@ -1,11 +1,10 @@
-import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {cleanup,render,screen,waitFor} from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
-import {MemoryRouter,Routes,Route} from 'react-router-dom';
 import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
-import {InvoiceEmitModal} from '@/modules/invoices/components/InvoiceEmitModal';
-import {useAuthStore} from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,render,screen,waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter,Route,Routes } from 'react-router-dom';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 const fixture=vi.hoisted(()=>({mode:'listo' as 'listo'|'cargando'|'error'|'vacio'}));
 vi.mock('@/lib/axios',()=>({apiClient:{get:vi.fn(async(url:string)=>{
  if(url.includes('/invoices/products')) {
@@ -19,12 +18,12 @@ vi.mock('@/modules/invoices/components/RetencionMaestro',()=>({RetencionMaestro:
 const clients:QueryClient[]=[];
 beforeEach(()=>{fixture.mode='listo';useAuthStore.setState({user:{id:'local',email:'local@example.invalid',role:'ADMIN'}});});
 afterEach(()=>{cleanup();clients.splice(0).forEach(c=>c.clear());});
-function mount(via='pagina',tipo='01') {
+function mount(tipo='01') {
  const q=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:0}}});clients.push(q);
- render(<QueryClientProvider client={q}><MemoryRouter initialEntries={[`/invoices/emision?tipo=${tipo}`]}>{via==='modal'?<InvoiceEmitModal tipoInicial="01" fecha="2026-11-13" seriesConfiguradas={[{document_type:'01',series:'F001',is_active:true}]} existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()}/>:<Routes><Route path="/invoices/emision" element={<InvoiceEmissionPage/>}/></Routes>}</MemoryRouter></QueryClientProvider>);
+ render(<QueryClientProvider client={q}><MemoryRouter initialEntries={[`/invoices/emision?tipo=${tipo}`]}>{<Routes><Route path="/invoices/emision" element={<InvoiceEmissionPage/>}/></Routes>}</MemoryRouter></QueryClientProvider>);
 }
 it.each(['01','03'])('ruta %s: solo la selección del catálogo crea una línea',async tipo=>{
- mount('pagina',tipo);const user=userEvent.setup();const search=await screen.findByRole('combobox',{name:'Buscar producto'});
+ mount(tipo);const user=userEvent.setup();const search=await screen.findByRole('combobox',{name:'Buscar producto'});
  expect(screen.queryByLabelText('Código de la línea 1')).toBeNull();
  expect(screen.queryByRole('button',{name:/Añadir ítem/})).toBeNull();
  for(let n=0;n<3;n++){await user.click(search);await user.keyboard('{Alt>}l{/Alt}');expect(document.activeElement).toBe(search);expect(screen.queryByLabelText('Descripción de la línea 1')).toBeNull();}
@@ -34,8 +33,8 @@ it.each(['01','03'])('ruta %s: solo la selección del catálogo crea una línea'
  await user.click(search);await user.keyboard('{Alt>}l{/Alt}');expect(screen.queryByLabelText('Descripción de la línea 2')).toBeNull();
  await user.click(screen.getByRole('button',{name:'Eliminar la línea 1'}));expect(screen.queryByLabelText('Código de la línea 1')).toBeNull();
 });
-it.each(['pagina','modal'])('%s: Alt+L solo enfoca búsqueda con líneas seleccionadas',async via=>{
- mount(via);const user=userEvent.setup();const search=await screen.findByRole('combobox',{name:'Buscar producto'});
+it.each(['pagina'])('%s: Alt+L solo enfoca búsqueda con líneas seleccionadas',async ()=>{
+ mount();const user=userEvent.setup();const search=await screen.findByRole('combobox',{name:'Buscar producto'});
  await user.click(search);await user.keyboard('{Alt>}l{/Alt}');expect(document.activeElement).toBe(search);expect(screen.queryByLabelText('Descripción de la línea 1')).toBeNull();
  await user.keyboard('CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
  await user.click(search);await user.keyboard('{Alt>}l{/Alt}');await user.keyboard('{Alt>}l{/Alt}');
@@ -53,8 +52,8 @@ it.each(['cargando','error','vacio'] as const)('catálogo %s tiene explicación 
  expect(screen.queryByLabelText('Descripción de la línea 2')).toBeNull();
  await waitFor(()=>expect(status.textContent).toMatch(message));
 });
-it.each(['pagina','modal'])('%s: elegir otra línea cuando no hay fila vacía añade sin reemplazar la anterior',async via=>{
- mount(via);const user=userEvent.setup();const search=await screen.findByRole('combobox',{name:'Buscar producto'});
+it.each(['pagina'])('%s: elegir otra línea cuando no hay fila vacía añade sin reemplazar la anterior',async ()=>{
+ mount();const user=userEvent.setup();const search=await screen.findByRole('combobox',{name:'Buscar producto'});
  await user.type(search,'CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
  await user.type(search,'CEM');await user.click(screen.getByRole('button',{name:/CEM-001 · Cemento prueba/}));
  await user.click(screen.getByRole('button',{name:'Mantener separada'}));

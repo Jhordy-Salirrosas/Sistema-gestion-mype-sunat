@@ -1,20 +1,18 @@
-import { TEST_ACTIONS as ACTIONS_PERMISOS,serverSnapshot } from '../../../fixtures/permissionsServer';
-import { permissionsApi } from '@/modules/auth/services/permissionsApi';
-import { afterEach,beforeEach,expect,it,vi } from 'vitest';
-import { cleanup,render,renderHook,screen,fireEvent,waitFor } from '@testing-library/react';
-import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import type { ReactNode } from 'react';
-import { useAuthStore } from '@/stores/authStore';
 import { type ActionCode } from '@/modules/auth/services/actionPermissionsApi';
 import { modulePermissionsApi } from '@/modules/auth/services/modulePermissionsApi';
-import { useInvoiceWritePermission } from '@/modules/invoices/hooks/useInvoiceWritePermission';
-import { InvoiceWriteButton } from '@/modules/invoices/components/InvoiceWriteButton';
-import { InvoiceEmitModal } from '@/modules/invoices/components/InvoiceEmitModal';
-import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
+import { permissionsApi } from '@/modules/auth/services/permissionsApi';
 import { InvoiceBridgeReprocess } from '@/modules/invoices/components/InvoiceBridgeReprocess';
 import { InvoiceForcedResend } from '@/modules/invoices/components/InvoiceForcedResend';
-import { hoyEnLima } from '@/modules/invoices/lib/invoiceFecha';
+import { InvoiceWriteButton } from '@/modules/invoices/components/InvoiceWriteButton';
+import { useInvoiceWritePermission } from '@/modules/invoices/hooks/useInvoiceWritePermission';
+import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
+import { useAuthStore } from '@/stores/authStore';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,fireEvent,render,renderHook,screen,waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach,beforeEach,expect,it,vi } from 'vitest';
+import { TEST_ACTIONS as ACTIONS_PERMISOS,serverSnapshot } from '../../../fixtures/permissionsServer';
 vi.mock('@/lib/axios',()=>({apiClient:{get:vi.fn(async(url:string)=>({data:url.includes('/invoices/config')?{series:[{document_type:'01',series:'F001',is_active:true}]}:[]})),post:vi.fn()}}));
 vi.mock('@/modules/invoices/services/inventoryProductsApi',()=>({cargarProductosAlmacen:vi.fn(async()=>[])}));
 const clients:QueryClient[]=[];
@@ -26,8 +24,8 @@ beforeEach(()=>{
  vi.mocked(permissionsApi.mine).mockResolvedValue({...serverSnapshot(),actions:actions(false)});
 });
 afterEach(()=>{cleanup();clients.splice(0).forEach(q=>q.clear());vi.resetAllMocks();useAuthStore.setState({user:null,activeCompany:null});});
-it.each(['pagina','modal'])('%s: fecha readonly con explicación, sin modificar el día del borrador',async via=>{
- const {Wrapper}=wrapper();render(via==='pagina'?<InvoiceEmissionPage/>:<InvoiceEmitModal tipoInicial="01" fecha={hoyEnLima()} existentes={[]} seriesConfiguradas={[{document_type:'01',series:'F001',is_active:true}]} onEmitir={vi.fn()} onCerrar={vi.fn()}/>,{wrapper:Wrapper});
+it.each(['pagina'])('%s: fecha readonly con explicación, sin modificar el día del borrador',async ()=>{
+ const {Wrapper}=wrapper();render(<InvoiceEmissionPage/>,{wrapper:Wrapper});
  const input=screen.getByLabelText('Fecha de emisión') as HTMLInputElement;
  await screen.findByText(/La fecha de emisión es de solo lectura/);expect(input.readOnly).toBe(true);
  const original=input.value;fireEvent.change(input,{target:{value:'2020-01-01'}});expect(input.value).toBe(original);

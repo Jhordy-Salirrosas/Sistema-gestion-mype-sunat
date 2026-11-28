@@ -116,3 +116,15 @@ it.each(['01','03','07','08'] as const)('rechazo %s: resumen sin botón conserva
  expect(within(modal).getByText('Código: 3105')).toBeVisible();
  expect(within(modal).getByRole('tab',{name:'Visor XML UBL 2.1'})).toHaveAttribute('data-state','active');
 });
+
+
+it.each(['/invoices/facturas','/invoices/notas'])('%s no muestra botón ni menú de emisión; la consulta conserva sus filtros',async path=>{
+ const q=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:0}}});queries.push(q);
+ render(<QueryClientProvider client={q}><MemoryRouter initialEntries={[path]}><InvoiceList/></MemoryRouter></QueryClientProvider>);
+ await screen.findByLabelText('Buscar comprobantes');
+ expect(screen.queryByRole('button',{name:'Emitir Comprobante'})).toBeNull();
+ expect(screen.queryByRole('menuitem')).toBeNull();
+ expect(screen.getByRole('button',{name:'Actualizar'})).toBeVisible();
+ if(path.endsWith('/notas'))expect(screen.getByRole('region',{name:'Emisión de notas'})).toBeVisible();
+ else expect(screen.queryByRole('region',{name:'Emisión de notas'})).toBeNull();
+});

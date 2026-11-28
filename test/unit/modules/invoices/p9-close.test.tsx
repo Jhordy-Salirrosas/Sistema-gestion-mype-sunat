@@ -9,25 +9,22 @@ vi.mock('@/modules/auth/hooks/useActionPermissions', async () => {
  return {useActionPermissions:()=>{useAuthStore(s=>s.user);const p=serverSnapshot();return {can:(code:string)=>p.actions.some(a=>a.actionCode===code&&a.allowed),canShow:(code:string)=>p.actions.some(a=>a.actionCode===code&&a.available),ready:true,isLoading:false,isError:false};}};
 });
 vi.mock('@/modules/invoices/hooks/useInvoiceDatePermission', () => ({ useInvoiceDatePermission: () => ({ canEditDate: true, explanation: undefined }) }));
-import { InvoiceOutboxMonitor } from '@/modules/invoices/components/InvoiceOutboxMonitor';
-import { InvoiceKpiCards } from '@/modules/invoices/components/InvoiceKpiCards';
-import { calcularResumenFiscal } from '@/modules/invoices/lib/invoiceMetrics';
-import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { borradorInicial, vincularDocumentoAfectado } from '@/modules/invoices/lib/invoiceEmitDraft';
-import { construir } from '@/modules/invoices/data/invoiceDemoTypes';
-import { actualizarItem, itemVacio } from '@/modules/invoices/lib/invoiceItems';
-import { borradorAPayloadEmision } from '@/modules/invoices/lib/invoiceEmitPayload';
-import { generarTramaQrSunat } from '@/modules/invoices/lib/invoiceCreditAndRules';
-import { MOTIVOS_NC, MOTIVOS_ND } from '@/modules/invoices/lib/invoiceEmitValidation';
-import { errorDatosTercero } from '@/modules/customs/libPartnerValidation';
-import { InvoiceWriteButton } from '@/modules/invoices/components/InvoiceWriteButton';
-import { InvoiceEmitMenu } from '@/modules/invoices/components/InvoiceEmitMenu';
-import { InvoiceEmitResumen } from '@/modules/invoices/components/InvoiceEmitResumen';
-import { InvoiceEmitCamposTributarios } from '@/modules/invoices/components/InvoiceEmitCamposTributarios';
-import { contieneDlq, estadoDeMonitor } from '@/modules/invoices/pages/InvoiceMonitorPage';
-import { useAuthStore } from '@/stores/authStore';
 import type { Role } from '@/modules/auth/types/auth.types';
+import { errorDatosTercero } from '@/modules/customs/libPartnerValidation';
+import { InvoiceKpiCards } from '@/modules/invoices/components/InvoiceKpiCards';
+import { InvoiceOutboxMonitor } from '@/modules/invoices/components/InvoiceOutboxMonitor';
+import { InvoiceWriteButton } from '@/modules/invoices/components/InvoiceWriteButton';
+import { construir } from '@/modules/invoices/data/invoiceDemoTypes';
+import { generarTramaQrSunat } from '@/modules/invoices/lib/invoiceCreditAndRules';
+import { borradorInicial,vincularDocumentoAfectado } from '@/modules/invoices/lib/invoiceEmitDraft';
+import { borradorAPayloadEmision } from '@/modules/invoices/lib/invoiceEmitPayload';
+import { MOTIVOS_NC,MOTIVOS_ND } from '@/modules/invoices/lib/invoiceEmitValidation';
+import { actualizarItem,itemVacio } from '@/modules/invoices/lib/invoiceItems';
+import { calcularResumenFiscal } from '@/modules/invoices/lib/invoiceMetrics';
+import { contieneDlq,estadoDeMonitor } from '@/modules/invoices/pages/InvoiceMonitorPage';
+import { useAuthStore } from '@/stores/authStore';
+import { cleanup,fireEvent,render,screen } from '@testing-library/react';
+import { afterEach,expect,it,vi } from 'vitest';
 afterEach(()=>{cleanup();vi.restoreAllMocks();useAuthStore.setState({user:null});});
 const origin={...construir({tipo:'01',serie:'F001',correlativo:1,fecha:'2026-11-01',ruc:'20100070970',razonSocial:'Cliente origen',base:100,estado:'ACEPTADO'}),formaPago:'Credito' as const,cuotas:[{numero:'Cuota001',monto:118,vencimiento:'2026-12-01'}]};
 it.each([['07','01'],['07','13'],['08','02']] as const)('nota %s/%s mantiene fecha actual y hereda pago solo en 07/13',(tipo,motivo)=>{
@@ -57,9 +54,9 @@ it('QR espeja fecha, correlativo sin padding, saneamiento de hash y separador fi
 });
 it.each(['ADMIN','OPERADOR_FACTURACION','OPERATOR','AUDITOR','CONTADOR','OPERADOR_ADUANAS',undefined])('controles de envío respetan rol %s',role=>{
  useAuthStore.setState({user:role?{id:'u',email:'fake@example.invalid',role:role as Role}:null});const click=vi.fn();
- render(<><InvoiceWriteButton onClick={click}>Enviar</InvoiceWriteButton><InvoiceEmitMenu abierto={false} onToggle={click} onEmitir={click}/></>);
+ render(<InvoiceWriteButton onClick={click}>Enviar</InvoiceWriteButton>);
  const allowed=['ADMIN','OPERADOR_FACTURACION','OPERATOR'].includes(role ?? '');const button=screen.getByRole('button',{name:'Enviar'}) as HTMLButtonElement;
- expect(button.disabled).toBe(!allowed);expect((screen.getByRole('button',{name:'Emitir Comprobante'}) as HTMLButtonElement).disabled).toBe(!allowed);
+ expect(button.disabled).toBe(!allowed);
  fireEvent.click(button);expect(click).toHaveBeenCalledTimes(allowed?1:0);
 });
 it('el permiso no anula el bloqueo operativo ni el título propio',()=>{
@@ -75,23 +72,10 @@ it.each([false,true])('documentos de terceros se validan también en edición=%s
  expect(errorDatosTercero(form,editar)).toBeUndefined();expect(errorDatosTercero({...form,docNumber:'20601234567'},editar)).toMatch(/Documento inválido/);
  expect(errorDatosTercero({...form,docType:'1',docNumber:'1234567'},editar)).toMatch(/Documento inválido/);
 });
-it.each(['02','03'] as const)('resumen del modal muestra descuento global %s',codigo=>{
- const b={...borradorInicial('01','2026-11-12'),items:[{...itemVacio('x'),codigo:'P',descripcion:'Producto',valorUnitario:100,precioUnitario:118}],descuentoGlobal:{codigo,monto:5}};
- render(<InvoiceEmitResumen borrador={b}/>);expect(screen.getByText(new RegExp(`Descuento global \\(${codigo}\\)`))).toBeTruthy();
-});
-it('selector tributario ofrece otros códigos vigentes del Catálogo 54',()=>{
- const b=borradorInicial('01','2026-11-12');render(<InvoiceEmitCamposTributarios borrador={b} total={0} actualizar={()=>{}}/>);
- fireEvent.click(screen.getByRole('combobox'));expect(screen.getByRole('option',{name:/037/})).toBeTruthy();
-});
 
 it.each([[false,10,false],[true,0,false],[true,10,true]] as const)('KPI mostrarNotas=%s acreditado=%s visibilidad=%s',(mostrarNotas,acreditado,visible)=>{
  render(<InvoiceKpiCards resumen={{...calcularResumenFiscal([]),acreditado}} mostrarNotas={mostrarNotas}/>);
  expect(Boolean(screen.queryByText(/Acreditado/))).toBe(visible);
-});
-it('el resumen gratuito conserva ICBPER separado y total de cincuenta céntimos',()=>{
- const b={...borradorInicial('01','2026-11-12'),items:[{...itemVacio('x'),codigo:'P',descripcion:'Producto gratuito',afectacion:'GRATUITA' as const,valorUnitario:100,precioUnitario:0,cantidadBolsas:1,icbper:0.5}]};
- render(<InvoiceEmitResumen borrador={b}/>);expect(screen.getByText(/ICBPER.*concepto separado/)).toBeTruthy();
- expect(borradorAPayloadEmision({...b,clienteDoc:'20100070970',clienteRazonSocial:'Cliente'}).items[0].icbper).toBe(0.5);
 });
 
 it('la descarga del periodo identifica la propuesta RVIE como CSV',()=>{
@@ -115,8 +99,4 @@ it('QR conserva fecha sin estructura y admite digest ausente',()=>{
 });
 it('motivo 13 sin un origen disponible conserva forma de pago explícita del borrador',()=>{
  const b={...borradorInicial('07','2026-11-12'),motivoCodigo:'13',formaPago:'Contado' as const};expect(vincularDocumentoAfectado(b,[]).borrador.formaPago).toBe('Contado');
-});
-it('el menú abierto permite elegir cada tipo autorizado',()=>{
- useAuthStore.setState({user:{id:'u',email:'fake@example.invalid',role:'ADMIN'}});const elegir=vi.fn();render(<InvoiceEmitMenu abierto onToggle={vi.fn()} onEmitir={elegir}/>);
- for(const name of ['Factura','Boleta','Nota'])fireEvent.click(screen.getByRole('menuitem',{name}));expect(elegir.mock.calls.map(c=>c[0])).toEqual(['Factura','Boleta','Nota']);
 });

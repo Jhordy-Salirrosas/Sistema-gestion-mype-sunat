@@ -1,19 +1,15 @@
-import { confirmarRevisionSiAbierta } from '../../../fixtures/invoiceEmissionProduct';
-import { seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
-import { beforeEach as billingBeforeEach } from 'vitest';
-import { useAuthStore as billingAuth } from '@/stores/authStore';
-import { seriesConfiguradasPrueba } from '../../../fixtures/invoiceSeries';
-import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import { InvoiceEmitModal } from '@/modules/invoices/components/InvoiceEmitModal';
-import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
-import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
-import { CATALOGO_59_MEDIOS_PAGO } from '@/modules/invoices/lib/medioPagoDetraccion';
 import { borradorInicial } from '@/modules/invoices/lib/invoiceEmitDraft';
 import { borradorAPayloadEmision } from '@/modules/invoices/lib/invoiceEmitPayload';
 import { hoyEnLima } from '@/modules/invoices/lib/invoiceFecha';
+import { CATALOGO_59_MEDIOS_PAGO } from '@/modules/invoices/lib/medioPagoDetraccion';
+import InvoiceEmissionPage from '@/modules/invoices/pages/InvoiceEmissionPage';
+import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
+import { useAuthStore as billingAuth } from '@/stores/authStore';
+import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
+import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach,beforeEach as billingBeforeEach,expect,it,vi } from 'vitest';
+import { confirmarRevisionSiAbierta,seleccionarProductoPrueba } from '../../../fixtures/invoiceEmissionProduct';
 
 vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async (url: string) => ({ data: url === '/invoices/config' ? { series: [{ document_type: '01', series: 'F001', is_active: true }, { document_type: '03', series: 'B001', is_active: true }] } : [] })) } }));
 vi.mock('@/modules/invoices/services/inventoryProductsApi', () => ({ cargarProductosAlmacen: vi.fn(async () => [{sku:'SERV',descripcion:'Servicio',unidad:'NIU',valorUnitario:1000,precioUnitario:1180,afectacion:'10',stock:100,vendible:true}]) }));
@@ -26,14 +22,12 @@ it('conserva los 22 códigos exactos y omite el campo sin detracción efectiva, 
   const b = { ...borradorInicial('01', hoyEnLima()), medioPagoDetraccion: '003' as const };
   expect(borradorAPayloadEmision(b)).not.toHaveProperty('medio_pago_detraccion');
 });
-it.each(['modal', 'pagina'])('%s: solo aparece con detracción, bloquea vacío y envía el código elegido', async (via) => {
+it.each(['pagina'])('%s: solo aparece con detracción, bloquea vacío y envía el código elegido', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  render(<QueryClientProvider client={client}><MemoryRouter>{via === 'modal'
-    ? <InvoiceEmitModal seriesConfiguradas={seriesConfiguradasPrueba} tipoInicial="01" fecha={hoyEnLima()} existentes={[]} onEmitir={vi.fn()} onCerrar={vi.fn()} />
-    : <InvoiceEmissionPage />}</MemoryRouter></QueryClientProvider>);
-  if (via === 'pagina') await waitFor(() => expect((screen.getByLabelText('Serie configurada') as HTMLSelectElement).value).toBe('F001'));
+  render(<QueryClientProvider client={client}><MemoryRouter>{<InvoiceEmissionPage />}</MemoryRouter></QueryClientProvider>);
+  await waitFor(() => expect((screen.getByLabelText('Serie configurada') as HTMLSelectElement).value).toBe('F001'));
   expect(screen.queryByLabelText('Medio de pago de la detracción')).toBeNull();
-  fireEvent.change(screen.getByLabelText(via === 'modal' ? 'RUC / DNI del cliente' : 'RUC del cliente'), { target: { value: '20100070970' } });
+  fireEvent.change(screen.getByLabelText('RUC del cliente'), { target: { value: '20100070970' } });
   fireEvent.change(screen.getByLabelText('Razón social / nombre'), { target: { value: 'Cliente de prueba' } });
   await seleccionarProductoPrueba();
   fireEvent.change(screen.getByLabelText('Detracción de la línea 1'), { target: { value: '009' } });

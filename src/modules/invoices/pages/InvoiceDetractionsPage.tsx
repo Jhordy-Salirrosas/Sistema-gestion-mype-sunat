@@ -1,3 +1,5 @@
+import { fechaLimiteDetraccion, superaPlazoDetraccion, detraccionFueraDePlazo } from '../lib/invoiceDetractionDeadline';
+import { hoyEnLima } from '../lib/invoiceFecha';
 import './invoiceDetractionsPage.css';
 import { CheckCircle2, Clock3 } from 'lucide-react';
 import { InvoiceUxPage as Page } from '../components/InvoiceUxPage';
@@ -16,6 +18,7 @@ const periodoActual = () => { const h = new Date(); return `${h.getFullYear()}-$
 
 export default function InvoiceDetractionsPage() {
   const qc = useQueryClient();
+  const [hoy] = useState(hoyEnLima);
   const [period, setPeriod] = useState(periodoActual);
   const [selected, setSelected] = useState<Detraccion | null>(null);
   const [editing, setEditing] = useState<Deposit | null>(null);
@@ -30,6 +33,9 @@ export default function InvoiceDetractionsPage() {
     balance: sum.balance + balance(d),
   }), { detraction: 0, deposited: 0, balance: 0 });
   const periodLabel = new Intl.DateTimeFormat('es-PE', { month: 'long', timeZone: 'UTC' }).format(new Date(`${period}-01T00:00:00Z`)).toLocaleLowerCase('es-PE') + ` ${period.slice(0, 4)}`;
+  const limiteSeleccionado = selected ? fechaLimiteDetraccion(selected.date) : null;
+  const fechaTardia = superaPlazoDetraccion(form.date, limiteSeleccionado);
+  const fueraDePlazo = (d: Detraccion) => detraccionFueraDePlazo({ emision: d.date, pendiente: balance(d) > 0, depositos: d.deposits?.length ? d.deposits.map(deposit => deposit.date) : d.depositedAt ? [d.depositedAt] : [], hoy });
   const errorMonto = selected ? errorMontoDeposito(Number(form.amount), balance(selected) + (editing?.amount ?? 0)) : undefined;
   const errorConstancia = errorConstanciaDeposito(form.constancia);
   const registrar = useMutation({
@@ -60,6 +66,7 @@ export default function InvoiceDetractionsPage() {
     {error ? <Card className="p-3 mb-3 text-sm">{error}</Card> : null}
     {isError && <p role="alert">No se pudieron consultar las detracciones. Reintente la consulta antes de registrar un depósito.</p>}
     <h2 className="text-base font-semibold">Comprobantes <span className="text-sm font-normal text-muted-foreground">· {periodLabel}</span></h2>
+    <p className="text-xs text-muted-foreground">Plazo de referencia: quinto día hábil del mes siguiente a la emisión, de lunes a viernes y sin descontar feriados. El plazo legal también depende del pago y de la anotación en el Registro de Compras.</p>
     <Card flush><Table className="detractions-table">
       <caption className="sr-only">Depósitos y saldo de detracción por comprobante</caption>
       <colgroup>{[13, 8, 13, 7.5, 8, 19, 6, 8.5, 7, 10].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
@@ -67,7 +74,7 @@ export default function InvoiceDetractionsPage() {
       {isLoading ? <TableRow><TableCell colSpan={10}>Cargando…</TableCell></TableRow> : null}
       {!isLoading && !isError && data.length === 0 ? <TableRow><TableCell colSpan={10}>No hay comprobantes con detracción en este periodo. Cambie el periodo o revise la bandeja.</TableCell></TableRow> : null}
       {data.map((d) => <TableRow key={d.id}>
-        <TableCell><strong className="detractions-number">{d.numero}</strong><span className="detractions-status">{balance(d)<=0?<CheckCircle2 aria-hidden="true" className="h-3 w-3 shrink-0"/>:<Clock3 aria-hidden="true" className="h-3 w-3 shrink-0"/>}{balance(d)<=0?'Depositada':'Pendiente de depósito'}</span></TableCell>
+        <TableCell><strong className="detractions-number">{d.numero}</strong><span className="detractions-status">{balance(d)<=0?<CheckCircle2 aria-hidden="true" className="h-3 w-3 shrink-0"/>:<Clock3 aria-hidden="true" className="h-3 w-3 shrink-0"/>}{balance(d)<=0?'Depositada':'Pendiente de depósito'}</span>{fueraDePlazo(d) && <div className="mt-1"><span className="detractions-status" title={`Fecha límite de referencia: ${formatDateToPeru(fechaLimiteDetraccion(d.date))}`}>Fuera de plazo</span></div>}</TableCell>
         <TableCell className="detractions-date">{formatDateToPeru(d.date)}</TableCell><TableCell className="detractions-customer">{d.customer}</TableCell>
         <TableCell align="right" className="detractions-money">{formatCurrency(d.total, 'PEN')}</TableCell><TableCell align="right" className="detractions-money">{formatCurrency(d.detraction, 'PEN')}</TableCell>
         <TableCell className="detractions-deposits">{d.deposits?.length ? <ul>{d.deposits.map(deposit => <li key={deposit.id}>
@@ -85,6 +92,10 @@ export default function InvoiceDetractionsPage() {
     </Dialog>
     <Dialog open={selected !== null} onOpenChange={(open) => { if (!open) setSelected(null); }}>
       <DialogContent className="detractions-dialog"><DialogHeader><DialogTitle>{editing ? 'Editar depósito de detracción' : 'Registrar depósito de detracción'}</DialogTitle><DialogDescription>{selected?.numero} · {selected?.customer} · Detracción {selected ? formatCurrency(selected.detraction, 'PEN') : ''}</DialogDescription></DialogHeader>
+        {fechaTardia && <div role="status" aria-label="Advertencia de plazo del depósito" className="space-y-1 rounded-md border bg-muted/40 p-3 text-xs">
+          <p>La fecha elegida supera el plazo legal de referencia ({formatDateToPeru(limiteSeleccionado)}). Un depósito fuera de plazo puede generar una multa del 50 % del importe no depositado oportunamente y postergar el uso del crédito fiscal.</p>
+          <p className="text-muted-foreground">Referencia calculada desde la emisión, sin descontar feriados ni considerar un vencimiento anterior por pago o anotación en Compras. La advertencia no impide registrar el depósito real.</p>
+        </div>}
         <div className="space-y-3">{error && <p role="alert" className="text-xs text-destructive">{error}</p>}<label className="text-xs block">Monto<InvoiceMoneyInput aria-invalid={Boolean(errorMonto)} aria-describedby="deposit-amount-error" value={Number(form.amount)} onValue={(amount) => setForm({ ...form, amount: String(amount) })} /></label>{errorMonto && <p id="deposit-amount-error" role="alert" className="text-xs text-destructive">{errorMonto}</p>}<label className="text-xs block">Fecha<Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label className="text-xs block">Constancia<Input inputMode="numeric" aria-invalid={Boolean(errorConstancia)} aria-describedby="deposit-constancia-error" value={form.constancia} onChange={(e) => setForm({ ...form, constancia: e.target.value })} /></label>{errorConstancia && <p id="deposit-constancia-error" role="alert" className="text-xs text-destructive">{errorConstancia}</p>}<Button onClick={() => registrar.mutate()} disabled={registrar.isPending || Boolean(errorMonto || errorConstancia)}>{registrar.isPending ? 'Guardando…' : 'Guardar depósito'}</Button></div>
       </DialogContent>
     </Dialog>

@@ -1,3 +1,4 @@
+import { esTipoNota } from './invoiceEmitDraft';
 import { problemasContenidoEmision } from './invoiceEmissionValidation';
 import { documentoValidoParaTipo, mensajeErrorDocumento } from './invoiceEmitValidation';
 import { problemaDeFechaEmision } from './invoiceEmitFecha';
@@ -10,7 +11,7 @@ import type { ProductoBuscado } from './invoiceSearch';
 export interface FormIssue { selector: string; mensaje: string; }
 /** Solo reúne las validaciones existentes de la página; no calcula importes ni altera el contrato. */
 export function invoiceFormIssues(v: {
- tipo:'01'|'03';serie:string;fecha:string;documento:string;nombre:string;items:readonly ItemBorrador[];
+ tipo:'01'|'03'|'07'|'08';serie:string;fecha:string;documento:string;nombre:string;items:readonly ItemBorrador[];
  descuento:DescuentoGlobal|null;productos:readonly ProductoBuscado[];detraccion:boolean;medioDetraccion:string;
  forma:'Contado'|'Credito';cuotas:readonly {monto:number;vencimiento:string}[];neto:number;
 }):FormIssue[] {
@@ -28,12 +29,12 @@ export function invoiceFormIssues(v: {
   else {
    const linea=/^Línea (\d+):/.exec(mensaje);
    const index=linea?Number(linea[1])-1:-1;
-   const campos=index>=0?erroresCamposLinea(v.items[index],false):null;
+   const campos=index>=0?erroresCamposLinea(v.items[index],esTipoNota(v.tipo)):null;
    if(campos?.cantidad)push(`[aria-label="Cantidad de la línea ${index+1}"]`,campos.cantidad);
    else push('[aria-label="Líneas del comprobante"]',mensaje);
   }
  }
- for(const linea of revisarGrilla(v.items,v.productos).lineas){if(linea.gravedad==='error')push(`[aria-label="Cantidad de la línea ${linea.indice+1}"]`,linea.mensaje);}
+ for(const linea of revisarGrilla(v.items,v.productos,{nota:esTipoNota(v.tipo)}).lineas){if(linea.gravedad==='error')push(`[aria-label="Cantidad de la línea ${linea.indice+1}"]`,linea.mensaje);}
  if(v.forma==='Credito'){
   const cronograma=validarCronograma(v.cuotas,v.neto,v.fecha);
   for(const error of cronograma.errores)push('#emision-cuotas',error);

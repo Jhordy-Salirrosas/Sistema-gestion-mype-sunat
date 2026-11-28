@@ -136,3 +136,30 @@
 .emision-etiquetas div:has(> :is(#doc-cliente, #razon-cliente)) {
   margin-bottom: 12px;
 }
+
+/* Campos propios de Nota dentro de la misma tarjeta Operación. */
+.emision-etiquetas .invoice-note-fields :is([data-testid="paso-origen-nota"], [data-slot="page-field"], label:has(> input[aria-label="Sustento de Otros conceptos"])) {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.emision-etiquetas .invoice-note-fields :is(label[for="doc-afectado"], [data-slot="page-label"]) {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.emision-etiquetas .invoice-note-fields :is(#doc-afectado, [role="combobox"], input[aria-label="Sustento de Otros conceptos"]) {
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  min-height: 30px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--foreground);
+}

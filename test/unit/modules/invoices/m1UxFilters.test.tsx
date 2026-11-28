@@ -8,7 +8,7 @@ import { InvoiceTable } from '@/modules/invoices/components/InvoiceTable';
 import { useInvoiceFiltros } from '@/modules/invoices/lib/useInvoiceFiltros';
 import { construir } from '@/modules/invoices/data/invoiceDemoTypes';
 afterEach(()=>{cleanup();sessionStorage.clear();});
-function Filtros(){const[filtros,setFiltros]=useInvoiceFiltros();const l=useLocation();return <><InvoiceFiltersBar filtros={filtros} onFiltrosChange={setFiltros} onActualizar={()=>{}} onEmitir={()=>{}}/><output aria-label="URL">{l.search}</output></>;}
+function Filtros(){const[filtros,setFiltros]=useInvoiceFiltros();const l=useLocation();return <><InvoiceFiltersBar filtros={filtros} onFiltrosChange={setFiltros} onActualizar={()=>{}}/><output aria-label="URL">{l.search}</output></>;}
 it('recupera de URL, muestra chips y elimina uno o todos sin ocultar filtros',()=>{
  const query=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:0}}});
  render(<QueryClientProvider client={query}><MemoryRouter initialEntries={['/invoices/facturas?m1=1&busqueda=F001&estado=OBSERVADO&desde=2026-11-01']}><Filtros/></MemoryRouter></QueryClientProvider>);

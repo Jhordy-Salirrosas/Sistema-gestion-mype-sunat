@@ -35,7 +35,7 @@ describe('período y fechas antes de consultar',()=>{
  it('señala mes inválido recibido',()=>{render(<PeriodInput value="2026-13" onChange={vi.fn()}/>);expect(screen.getByRole('alert')).toHaveTextContent('mes entre 1 y 12');});
  it('no aplica rangos invertidos en bandeja y permite corregirlos',()=>{
   const change=vi.fn();
-  function Filters(){const [f,set]=useState({busqueda:'',estado:'TODOS' as const,desde:'2026-11-01',hasta:'2026-11-12'});return <InvoiceFiltersBar filtros={f} onFiltrosChange={n=>{change(n);set(n as typeof f);}} onActualizar={vi.fn()} onEmitir={vi.fn()}/>;}
+  function Filters(){const [f,set]=useState({busqueda:'',estado:'TODOS' as const,desde:'2026-11-01',hasta:'2026-11-12'});return <InvoiceFiltersBar filtros={f} onFiltrosChange={n=>{change(n);set(n as typeof f);}} onActualizar={vi.fn()}/>;}
   render(<Filters/>);
   fireEvent.change(screen.getByLabelText('Desde'),{target:{value:'2026-11-20'}});
   expect(change).not.toHaveBeenCalled();expect(screen.getByRole('alert')).toHaveTextContent('posterior');expect(screen.getByRole('button',{name:'Actualizar'})).toBeDisabled();
