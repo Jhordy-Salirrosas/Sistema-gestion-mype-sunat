@@ -41,12 +41,8 @@ export class LoginUseCase {
     try {
       isValid = await this.hasher.compare(dto.password, passwordHash);
     } catch {
-      // Ignorar errores de hash si estamos en modo offline/fallback
-    }
-
-    // Bypass para el modo Demo / Offline en presentaciones en vivo
-    if (!isValid && user.id === 'mock-admin-id') {
-      isValid = true;
+      // Un hash ilegible no autoriza: se trata como credencial inválida.
+      isValid = false;
     }
 
     if (!isValid) {
