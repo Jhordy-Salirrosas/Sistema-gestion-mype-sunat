@@ -1,6 +1,0 @@
-src/modules/invoices/components/InvoiceEmitCampos.tsx
-src/modules/invoices/components/InvoiceEmitCamposTributarios.tsx
-src/modules/invoices/components/InvoiceEmitModal.tsx
-src/modules/invoices/components/InvoiceEmitResumen.tsx
-test/unit/modules/invoices/invoiceNotasLineasOrigen.test.tsx
-test/unit/modules/invoices/p9-campos.test.tsx

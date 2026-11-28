@@ -6,7 +6,7 @@ import {
   type IssuerContext,
 } from '../../../sunat/issuerConfigResolver';
 import { IssuerConfigWriter } from './issuerConfigWriter';
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   CertificateService,
   CertificateInspectionError,
@@ -157,6 +157,12 @@ export class InvoiceConfigService {
     body: unknown,
   ): Promise<ConfiguracionFiscal> {
     if (!this.writer) throw new Error('ISSUER_CONFIG_WRITER_UNAVAILABLE');
+    const cuenta = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>).cuenta_banco_nacion
+      : undefined;
+    if (typeof cuenta === 'string' && cuenta.trim() && !/^[0-9]{11}$/.test(cuenta.trim())) {
+      throw new BadRequestException('cuenta_banco_nacion: debe contener 11 dígitos.');
+    }
     await this.writer.save(companyId, body);
     return this.obtener(companyId);
   }
