@@ -1,0 +1,130 @@
+import '@testing-library/jest-dom/vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+import { InvoiceList } from '@/modules/invoices/InvoiceList';
+import { invoicesApi } from '@/modules/invoices/services/invoicesApi';
+import { descargarDesdeBackend } from '@/modules/invoices/lib/invoiceDescarga';
+import { aInvoice } from '@/modules/invoices/lib/invoiceMapper';
+import { useAuthStore } from '@/stores/authStore';
+import type { Invoice } from '@/modules/invoices/types/invoice.types';
+
+vi.mock('@/lib/axios', () => ({ apiClient: { get: vi.fn(async () => ({ data: { series: [] } })) } }));
+vi.mock('@/modules/invoices/services/invoicesApi', () => ({ invoicesApi: { getInvoices: vi.fn(), getInvoiceById: vi.fn(), retryCdr: vi.fn() } }));
+vi.mock('@/modules/invoices/lib/invoiceDescarga', () => ({ obtenerXmlDesdeBackend: vi.fn(async () => '<Invoice/>'), extraerDigestValue: vi.fn(() => null), descargarDesdeBackend: vi.fn(async () => {}) }));
+let factura: Invoice;
+const queries: QueryClient[] = [];
+beforeEach(() => {
+ vi.clearAllMocks();sessionStorage.clear();
+ useAuthStore.setState({user:{id:'admin',email:'admin@example.invalid',role:'ADMIN'},activeCompany:{tenantId:'company',ruc:'20100070970',razonSocial:'Empresa'}});
+ factura=aInvoice({id:'invoice',tipo_comprobante:'01',serie:'F001',correlativo:97,numero:'F001-00000097',fecha_emision:'2026-11-20',estado:'ACEPTADO',monto_total:118,base_imponible:100,total_igv:18,moneda:'PEN',cliente_documento:'20100070970',cliente_nombre:'Cliente de prueba',cdr_codigo:'0'});
+ vi.mocked(invoicesApi.getInvoices).mockImplementation(async()=>({data:[factura],total:1,page:1,pageSize:100,totalPages:1}));
+ vi.mocked(invoicesApi.getInvoiceById).mockImplementation(async()=>({...factura,tieneCdr:factura.estadoBackend==='ACEPTADO',historial:[]}));
+ vi.mocked(invoicesApi.retryCdr).mockResolvedValue({id:'invoice',estado:'ERROR_RED',encolado:false,mensaje:'Reintento consultado.'});
+});
+afterEach(()=>{cleanup();queries.splice(0).forEach(q=>q.clear());useAuthStore.getState().logout();sessionStorage.clear();});
+async function mount(path = '/invoices/facturas'){
+ const q=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:0}}});queries.push(q);
+ render(<QueryClientProvider client={q}><MemoryRouter initialEntries={[path]}><InvoiceList/></MemoryRouter></QueryClientProvider>);
+ return (await screen.findByText(factura.numero)).closest('tr')!;
+}
+it.each(['ACEPTADO','OBSERVADO','EN_COLA','ERROR_RED'])('fila %s no rechazada conserva Estado CDR sin nuevos controles ni orientación',async estado=>{
+ factura={...factura,estadoBackend:estado};
+ const row=await mount();const table=row.closest('table')!;
+ const headers=within(table).getAllByRole('columnheader');expect(headers).toHaveLength(9);expect(headers.at(-1)).toHaveTextContent('Estado CDR');
+ expect(within(table).queryByRole('columnheader',{name:'Acciones'})).toBeNull();expect(within(row).getAllByRole('cell')).toHaveLength(9);
+ expect(within(row).queryByRole('button')).toBeNull();expect(within(row).queryByText('Más acciones')).toBeNull();expect(within(row).queryByText('Ver XML')).toBeNull();expect(within(row).queryByText('Ver CDR')).toBeNull();expect(within(row).queryByText('Descargar PDF')).toBeNull();
+});
+it.each(['número','cliente','importe','estado'])('clic en %s abre el mismo detalle modal con pestañas y capacidades',async campo=>{
+ const row=await mount();const user=userEvent.setup();
+ const target=campo==='número'?within(row).getByText('F001-00000097'):campo==='cliente'?within(row).getByText('Cliente de prueba'):campo==='importe'?within(row).getByText(/118\.00/):within(row).getByLabelText('Aceptada');
+ await user.click(target);const modal=await screen.findByRole('dialog',{name:/F001-00000097/});
+ expect(modal).toHaveTextContent('Cliente de prueba');expect(within(modal).getByLabelText('Aceptada')).toBeVisible();
+ expect(within(modal).getByRole('tab',{name:'Auditoría CDR'})).toBeVisible();expect(within(modal).getByRole('tab',{name:'Visor XML UBL 2.1'})).toBeVisible();
+ expect(await within(modal).findByRole('button',{name:'Reprocesar puente'})).toBeVisible();
+ expect(within(modal).getByRole('button',{name:'Descargar XML Oficial'})).toBeVisible();expect(within(modal).getByRole('button',{name:'Descargar PDF Homologado'})).toBeVisible();
+ await waitFor(()=>expect(within(modal).getByRole('button',{name:'Descargar CDR'})).toBeEnabled());expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeTruthy();
+ expect(screen.queryByRole('region',{name:/F001-00000097/})).toBeNull();
+});
+it.each(['Cerrar','Escape','fondo'])('el modal se cierra con %s y devuelve el foco a la fila',async modo=>{
+ const row=await mount();const user=userEvent.setup();row.focus();await user.keyboard('{Enter}');
+ const modal=await screen.findByRole('dialog',{name:/F001-00000097/});
+ if(modo==='Cerrar')await user.click(within(modal).getByRole('button',{name:'Cerrar'}));
+ else if(modo==='Escape')await user.keyboard('{Escape}');
+ else await user.click(document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')!);
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());await waitFor(()=>expect(row).toHaveFocus());
+});
+it('las tres descargas se mantienen dentro del detalle usando el flujo existente',async()=>{
+ const row=await mount();const user=userEvent.setup();await user.click(row);const modal=await screen.findByRole('dialog');
+ for(const [label,formato] of [['Descargar XML Oficial','xml'],['Descargar PDF Homologado','pdf'],['Descargar CDR','cdr']] as const){
+  const button=within(modal).getByRole('button',{name:label});await waitFor(()=>expect(button).toBeEnabled());await user.click(button);await waitFor(()=>expect(descargarDesdeBackend).toHaveBeenCalledWith('invoice',formato));
+ }
+ expect(descargarDesdeBackend).toHaveBeenCalledTimes(3);
+});
+it.each([true,false])('el reintento trasladado al modal conserva la guarda de transporte: %s',async acreditado=>{
+ factura={...factura,estadoBackend:'ERROR_RED',cdrStatus:'SIN_CONFIRMAR',cdrCodigo:undefined,transporteAcreditado:acreditado};
+ const row=await mount();const user=userEvent.setup();await user.click(row);const modal=await screen.findByRole('dialog');
+ if(acreditado){const retry=await within(modal).findByRole('button',{name:'Reintentar CDR'});await waitFor(()=>expect(retry).toBeEnabled());await user.click(retry);await waitFor(()=>expect(invoicesApi.retryCdr).toHaveBeenCalledWith('invoice'));}
+ else expect(within(modal).queryByRole('button',{name:'Reintentar CDR'})).toBeNull();
+});
+
+it.each((['07','08'] as const).flatMap(tipo=>(['clic','Enter','Espacio'] as const).map(entrada=>({tipo,entrada}))))('Notas $tipo abre modal sin acciones mediante $entrada, conservando capacidades y cierre',async({tipo,entrada})=>{
+ const serie=tipo==='07'?'FC01':'FD01';factura={...factura,tipoComprobante:tipo,serie,numero:`${serie}-00000097`};
+ const row=await mount('/invoices/notas');const table=row.closest('table')!;
+ expect(within(table).getAllByRole('columnheader')).toHaveLength(9);expect(within(table).getAllByRole('columnheader').at(-1)).toHaveTextContent('Estado CDR');expect(within(row).queryByRole('button')).toBeNull();expect(within(row).queryByText('Más acciones')).toBeNull();
+ expect(screen.queryByRole('tablist',{name:'Apartados del módulo de facturación'})).toBeNull();expect(screen.queryByRole('tab')).toBeNull();
+ const user=userEvent.setup();if(entrada==='clic')await user.click(within(row).getByText('Cliente de prueba'));else{row.focus();await user.keyboard(entrada==='Enter'?'{Enter}':' ');}
+ const modal=await screen.findByRole('dialog',{name:new RegExp(`${serie}-00000097`)});expect(screen.queryByRole('region',{name:new RegExp(`${serie}-00000097`)})).toBeNull();
+ expect(within(modal).getByRole('tab',{name:'Auditoría CDR'})).toBeVisible();expect(within(modal).getByRole('tab',{name:'Visor XML UBL 2.1'})).toBeVisible();
+ expect(await within(modal).findByRole('button',{name:'Reprocesar puente'})).toBeVisible();
+ for(const label of ['Descargar XML Oficial','Descargar PDF Homologado','Descargar CDR'])await waitFor(()=>expect(within(modal).getByRole('button',{name:label})).toBeEnabled());
+ if(entrada==='clic')await user.click(document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')!);else if(entrada==='Enter')await user.click(within(modal).getByRole('button',{name:'Cerrar'}));else await user.keyboard('{Escape}');
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());await waitFor(()=>expect(row).toHaveFocus());
+});
+
+it('Facturas y Boletas no muestra la franja de navegación del módulo',async()=>{
+ await mount();expect(screen.queryByRole('tablist',{name:'Apartados del módulo de facturación'})).toBeNull();expect(screen.queryByRole('tab')).toBeNull();
+});
+
+it.each(['07','08'])('Notas %s conserva el reintento de la fila dentro del modal',async tipo=>{
+ const serie=tipo==='07'?'FC01':'FD01';factura={...factura,tipoComprobante:tipo,serie,numero:`${serie}-00000097`,estadoBackend:'ERROR_RED',cdrStatus:'SIN_CONFIRMAR',cdrCodigo:undefined,transporteAcreditado:true};
+ const row=await mount('/invoices/notas');const user=userEvent.setup();await user.click(row);const modal=await screen.findByRole('dialog');
+ const retry=await within(modal).findByRole('button',{name:'Reintentar CDR'});await waitFor(()=>expect(retry).toBeEnabled());await user.click(retry);await waitFor(()=>expect(invoicesApi.retryCdr).toHaveBeenCalledWith('invoice'));
+});
+
+const motivo3105 = `SOAP Fault del billService [3105]: El XML debe contener al menos un tributo por linea de afectacion por IGV - Detalle: xxx.xxx.xxx value='ticket: 1794529417139 error: Error en la linea: 2: 3105 (nodo: "/" valor: "")'`;
+it.each(['01','03','07','08'] as const)('rechazo %s: resumen sin botón conserva la apertura por fila y toda la orientación en el modal',async tipo=>{
+ const serie=tipo==='03'?'B001':tipo==='07'?'FC01':tipo==='08'?'FD01':'F001';
+ factura={...factura,tipoComprobante:tipo,serie,correlativo:79,numero:`${serie}-00000079`,estadoBackend:'RECHAZADO',cdrStatus:'RECHAZADO_SUNAT',cdrCodigo:'3105',cdrMensaje:motivo3105,resultadoPresentacion:{origen:'SUNAT',codigo:'3105',motivo:motivo3105}};
+ const row=await mount(['07','08'].includes(tipo)?'/invoices/notas':'/invoices/facturas');
+ expect(within(row).getByLabelText('Rechazada')).toHaveTextContent('3105');
+ expect(within(row).getByText('El comprobante requiere revisión.')).toHaveClass('truncate');
+ expect(within(row).queryByText(/Motivo informado:/)).toBeNull();
+ expect(within(row).queryByText(/Abra el detalle, revise el motivo/)).toBeNull();
+ expect(within(row).queryByText('Ver detalle técnico')).toBeNull();
+ expect(within(row).queryByRole('button',{name:'Ver detalle'})).toBeNull();
+ const user=userEvent.setup();await user.click(row);
+ const modal=await screen.findByRole('dialog',{name:new RegExp(`${serie}-00000079`)});
+ expect(screen.getAllByRole('dialog')).toHaveLength(1);
+ expect(within(modal).getAllByText('El comprobante requiere revisión.')).toHaveLength(1);
+ expect(within(modal).getByText('Abra el detalle, revise el motivo informado y corrija la información que corresponda antes de reintentar.')).toBeVisible();
+ expect(within(modal).getByText(`Motivo informado: ${motivo3105}`)).toBeVisible();
+ expect(within(modal).getByText(`Motivo informado: ${motivo3105}`)).toHaveClass('whitespace-pre-wrap');
+ await user.click(within(modal).getByText('Ver detalle técnico'));
+ expect(within(modal).getByText('Código: 3105')).toBeVisible();
+ expect(within(modal).getByRole('tab',{name:'Visor XML UBL 2.1'})).toHaveAttribute('data-state','active');
+});
+
+
+it.each(['/invoices/facturas','/invoices/notas'])('%s no muestra botón ni menú de emisión; la consulta conserva sus filtros',async path=>{
+ const q=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:0}}});queries.push(q);
+ render(<QueryClientProvider client={q}><MemoryRouter initialEntries={[path]}><InvoiceList/></MemoryRouter></QueryClientProvider>);
+ await screen.findByLabelText('Buscar comprobantes');
+ expect(screen.queryByRole('button',{name:'Emitir Comprobante'})).toBeNull();
+ expect(screen.queryByRole('menuitem')).toBeNull();
+ expect(screen.getByRole('button',{name:'Actualizar'})).toBeVisible();
+ if(path.endsWith('/notas'))expect(screen.getByRole('region',{name:'Emisión de notas'})).toBeVisible();
+ else expect(screen.queryByRole('region',{name:'Emisión de notas'})).toBeNull();
+});
