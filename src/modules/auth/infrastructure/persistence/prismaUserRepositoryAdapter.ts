@@ -6,123 +6,58 @@ import { DEFAULT_ACCOUNTING_RULES } from '../../../accounting/domain/rules/defau
 import { UserEntity } from '../../domain/entities/userEntity';
 import { CompanyEntity } from '../../domain/entities/companyEntity';
 import { RefreshTokenEntity } from '../../domain/entities/refreshTokenEntity';
-import { OFFLINE_FALLBACK } from './offlineFallback.fixtures';
 import type {
   CreateUserWithCompanyParams,
   UserAuthRecord,
   UserRepositoryPort,
 } from '../../domain/ports/userRepositoryPort';
 
-
+/**
+ * Repositorio de usuarios, empresas y sesiones sobre Prisma.
+ *
+ * No hay respaldo en memoria. Antes existía un «modo offline» que, cuando la
+ * base no respondía y el entorno no era producción, devolvía un usuario y una
+ * empresa ficticios. Ese atajo fue el origen de tres problemas: un login que
+ * aceptaba cualquier contraseña para el usuario mock, datos fiscales
+ * inventados, y una alerta de credencial embebida por el hash de la contraseña
+ * demo. Ahora, si la base falla, el error sube y el login responde con el
+ * mensaje genérico de credenciales.
+ */
 @Injectable()
 export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByEmail(email: string): Promise<UserAuthRecord | null> {
-    try {
-      const raw = await this.prisma.user.findFirst({
-        where: { email: email.trim().toLowerCase() },
-      });
-      if (raw) {
-        return {
-          user: this.mapUser(raw),
-          passwordHash: raw.password_hash,
-        };
-      }
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    // Usuario Mock de respaldo para garantizar el login en la exposición
-    const mockUser = new UserEntity({
-      id: OFFLINE_FALLBACK.user.id,
-      companyId: OFFLINE_FALLBACK.company.id,
-      email: email || OFFLINE_FALLBACK.user.email,
-      fullName: OFFLINE_FALLBACK.user.fullName,
-      role: OFFLINE_FALLBACK.user.role,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const raw = await this.prisma.user.findFirst({
+      where: { email: email.trim().toLowerCase() },
     });
+    if (!raw) return null;
 
     return {
-      user: mockUser,
-      passwordHash: OFFLINE_FALLBACK.demoPasswordHash,
+      user: this.mapUser(raw),
+      passwordHash: raw.password_hash,
     };
   }
 
   async findById(id: string, companyId?: string): Promise<UserEntity | null> {
-    try {
-      const raw = await this.prisma.user.findFirst({
-        where: { id, ...(companyId ? { company_id: companyId } : {}) },
-      });
-      if (raw) return this.mapUser(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new UserEntity({
-      id: id || OFFLINE_FALLBACK.user.id,
-      companyId: companyId || OFFLINE_FALLBACK.company.id,
-      email: OFFLINE_FALLBACK.user.email,
-      fullName: OFFLINE_FALLBACK.user.fullName,
-      role: OFFLINE_FALLBACK.user.role,
-      isActive: true,
+    const raw = await this.prisma.user.findFirst({
+      where: { id, ...(companyId ? { company_id: companyId } : {}) },
     });
+    return raw ? this.mapUser(raw) : null;
   }
 
   async findByRuc(ruc: string): Promise<CompanyEntity | null> {
-    try {
-      const raw = await this.prisma.company.findUnique({
-        where: { ruc },
-      });
-      if (raw) return this.mapCompany(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new CompanyEntity({
-      id: OFFLINE_FALLBACK.company.id,
-      ruc: ruc || OFFLINE_FALLBACK.company.ruc,
-      legalName: OFFLINE_FALLBACK.company.legalName,
-      tradeName: OFFLINE_FALLBACK.company.tradeName,
-      solUser: '',
-      solPassEncrypted: '',
-      certStorageUrl: null,
-      certPassEncrypted: null,
-      isActive: true,
+    const raw = await this.prisma.company.findUnique({
+      where: { ruc },
     });
+    return raw ? this.mapCompany(raw) : null;
   }
 
   async findCompanyById(companyId: string): Promise<CompanyEntity | null> {
-    try {
-      const raw = await this.prisma.company.findUnique({
-        where: { id: companyId },
-      });
-      if (raw) return this.mapCompany(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new CompanyEntity({
-      id: companyId || OFFLINE_FALLBACK.company.id,
-      ruc: OFFLINE_FALLBACK.company.ruc,
-      legalName: OFFLINE_FALLBACK.company.legalName,
-      tradeName: OFFLINE_FALLBACK.company.tradeName,
-      solUser: '',
-      solPassEncrypted: '',
-      certStorageUrl: null,
-      certPassEncrypted: null,
-      isActive: true,
+    const raw = await this.prisma.company.findUnique({
+      where: { id: companyId },
     });
+    return raw ? this.mapCompany(raw) : null;
   }
 
   async createUserWithCompany(
@@ -215,100 +150,51 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
     tokenHash: string,
     expiresAt: Date,
   ): Promise<RefreshTokenEntity> {
-    try {
-      const raw = await this.prisma.refreshToken.create({
-        data: {
-          user_id: userId,
-          token_hash: tokenHash,
-          expires_at: expiresAt,
-          is_revoked: false,
-        },
-      });
-      return this.mapRefreshToken(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-      return new RefreshTokenEntity({
-        id: OFFLINE_FALLBACK.refreshTokenId,
-        userId,
-        tokenHash,
-        expiresAt,
-        isRevoked: false,
-      });
-    }
+    const raw = await this.prisma.refreshToken.create({
+      data: {
+        user_id: userId,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        is_revoked: false,
+      },
+    });
+    return this.mapRefreshToken(raw);
   }
 
   async findRefreshToken(tokenHash: string): Promise<RefreshTokenEntity | null> {
-    try {
-      const raw = await this.prisma.refreshToken.findFirst({
-        where: { token_hash: tokenHash },
-      });
-      if (raw) return this.mapRefreshToken(raw);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
-
-    if (this.isProduction()) return null;
-
-    return new RefreshTokenEntity({
-      id: OFFLINE_FALLBACK.refreshTokenId,
-      userId: OFFLINE_FALLBACK.user.id,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      isRevoked: false,
+    const raw = await this.prisma.refreshToken.findFirst({
+      where: { token_hash: tokenHash },
     });
+    return raw ? this.mapRefreshToken(raw) : null;
   }
 
   async revokeRefreshToken(tokenHash: string): Promise<void> {
-    try {
-      await this.prisma.refreshToken.updateMany({
-        where: { token_hash: tokenHash },
-        data: { is_revoked: true },
-      });
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
+    await this.prisma.refreshToken.updateMany({
+      where: { token_hash: tokenHash },
+      data: { is_revoked: true },
+    });
   }
 
   async revokeAllUserRefreshTokens(userId: string): Promise<void> {
-    try {
-      await this.prisma.refreshToken.updateMany({
-        where: { user_id: userId },
-        data: { is_revoked: true },
-      });
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
+    await this.prisma.refreshToken.updateMany({
+      where: { user_id: userId },
+      data: { is_revoked: true },
+    });
   }
 
   async updatePassword(userId: string, newPasswordHash: string): Promise<void> {
-    try {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { password_hash: newPasswordHash },
-      });
-    } catch (error) {
-      if (this.isProduction()) throw error;
-    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password_hash: newPasswordHash },
+    });
   }
 
   async updateProfile(userId: string, fullName: string): Promise<UserEntity> {
-    try {
-      const updated = await this.prisma.user.update({
-        where: { id: userId },
-        data: { full_name: fullName.trim() },
-      });
-      return this.mapUser(updated);
-    } catch (error) {
-      if (this.isProduction()) throw error;
-      return new UserEntity({
-        id: userId,
-        companyId: OFFLINE_FALLBACK.company.id,
-        email: OFFLINE_FALLBACK.user.email,
-        fullName: fullName.trim(),
-        role: OFFLINE_FALLBACK.user.role,
-        isActive: true,
-      });
-    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { full_name: fullName.trim() },
+    });
+    return this.mapUser(updated);
   }
 
   private mapUser(raw: {
@@ -377,9 +263,5 @@ export class PrismaUserRepositoryAdapter implements UserRepositoryPort {
       isRevoked: raw.is_revoked,
       createdAt: raw.created_at,
     });
-  }
-
-  private isProduction(): boolean {
-    return process.env.NODE_ENV === 'production';
   }
 }
