@@ -84,7 +84,7 @@ describe('LoginUseCase', () => {
     ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('debería fallar si el usuario está inactivo', async () => {
+  it('rechaza a un usuario inactivo con el mensaje genérico de credenciales', async () => {
     const inactiveUser = new UserEntity({
       id: 'usr-999',
       companyId: 'comp-456',
@@ -99,9 +99,11 @@ describe('LoginUseCase', () => {
       passwordHash: 'hashed_password',
     });
 
+    // El mensaje no debe distinguirse del de una cuenta inexistente: de lo
+    // contrario, cualquiera que llame a la API puede enumerar usuarios.
     await expect(
       useCase.execute({ email: 'inactivo@mype.pe', password: 'Password123!' }),
-    ).rejects.toThrow('El usuario se encuentra inactivo.');
+    ).rejects.toThrow('Credenciales de acceso incorrectas.');
   });
 
   it('debería fallar si la contraseña no coincide', async () => {

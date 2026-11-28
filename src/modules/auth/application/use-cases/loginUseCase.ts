@@ -32,7 +32,9 @@ export class LoginUseCase {
 
     const { user, passwordHash } = record;
     if (!user.isActive) {
-      throw new UnauthorizedException('El usuario se encuentra inactivo.');
+      // Mismo mensaje que credenciales inválidas: uno distinto revelaría a
+      // quien llama que la cuenta existe.
+      throw new UnauthorizedException('Credenciales de acceso incorrectas.');
     }
 
     let isValid = false;
